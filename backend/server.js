@@ -17,36 +17,9 @@ app.use(express.static(__dirname));
 
 const PORT=process.env.PORT||3000;
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
-const DATA_FILE=path.join('/tmp','beautyflow-aggregator.json');
+const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 
-const seed={
- cities:[
-  {id:'moscow',name:'Москва'},{id:'spb',name:'Санкт-Петербург'},{id:'kazan',name:'Казань'},
-  {id:'sochi',name:'Сочи'},{id:'ekb',name:'Екатеринбург'},{id:'nsk',name:'Новосибирск'}
- ],
- salons:[
-  {id:1,city:'Москва',name:'LUNA Beauty Space',district:'Хамовники',rating:4.9,reviews:384,price:'₽₽₽',image:'🌙',tags:['Волосы','Ногти','Брови'],today:'Сегодня 16:30',promo:'−15% на первое посещение'},
-  {id:2,city:'Москва',name:'MUSE Studio',district:'Патриаршие',rating:4.8,reviews:271,price:'₽₽₽',image:'✦',tags:['Волосы','Уход'],today:'Сегодня 18:00',promo:'Свободное окно'},
-  {id:3,city:'Москва',name:'NUDE Lab',district:'Чистые пруды',rating:5.0,reviews:146,price:'₽₽',image:'◌',tags:['Ногти','Брови','Ресницы'],today:'Сегодня 19:30',promo:'Маникюр от 2 490 ₽'},
-  {id:4,city:'Санкт-Петербург',name:'VELVET Beauty',district:'Петроградская',rating:4.9,reviews:312,price:'₽₽',image:'❦',tags:['Волосы','Ногти'],today:'Завтра 10:00',promo:'−10% по будням'},
-  {id:5,city:'Казань',name:'AURA Studio',district:'Центр',rating:4.8,reviews:198,price:'₽₽',image:'✧',tags:['Брови','Уход'],today:'Сегодня 17:15',promo:'Уход + диагностика'}
- ],
- services:[
-  {id:1,salon_id:1,name:'Маникюр + покрытие',category:'Ногти',price:3200,duration:90,emoji:'💅'},
-  {id:2,salon_id:1,name:'Укладка',category:'Волосы',price:2800,duration:60,emoji:'✂️'},
-  {id:3,salon_id:2,name:'Стрижка + укладка',category:'Волосы',price:4500,duration:75,emoji:'✂️'},
-  {id:4,salon_id:2,name:'Уход за лицом',category:'Уход',price:5400,duration:80,emoji:'🫧'},
-  {id:5,salon_id:3,name:'Оформление бровей',category:'Брови',price:1900,duration:60,emoji:'✨'},
-  {id:6,salon_id:3,name:'Маникюр',category:'Ногти',price:2490,duration:80,emoji:'💅'}
- ],
- masters:[
-  {id:1,salon_id:1,name:'Алина',specialty:'Nail master',experience:5,rating:4.9},
-  {id:2,salon_id:1,name:'Мила',specialty:'Hair stylist',experience:7,rating:4.9},
-  {id:3,salon_id:2,name:'София',specialty:'Hair stylist',experience:6,rating:5.0},
-  {id:4,salon_id:3,name:'Ева',specialty:'Brow artist',experience:4,rating:4.9}
- ],
- bookings:[]
-};
+const seed={shaurma_orders:[]};
 
 function cloneSeed(){return JSON.parse(JSON.stringify(seed))}
 function readStore(){try{return JSON.parse(fs.readFileSync(DATA_FILE,'utf8'))}catch{const d=cloneSeed();fs.writeFileSync(DATA_FILE,JSON.stringify(d));return d}}
@@ -55,15 +28,8 @@ function writeStore(v){fs.writeFileSync(DATA_FILE,JSON.stringify(v))}
 async function initDb(){
  if(!DB)return;
 
- // One-time migration from the old BeautyFlow schema to Shaurma City.
  if(process.env.RESET_TO_SHAURMA==='true'){
-  await DB.query(`
-   DROP TABLE IF EXISTS bookings CASCADE;
-   DROP TABLE IF EXISTS masters CASCADE;
-   DROP TABLE IF EXISTS services CASCADE;
-   DROP TABLE IF EXISTS salons CASCADE;
-   DROP TABLE IF EXISTS shaurma_orders CASCADE;
-  `);
+  await DB.query('DROP TABLE IF EXISTS shaurma_orders CASCADE');
  }
 
  await DB.query(`
@@ -302,7 +268,6 @@ app.get('/api/shaurma/stats',async(req,res)=>{
 
 app.get('/shaurma-owner',(req,res)=>res.sendFile(path.join(__dirname,'shaurma-owner.html')));
 
-app.get('/admin',(req,res)=>res.sendFile(path.join(__dirname,'admin.html')));
-app.use((req,res)=>res.sendFile(path.join(__dirname,'index.html')));
+app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(()=>console.log('Shaurma City database ready')).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

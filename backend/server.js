@@ -92,7 +92,7 @@ function verifyTelegramInitDataWithToken(initData,botToken){
  if(!user.id) throw new Error('no_user');
  return user;
 }
-function verifyTelegramInitData(initData){return verifyTelegramInitDataWithToken(initData,process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN)}
+function verifyTelegramInitData(initData){return verifyTelegramInitDataWithToken(initData,process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN)}
 function newTelegramSession(user){
  const token=crypto.randomBytes(32).toString('hex');
  telegramSessions.set(token,{user,exp:Date.now()+12*60*60*1000});
@@ -132,6 +132,21 @@ function pushOwner(event,payload){
  for(const res of ownerClients){try{res.write(data)}catch{ownerClients.delete(res)}}
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
+async function syncTelegramMiniApp(){
+ const token=process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN;
+ if(!token){console.log('Telegram client bot token not configured');return}
+ try{
+  const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com'}}})
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
+  console.log('Telegram Mini App menu synced to Shaurma City');
+ }catch(e){console.error('Telegram Mini App sync:',e.message)}
+}
+
 
 app.post('/api/shaurma/login',(req,res)=>{
  if(!process.env.OWNER_PASSWORD||!process.env.OWNER_API_TOKEN)return res.status(503).json({error:'owner_not_configured'});
@@ -270,4 +285,4 @@ app.get('/shaurma-owner',(req,res)=>res.sendFile(path.join(__dirname,'shaurma-ow
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(()=>console.log('Shaurma City database ready')).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await syncTelegramMiniApp()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

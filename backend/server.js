@@ -251,6 +251,21 @@ async function syncTelegramMiniApp(){
  }catch(e){console.error('Telegram Mini App sync:',e.message)}
 }
 
+async function syncAdminTelegramMiniApp(){
+ const token=process.env.ADMIN_TELEGRAM_BOT_TOKEN;
+ if(!token){console.log('Telegram admin bot token not configured');return}
+ try{
+  const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:'https://shaurma-city-api.onrender.com/shaurma-owner?v=2'}}})
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
+  console.log('Telegram admin Mini App menu synced to Shaurma City');
+ }catch(e){console.error('Telegram admin Mini App sync:',e.message)}
+}
+
 
 app.post('/api/shaurma/login',(req,res)=>{
  if(!process.env.OWNER_PASSWORD||!process.env.OWNER_API_TOKEN)return res.status(503).json({error:'owner_not_configured'});
@@ -428,8 +443,11 @@ app.get('/api/shaurma/stats',async(req,res)=>{
  }catch(e){res.status(500).json({error:e.message})}
 });
 
-app.get('/shaurma-owner',(req,res)=>res.sendFile(path.join(__dirname,'shaurma-owner.html')));
+const sendOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurma-owner.html'));
+app.get('/shaurma-owner',sendOwner);
+app.get('/admin',sendOwner);
+app.get('/owner',sendOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await syncTelegramMiniApp()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await syncTelegramMiniApp();await syncAdminTelegramMiniApp()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

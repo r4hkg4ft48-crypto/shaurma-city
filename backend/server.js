@@ -243,7 +243,7 @@ async function syncTelegramMiniApp(){
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=59'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=60'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
@@ -380,7 +380,7 @@ app.post('/api/shaurma/orders',async(req,res)=>{
   try{tgUser=verifyTelegramInitData(telegram_init_data)}catch{}
  }
  if(!Array.isArray(items)||!items.length)return res.status(400).json({error:'empty_order'});
- const fulfillment=['dine_in','takeaway','delivery'].includes(fulfillment_type)?fulfillment_type:(fulfillment_type==='cafe'?'dine_in':'delivery');
+ const fulfillment=fulfillment_type==='cafe'?'cafe':'delivery';
  if(fulfillment==='delivery' && !phone)return res.status(400).json({error:'phone_required'});
  if(fulfillment==='delivery' && !address)return res.status(400).json({error:'address_required'});
  const num=orderNumber();

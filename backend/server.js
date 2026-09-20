@@ -243,7 +243,7 @@ async function syncTelegramMiniApp(){
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/app-v58.html?v=58'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=58'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));

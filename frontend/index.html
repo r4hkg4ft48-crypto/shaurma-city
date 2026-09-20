@@ -1835,9 +1835,10 @@ body{
     <div class="k">Получение заказа</div>
     <h3>Как заберёшь?</h3>
     <p>Сначала выбери способ получения. После подтверждения сразу перейдём к оплате.</p>
-    <div class="fulfillmentGrid">
-      <button class="fulfillmentOption selected" data-fulfillment="delivery"><span class="foIcon">↗</span><b>Доставка</b><small>Привезём по адресу</small></button>
-      <button class="fulfillmentOption" data-fulfillment="cafe"><span class="foIcon">⌂</span><b>В кафе</b><small>На месте, без данных</small></button>
+    <div class="fulfillmentGrid fulfillmentGrid3">
+      <button class="fulfillmentOption selected" data-fulfillment="dine_in"><span class="foIcon">⌂</span><b>Здесь</b><small>Поесть в кафе</small></button>
+      <button class="fulfillmentOption" data-fulfillment="takeaway"><span class="foIcon">↗</span><b>С собой</b><small>Упакуем с собой</small></button>
+      <button class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Привезём по адресу</small></button>
     </div>
     <div class="deliveryFields" id="deliveryFields">
       <div class="form">
@@ -1864,7 +1865,7 @@ const API="https://shaurma-city-api.onrender.com";
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
 let tgUser=null;
 let userProfile=null;
-let checkoutFulfillment="delivery";
+let checkoutFulfillment="dine_in";
 let myOrders=[];
 let myStream=null;
 const STATUS_LABELS={new:"Принят",cooking:"Готовим",ready:"Готов к выдаче",done:"Выдан",cancelled:"Отменён"};
@@ -2028,7 +2029,7 @@ function setHeroFilter(c){
 function cartRender(){saveCartPersisted();const count=cart.reduce((s,x)=>s+x.q,0);$("#dot").textContent=count;$("#dot").style.display=count?"grid":"none";$("#cartItems").innerHTML=cart.length?cart.map((x,i)=>`<div class="ci"><div><b>${x.n}</b><small>${x.detail||money(x.p)}</small></div><div class="qty"><button data-act="-" data-i="${i}">−</button><b>${x.q}</b><button data-act="+" data-i="${i}">+</button></div><button class="rm" data-act="x" data-i="${i}">Убрать</button></div>`).join(""):'<div class="card" style="padding:15px;color:var(--muted)">Здесь пока пусто</div>';$("#cartTotal").textContent=cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0)+" ₽"}
 function addProduct(id){const p=P.find(x=>x.id===id);if(!p)return;const e=cart.find(x=>x.id===id&&!x.builder);e?e.q++:cart.push({id:p.id,n:p.n,p:p.p,q:1});cartRender();toast("Добавлено")}
 function openCart(){cartRender();$("#cartBack").classList.add("open");$("#cart").classList.add("open");document.body.style.overflow="hidden"}function closeCart(){$("#cartBack").classList.remove("open");$("#cart").classList.remove("open");document.body.style.overflow=""}
-function openCheckout(){if(!cart.length){toast("Корзина пустая");return}const d=(userProfile&&userProfile.profile&&userProfile.profile.delivery)||{};if(!$("#customerName").value)$("#customerName").value=d.name||tgUser?.first_name||"";if(!$("#customerPhone").value)$("#customerPhone").value=d.phone||"";if(!$("#customerAddress").value)$("#customerAddress").value=d.address||"";closeCart();$("#checkoutModal").classList.add("open");document.body.style.overflow="hidden"}function closeCheckout(){$("#checkoutModal").classList.remove("open");$("#orderOk").classList.remove("show");$("#checkoutFormWrap").style.display="block";document.body.style.overflow=""}
+function openCheckout(){if(!cart.length){toast("Корзина пустая");return}const d=(userProfile&&userProfile.profile&&userProfile.profile.delivery)||{};if(!$("#customerName").value)$("#customerName").value=d.name||tgUser?.first_name||"";if(!$("#customerPhone").value)$("#customerPhone").value=d.phone||"";if(!$("#customerAddress").value)$("#customerAddress").value=d.address||"";closeCart();$("#checkoutModal").classList.add("open");document.body.style.overflow="hidden"}function closeCheckout(){$("#checkoutModal").classList.remove("open");$("#orderOk").classList.remove("show");$("#checkoutFormWrap").style.display="block";$("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="block";document.body.style.overflow=""}
 function cartTotal(){return cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0)}
 function goToPayment(){
   if(checkoutFulfillment==="delivery"){
@@ -2038,7 +2039,7 @@ function goToPayment(){
   }
   $("#fulfillmentStep").style.display="none";
   $("#paymentStep").classList.add("show");
-  $("#paymentFulfillment").textContent=checkoutFulfillment==="cafe"?"В кафе":"Доставка";
+  $("#paymentFulfillment").textContent=checkoutFulfillment==="dine_in"?"Здесь":checkoutFulfillment==="takeaway"?"С собой":"Доставка";
   $("#paymentTotal").textContent=cartTotal()+" ₽";
 }
 function backToFulfillment(){$("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="block"}
@@ -2049,7 +2050,7 @@ function paymentNotConnected(){
   toast("Сначала подключим безопасный платёжный провайдер");
 }
 
-async function sendOrder(){const phone=$("#customerPhone").value.trim();if(checkoutFulfillment==="delivery"&&!phone){toast("Укажи телефон");return}const tg=window.Telegram&&window.Telegram.WebApp;if(tg&&tg.initData&&!tgSession)await telegramAuth();const total=cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0);const payload={items:cart,total,customer_name:checkoutFulfillment==="cafe"?(tgUser?.first_name||"Гость"):($("#customerName").value.trim()||"Гость"),phone:checkoutFulfillment==="delivery"?phone:"",address:checkoutFulfillment==="delivery"?$("#customerAddress").value.trim():"",comment:checkoutFulfillment==="delivery"?$("#customerComment").value.trim():"",fulfillment_type:checkoutFulfillment,payment_status:"paid",telegram_init_data:(tg&&tg.initData)||""};$("#checkoutSend").disabled=true;$("#checkoutSend").textContent="Оформляем…";try{const hdr={"Content-Type":"application/json"};if(tgSession)hdr["Authorization"]="Bearer "+tgSession;const r=await fetch(API+"/api/shaurma/orders",{method:"POST",headers:hdr,body:JSON.stringify(payload)});if(!r.ok)throw new Error(await r.text());const o=await r.json();$("#checkoutFormWrap").style.display="none";$("#orderOk").classList.add("show");$("#orderNumber").textContent=o.order_number;cart=[];cartRender();if(tgSession||tgUser){myOrders=[o,...myOrders.filter(x=>String(x.id)!==String(o.id))];saveOrderCache();renderMyOrders();checkoutFulfillment==="delivery"&&saveUserState({profile:{delivery:{name:$("#customerName").value.trim(),phone:$("#customerPhone").value.trim(),address:$("#customerAddress").value.trim()}}})}}catch(e){toast("Не удалось оформить. Попробуй ещё раз")}finally{$("#checkoutSend").disabled=false;$("#checkoutSend").textContent="Заказать"}}
+async function sendOrder(){const phone=$("#customerPhone").value.trim();if(checkoutFulfillment==="delivery"&&!phone){toast("Укажи телефон");return}const tg=window.Telegram&&window.Telegram.WebApp;if(tg&&tg.initData&&!tgSession)await telegramAuth();const total=cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0);const payload={items:cart,total,customer_name:checkoutFulfillment!=="delivery"?(tgUser?.first_name||"Гость"):($("#customerName").value.trim()||"Гость"),phone:checkoutFulfillment==="delivery"?phone:"",address:checkoutFulfillment==="delivery"?$("#customerAddress").value.trim():"",comment:checkoutFulfillment==="delivery"?$("#customerComment").value.trim():"",fulfillment_type:checkoutFulfillment,payment_status:"pending",telegram_init_data:(tg&&tg.initData)||""};$("#checkoutSend").disabled=true;$("#checkoutSend").textContent="Оформляем…";try{const hdr={"Content-Type":"application/json"};if(tgSession)hdr["Authorization"]="Bearer "+tgSession;const r=await fetch(API+"/api/shaurma/orders",{method:"POST",headers:hdr,body:JSON.stringify(payload)});if(!r.ok)throw new Error(await r.text());const o=await r.json();$("#checkoutFormWrap").style.display="none";$("#orderOk").classList.add("show");$("#orderNumber").textContent=o.order_number;cart=[];cartRender();if(tgSession||tgUser){myOrders=[o,...myOrders.filter(x=>String(x.id)!==String(o.id))];saveOrderCache();renderMyOrders();checkoutFulfillment==="delivery"&&saveUserState({profile:{delivery:{name:$("#customerName").value.trim(),phone:$("#customerPhone").value.trim(),address:$("#customerAddress").value.trim()}}})}}catch(e){toast("Не удалось оформить. Попробуй ещё раз")}finally{$("#checkoutSend").disabled=false;$("#checkoutSend").textContent="Заказать"}}
 function scene(id){$$(".scene").forEach(x=>x.classList.remove("active"));$(id).classList.add("active")}
 function resetBuilder(){phase="type";armed=null;st={type:null,sauces:[],extras:[]};scene("#sceneType");syncBuilder()}
 function openBuilder(){resetBuilder();$("#builder").classList.add("open");document.body.style.overflow="hidden"}function closeBuilder(){$("#builder").classList.remove("open");document.body.style.overflow=""}

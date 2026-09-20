@@ -102,7 +102,6 @@ app.get('/api/health',(req,res)=>res.json({ok:true,mode:'shaurma-city',storage:D
 
 const ownerClients=new Set();
 const telegramClients=new Map();
-const adminTelegramSessions=new Map();
 
 function verifyTelegramInitDataWithToken(initData,botToken){
  if(!botToken) throw new Error('telegram_not_configured');
@@ -194,17 +193,33 @@ function publicUserProfile(row){
   updated_at:row.updated_at
  };
 }
+function adminSessionSecret(){
+ const token=process.env.ADMIN_TELEGRAM_BOT_TOKEN||process.env.OWNER_API_TOKEN||'';
+ if(!token)throw new Error('admin_not_configured');
+ return crypto.createHmac('sha256','ShaurmaCityAdminSessionV1').update(token).digest();
+}
 function newAdminTelegramSession(user){
- const sessionToken=crypto.randomBytes(32).toString('hex');
- adminTelegramSessions.set(sessionToken,{user,exp:Date.now()+12*60*60*1000});
- return sessionToken;
+ const now=Math.floor(Date.now()/1000);
+ const payload={sub:String(user.id),username:user.username||'',first_name:user.first_name||'',iat:now,exp:now+7*24*60*60};
+ const body=Buffer.from(JSON.stringify(payload)).toString('base64url');
+ const sig=crypto.createHmac('sha256',adminSessionSecret()).update(body).digest('base64url');
+ return body+'.'+sig;
 }
 function adminTelegramSession(req){
- const auth=req.get('authorization')||'';
- const sessionToken=auth.startsWith('Bearer ')?auth.slice(7):(req.query.admin_session||'');
- const sess=adminTelegramSessions.get(sessionToken);
- if(!sess||sess.exp<Date.now()){if(sessionToken)adminTelegramSessions.delete(sessionToken);return null}
- return sess;
+ try{
+  const auth=req.get('authorization')||'';
+  const token=auth.startsWith('Bearer ')?auth.slice(7):(req.query.admin_session||'');
+  const [body,sig,extra]=String(token||'').split('.');
+  if(!body||!sig||extra)return null;
+  const expected=crypto.createHmac('sha256',adminSessionSecret()).update(body).digest('base64url');
+  const a=Buffer.from(sig),b=Buffer.from(expected);
+  if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return null;
+  const payload=JSON.parse(Buffer.from(body,'base64url').toString('utf8'));
+  const now=Math.floor(Date.now()/1000);
+  if(!payload.sub||!payload.exp||payload.exp<now)return null;
+  if(!adminTelegramAllowed(payload.sub))return null;
+  return {user:{id:String(payload.sub),username:payload.username||'',first_name:payload.first_name||''},exp:payload.exp*1000};
+ }catch{return null}
 }
 function adminTelegramAllowed(userId){
  const raw=process.env.ADMIN_TELEGRAM_IDS||'';
@@ -259,7 +274,7 @@ app.get('/api/shaurma/stream',(req,res)=>{
 app.post('/api/shaurma/admin-telegram-auth',(req,res)=>{
  try{
   const user=verifyTelegramInitDataWithToken((req.body||{}).initData||'',process.env.ADMIN_TELEGRAM_BOT_TOKEN);
-  if(!adminTelegramAllowed(user.id))return res.status(403).json({error:'admin_not_allowed'});
+  if(!adminTelegramAllowed(user.id))return res.status(403).json({error:'admin_not_allowed',user_id:String(user.id)});
   const session=newAdminTelegramSession(user);
   res.json({ok:true,session,user:{id:String(user.id),username:user.username||'',first_name:user.first_name||'',last_name:user.last_name||''}});
  }catch(e){

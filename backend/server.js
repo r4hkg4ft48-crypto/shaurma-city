@@ -60,6 +60,9 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS telegram_first_name TEXT");
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'web'");
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS telegram_user_id TEXT");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT NOT NULL DEFAULT 'delivery'");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending'");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS payment_method TEXT");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_telegram_user ON shaurma_orders(telegram_user_id, created_at DESC)");
 
  await DB.query(`
@@ -340,32 +343,35 @@ app.get('/api/shaurma/my-stream',(req,res)=>{
 });
 
 app.post('/api/shaurma/orders',async(req,res)=>{
- const {items,total,customer_name,phone,address,comment,telegram_init_data}=req.body||{};
+ const {items,total,customer_name,phone,address,comment,telegram_init_data,fulfillment_type,payment_status,payment_method}=req.body||{};
  const sess=telegramSession(req);
  let tgUser=sess?sess.user:null;
  if(!tgUser && telegram_init_data){
   try{tgUser=verifyTelegramInitData(telegram_init_data)}catch{}
  }
  if(!Array.isArray(items)||!items.length)return res.status(400).json({error:'empty_order'});
- if(!phone)return res.status(400).json({error:'phone_required'});
+ const fulfillment=fulfillment_type==='cafe'?'cafe':'delivery';
+ if(fulfillment==='delivery' && !phone)return res.status(400).json({error:'phone_required'});
+ if(fulfillment==='delivery' && !address)return res.status(400).json({error:'address_required'});
  const num=orderNumber();
  try{
   let order;
+  const safePaymentStatus=['pending','paid','failed','cancelled'].includes(payment_status)?payment_status:'pending';
   if(DB){
    const q=await DB.query(
-    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-    [num,JSON.stringify(items),Number(total)||0,customer_name||(tgUser?.first_name||'Гость'),phone,address||'',comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null]
+    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
+    [num,JSON.stringify(items),Number(total)||0,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null]
    );
    order=q.rows[0];
   }else{
    const d=readStore();d.shaurma_orders=d.shaurma_orders||[];
-   order={id:Date.now(),order_number:num,items,total:Number(total)||0,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone,address:address||'',comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+   order={id:Date.now(),order_number:num,items,total:Number(total)||0,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
    d.shaurma_orders.push(order);writeStore(d);
   }
   pushOwner('order',order);
   if(order.telegram_user_id) pushTelegram(order.telegram_user_id,'order',order);
   res.status(201).json(order);
- }catch(e){res.status(500).json({error:e.message})}
+ }catch(e){console.error('create order:',e.message);res.status(500).json({error:'order_create_failed'})}
 });
 
 app.get('/api/shaurma/orders',async(req,res)=>{

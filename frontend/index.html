@@ -1935,6 +1935,8 @@ function applyVenue(venue){
   if(brand)brand.textContent=venue.name;
   if(pickup)pickup.textContent=venue.name;
   if(sub)sub.textContent=String(venue.config?.subtitle||"МЕНЮ И ЗАКАЗ");
+  const builderEnabled=venue.config?.builder_enabled!==false;
+  ["#builderPreview","#heroBuilder","#navBuilder"].forEach(selector=>{const node=$(selector);if(node)node.style.display=builderEnabled?"":"none"});
   const menu=normalizeVenueMenu(venue.menu);
   if(menu.length)P=menu;
   render();

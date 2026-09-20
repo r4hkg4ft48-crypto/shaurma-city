@@ -20,6 +20,32 @@ const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABAS
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 const DEFAULT_VENUE_ID='lepyoshka';
 const DEFAULT_VENUE={venue_id:DEFAULT_VENUE_ID,slug:DEFAULT_VENUE_ID,name:'В Лепёшке',is_active:true,config:{},menu:[]};
+const SEEDED_VENUES=[
+ {venue_id:'lepyoshka',slug:'lepyoshka',name:'В Лепёшке',config:{subtitle:'ФИРМЕННОЕ МЕНЮ',builder_enabled:true},menu:[
+  {id:'lep_classic',n:'Шаурма классическая',c:'shawarma',d:'Курица, свежие овощи и фирменный соус',p:280},
+  {id:'lep_cheese',n:'Шаурма сырная',c:'shawarma',d:'Курица, сыр, овощи и сливочный соус',p:330},
+  {id:'lep_flat',n:'Лепёшка фирменная',c:'flatbread',d:'Сочная начинка в горячей лепёшке',p:270},
+  {id:'lep_fries',n:'Картошка фри',c:'extras',d:'Хрустящая порция',p:150},
+  {id:'lep_mors',n:'Морс ягодный',c:'drinks',d:'Холодный домашний морс',p:120},
+  {id:'lep_samsa',n:'Самса с курицей',c:'bakery',d:'Горячая и хрустящая',p:160}
+ ]},
+ {venue_id:'obrucheva',slug:'obrucheva',name:'Шаурма на Обручева',config:{subtitle:'ТЕСТОВОЕ МЕНЮ',builder_enabled:false},menu:[
+  {id:'obr_small',n:'Шаурма мини',c:'shawarma',d:'Курица, томаты, огурцы и чесночный соус',p:230},
+  {id:'obr_big',n:'Шаурма большая',c:'shawarma',d:'Двойная курица, овощи и два соуса',p:390},
+  {id:'obr_spicy',n:'Шаурма острая',c:'shawarma',d:'Курица, халапеньо и острый соус',p:340},
+  {id:'obr_fries',n:'Фри с сырным соусом',c:'extras',d:'Большая хрустящая порция',p:190},
+  {id:'obr_cola',n:'Кола',c:'drinks',d:'Холодная, 0,5 л',p:130},
+  {id:'obr_ayran',n:'Айран',c:'drinks',d:'Освежающий кисломолочный напиток',p:110}
+ ]},
+ {venue_id:'flotskaya',slug:'flotskaya',name:'Шаурма на Флотской',config:{subtitle:'ТЕСТОВОЕ МЕНЮ',builder_enabled:false},menu:[
+  {id:'flt_classic',n:'Шаверма классика',c:'shawarma',d:'Курица гриль, капуста, томаты и белый соус',p:300},
+  {id:'flt_beef',n:'Шаверма с говядиной',c:'shawarma',d:'Говядина, овощи и соус барбекю',p:420},
+  {id:'flt_plate',n:'Шаурма на тарелке',c:'flatbread',d:'Мясо, овощи, фри и два соуса',p:450},
+  {id:'flt_cheese',n:'Сырные палочки',c:'extras',d:'Пять штук с соусом',p:240},
+  {id:'flt_compote',n:'Компот',c:'drinks',d:'Домашний, 0,5 л',p:100},
+  {id:'flt_cheburek',n:'Чебурек с мясом',c:'bakery',d:'Хрустящий с сочной начинкой',p:180}
+ ]}
+];
 
 const seed={shaurma_orders:[]};
 
@@ -83,11 +109,18 @@ async function initDb(){
   );
   CREATE INDEX IF NOT EXISTS idx_shaurma_venues_active ON shaurma_venues(is_active, name);
  `);
- await DB.query(`
-  INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
-  VALUES($1,$2,$3,TRUE,'{}'::jsonb,'[]'::jsonb)
-  ON CONFLICT(venue_id) DO NOTHING
- `,[DEFAULT_VENUE.venue_id,DEFAULT_VENUE.slug,DEFAULT_VENUE.name]);
+ for(const venue of SEEDED_VENUES){
+  await DB.query(`
+   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
+   VALUES($1,$2,$3,TRUE,$4::jsonb,$5::jsonb)
+   ON CONFLICT(venue_id) DO UPDATE SET
+    slug=EXCLUDED.slug,
+    name=EXCLUDED.name,
+    config=CASE WHEN shaurma_venues.config='{}'::jsonb THEN EXCLUDED.config ELSE shaurma_venues.config END,
+    menu=CASE WHEN jsonb_array_length(shaurma_venues.menu)=0 THEN EXCLUDED.menu ELSE shaurma_venues.menu END,
+    updated_at=NOW()
+  `,[venue.venue_id,venue.slug,venue.name,JSON.stringify(venue.config),JSON.stringify(venue.menu)]);
+ }
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(

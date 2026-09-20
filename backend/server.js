@@ -380,7 +380,7 @@ app.post('/api/shaurma/orders',async(req,res)=>{
   try{tgUser=verifyTelegramInitData(telegram_init_data)}catch{}
  }
  if(!Array.isArray(items)||!items.length)return res.status(400).json({error:'empty_order'});
- const fulfillment=fulfillment_type==='cafe'?'cafe':'delivery';
+ const fulfillment=['dine_in','takeaway','delivery'].includes(fulfillment_type)?fulfillment_type:(fulfillment_type==='cafe'?'dine_in':'delivery');
  if(fulfillment==='delivery' && !phone)return res.status(400).json({error:'phone_required'});
  if(fulfillment==='delivery' && !address)return res.status(400).json({error:'address_required'});
  const num=orderNumber();

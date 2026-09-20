@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">\n<meta name="shaurma-build" content="59">
+<meta charset="utf-8">\n<meta name="shaurma-build" content="60">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -28,7 +28,7 @@
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.choice{position:relative;min-height:102px;padding:13px;border-radius:19px;border:1px solid var(--line);background:rgba(255,255,255,.03);text-align:left;overflow:hidden}.choice.selected{border-color:rgba(47,109,246,.42);box-shadow:0 0 0 1px rgba(47,109,246,.13) inset}.choice b{display:block;font-size:16px}.choice small{display:block;color:var(--muted);margin-top:3px}.mark{position:absolute;right:10px;top:10px;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.04)}.choice.selected .mark{background:linear-gradient(135deg,#477fff,#1d4eb8);border-color:transparent}.note{margin:8px 0;padding:9px 10px;border-radius:13px;background:rgba(47,109,246,.08);border:1px solid rgba(47,109,246,.16);color:#c5d1e8;font-size:11px}.extraTag{position:absolute;z-index:4;padding:7px 9px;border-radius:999px;background:rgba(7,12,20,.84);border:1px solid rgba(255,255,255,.1);font-size:10px;font-weight:850}.sum{padding:13px;border-radius:19px;background:rgba(255,255,255,.03);border:1px solid var(--line)}.sum h4{font-size:21px;margin:0 0 8px}.chips{display:flex;flex-wrap:wrap;gap:6px}.chip2{padding:7px 9px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:10px;font-weight:800}.meta{display:grid;gap:7px;margin-top:10px}.meta div{display:flex;justify-content:space-between;gap:10px;color:var(--muted)}.meta b{color:white;text-align:right}.bactions{flex:0 0 auto;display:flex;gap:8px;padding-top:9px}.bactions .pri{flex:1}.toast{position:fixed;left:50%;bottom:calc(95px + var(--safeB));z-index:100;transform:translate(-50%,18px);opacity:0;pointer-events:none;transition:.2s;padding:10px 13px;border-radius:13px;background:#101923;border:1px solid rgba(47,109,246,.25)}.toast.show{opacity:1;transform:translate(-50%,0)}
 @media(max-width:820px){.hero,.showcase{grid-template-columns:1fr}.foodhero{min-height:400px}.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:540px){.hero{padding:17px 12px 10px}.hero h1{font-size:39px}.cats{padding:5px 12px 15px;grid-template-columns:repeat(2,1fr)}.section{padding:0 12px 15px}.grid{grid-template-columns:1fr}.pic{height:188px}.typecard{min-height:calc(100dvh - 142px)}}
 
-/* BUILD 59 — vertical confrontation posters */
+/* BUILD 60 — vertical confrontation posters */
 .typegrid{
   height:100%;
   display:grid;
@@ -95,7 +95,7 @@
 }
 
 
-/* BUILD 59 — natural-language final order description */
+/* BUILD 60 — natural-language final order description */
 .orderStory{
   margin:12px 0 14px;
   padding:16px 16px 17px;
@@ -111,14 +111,14 @@
 .chips{display:none!important}
 
 
-/* BUILD 59 — real checkout */
+/* BUILD 60 — real checkout */
 .checkoutModal{position:fixed;inset:0;z-index:90;background:rgba(5,9,15,.78);backdrop-filter:blur(12px);display:grid;place-items:end center;opacity:0;visibility:hidden;pointer-events:none;transition:.22s}
 .checkoutModal.open{opacity:1;visibility:visible;pointer-events:auto}
 .checkoutCard{width:min(680px,100%);max-height:92dvh;overflow:auto;border-radius:28px 28px 0 0;background:linear-gradient(180deg,#121923,#0b1119);border:1px solid var(--line);padding:16px 16px calc(16px + var(--safeB))}
 .checkoutCard h3{font-size:28px;margin:4px 0 6px}.checkoutCard p{color:var(--muted);margin:0 0 14px}.form{display:grid;gap:10px}.field{display:grid;gap:6px}.field label{font-size:11px;color:#9ba7ba;font-weight:800}.field input,.field textarea{width:100%;border:1px solid var(--line);background:rgba(255,255,255,.035);color:white;border-radius:15px;padding:13px;outline:none;font:inherit}.field textarea{min-height:82px;resize:vertical}.checkoutActions{display:flex;gap:8px;margin-top:12px}.checkoutActions .pri{flex:1}.orderOk{display:none;padding:18px 0;text-align:center}.orderOk.show{display:block}.orderOk b{display:block;font-size:30px;margin:7px 0}.orderOk p{color:var(--muted)}
 
 
-/* BUILD 59 — Telegram identity + My Orders */
+/* BUILD 60 — Telegram identity + My Orders */
 .myOrdersPanel{position:fixed;inset:0;z-index:88;background:#0a0f16;opacity:0;visibility:hidden;pointer-events:none;transition:.22s}
 .myOrdersPanel.open{opacity:1;visibility:visible;pointer-events:auto}
 .myOrdersInner{height:100dvh;max-width:760px;margin:auto;padding:calc(var(--safeT) + 10px) 12px calc(var(--safeB) + 18px);overflow:auto;background:linear-gradient(180deg,#0d131c,#101821 58%,#0a0f16)}
@@ -130,7 +130,7 @@
 .historyList{display:grid;gap:8px}.historyItem{padding:13px;border-radius:17px;background:rgba(255,255,255,.025);border:1px solid var(--line)}.historyItem .r{display:flex;justify-content:space-between;gap:10px}.historyItem small{color:var(--muted)}.tgUnavailable{padding:18px;border-radius:18px;border:1px dashed var(--line);color:var(--muted);text-align:center}.miniProfile{font-size:10px;color:#8ea9ff}
 
 
-/* BUILD 59 — Telegram Mini App viewport hardening */
+/* BUILD 60 — Telegram Mini App viewport hardening */
 :root{--appH:100dvh}
 html,body{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%;overscroll-behavior-x:none}
 body{min-height:var(--appH)}
@@ -270,7 +270,7 @@ body{min-height:var(--appH)}
 }
 
 
-/* BUILD 59 — cinematic builder interactions */
+/* BUILD 60 — cinematic builder interactions */
 .choice.standard-sauce{
   grid-column:1/-1;
   border:1px solid rgba(255,72,72,.82)!important;
@@ -348,7 +348,7 @@ body{min-height:var(--appH)}
 }
 
 
-/* BUILD 59 — photorealistic food-cinema canvas */
+/* BUILD 60 — photorealistic food-cinema canvas */
 .builderFx,.sauceLines,.extraTag{display:none!important}
 .visual{position:relative;isolation:isolate;background:#090d12}
 .visual>img{z-index:1;position:relative}
@@ -376,7 +376,7 @@ body{min-height:var(--appH)}
 }
 
 
-/* BUILD 59 — premium sauce cinema */
+/* BUILD 60 — premium sauce cinema */
 #sceneSauce canvas.foodFxCanvas{display:none!important}
 .premiumSauceSvg{
   position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none;
@@ -419,7 +419,7 @@ body{min-height:var(--appH)}
 }
 
 
-/* BUILD 59 — simplified final confirmation */
+/* BUILD 60 — simplified final confirmation */
 #sceneReady .meta{
   display:block!important;
   margin-top:10px;
@@ -442,7 +442,7 @@ body{min-height:var(--appH)}
 }
 
 
-/* BUILD 59 — safe isolated builder entry */
+/* BUILD 60 — safe isolated builder entry */
 .safeBuildEntry{padding:12px;border-radius:26px;border:1px solid var(--line);background:linear-gradient(180deg,#131b26,#0b1118)}
 .safeBuildHead{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:10px}
 .safeBuildHead h2{margin:6px 0 6px;font-size:30px;line-height:.95;letter-spacing:-.04em}
@@ -465,7 +465,7 @@ body{min-height:var(--appH)}
 @media(max-width:390px){.safeBuildHead{display:block}.safeBuildAll{width:100%;margin-top:9px}.safeBuildCard{min-height:218px}}
 
 
-/* BUILD 59 — immersive cobalt / steel color system */
+/* BUILD 60 — immersive cobalt / steel color system */
 :root{
   --bg:#050b14;
   --panel:#0c1624;
@@ -567,11 +567,11 @@ body{
 ::selection{background:rgba(33,91,220,.36);color:#fff}
 
 
-/* BUILD 59 — generated food photography */
+/* BUILD 60 — generated food photography */
 .pic img,.safeBuildCard img,.typecard img,.foodhero img,.visual>img{object-position:center center}
 .foodhero img{object-position:center 50%}
 
-/* BUILD 59 — lock hero geometry, eliminate image/layout jumps */
+/* BUILD 60 — lock hero geometry, eliminate image/layout jumps */
 .foodhero{
   position:relative!important;
   height:440px!important;
@@ -618,7 +618,7 @@ body{
 }
 
 
-/* BUILD 59 — fail-safe menu visibility */
+/* BUILD 60 — fail-safe menu visibility */
 #menu{
   display:block!important;
   visibility:visible!important;
@@ -637,7 +637,7 @@ body{
 }
 
 
-/* BUILD 59 — retention polish, HTML/CSS only */
+/* BUILD 60 — retention polish, HTML/CSS only */
 .heroSignals{
   display:flex;
   flex-wrap:wrap;
@@ -795,7 +795,7 @@ body{
 }
 
 
-/* BUILD 59 — retention through craft/process, not assortment */
+/* BUILD 60 — retention through craft/process, not assortment */
 .craftSection{padding-top:2px}
 .craftHead{
   display:grid;
@@ -912,7 +912,7 @@ body{
 }
 
 
-/* BUILD 59 — isolated visual separation for builder preview only */
+/* BUILD 60 — isolated visual separation for builder preview only */
 #builderPreview{
   position:relative;
   isolation:isolate;
@@ -959,7 +959,7 @@ body{
 }
 
 
-/* BUILD 59 — isolated visual upgrade for craft/story section only */
+/* BUILD 60 — isolated visual upgrade for craft/story section only */
 .craftSection{
   position:relative;
   isolation:isolate;
@@ -1041,7 +1041,7 @@ body{
 }
 
 
-/* BUILD 59 — stronger premium palette + menu-only visual polish */
+/* BUILD 60 — stronger premium palette + menu-only visual polish */
 :root{
   --bg:#030812;
   --panel:#091426;
@@ -1225,7 +1225,7 @@ body{
 }
 
 
-/* BUILD 59 — visually stronger menu stage */
+/* BUILD 60 — visually stronger menu stage */
 #menu{
   overflow:hidden;
 }
@@ -1356,7 +1356,7 @@ body{
 }
 
 
-/* BUILD 59 — premium hero / first-impression stage */
+/* BUILD 60 — premium hero / first-impression stage */
 #home{
   position:relative;
   isolation:isolate;
@@ -1543,7 +1543,7 @@ body{
 }
 
 
-/* BUILD 59 — premium header, nav, menu badges, hero and builder accents */
+/* BUILD 60 — premium header, nav, menu badges, hero and builder accents */
 
 /* HEADER */
 .top{
@@ -1735,7 +1735,7 @@ body{
 </head>
 <body>
 <div class="app">
-<header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b>SHAURMA <i>CITY</i></b><small>FOOD SYSTEM</small></div><div class="build">BUILD 59</div></header>
+<header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b>SHAURMA <i>CITY</i></b><small>FOOD SYSTEM</small></div><div class="build">BUILD 60</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
@@ -1835,10 +1835,9 @@ body{
     <div class="k">Получение заказа</div>
     <h3>Как заберёшь?</h3>
     <p>Сначала выбери способ получения. После подтверждения сразу перейдём к оплате.</p>
-    <div class="fulfillmentGrid fulfillmentGrid3">
-      <button class="fulfillmentOption selected" data-fulfillment="dine_in"><span class="foIcon">⌂</span><b>Здесь</b><small>Поесть в кафе</small></button>
-      <button class="fulfillmentOption" data-fulfillment="takeaway"><span class="foIcon">↗</span><b>С собой</b><small>Упакуем с собой</small></button>
-      <button class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Привезём по адресу</small></button>
+    <div class="fulfillmentGrid">
+      <button class="fulfillmentOption selected" data-fulfillment="cafe"><span class="foIcon">⌂</span><b>В Лепёшке</b><small>На месте в кафе · без заполнения данных</small></button>
+      <button class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Привезём по указанному адресу</small></button>
     </div>
     <div class="deliveryFields" id="deliveryFields">
       <div class="form">
@@ -1865,7 +1864,7 @@ const API="https://shaurma-city-api.onrender.com";
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
 let tgUser=null;
 let userProfile=null;
-let checkoutFulfillment="dine_in";
+let checkoutFulfillment="cafe";
 let myOrders=[];
 let myStream=null;
 const STATUS_LABELS={new:"Принят",cooking:"Готовим",ready:"Готов к выдаче",done:"Выдан",cancelled:"Отменён"};
@@ -2029,17 +2028,36 @@ function setHeroFilter(c){
 function cartRender(){saveCartPersisted();const count=cart.reduce((s,x)=>s+x.q,0);$("#dot").textContent=count;$("#dot").style.display=count?"grid":"none";$("#cartItems").innerHTML=cart.length?cart.map((x,i)=>`<div class="ci"><div><b>${x.n}</b><small>${x.detail||money(x.p)}</small></div><div class="qty"><button data-act="-" data-i="${i}">−</button><b>${x.q}</b><button data-act="+" data-i="${i}">+</button></div><button class="rm" data-act="x" data-i="${i}">Убрать</button></div>`).join(""):'<div class="card" style="padding:15px;color:var(--muted)">Здесь пока пусто</div>';$("#cartTotal").textContent=cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0)+" ₽"}
 function addProduct(id){const p=P.find(x=>x.id===id);if(!p)return;const e=cart.find(x=>x.id===id&&!x.builder);e?e.q++:cart.push({id:p.id,n:p.n,p:p.p,q:1});cartRender();toast("Добавлено")}
 function openCart(){cartRender();$("#cartBack").classList.add("open");$("#cart").classList.add("open");document.body.style.overflow="hidden"}function closeCart(){$("#cartBack").classList.remove("open");$("#cart").classList.remove("open");document.body.style.overflow=""}
-function openCheckout(){if(!cart.length){toast("Корзина пустая");return}const d=(userProfile&&userProfile.profile&&userProfile.profile.delivery)||{};if(!$("#customerName").value)$("#customerName").value=d.name||tgUser?.first_name||"";if(!$("#customerPhone").value)$("#customerPhone").value=d.phone||"";if(!$("#customerAddress").value)$("#customerAddress").value=d.address||"";$("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="block";syncFulfillmentUI();closeCart();$("#checkoutModal").classList.add("open");document.body.style.overflow="hidden"}function closeCheckout(){$("#checkoutModal").classList.remove("open");$("#orderOk").classList.remove("show");$("#checkoutFormWrap").style.display="block";$("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="block";document.body.style.overflow=""}
+function openCheckout(){
+  if(!cart.length){toast("Корзина пустая");return}
+  const d=(userProfile&&userProfile.profile&&userProfile.profile.delivery)||{};
+  if(!$("#customerName").value)$("#customerName").value=d.name||tgUser?.first_name||"";
+  if(!$("#customerPhone").value)$("#customerPhone").value=d.phone||"";
+  if(!$("#customerAddress").value)$("#customerAddress").value=d.address||"";
+  $("#orderOk").classList.remove("show");
+  $("#paymentStep").classList.remove("show");
+  $("#fulfillmentStep").style.display="block";
+  syncFulfillmentUI();
+  closeCart();
+  $("#checkoutModal").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeCheckout(){
+  $("#checkoutModal").classList.remove("open");
+  $("#orderOk").classList.remove("show");
+  $("#paymentStep").classList.remove("show");
+  $("#fulfillmentStep").style.display="block";
+  document.body.style.overflow="";
+}
 function cartTotal(){return cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0)}
 function syncFulfillmentUI(){
-  $(".fulfillmentOption").forEach(x=>x.classList.toggle("selected",x.dataset.fulfillment===checkoutFulfillment));
+  $$(".fulfillmentOption").forEach(x=>x.classList.toggle("selected",x.dataset.fulfillment===checkoutFulfillment));
   const delivery=checkoutFulfillment==="delivery";
   const fields=$("#deliveryFields");
   if(fields)fields.style.display=delivery?"grid":"none";
   const btn=$("#fulfillmentContinue");
-  if(btn)btn.textContent=delivery?"Подтвердить доставку":"Подтвердить";
+  if(btn)btn.textContent="Перейти к оплате";
 }
-
 function goToPayment(){
   if(checkoutFulfillment==="delivery"){
     const phone=$("#customerPhone").value.trim(),address=$("#customerAddress").value.trim();
@@ -2048,18 +2066,23 @@ function goToPayment(){
   }
   $("#fulfillmentStep").style.display="none";
   $("#paymentStep").classList.add("show");
-  $("#paymentFulfillment").textContent=checkoutFulfillment==="dine_in"?"Здесь":checkoutFulfillment==="takeaway"?"С собой":"Доставка";
+  $("#paymentFulfillment").textContent=checkoutFulfillment==="cafe"?"В Лепёшке · на месте":"Доставка";
   $("#paymentTotal").textContent=cartTotal()+" ₽";
+  const pay=(userProfile&&userProfile.payment)||{};
+  $("#paymentCardHint").textContent=pay.linked?((pay.card_brand||"Карта")+" •••• "+(pay.card_last4||"")):"Привязать банковскую карту";
+  $("#paymentContinue").textContent="Оплатить "+cartTotal()+" ₽";
 }
-function backToFulfillment(){$("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="block"}
+function backToFulfillment(){
+  $("#paymentStep").classList.remove("show");
+  $("#fulfillmentStep").style.display="block";
+}
 function openPaymentMethod(){
-  toast("Подключим привязку карты следующим шагом");
+  toast("Подключаем безопасную привязку карты");
 }
 function paymentNotConnected(){
-  toast("Сначала подключим безопасный платёжный провайдер");
+  toast("Оплата будет доступна после подключения платёжного провайдера");
 }
 
-async function sendOrder(){const phone=$("#customerPhone").value.trim();if(checkoutFulfillment==="delivery"&&!phone){toast("Укажи телефон");return}const tg=window.Telegram&&window.Telegram.WebApp;if(tg&&tg.initData&&!tgSession)await telegramAuth();const total=cart.reduce((s,x)=>s+(typeof x.p==="number"?x.p*x.q:0),0);const payload={items:cart,total,customer_name:checkoutFulfillment!=="delivery"?(tgUser?.first_name||"Гость"):($("#customerName").value.trim()||"Гость"),phone:checkoutFulfillment==="delivery"?phone:"",address:checkoutFulfillment==="delivery"?$("#customerAddress").value.trim():"",comment:checkoutFulfillment==="delivery"?$("#customerComment").value.trim():"",fulfillment_type:checkoutFulfillment,payment_status:"pending",telegram_init_data:(tg&&tg.initData)||""};$("#checkoutSend").disabled=true;$("#checkoutSend").textContent="Оформляем…";try{const hdr={"Content-Type":"application/json"};if(tgSession)hdr["Authorization"]="Bearer "+tgSession;const r=await fetch(API+"/api/shaurma/orders",{method:"POST",headers:hdr,body:JSON.stringify(payload)});if(!r.ok)throw new Error(await r.text());const o=await r.json();$("#checkoutFormWrap").style.display="none";$("#orderOk").classList.add("show");$("#orderNumber").textContent=o.order_number;cart=[];cartRender();if(tgSession||tgUser){myOrders=[o,...myOrders.filter(x=>String(x.id)!==String(o.id))];saveOrderCache();renderMyOrders();checkoutFulfillment==="delivery"&&saveUserState({profile:{delivery:{name:$("#customerName").value.trim(),phone:$("#customerPhone").value.trim(),address:$("#customerAddress").value.trim()}}})}}catch(e){toast("Не удалось оформить. Попробуй ещё раз")}finally{$("#checkoutSend").disabled=false;$("#checkoutSend").textContent="Заказать"}}
 function scene(id){$$(".scene").forEach(x=>x.classList.remove("active"));$(id).classList.add("active")}
 function resetBuilder(){phase="type";armed=null;st={type:null,sauces:[],extras:[]};scene("#sceneType");syncBuilder()}
 function openBuilder(){resetBuilder();$("#builder").classList.add("open");document.body.style.overflow="hidden"}function closeBuilder(){$("#builder").classList.remove("open");document.body.style.overflow=""}
@@ -2143,7 +2166,7 @@ document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-buil
 $("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=paymentNotConnected;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
 syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();telegramAuth();
 
-/* BUILD 59 — canvas food physics */
+/* BUILD 60 — canvas food physics */
 const SAUCE_PHYS={
  "Стандартные соусы":[
   {c:"#f1eee5",edge:"#b6aa97",hi:"#ffffff",w:10,vis:1.05},
@@ -2328,7 +2351,7 @@ resetBuilder=function(){
 window.addEventListener("resize",()=>setTimeout(repaintCurrentBuilderScene,80));
 
 
-/* BUILD 59 — clean premium sauce renderer */
+/* BUILD 60 — clean premium sauce renderer */
 const PREMIUM_SAUCE={
  "Стандартные соусы":[
   {c:"#efe8dc",edge:"#b9ad9d",w:10},

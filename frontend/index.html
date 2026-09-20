@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#030812">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Shaurma City</title>
+<title id="pageTitle">Shaurma City</title>
 <style>
 :root{--bg:#0a0f16;--panel:#121923;--panel2:#171f2a;--text:#f4f7fb;--muted:#8f99a8;--line:rgba(255,255,255,.08);--blue:#2f6df6;--blue2:#173f9c;--safeT:max(env(safe-area-inset-top),12px);--safeB:max(env(safe-area-inset-bottom),12px)}
 *{box-sizing:border-box}html{background:var(--bg);scroll-behavior:smooth}body{margin:0;background:radial-gradient(circle at 15% -5%,rgba(47,109,246,.15),transparent 28%),linear-gradient(#0a0f16,#101720 55%,#0a0f16);color:var(--text);font:500 15px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overflow-x:hidden}button{font:inherit;color:inherit}.app{max-width:980px;margin:auto;padding-bottom:calc(90px + var(--safeB))}
@@ -1735,7 +1735,7 @@ body{
 </head>
 <body>
 <div class="app">
-<header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b>SHAURMA <i>CITY</i></b><small>FOOD SYSTEM</small></div><div class="build">BUILD 60</div></header>
+<header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 61</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
@@ -1836,7 +1836,7 @@ body{
     <h3>Как заберёшь?</h3>
     <p>Сначала выбери способ получения. После подтверждения сразу перейдём к оплате.</p>
     <div class="fulfillmentGrid">
-      <button class="fulfillmentOption selected" data-fulfillment="cafe"><span class="foIcon">⌂</span><b>В Лепёшке</b><small>На месте в кафе · без заполнения данных</small></button>
+      <button class="fulfillmentOption selected" data-fulfillment="cafe"><span class="foIcon">⌂</span><b id="venuePickupName">В Лепёшке</b><small>На месте в кафе · без заполнения данных</small></button>
       <button class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Привезём по указанному адресу</small></button>
     </div>
     <div class="deliveryFields" id="deliveryFields">
@@ -1861,6 +1861,15 @@ body{
 </div></div><div class="toast" id="toast"></div>
 <script>
 const API="https://shaurma-city-api.onrender.com";
+const DEFAULT_VENUE_ID="lepyoshka";
+function cleanVenueId(value){const id=String(value||"").trim().toLowerCase().replace(/^venue_/,"");return /^[a-z0-9_-]{1,64}$/.test(id)?id:""}
+function venueFromLaunch(){
+  const tg=window.Telegram&&window.Telegram.WebApp;
+  const url=new URL(location.href);
+  return cleanVenueId(tg?.initDataUnsafe?.start_param||url.searchParams.get("tgWebAppStartParam")||url.searchParams.get("venue"))||DEFAULT_VENUE_ID;
+}
+const ACTIVE_VENUE_ID=venueFromLaunch();
+let activeVenue={venue_id:ACTIVE_VENUE_ID,slug:ACTIVE_VENUE_ID,name:"В Лепёшке",config:{},menu:[]};
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
 let tgUser=null;
 let userProfile=null;
@@ -1877,7 +1886,7 @@ const IMG_SAUCES=IMG_CLASSIC, IMG_EXTRAS=IMG_CLASSIC, IMG_DRINKS=IMG_CLASSIC, IM
 const IMG1=IMG_TOP_SH, IMG2=IMG_TOP_FL;
 const CATIMG={shawarma:IMG_HERO,flatbread:IMG_FLAT,extras:IMG_EXTRAS,drinks:IMG_DRINKS,sauces:IMG_SAUCES,bakery:IMG_BAKERY};
 const TIT={shawarma:"Шаурма",flatbread:"Лепёшка",sauces:"Соусы",extras:"Допы",drinks:"Напитки",bakery:"Выпечка"};
-const P=[
+let P=[
 {id:"classic",n:"Шаурма классика",c:"shawarma",d:"Сочная курица, свежие овощи, фирменный соус",p:280,i:IMG_CLASSIC},
 {id:"cheese",n:"Шаурма сырная",c:"shawarma",d:"Горячая курица, сыр, овощи и соус",p:null,i:IMG_CHEESY},
 {id:"flat",n:"Лепёшка",c:"flatbread",d:"Сочная начинка в горячей лепёшке",p:270,i:IMG_FLAT},
@@ -1901,13 +1910,45 @@ const P=[
 ];
 const SA=[{n:"Стандартные соусы",t:"#f1e7d7",standard:true},{n:"Биг Тейсти",t:"#e5c8a9"},{n:"Барбекю",t:"#a94d32"},{n:"Гранатовый",t:"#9b1f3e"},{n:"Сырный",t:"#e0ad3e"},{n:"Чесночный",t:"#eceff5"}],EX=["Картошка фри","Халапеньо","Лук","Сыр"];
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const CART_KEY="sc_cart_v1";
+const CART_KEY="sc_cart_v2_"+ACTIVE_VENUE_ID;
 function loadCartPersisted(){try{const x=JSON.parse(localStorage.getItem(CART_KEY)||"[]");return Array.isArray(x)?x.filter(v=>v&&typeof v==="object"&&v.id&&Number(v.q)>0).map(v=>({...v,q:Math.max(1,Number(v.q)||1)})):[]}catch{return []}}
 function saveCartPersisted(){try{localStorage.setItem(CART_KEY,JSON.stringify(cart))}catch{}}
 function orderCacheKey(){return tgUser&&tgUser.id?"sc_orders_"+tgUser.id:""}
 function loadOrderCache(){const k=orderCacheKey();if(!k)return [];try{const x=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(x)?x:[]}catch{return []}}
 function saveOrderCache(){const k=orderCacheKey();if(!k)return;try{localStorage.setItem(k,JSON.stringify(myOrders.slice(0,100)))}catch{}}
 let filter="shawarma",cart=loadCartPersisted(),phase="type",armed=null,st={type:null,sauces:[],extras:[]};
+function normalizeVenueMenu(menu){
+  if(!Array.isArray(menu))return [];
+  return menu.slice(0,300).map((x,i)=>({
+    id:String(x.id||("item_"+i)),
+    n:String(x.n||x.name||"Позиция"),
+    c:String(x.c||x.category||"shawarma"),
+    d:String(x.d||x.description||""),
+    p:x.p===null||x.price===null?null:Number(x.p??x.price??0),
+    i:String(x.i||x.image||IMG_CLASSIC)
+  })).filter(x=>x.id&&x.n&&(Number.isFinite(x.p)||x.p===null));
+}
+function applyVenue(venue){
+  activeVenue=venue;
+  document.title=venue.name+" · заказ";
+  const brand=$("#venueBrand"),pickup=$("#venuePickupName"),sub=$("#venueBrandSub");
+  if(brand)brand.textContent=venue.name;
+  if(pickup)pickup.textContent=venue.name;
+  if(sub)sub.textContent=String(venue.config?.subtitle||"МЕНЮ И ЗАКАЗ");
+  const menu=normalizeVenueMenu(venue.menu);
+  if(menu.length)P=menu;
+  render();
+}
+async function loadVenue(){
+  try{
+    const r=await fetch(API+"/api/shaurma/venues/"+encodeURIComponent(ACTIVE_VENUE_ID));
+    if(!r.ok)throw new Error("venue_"+r.status);
+    applyVenue(await r.json());
+  }catch(e){
+    if(ACTIVE_VENUE_ID!==DEFAULT_VENUE_ID)toast("Заведение временно недоступно");
+    applyVenue(activeVenue);
+  }
+}
 function syncMiniAppViewport(){
   const tg=window.Telegram&&window.Telegram.WebApp;
   const setH=()=>{
@@ -1991,7 +2032,7 @@ function connectMyStream(){
   myStream.addEventListener("update",e=>{const o=JSON.parse(e.data);myOrders=myOrders.map(x=>String(x.id)===String(o.id)?o:x);saveOrderCache();renderMyOrders();if(o.status==="ready")toast("Ваш заказ готов")});
   myStream.onerror=()=>{};
 }
-function orderSummary(o){const a=Array.isArray(o.items)?o.items:[];return a.map(x=>(x.n||x.name||"Позиция")+" × "+(x.q||1)).join(", ")}
+function orderSummary(o){const a=Array.isArray(o.items)?o.items:[];return (o.venue_name?o.venue_name+" · ":"")+a.map(x=>(x.n||x.name||"Позиция")+" × "+(x.q||1)).join(", ")}
 function renderMyOrders(){
   const host=$("#myOrdersContent");if(!host)return;
   if(!tgUser){host.innerHTML='<div class="tgUnavailable">История заказов появится здесь автоматически.</div>';return}
@@ -2066,7 +2107,7 @@ function goToPayment(){
   }
   $("#fulfillmentStep").style.display="none";
   $("#paymentStep").classList.add("show");
-  $("#paymentFulfillment").textContent=checkoutFulfillment==="cafe"?"В Лепёшке · на месте":"Доставка";
+  $("#paymentFulfillment").textContent=checkoutFulfillment==="cafe"?activeVenue.name+" · на месте":"Доставка · "+activeVenue.name;
   $("#paymentTotal").textContent=cartTotal()+" ₽";
   const pay=(userProfile&&userProfile.payment)||{};
   $("#paymentCardHint").textContent=pay.linked?((pay.card_brand||"Карта")+" •••• "+(pay.card_last4||"")):"Привязать банковскую карту";
@@ -2164,7 +2205,7 @@ function next(){if(phase==="type")return;if(phase==="sauce"){if(!st.sauces.lengt
 function prev(){if(phase==="sauce"){phase="type";scene("#sceneType");armed=st.type;syncBuilder()}else if(phase==="extras"){phase="sauce";scene("#sceneSauce");syncBuilder()}else if(phase==="ready"){phase="extras";scene("#sceneExtras");syncBuilder()}}
 document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-builder]");if(sb){resetBuilder();st.type=sb.dataset.safeBuilder;armed=null;phase="sauce";scene("#sceneSauce");syncBuilder();$("#builder").classList.add("open");document.body.style.overflow="hidden";return}const a=e.target.closest("[data-add]");if(a)addProduct(a.dataset.add);const hf=e.target.closest("[data-hero-filter]");if(hf)setHeroFilter(hf.dataset.heroFilter);const mf=e.target.closest("[data-menu-filter]");if(mf)setFilter(mf.dataset.menuFilter);const g=e.target.closest("[data-go]");if(g){document.querySelector(g.dataset.go)?.scrollIntoView({behavior:"smooth"});$$(".nav button").forEach(x=>x.classList.remove("active"));g.classList.add("active")}const act=e.target.closest("[data-act]");if(act){const i=+act.dataset.i;if(!cart[i])return;if(act.dataset.act==="+")cart[i].q++;if(act.dataset.act==="-"){cart[i].q--;if(cart[i].q<=0)cart.splice(i,1)}if(act.dataset.act==="x")cart.splice(i,1);cartRender()}const s=e.target.closest("[data-sauce]");if(s)toggleSauce(s.dataset.sauce);const ex=e.target.closest("[data-extra]");if(ex)toggleExtra(ex.dataset.extra)});
 $("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=paymentNotConnected;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
-syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();telegramAuth();
+syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();loadVenue();telegramAuth();
 
 /* BUILD 60 — canvas food physics */
 const SAUCE_PHYS={

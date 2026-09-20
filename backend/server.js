@@ -9,7 +9,7 @@ app.use(express.json());
 app.use((req,res,next)=>{
  res.setHeader('Access-Control-Allow-Origin','*');
  res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Owner-Token, Authorization');
- res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,OPTIONS');
+ res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,PATCH,OPTIONS');
  if(req.method==='OPTIONS') return res.sendStatus(204);
  next();
 });
@@ -18,6 +18,8 @@ app.use(express.static(__dirname));
 const PORT=process.env.PORT||3000;
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
+const DEFAULT_VENUE_ID='lepyoshka';
+const DEFAULT_VENUE={venue_id:DEFAULT_VENUE_ID,slug:DEFAULT_VENUE_ID,name:'В Лепёшке',is_active:true,config:{},menu:[]};
 
 const seed={shaurma_orders:[]};
 
@@ -63,7 +65,29 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS fulfillment_type TEXT NOT NULL DEFAULT 'delivery'");
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending'");
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS payment_method TEXT");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS venue_id TEXT NOT NULL DEFAULT 'lepyoshka'");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS venue_name TEXT NOT NULL DEFAULT 'В Лепёшке'");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_telegram_user ON shaurma_orders(telegram_user_id, created_at DESC)");
+ await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_venue_created ON shaurma_orders(venue_id, created_at DESC)");
+
+ await DB.query(`
+  CREATE TABLE IF NOT EXISTS shaurma_venues(
+    venue_id TEXT PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    menu JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_shaurma_venues_active ON shaurma_venues(is_active, name);
+ `);
+ await DB.query(`
+  INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
+  VALUES($1,$2,$3,TRUE,'{}'::jsonb,'[]'::jsonb)
+  ON CONFLICT(venue_id) DO NOTHING
+ `,[DEFAULT_VENUE.venue_id,DEFAULT_VENUE.slug,DEFAULT_VENUE.name]);
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(
@@ -91,7 +115,7 @@ async function initDb(){
 
 }
 
-app.get('/api/health',(req,res)=>res.json({ok:true,mode:'shaurma-city',storage:DB?'postgres':'temporary',identity:'telegram-user-id',profile_storage:DB?'postgres':'unavailable'}));
+app.get('/api/health',(req,res)=>res.json({ok:true,mode:'shaurma-city',storage:DB?'postgres':'temporary',identity:'telegram-user-id',profile_storage:DB?'postgres':'unavailable',multi_venue:true,default_venue_id:DEFAULT_VENUE_ID}));
 
 
 
@@ -235,15 +259,40 @@ function pushOwner(event,payload){
  const data='event: '+event+'\n'+'data: '+JSON.stringify(payload)+'\n\n';
  for(const res of ownerClients){try{res.write(data)}catch{ownerClients.delete(res)}}
 }
+function normalizeVenueId(value){
+ const id=String(value||'').trim().toLowerCase().replace(/^venue_/,'');
+ return /^[a-z0-9_-]{1,64}$/.test(id)?id:null;
+}
+async function resolveVenue(value,{includeInactive=false}={}){
+ const id=normalizeVenueId(value)||DEFAULT_VENUE_ID;
+ if(!DB){
+  return (id===DEFAULT_VENUE_ID && (includeInactive||DEFAULT_VENUE.is_active))?{...DEFAULT_VENUE}:null;
+ }
+ const where=includeInactive?'':' AND is_active=TRUE';
+ const q=await DB.query(`SELECT venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE (venue_id=$1 OR slug=$1)${where} LIMIT 1`,[id]);
+ return q.rows[0]||null;
+}
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
+let clientBotUsername='';
+async function getClientBotUsername(){
+ if(clientBotUsername)return clientBotUsername;
+ const token=clientBotToken();
+ if(!token)return '';
+ const r=await fetch('https://api.telegram.org/bot'+token+'/getMe');
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
+ clientBotUsername=j.result.username;
+ return clientBotUsername;
+}
 async function syncTelegramMiniApp(){
  const token=process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN;
  if(!token){console.log('Telegram client bot token not configured');return}
  try{
+  await getClientBotUsername();
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=60'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=61&venue=lepyoshka'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
@@ -271,6 +320,60 @@ app.post('/api/shaurma/login',(req,res)=>{
  if(!process.env.OWNER_PASSWORD||!process.env.OWNER_API_TOKEN)return res.status(503).json({error:'owner_not_configured'});
  if((req.body||{}).password!==process.env.OWNER_PASSWORD)return res.status(401).json({error:'invalid_password'});
  res.json({ok:true,token:process.env.OWNER_API_TOKEN});
+});
+
+app.get('/api/shaurma/venues',async(req,res)=>{
+ try{
+  if(!DB)return res.json([DEFAULT_VENUE]);
+  const q=await DB.query('SELECT venue_id,slug,name,is_active,config,updated_at FROM shaurma_venues WHERE is_active=TRUE ORDER BY name');
+  res.json(q.rows);
+ }catch(e){console.error('venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
+});
+
+app.get('/api/shaurma/client-config',async(req,res)=>{
+ try{
+  const botUsername=await getClientBotUsername();
+  if(!botUsername)return res.status(503).json({error:'telegram_not_configured'});
+  const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
+  const base=shortName?`https://t.me/${botUsername}/${shortName}`:`https://t.me/${botUsername}`;
+  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base+'?startapp=venue_{venue_id}'});
+ }catch(e){console.error('client config:',e.message);res.status(502).json({error:'telegram_lookup_failed'})}
+});
+
+app.get('/api/shaurma/venues/:venueId',async(req,res)=>{
+ try{
+  const id=normalizeVenueId(req.params.venueId);
+  if(!id)return res.status(400).json({error:'bad_venue_id'});
+  const venue=await resolveVenue(id);
+  if(!venue)return res.status(404).json({error:'venue_not_found'});
+  res.json(venue);
+ }catch(e){console.error('venue read:',e.message);res.status(500).json({error:'venue_read_failed'})}
+});
+
+app.put('/api/shaurma/venues/:venueId',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const venueId=normalizeVenueId(req.params.venueId);
+ const body=req.body||{};
+ const slug=normalizeVenueId(body.slug||venueId);
+ const name=String(body.name||'').trim().slice(0,160);
+ const config=body.config&&typeof body.config==='object'&&!Array.isArray(body.config)?body.config:{};
+ const menu=Array.isArray(body.menu)?body.menu:[];
+ if(!venueId||!slug||!name)return res.status(400).json({error:'invalid_venue'});
+ if(JSON.stringify(config).length>50000||JSON.stringify(menu).length>500000)return res.status(413).json({error:'venue_too_large'});
+ try{
+  const q=await DB.query(`
+   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
+   VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb)
+   ON CONFLICT(venue_id) DO UPDATE SET slug=EXCLUDED.slug,name=EXCLUDED.name,is_active=EXCLUDED.is_active,
+    config=EXCLUDED.config,menu=EXCLUDED.menu,updated_at=NOW()
+   RETURNING *
+  `,[venueId,slug,name,body.is_active!==false,JSON.stringify(config),JSON.stringify(menu)]);
+  res.json(q.rows[0]);
+ }catch(e){
+  if(e.code==='23505')return res.status(409).json({error:'venue_slug_exists'});
+  console.error('venue upsert:',e.message);res.status(500).json({error:'venue_update_failed'});
+ }
 });
 
 app.get('/api/shaurma/stream',(req,res)=>{
@@ -373,7 +476,7 @@ app.get('/api/shaurma/my-stream',(req,res)=>{
 });
 
 app.post('/api/shaurma/orders',async(req,res)=>{
- const {items,total,customer_name,phone,address,comment,telegram_init_data,fulfillment_type,payment_status,payment_method}=req.body||{};
+ const {items,total,customer_name,phone,address,comment,telegram_init_data,fulfillment_type,payment_status,payment_method,venue_id}=req.body||{};
  const sess=telegramSession(req);
  let tgUser=sess?sess.user:null;
  if(!tgUser && telegram_init_data){
@@ -383,19 +486,23 @@ app.post('/api/shaurma/orders',async(req,res)=>{
  const fulfillment=fulfillment_type==='cafe'?'cafe':'delivery';
  if(fulfillment==='delivery' && !phone)return res.status(400).json({error:'phone_required'});
  if(fulfillment==='delivery' && !address)return res.status(400).json({error:'address_required'});
+ const requestedVenueId=normalizeVenueId(venue_id||DEFAULT_VENUE_ID);
+ if(!requestedVenueId)return res.status(400).json({error:'bad_venue_id'});
  const num=orderNumber();
  try{
+  const venue=await resolveVenue(requestedVenueId);
+  if(!venue)return res.status(404).json({error:'venue_not_found'});
   let order;
   const safePaymentStatus=['pending','paid','failed','cancelled'].includes(payment_status)?payment_status:'pending';
   if(DB){
    const q=await DB.query(
-    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *',
-    [num,JSON.stringify(items),Number(total)||0,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null]
+    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *',
+    [num,JSON.stringify(items),Number(total)||0,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null,venue.venue_id,venue.name]
    );
    order=q.rows[0];
   }else{
    const d=readStore();d.shaurma_orders=d.shaurma_orders||[];
-   order={id:Date.now(),order_number:num,items,total:Number(total)||0,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+   order={id:Date.now(),order_number:num,items,total:Number(total)||0,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,venue_id:venue.venue_id,venue_name:venue.name,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
    d.shaurma_orders.push(order);writeStore(d);
   }
   pushOwner('order',order);
@@ -407,7 +514,9 @@ app.post('/api/shaurma/orders',async(req,res)=>{
 app.get('/api/shaurma/orders',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);
  try{
-  const rows=DB?(await DB.query('SELECT * FROM shaurma_orders ORDER BY created_at DESC LIMIT 200')).rows:(readStore().shaurma_orders||[]).slice().reverse();
+  const venueId=req.query.venue_id?normalizeVenueId(req.query.venue_id):null;
+  if(req.query.venue_id&&!venueId)return res.status(400).json({error:'bad_venue_id'});
+  const rows=DB?(venueId?(await DB.query('SELECT * FROM shaurma_orders WHERE venue_id=$1 ORDER BY created_at DESC LIMIT 200',[venueId])).rows:(await DB.query('SELECT * FROM shaurma_orders ORDER BY created_at DESC LIMIT 200')).rows):(readStore().shaurma_orders||[]).filter(x=>!venueId||x.venue_id===venueId).slice().reverse();
   res.json(rows);
  }catch(e){res.status(500).json({error:e.message})}
 });

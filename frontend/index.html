@@ -1850,12 +1850,12 @@ body{
     <div class="checkoutActions"><button class="ghost" id="checkoutCancel">Назад</button><button class="pri" id="fulfillmentContinue">К оплате</button></div>
   </div>
   <div class="paymentStep" id="paymentStep">
-    <div class="k">Оплата</div><h3>Оплатить заказ</h3>
-    <p id="paymentSubtitle">Безопасная оплата картой. Реквизиты карты не хранятся в Shaurma City.</p>
+    <div class="k">Подтверждение</div><h3>Оформить заказ</h3>
+    <p id="paymentSubtitle">Проверь способ получения и отправь заказ заведению.</p>
     <div class="paymentSummary"><div><span>Получение</span><b id="paymentFulfillment">Доставка</b></div><div><span>Сумма</span><b id="paymentTotal">0 ₽</b></div></div>
-    <button class="paymentMethodCard" id="paymentMethodCard"><span>◫</span><div><b>Банковская карта</b><small id="paymentCardHint">Привязать или выбрать сохранённую</small></div><em>›</em></button>
-    <div class="paymentNotice">Платёжный провайдер подключим следующим шагом. До его подключения списаний и создания оплаченного заказа не происходит.</div>
-    <div class="checkoutActions"><button class="ghost" id="paymentBack">Назад</button><button class="pri" id="paymentContinue">Оплатить</button></div>
+    <button class="paymentMethodCard" id="paymentMethodCard"><span>✓</span><div><b>Оплата при получении</b><small id="paymentCardHint">Наличными или картой в заведении</small></div><em>›</em></button>
+    <div class="paymentNotice">Тестовый режим: онлайн-списаний нет. Заказ сразу поступит заведению, оплатить его можно при получении.</div>
+    <div class="checkoutActions"><button class="ghost" id="paymentBack">Назад</button><button class="pri" id="paymentContinue">Оформить заказ</button></div>
   </div>
   <div class="orderOk" id="orderOk"><div class="k">Заказ в работе</div><b id="orderNumber"></b><p>Мы получили его. Статус можно смотреть в разделе «Профиль».</p><button class="pri wide" id="orderDone">Отлично</button></div>
 </div></div><div class="toast" id="toast"></div>
@@ -2111,19 +2111,38 @@ function goToPayment(){
   $("#paymentStep").classList.add("show");
   $("#paymentFulfillment").textContent=checkoutFulfillment==="cafe"?activeVenue.name+" · на месте":"Доставка · "+activeVenue.name;
   $("#paymentTotal").textContent=cartTotal()+" ₽";
-  const pay=(userProfile&&userProfile.payment)||{};
-  $("#paymentCardHint").textContent=pay.linked?((pay.card_brand||"Карта")+" •••• "+(pay.card_last4||"")):"Привязать банковскую карту";
-  $("#paymentContinue").textContent="Оплатить "+cartTotal()+" ₽";
+  $("#paymentCardHint").textContent="Наличными или картой в заведении";
+  $("#paymentContinue").textContent="Оформить · "+cartTotal()+" ₽";
 }
 function backToFulfillment(){
   $("#paymentStep").classList.remove("show");
   $("#fulfillmentStep").style.display="block";
 }
 function openPaymentMethod(){
-  toast("Подключаем безопасную привязку карты");
+  toast("Сейчас доступна оплата при получении");
 }
-function paymentNotConnected(){
-  toast("Оплата будет доступна после подключения платёжного провайдера");
+async function submitOrder(){
+  if(!cart.length){toast("Корзина пустая");return}
+  const button=$("#paymentContinue"),tg=window.Telegram&&window.Telegram.WebApp;
+  button.disabled=true;button.textContent="Отправляем…";
+  const payload={
+    venue_id:activeVenue.venue_id||ACTIVE_VENUE_ID,
+    items:cart.map(x=>({id:x.id,n:x.n,p:x.p,q:x.q,detail:x.detail||"",builder:!!x.builder})),
+    total:cartTotal(),customer_name:$("#customerName").value.trim()||tgUser?.first_name||"Гость",
+    phone:$("#customerPhone").value.trim(),address:$("#customerAddress").value.trim(),comment:$("#customerComment").value.trim(),
+    fulfillment_type:checkoutFulfillment,payment_status:"pending",payment_method:"on_delivery",telegram_init_data:tg?.initData||""
+  };
+  try{
+    const headers={"Content-Type":"application/json"};if(tgSession)headers.Authorization="Bearer "+tgSession;
+    const response=await fetch(API+"/api/shaurma/orders",{method:"POST",headers,body:JSON.stringify(payload)});
+    if(!response.ok)throw new Error("order_"+response.status);
+    const order=await response.json();
+    if(tgSession&&checkoutFulfillment==="delivery")saveUserState({profile:{delivery:{name:payload.customer_name,phone:payload.phone,address:payload.address}}});
+    cart=[];cartRender();myOrders=[order,...myOrders.filter(x=>String(x.id)!==String(order.id))];saveOrderCache();renderMyOrders();
+    $("#paymentStep").classList.remove("show");$("#fulfillmentStep").style.display="none";$("#orderNumber").textContent=order.order_number;$("#orderOk").classList.add("show");
+    tg?.HapticFeedback?.notificationOccurred?.("success");
+  }catch(e){toast("Не удалось отправить заказ. Попробуй ещё раз")}
+  finally{button.disabled=false;button.textContent="Оформить · "+cartTotal()+" ₽"}
 }
 
 function scene(id){$$(".scene").forEach(x=>x.classList.remove("active"));$(id).classList.add("active")}
@@ -2206,7 +2225,7 @@ function renderReady(){$("#readyImg").src=imgFor();renderSauceLines($("#readyLin
 function next(){if(phase==="type")return;if(phase==="sauce"){if(!st.sauces.length){toast("Добавь хотя бы один соус");return}phase="extras";scene("#sceneExtras");syncBuilder();return}if(phase==="extras"){phase="ready";scene("#sceneReady");syncBuilder();return}const price=st.type==="Лепёшка"?320:330;cart.push({id:"custom"+Date.now(),builder:true,n:st.type+" · своя сборка",detail:"Соусы: "+st.sauces.join(", ")+" · Добавки: "+(st.extras.length?st.extras.join(", "):"без добавок"),p:price,q:1});cartRender();closeBuilder();toast("Добавили в заказ")}
 function prev(){if(phase==="sauce"){phase="type";scene("#sceneType");armed=st.type;syncBuilder()}else if(phase==="extras"){phase="sauce";scene("#sceneSauce");syncBuilder()}else if(phase==="ready"){phase="extras";scene("#sceneExtras");syncBuilder()}}
 document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-builder]");if(sb){resetBuilder();st.type=sb.dataset.safeBuilder;armed=null;phase="sauce";scene("#sceneSauce");syncBuilder();$("#builder").classList.add("open");document.body.style.overflow="hidden";return}const a=e.target.closest("[data-add]");if(a)addProduct(a.dataset.add);const hf=e.target.closest("[data-hero-filter]");if(hf)setHeroFilter(hf.dataset.heroFilter);const mf=e.target.closest("[data-menu-filter]");if(mf)setFilter(mf.dataset.menuFilter);const g=e.target.closest("[data-go]");if(g){document.querySelector(g.dataset.go)?.scrollIntoView({behavior:"smooth"});$$(".nav button").forEach(x=>x.classList.remove("active"));g.classList.add("active")}const act=e.target.closest("[data-act]");if(act){const i=+act.dataset.i;if(!cart[i])return;if(act.dataset.act==="+")cart[i].q++;if(act.dataset.act==="-"){cart[i].q--;if(cart[i].q<=0)cart.splice(i,1)}if(act.dataset.act==="x")cart.splice(i,1);cartRender()}const s=e.target.closest("[data-sauce]");if(s)toggleSauce(s.dataset.sauce);const ex=e.target.closest("[data-extra]");if(ex)toggleExtra(ex.dataset.extra)});
-$("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=paymentNotConnected;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
+$("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=submitOrder;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
 syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();loadVenue();telegramAuth();
 
 /* BUILD 60 — canvas food physics */

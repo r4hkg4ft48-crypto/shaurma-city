@@ -299,7 +299,8 @@ function normalizeVenueId(value){
 async function resolveVenue(value,{includeInactive=false}={}){
  const id=normalizeVenueId(value)||DEFAULT_VENUE_ID;
  if(!DB){
-  return (id===DEFAULT_VENUE_ID && (includeInactive||DEFAULT_VENUE.is_active))?{...DEFAULT_VENUE}:null;
+  const venue=SEEDED_VENUES.find(v=>v.venue_id===id||v.slug===id);
+  return venue?{...venue,is_active:true}:null;
  }
  const where=includeInactive?'':' AND is_active=TRUE';
  const q=await DB.query(`SELECT venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE (venue_id=$1 OR slug=$1)${where} LIMIT 1`,[id]);
@@ -357,7 +358,7 @@ app.post('/api/shaurma/login',(req,res)=>{
 
 app.get('/api/shaurma/venues',async(req,res)=>{
  try{
-  if(!DB)return res.json([DEFAULT_VENUE]);
+  if(!DB)return res.json(SEEDED_VENUES.map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
   const q=await DB.query('SELECT venue_id,slug,name,is_active,config,updated_at FROM shaurma_venues WHERE is_active=TRUE ORDER BY name');
   res.json(q.rows);
  }catch(e){console.error('venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
@@ -525,17 +526,31 @@ app.post('/api/shaurma/orders',async(req,res)=>{
  try{
   const venue=await resolveVenue(requestedVenueId);
   if(!venue)return res.status(404).json({error:'venue_not_found'});
+  const venueMenu=new Map((Array.isArray(venue.menu)?venue.menu:[]).map(item=>[String(item.id),item]));
+  const normalizedItems=[];
+  for(const item of items){
+   const qty=Math.max(1,Math.min(50,Math.floor(Number(item.q)||1))),menuItem=venueMenu.get(String(item.id));
+   if(menuItem){
+    const price=Number(menuItem.p??menuItem.price);
+    if(!Number.isFinite(price)||price<0)return res.status(400).json({error:'invalid_menu_price',item_id:item.id});
+    normalizedItems.push({id:String(menuItem.id),n:String(menuItem.n||menuItem.name||'Позиция'),p:price,q:qty,detail:String(item.detail||'').slice(0,500)});
+   }else if(venue.config?.builder_enabled!==false&&item.builder){
+    const price=Math.max(0,Math.min(100000,Number(item.p)||0));
+    normalizedItems.push({id:String(item.id),n:String(item.n||'Своя сборка').slice(0,160),p:price,q:qty,detail:String(item.detail||'').slice(0,500),builder:true});
+   }else return res.status(400).json({error:'item_not_in_venue_menu',item_id:item.id});
+  }
+  const calculatedTotal=normalizedItems.reduce((sum,item)=>sum+item.p*item.q,0);
   let order;
   const safePaymentStatus=['pending','paid','failed','cancelled'].includes(payment_status)?payment_status:'pending';
   if(DB){
    const q=await DB.query(
     'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *',
-    [num,JSON.stringify(items),Number(total)||0,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null,venue.venue_id,venue.name]
+    [num,JSON.stringify(normalizedItems),calculatedTotal,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null,venue.venue_id,venue.name]
    );
    order=q.rows[0];
   }else{
    const d=readStore();d.shaurma_orders=d.shaurma_orders||[];
-   order={id:Date.now(),order_number:num,items,total:Number(total)||0,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,venue_id:venue.venue_id,venue_name:venue.name,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+   order={id:Date.now(),order_number:num,items:normalizedItems,total:calculatedTotal,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,venue_id:venue.venue_id,venue_name:venue.name,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
    d.shaurma_orders.push(order);writeStore(d);
   }
   pushOwner('order',order);

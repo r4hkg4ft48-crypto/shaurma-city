@@ -143,7 +143,7 @@ async function initDb(){
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_active ON shaurmeg_markers(is_active,updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_venue ON shaurmeg_markers(venue_id);
  `);
- await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
+ await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(
@@ -456,7 +456,7 @@ app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
  const client=await DB.connect();
  try{
   await client.query('BEGIN');
-  const venueId=x.venue_id||('venue_'+crypto.randomBytes(6).toString('hex'));
+  const venueId=x.venue_id||crypto.randomBytes(8).toString('hex');
   const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false})]);
   const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);
   await client.query('COMMIT');publishVenue(venue.rows[0]);res.status(201).json(q.rows[0]);

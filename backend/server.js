@@ -144,6 +144,9 @@ async function initDb(){
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_venue ON shaurmeg_markers(venue_id);
  `);
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS panorama_image TEXT NOT NULL DEFAULT ''");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_scene_url TEXT NOT NULL DEFAULT ''");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_poster TEXT NOT NULL DEFAULT ''");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_config JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`
@@ -426,16 +429,19 @@ function publishVenue(venue){
 
 function markerPayload(body={}){
  const gallery=Array.isArray(body.gallery)?body.gallery.map(x=>String(x||'').trim()).filter(Boolean).slice(0,6):[];
+ const rawConfig=body.immersive_config&&typeof body.immersive_config==='object'&&!Array.isArray(body.immersive_config)?body.immersive_config:{};
+ const immersive_config={bearing:Number(rawConfig.bearing)||0,pitch:Math.max(20,Math.min(85,Number(rawConfig.pitch)||68)),zoom:Math.max(15,Math.min(20,Number(rawConfig.zoom)||18.2)),entry_mode:['orbit','walk','fly'].includes(rawConfig.entry_mode)?rawConfig.entry_mode:'orbit'};
  return {
   venue_id:normalizeVenueId(body.venue_id),name:String(body.name||'').trim().slice(0,160),address:String(body.address||'').trim().slice(0,300),
   description:String(body.description||'').trim().slice(0,1400),lat:Number(body.lat),lon:Number(body.lon),hero_image:String(body.hero_image||'').trim().slice(0,1800000),panorama_image:String(body.panorama_image||'').trim().slice(0,4200000),
+  immersive_scene_url:String(body.immersive_scene_url||'').trim().slice(0,2000),immersive_poster:String(body.immersive_poster||'').trim().slice(0,2400000),immersive_config,
   gallery,hours:String(body.hours||'').trim().slice(0,160),price_label:String(body.price_label||'').trim().slice(0,80),is_active:body.is_active!==false
  };
 }
 function markerValid(x,{requireVenue=true}={}){return (!requireVenue||x.venue_id)&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
 function publicMarker(row){
  const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
- return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,panorama_image:row.panorama_image||'',gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
+ return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,panorama_image:row.panorama_image||'',immersive_scene_url:row.immersive_scene_url||'',immersive_poster:row.immersive_poster||'',immersive_config:row.immersive_config&&typeof row.immersive_config==='object'?row.immersive_config:{},gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
 }
 
 app.get('/api/shaurmeg/markers',async(req,res)=>{
@@ -459,7 +465,7 @@ app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
   await client.query('BEGIN');
   const venueId=x.venue_id||crypto.randomBytes(8).toString('hex');
   const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false})]);
-  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,panorama_image,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);
+  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,panorama_image,immersive_scene_url,immersive_poster,immersive_config,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,x.immersive_scene_url,x.immersive_poster,JSON.stringify(x.immersive_config),JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);
   await client.query('COMMIT');publishVenue(venue.rows[0]);res.status(201).json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}finally{client.release()}
 });
@@ -472,7 +478,7 @@ app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
   await client.query('BEGIN');
   const current=await client.query('SELECT venue_id FROM shaurmeg_markers WHERE id=$1 FOR UPDATE',[req.params.id]);if(!current.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
   const venueId=current.rows[0].venue_id;
-  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,panorama_image=$7,gallery=$8::jsonb,hours=$9,price_label=$10,is_active=$11,updated_at=NOW() WHERE id=$12 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);
+  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,panorama_image=$7,immersive_scene_url=$8,immersive_poster=$9,immersive_config=$10::jsonb,gallery=$11::jsonb,hours=$12,price_label=$13,is_active=$14,updated_at=NOW() WHERE id=$15 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,x.immersive_scene_url,x.immersive_poster,JSON.stringify(x.immersive_config),JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);
   const venue=await client.query('UPDATE shaurma_venues SET name=$1,is_active=$2,updated_at=NOW() WHERE venue_id=$3 RETURNING *',[x.name,x.is_active,venueId]);
   await client.query('COMMIT');if(venue.rows[0])publishVenue(venue.rows[0]);res.json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker update:',e.message);res.status(500).json({error:'marker_update_failed'})}finally{client.release()}

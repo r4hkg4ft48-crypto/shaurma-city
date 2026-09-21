@@ -346,6 +346,18 @@ async function getClientBotInfo(){
  clientBotInfo=j.result;
  return clientBotInfo;
 }
+function directVenueUrl(venueId){
+ return 'https://shaurma-city-app.onrender.com/?v=65&venue='+encodeURIComponent(normalizeVenueId(venueId)||DEFAULT_VENUE_ID)+'&open=menu';
+}
+async function telegramVenueUrl(venueId){
+ const id=normalizeVenueId(venueId)||DEFAULT_VENUE_ID;
+ const botInfo=await getClientBotInfo();
+ const username=botInfo?.username||'';
+ if(!username)return directVenueUrl(id);
+ const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
+ const start='venue_'+id;
+ return shortName?'https://t.me/'+username+'/'+shortName+'?startapp='+encodeURIComponent(start):'https://t.me/'+username+'?startapp='+encodeURIComponent(start);
+}
 async function syncTelegramMiniApp(){
  const token=process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN;
  if(!token){console.log('Telegram client bot token not configured');return}
@@ -354,7 +366,7 @@ async function syncTelegramMiniApp(){
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=63&venue=lepyoshka&open=menu'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=65&venue=lepyoshka&open=menu'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
@@ -412,8 +424,17 @@ app.get('/api/shaurma/client-config',async(req,res)=>{
   if(!botUsername)return res.status(503).json({error:'telegram_not_configured'});
   const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
   const base=shortName?`https://t.me/${botUsername}/${shortName}?startapp=venue_{venue_id}`:`https://t.me/${botUsername}?startapp=venue_{venue_id}`;
-  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base});
+  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base,stable_launch_url_template:'https://shaurma-city-api.onrender.com/api/shaurma/launch/{venue_id}'});
  }catch(e){console.error('client config:',e.message);res.status(502).json({error:'telegram_lookup_failed'})}
+});
+
+app.get('/api/shaurma/launch/:venueId',async(req,res)=>{
+ try{
+  const venue=await resolveVenue(req.params.venueId);
+  if(!venue)return res.status(404).json({error:'venue_not_found'});
+  res.setHeader('Cache-Control','no-store');
+  res.redirect(302,await telegramVenueUrl(venue.venue_id));
+ }catch(e){console.error('venue launch:',e.message);res.redirect(302,directVenueUrl(req.params.venueId))}
 });
 
 function publishVenue(venue){
@@ -434,7 +455,11 @@ function markerPayload(body={}){
 function markerValid(x,{requireVenue=true}={}){return (!requireVenue||x.venue_id)&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
 function publicMarker(row){
  const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
- return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
+ const venueId=normalizeVenueId(row.venue_id)||DEFAULT_VENUE_ID;
+ return {id:row.id,venue_id:venueId,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu,
+  order_url:'https://shaurma-city-api.onrender.com/api/shaurma/launch/'+encodeURIComponent(venueId),
+  mini_app_url:directVenueUrl(venueId)
+ };
 }
 
 app.get('/api/shaurmeg/markers',async(req,res)=>{

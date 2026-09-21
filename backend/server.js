@@ -5,7 +5,7 @@ const {Pool}=require('pg');
 const crypto=require('crypto');
 
 const app=express();
-app.use(express.json());
+app.use(express.json({limit:'4mb'}));
 app.use((req,res,next)=>{
  res.setHeader('Access-Control-Allow-Origin','*');
  res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Owner-Token, Authorization');
@@ -19,6 +19,7 @@ const PORT=process.env.PORT||3000;
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 const DEFAULT_VENUE_ID='lepyoshka';
+const venueClients=new Map();
 const DEFAULT_VENUE={venue_id:DEFAULT_VENUE_ID,slug:DEFAULT_VENUE_ID,name:'В Лепёшке',is_active:true,config:{},menu:[]};
 const SEEDED_VENUES=[
  {venue_id:'lepyoshka',slug:'lepyoshka',name:'В Лепёшке',config:{subtitle:'ФИРМЕННОЕ МЕНЮ',builder_enabled:true},menu:[
@@ -121,6 +122,27 @@ async function initDb(){
     updated_at=NOW()
   `,[venue.venue_id,venue.slug,venue.name,JSON.stringify(venue.config),JSON.stringify(venue.menu)]);
  }
+
+ await DB.query(`
+  CREATE TABLE IF NOT EXISTS shaurmeg_markers(
+    id BIGSERIAL PRIMARY KEY,
+    venue_id TEXT NOT NULL REFERENCES shaurma_venues(venue_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    lat DOUBLE PRECISION NOT NULL,
+    lon DOUBLE PRECISION NOT NULL,
+    hero_image TEXT NOT NULL DEFAULT '',
+    gallery JSONB NOT NULL DEFAULT '[]'::jsonb,
+    hours TEXT NOT NULL DEFAULT '',
+    price_label TEXT NOT NULL DEFAULT '',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_active ON shaurmeg_markers(is_active,updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_venue ON shaurmeg_markers(venue_id);
+ `);
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(
@@ -307,36 +329,35 @@ async function resolveVenue(value,{includeInactive=false}={}){
  return q.rows[0]||null;
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-let clientBotUsername='';
-function telegramWebhookSecret(){const token=clientBotToken();return token?crypto.createHmac('sha256','ShaurmaCityWebhookV1').update(token).digest('hex'):''}
+let clientBotInfo=null;
 async function clientTelegramApi(method,body={}){
  const token=clientBotToken();if(!token)throw new Error('telegram_not_configured');
  const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));return j.result;
 }
-async function getClientBotUsername(){
- if(clientBotUsername)return clientBotUsername;
+async function getClientBotInfo(){
+ if(clientBotInfo)return clientBotInfo;
  const token=clientBotToken();
- if(!token)return '';
+ if(!token)return null;
  const r=await fetch('https://api.telegram.org/bot'+token+'/getMe');
  const j=await r.json().catch(()=>({}));
  if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
- clientBotUsername=j.result.username;
- return clientBotUsername;
+ clientBotInfo=j.result;
+ return clientBotInfo;
 }
 async function syncTelegramMiniApp(){
  const token=process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN;
  if(!token){console.log('Telegram client bot token not configured');return}
  try{
-  await getClientBotUsername();
+  await getClientBotInfo();
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=62&venue=lepyoshka'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Shaurma City',web_app:{url:'https://shaurma-city-app.onrender.com/?v=63&venue=lepyoshka&open=menu'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
-  await clientTelegramApi('setWebhook',{url:'https://shaurma-city-api.onrender.com/api/shaurma/client-telegram-webhook',secret_token:telegramWebhookSecret(),allowed_updates:['message'],drop_pending_updates:false});
+  await clientTelegramApi('deleteWebhook',{drop_pending_updates:false});
   console.log('Telegram Mini App menu synced to Shaurma City');
  }catch(e){console.error('Telegram Mini App sync:',e.message)}
 }
@@ -375,29 +396,67 @@ app.get('/api/shaurma/venues',async(req,res)=>{
 app.get('/api/shaurma/client-config',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
-  const botUsername=await getClientBotUsername();
+  const botInfo=await getClientBotInfo();
+  const botUsername=botInfo?.username||'';
   if(!botUsername)return res.status(503).json({error:'telegram_not_configured'});
   const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
-  const base=shortName?`https://t.me/${botUsername}/${shortName}?startapp=venue_{venue_id}`:`https://t.me/${botUsername}?start=venue_{venue_id}`;
-  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base});
+  const base=shortName?`https://t.me/${botUsername}/${shortName}?startapp=venue_{venue_id}`:`https://t.me/${botUsername}?startapp=venue_{venue_id}`;
+  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base});
  }catch(e){console.error('client config:',e.message);res.status(502).json({error:'telegram_lookup_failed'})}
 });
 
-app.post('/api/shaurma/client-telegram-webhook',async(req,res)=>{
- const expected=telegramWebhookSecret(),received=req.get('x-telegram-bot-api-secret-token')||'';
- const a=Buffer.from(received),b=Buffer.from(expected);
- if(!expected||a.length!==b.length||!crypto.timingSafeEqual(a,b))return res.sendStatus(401);
- res.json({ok:true});
- const message=(req.body||{}).message;if(!message?.chat?.id||!message.text)return;
- const match=String(message.text).match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+([^\s]+))?/i);if(!match)return;
- const requested=normalizeVenueId(match[1]||DEFAULT_VENUE_ID)||DEFAULT_VENUE_ID;
- try{
-  const venue=await resolveVenue(requested);if(!venue)return;
-  const appUrl='https://shaurma-city-app.onrender.com/?v=62&venue='+encodeURIComponent(venue.venue_id)+'&t='+Date.now();
-  const chatId=message.chat.id;
-  await clientTelegramApi('setChatMenuButton',{chat_id:chatId,menu_button:{type:'web_app',text:'Меню · '+venue.name.slice(0,40),web_app:{url:appUrl}}});
-  await clientTelegramApi('sendMessage',{chat_id:chatId,text:'Открыть меню: '+venue.name,reply_markup:{inline_keyboard:[[{text:'Открыть '+venue.name,web_app:{url:appUrl}}]]}});
- }catch(e){console.error('client webhook:',e.message)}
+function publishVenue(venue){
+ const clients=venueClients.get(venue.venue_id);if(!clients)return;
+ const payload='event: venue\ndata: '+JSON.stringify(venue)+'\n\n';
+ for(const client of clients){try{client.write(payload)}catch{clients.delete(client)}}
+ if(!clients.size)venueClients.delete(venue.venue_id);
+}
+
+function markerPayload(body={}){
+ const gallery=Array.isArray(body.gallery)?body.gallery.map(x=>String(x||'').trim()).filter(Boolean).slice(0,6):[];
+ return {
+  venue_id:normalizeVenueId(body.venue_id),name:String(body.name||'').trim().slice(0,160),address:String(body.address||'').trim().slice(0,300),
+  description:String(body.description||'').trim().slice(0,1400),lat:Number(body.lat),lon:Number(body.lon),hero_image:String(body.hero_image||'').trim().slice(0,1800000),
+  gallery,hours:String(body.hours||'').trim().slice(0,160),price_label:String(body.price_label||'').trim().slice(0,80),is_active:body.is_active!==false
+ };
+}
+function markerValid(x){return x.venue_id&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
+function publicMarker(row){
+ const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
+ return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
+}
+
+app.get('/api/shaurmeg/markers',async(req,res)=>{
+ res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+ if(!DB)return res.json([]);
+ try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id WHERE m.is_active=TRUE AND v.is_active=TRUE ORDER BY m.updated_at DESC`);res.json(q.rows.map(publicMarker))}
+ catch(e){console.error('marker list:',e.message);res.status(500).json({error:'marker_list_failed'})}
+});
+
+app.get('/api/shaurmeg/admin/markers',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.json([]);
+ try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);res.json(q.rows.map(row=>({...publicMarker(row),is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at})))}
+ catch(e){res.status(500).json({error:'marker_list_failed'})}
+});
+
+app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const x=markerPayload(req.body);if(!markerValid(x))return res.status(400).json({error:'invalid_marker'});
+ try{const q=await DB.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) RETURNING *`,[x.venue_id,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);res.status(201).json(q.rows[0])}
+ catch(e){if(e.code==='23503')return res.status(400).json({error:'venue_not_found'});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}
+});
+
+app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const x=markerPayload(req.body);if(!markerValid(x))return res.status(400).json({error:'invalid_marker'});
+ try{const q=await DB.query(`UPDATE shaurmeg_markers SET venue_id=$1,name=$2,address=$3,description=$4,lat=$5,lon=$6,hero_image=$7,gallery=$8::jsonb,hours=$9,price_label=$10,is_active=$11,updated_at=NOW() WHERE id=$12 RETURNING *`,[x.venue_id,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);if(!q.rows[0])return res.sendStatus(404);res.json(q.rows[0])}
+ catch(e){if(e.code==='23503')return res.status(400).json({error:'venue_not_found'});res.status(500).json({error:'marker_update_failed'})}
+});
+
+app.delete('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ try{const q=await DB.query('DELETE FROM shaurmeg_markers WHERE id=$1 RETURNING id',[req.params.id]);if(!q.rows[0])return res.sendStatus(404);res.json({ok:true,id:q.rows[0].id})}
+ catch(e){res.status(500).json({error:'marker_delete_failed'})}
 });
 
 app.get('/api/shaurma/venues/:venueId',async(req,res)=>{
@@ -409,6 +468,20 @@ app.get('/api/shaurma/venues/:venueId',async(req,res)=>{
   if(!venue)return res.status(404).json({error:'venue_not_found'});
   res.json(venue);
  }catch(e){console.error('venue read:',e.message);res.status(500).json({error:'venue_read_failed'})}
+});
+
+app.get('/api/shaurma/venues/:venueId/stream',async(req,res)=>{
+ const venue=await resolveVenue(req.params.venueId).catch(()=>null);
+ if(!venue)return res.status(404).json({error:'venue_not_found'});
+ res.setHeader('Content-Type','text/event-stream');
+ res.setHeader('Cache-Control','no-cache, no-transform');
+ res.setHeader('Connection','keep-alive');
+ res.flushHeaders?.();
+ const id=venue.venue_id,clients=venueClients.get(id)||new Set();
+ clients.add(res);venueClients.set(id,clients);
+ res.write('event: venue\ndata: '+JSON.stringify(venue)+'\n\n');
+ const keep=setInterval(()=>{try{res.write(': ping\n\n')}catch{}},20000);
+ req.on('close',()=>{clearInterval(keep);clients.delete(res);if(!clients.size)venueClients.delete(id)});
 });
 
 app.put('/api/shaurma/venues/:venueId',async(req,res)=>{
@@ -430,6 +503,7 @@ app.put('/api/shaurma/venues/:venueId',async(req,res)=>{
     config=EXCLUDED.config,menu=EXCLUDED.menu,updated_at=NOW()
    RETURNING *
   `,[venueId,slug,name,body.is_active!==false,JSON.stringify(config),JSON.stringify(menu)]);
+  publishVenue(q.rows[0]);
   res.json(q.rows[0]);
  }catch(e){
   if(e.code==='23505')return res.status(409).json({error:'venue_slug_exists'});
@@ -628,9 +702,11 @@ app.get('/api/shaurma/stats',async(req,res)=>{
 });
 
 const sendOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurma-owner.html'));
+const sendShaurmegOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurmeg-owner.html'));
 app.get('/shaurma-owner',sendOwner);
 app.get('/admin',sendOwner);
 app.get('/owner',sendOwner);
+app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 

@@ -1744,7 +1744,7 @@ body{
 </head>
 <body>
 <div class="app">
-<header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 63</div></header>
+<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><div><b>Москва</b><small>Горячее · рядом</small></div><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 64</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
@@ -1942,6 +1942,9 @@ function normalizeVenueMenu(menu){
 function applyVenue(venue){
   activeVenue=venue;
   document.title=venue.name+" · заказ";
+  const accent=/^#[0-9a-f]{6}$/i.test(venue.config?.accent||"")?venue.config.accent:"#2f6df6";
+  document.documentElement.style.setProperty("--venue-accent",accent);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content",accent);
   const brand=$("#venueBrand"),pickup=$("#venuePickupName"),sub=$("#venueBrandSub");
   if(brand)brand.textContent=venue.name;
   if(pickup)pickup.textContent=venue.name;

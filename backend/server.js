@@ -110,7 +110,7 @@ async function initDb(){
   );
   CREATE INDEX IF NOT EXISTS idx_shaurma_venues_active ON shaurma_venues(is_active, name);
  `);
- for(const venue of SEEDED_VENUES){
+ for(const venue of SEEDED_VENUES.filter(v=>v.venue_id===DEFAULT_VENUE_ID)){
   await DB.query(`
    INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
    VALUES($1,$2,$3,TRUE,$4::jsonb,$5::jsonb)
@@ -143,6 +143,7 @@ async function initDb(){
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_active ON shaurmeg_markers(is_active,updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_venue ON shaurmeg_markers(venue_id);
  `);
+ await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(
@@ -387,10 +388,20 @@ app.post('/api/shaurma/login',(req,res)=>{
 app.get('/api/shaurma/venues',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
-  if(!DB)return res.json(SEEDED_VENUES.map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
-  const q=await DB.query('SELECT venue_id,slug,name,is_active,config,updated_at FROM shaurma_venues WHERE is_active=TRUE ORDER BY name');
+  if(!DB)return res.json([SEEDED_VENUES[0]].map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
+  const q=await DB.query(`SELECT DISTINCT v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.is_active=TRUE AND (v.venue_id=$1 OR m.id IS NOT NULL) ORDER BY v.name`,[DEFAULT_VENUE_ID]);
   res.json(q.rows);
  }catch(e){console.error('venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
+});
+
+app.get('/api/shaurma/admin/venues',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ try{
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+  if(!DB)return res.json([SEEDED_VENUES[0]].map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
+  const q=await DB.query(`SELECT DISTINCT v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at,COUNT(m.id)::int AS marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.venue_id=$1 OR m.id IS NOT NULL GROUP BY v.venue_id ORDER BY v.name`,[DEFAULT_VENUE_ID]);
+  res.json(q.rows);
+ }catch(e){console.error('admin venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
 });
 
 app.get('/api/shaurma/client-config',async(req,res)=>{
@@ -420,7 +431,7 @@ function markerPayload(body={}){
   gallery,hours:String(body.hours||'').trim().slice(0,160),price_label:String(body.price_label||'').trim().slice(0,80),is_active:body.is_active!==false
  };
 }
-function markerValid(x){return x.venue_id&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
+function markerValid(x,{requireVenue=true}={}){return (!requireVenue||x.venue_id)&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
 function publicMarker(row){
  const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
  return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
@@ -441,22 +452,36 @@ app.get('/api/shaurmeg/admin/markers',async(req,res)=>{
 
 app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
- const x=markerPayload(req.body);if(!markerValid(x))return res.status(400).json({error:'invalid_marker'});
- try{const q=await DB.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) RETURNING *`,[x.venue_id,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);res.status(201).json(q.rows[0])}
- catch(e){if(e.code==='23503')return res.status(400).json({error:'venue_not_found'});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}
+ const x=markerPayload(req.body);if(!markerValid(x,{requireVenue:false}))return res.status(400).json({error:'invalid_marker'});
+ const client=await DB.connect();
+ try{
+  await client.query('BEGIN');
+  const venueId=x.venue_id||('venue_'+crypto.randomBytes(6).toString('hex'));
+  const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false})]);
+  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);
+  await client.query('COMMIT');publishVenue(venue.rows[0]);res.status(201).json(q.rows[0]);
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}finally{client.release()}
 });
 
 app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
- const x=markerPayload(req.body);if(!markerValid(x))return res.status(400).json({error:'invalid_marker'});
- try{const q=await DB.query(`UPDATE shaurmeg_markers SET venue_id=$1,name=$2,address=$3,description=$4,lat=$5,lon=$6,hero_image=$7,gallery=$8::jsonb,hours=$9,price_label=$10,is_active=$11,updated_at=NOW() WHERE id=$12 RETURNING *`,[x.venue_id,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);if(!q.rows[0])return res.sendStatus(404);res.json(q.rows[0])}
- catch(e){if(e.code==='23503')return res.status(400).json({error:'venue_not_found'});res.status(500).json({error:'marker_update_failed'})}
+ const x=markerPayload(req.body);if(!markerValid(x,{requireVenue:false}))return res.status(400).json({error:'invalid_marker'});
+ const client=await DB.connect();
+ try{
+  await client.query('BEGIN');
+  const current=await client.query('SELECT venue_id FROM shaurmeg_markers WHERE id=$1 FOR UPDATE',[req.params.id]);if(!current.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
+  const venueId=current.rows[0].venue_id;
+  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,gallery=$7::jsonb,hours=$8,price_label=$9,is_active=$10,updated_at=NOW() WHERE id=$11 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);
+  const venue=await client.query('UPDATE shaurma_venues SET name=$1,is_active=$2,updated_at=NOW() WHERE venue_id=$3 RETURNING *',[x.name,x.is_active,venueId]);
+  await client.query('COMMIT');if(venue.rows[0])publishVenue(venue.rows[0]);res.json(q.rows[0]);
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker update:',e.message);res.status(500).json({error:'marker_update_failed'})}finally{client.release()}
 });
 
 app.delete('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
- try{const q=await DB.query('DELETE FROM shaurmeg_markers WHERE id=$1 RETURNING id',[req.params.id]);if(!q.rows[0])return res.sendStatus(404);res.json({ok:true,id:q.rows[0].id})}
- catch(e){res.status(500).json({error:'marker_delete_failed'})}
+ const client=await DB.connect();
+ try{await client.query('BEGIN');const q=await client.query('DELETE FROM shaurmeg_markers WHERE id=$1 RETURNING id,venue_id',[req.params.id]);if(!q.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}const venueId=q.rows[0].venue_id;if(venueId!==DEFAULT_VENUE_ID)await client.query('DELETE FROM shaurma_venues v WHERE v.venue_id=$1 AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)',[venueId]);await client.query('COMMIT');res.json({ok:true,id:q.rows[0].id})}
+ catch(e){await client.query('ROLLBACK').catch(()=>{});res.status(500).json({error:'marker_delete_failed'})}finally{client.release()}
 });
 
 app.get('/api/shaurma/venues/:venueId',async(req,res)=>{

@@ -301,7 +301,7 @@ function adminTelegramSession(req){
  }catch{return null}
 }
 function adminTelegramAllowed(userId){
- const raw=process.env.ADMIN_TELEGRAM_IDS||'';
+ const raw=[process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(',');
  return raw.split(',').map(x=>x.trim()).filter(Boolean).includes(String(userId));
 }
 function pushTelegram(userId,event,payload){

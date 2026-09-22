@@ -374,7 +374,7 @@ async function syncAdminTelegramMiniApp(){
   const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
    method:'POST',
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:'https://shaurma-city-api.onrender.com/shaurma-owner?v=2'}}})
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:'https://shaurma-city-api.onrender.com/shaurma-owner?v=3'}}})
   });
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
@@ -733,7 +733,7 @@ app.get('/api/shaurma/stats',async(req,res)=>{
  }catch(e){res.status(500).json({error:e.message})}
 });
 
-const sendOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurma-owner.html'));
+const sendOwner=(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.sendFile(path.join(__dirname,'shaurma-owner.html'))};
 const sendShaurmegOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurmeg-owner.html'));
 app.get('/shaurma-owner',sendOwner);
 app.get('/admin',sendOwner);

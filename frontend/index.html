@@ -117,6 +117,51 @@
 .checkoutCard{width:min(680px,100%);max-height:92dvh;overflow:auto;border-radius:28px 28px 0 0;background:linear-gradient(180deg,#121923,#0b1119);border:1px solid var(--line);padding:16px 16px calc(16px + var(--safeB))}
 .checkoutCard h3{font-size:28px;margin:4px 0 6px}.checkoutCard p{color:var(--muted);margin:0 0 14px}.form{display:grid;gap:10px}.field{display:grid;gap:6px}.field label{font-size:11px;color:#9ba7ba;font-weight:800}.field input,.field textarea{width:100%;border:1px solid var(--line);background:rgba(255,255,255,.035);color:white;border-radius:15px;padding:13px;outline:none;font:inherit}.field textarea{min-height:82px;resize:vertical}.checkoutActions{display:flex;gap:8px;margin-top:12px}.checkoutActions .pri{flex:1}.orderOk{display:none;padding:18px 0;text-align:center}.orderOk.show{display:block}.orderOk b{display:block;font-size:30px;margin:7px 0}.orderOk p{color:var(--muted)}
 
+/* BUILD 66 — fulfillment checkout */
+#fulfillmentStep{display:block}
+.fulfillmentGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.fulfillmentOption{
+  appearance:none;-webkit-appearance:none;width:100%;min-height:128px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:4px;
+  position:relative;padding:16px;text-align:left;color:var(--text)!important;
+  background:linear-gradient(180deg,#151e2a,#0d141d)!important;
+  border:1px solid rgba(180,199,226,.14)!important;border-radius:20px!important;
+  opacity:1!important;cursor:pointer;box-shadow:none!important;
+}
+.fulfillmentOption .foIcon{
+  position:absolute;left:14px;top:14px;width:38px;height:38px;border-radius:12px;
+  display:grid;place-items:center;font-size:19px;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);color:#9fb9ff
+}
+.fulfillmentOption b{display:block;font-size:19px;line-height:1.05;color:#fff!important;margin-top:35px}
+.fulfillmentOption small{display:block;font-size:11px;line-height:1.35;color:#8f9db2!important;font-weight:600}
+.fulfillmentOption.selected{
+  border-color:rgba(72,126,255,.72)!important;
+  background:linear-gradient(180deg,rgba(48,92,190,.23),#0d1623)!important;
+  box-shadow:0 0 0 1px rgba(72,126,255,.18) inset,0 12px 28px rgba(25,65,150,.12)!important
+}
+.fulfillmentOption.selected .foIcon{background:#2f6df6;color:#fff;border-color:#2f6df6}
+.deliveryFields{display:none;margin:4px 0 2px;padding:13px;border-radius:18px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+#fulfillmentContinue{min-height:54px!important}
+.paymentStep{display:none!important}
+.paymentStep.show{display:block!important}
+.paymentSummary{display:grid;gap:8px;margin:14px 0}
+.paymentSummary>div{display:flex;justify-content:space-between;gap:14px;padding:12px 13px;border-radius:15px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+.paymentSummary span{color:var(--muted);font-size:12px}.paymentSummary b{text-align:right}
+.paymentMethodCard{
+  appearance:none;-webkit-appearance:none;width:100%;display:grid;grid-template-columns:38px 1fr auto;
+  gap:11px;align-items:center;text-align:left;padding:13px;color:#fff!important;
+  background:rgba(255,255,255,.035)!important;border:1px solid var(--line)!important;border-radius:17px!important
+}
+.paymentMethodCard>span{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:rgba(47,109,246,.16);color:#82a5ff}
+.paymentMethodCard b,.paymentMethodCard small{display:block}.paymentMethodCard small{color:var(--muted);margin-top:2px}.paymentMethodCard em{font-style:normal;color:var(--muted);font-size:22px}
+.paymentNotice{margin:10px 0 2px;padding:11px 12px;border-radius:14px;background:rgba(47,109,246,.07);border:1px solid rgba(47,109,246,.14);color:#9cabc2;font-size:11px;line-height:1.45}
+@media(max-width:430px){
+ .fulfillmentGrid{grid-template-columns:1fr;gap:8px}
+ .fulfillmentOption{min-height:105px;padding:14px}
+ .fulfillmentOption b{font-size:18px}
+}
+
 
 /* BUILD 60 — Telegram identity + My Orders */
 .myOrdersPanel{position:fixed;inset:0;z-index:88;background:#0a0f16;opacity:0;visibility:hidden;pointer-events:none;transition:.22s}
@@ -1745,7 +1790,7 @@ body{
 </head>
 <body>
 <div class="app">
-<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 65</div></header>
+<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 66</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
@@ -1846,8 +1891,8 @@ body{
     <h3>Как заберёшь?</h3>
     <p>Сначала выбери способ получения. После подтверждения сразу перейдём к оплате.</p>
     <div class="fulfillmentGrid">
-      <button class="fulfillmentOption selected" data-fulfillment="cafe"><span class="foIcon">⌂</span><b id="venuePickupName">В Лепёшке</b><small>На месте в кафе · без заполнения данных</small></button>
-      <button class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Привезём по указанному адресу</small></button>
+      <button type="button" class="fulfillmentOption selected" data-fulfillment="cafe"><span class="foIcon">⌂</span><b>С собой</b><small id="venuePickupName">Заберу в кафе · без заполнения данных</small></button>
+      <button type="button" class="fulfillmentOption" data-fulfillment="delivery"><span class="foIcon">⌁</span><b>Доставка</b><small>Курьер привезёт по указанному адресу</small></button>
     </div>
     <div class="deliveryFields" id="deliveryFields">
       <div class="form">
@@ -1948,7 +1993,7 @@ function applyVenue(venue){
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",accent);
   const brand=$("#venueBrand"),pickup=$("#venuePickupName"),sub=$("#venueBrandSub");
   if(brand)brand.textContent=venue.name;
-  if(pickup)pickup.textContent=venue.name;
+  if(pickup)pickup.textContent="Заберу в "+venue.name+" · без заполнения данных";
   const venueSwitchName=$("#venueSwitchName");if(venueSwitchName)venueSwitchName.textContent=venue.name;
   if(sub)sub.textContent=String(venue.config?.subtitle||"МЕНЮ И ЗАКАЗ");
   const builderEnabled=venue.config?.builder_enabled!==false;
@@ -2130,6 +2175,7 @@ function openCheckout(){
   if(!$("#customerAddress").value)$("#customerAddress").value=d.address||"";
   $("#orderOk").classList.remove("show");
   $("#paymentStep").classList.remove("show");
+  $("#paymentStep").style.display="";
   $("#fulfillmentStep").style.display="block";
   syncFulfillmentUI();
   closeCart();

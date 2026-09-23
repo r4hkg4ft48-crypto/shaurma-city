@@ -1,6 +1,8 @@
 'use strict';
 
 const sharp=require('sharp');
+const {VectorTile}=require('@mapbox/vector-tile');
+const Pbf=require('pbf');
 
 const PROFILE_VERSION=5;
 const OVERPASS_ENDPOINTS=[
@@ -362,6 +364,62 @@ async function overpassQuery(query,timeout=8000){
   }
   throw last||new Error('overpass_unavailable');
 }
+let openFreeMapTileTemplate='',openFreeMapTileTemplateAt=0;
+async function getOpenFreeMapTileTemplate(){
+  if(openFreeMapTileTemplate&&Date.now()-openFreeMapTileTemplateAt<3600000)return openFreeMapTileTemplate;
+  const j=await fetchJson('https://tiles.openfreemap.org/planet',6000);
+  const tpl=Array.isArray(j?.tiles)&&j.tiles[0]?String(j.tiles[0]):'';
+  if(!tpl)throw new Error('openfreemap_tile_template_missing');
+  openFreeMapTileTemplate=tpl;openFreeMapTileTemplateAt=Date.now();return tpl;
+}
+function mercatorTile(lon,lat,z){
+  const n=2**z,x=(lon+180)/360*n;
+  const rad=lat*Math.PI/180,y=(1-Math.asinh(Math.tan(rad))/Math.PI)/2*n;
+  return {x,y,xi:Math.floor(x),yi:Math.floor(y),fx:x-Math.floor(x),fy:y-Math.floor(y)};
+}
+function geoOuterRings(g){
+  if(!g)return[];
+  if(g.type==='Polygon')return Array.isArray(g.coordinates?.[0])?[g.coordinates[0]]:[];
+  if(g.type==='MultiPolygon')return (g.coordinates||[]).map(p=>p?.[0]).filter(r=>Array.isArray(r));
+  return[];
+}
+async function fetchVectorBuildings(marker,radius=190){
+  const z=14,t=mercatorTile(marker.lon,marker.lat,z),tpl=await getOpenFreeMapTileTemplate();
+  const xs=[t.xi],ys=[t.yi];
+  const edge=.22;
+  if(t.fx<edge)xs.push(t.xi-1);if(t.fx>1-edge)xs.push(t.xi+1);
+  if(t.fy<edge)ys.push(t.yi-1);if(t.fy>1-edge)ys.push(t.yi+1);
+  const jobs=[];
+  for(const x of [...new Set(xs)])for(const y of [...new Set(ys)])jobs.push({x,y,url:tpl.replace('{z}',z).replace('{x}',x).replace('{y}',y)});
+  const pseudo=[],seen=new Set(),center=[marker.lon,marker.lat];
+  await Promise.all(jobs.map(async job=>{
+    try{
+      const buf=await fetchBuffer(job.url,6500),tile=new VectorTile(new Pbf(buf)),layer=tile.layers?.building;
+      if(!layer)return;
+      for(let n=0;n<layer.length;n++){
+        const feat=layer.feature(n),gj=feat.toGeoJSON(job.x,job.y,z),props=gj.properties||{};
+        if(props.hide_3d===true||props.hide_3d===1)continue;
+        let part=0;
+        for(const ring0 of geoOuterRings(gj.geometry)){
+          const ring=ring0.map(v=>[Number(v[0]),Number(v[1])]).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));
+          if(ring.length<4)continue;
+          const first=ring[0],last=ring[ring.length-1];if(first[0]!==last[0]||first[1]!==last[1])ring.push([...first]);
+          const d=pointToRingMeters(center,ring,marker.lon,marker.lat);if(d>radius+45)continue;
+          const cc=centroid(ring),height=num(props.render_height)||9;
+          const sig=cc[0].toFixed(5)+':'+cc[1].toFixed(5)+':'+Math.round(height);
+          if(seen.has(sig))continue;seen.add(sig);
+          pseudo.push({
+            type:'way',id:'ofm-'+z+'-'+job.x+'-'+job.y+'-'+n+'-'+part++,
+            tags:{building:'yes',height:String(height),min_height:String(num(props.render_min_height)||0),'building:colour':props.colour||''},
+            geometry:ring.map(v=>({lon:v[0],lat:v[1]}))
+          });
+        }
+      }
+    }catch{}
+  }));
+  return pseudo;
+}
+
 async function fetchOsmWorld(marker,radius=190){
   const buildingsQ='[out:json][timeout:12];way["building"](around:'+radius+','+marker.lat+','+marker.lon+');out geom tags;';
   const environmentQ='[out:json][timeout:12];('+
@@ -371,8 +429,9 @@ async function fetchOsmWorld(marker,radius=190){
     'way["highway"](around:'+radius+','+marker.lat+','+marker.lon+');'+
   ');out geom tags;';
   const [b,e]=await Promise.allSettled([overpassQuery(buildingsQ,8500),overpassQuery(environmentQ,6500)]);
-  const buildings=b.status==='fulfilled'?b.value:[];
+  let buildings=b.status==='fulfilled'?b.value:[];
   const environment=e.status==='fulfilled'?e.value:[];
+  if(!buildings.length)buildings=await fetchVectorBuildings(marker,radius).catch(()=>[]);
   if(!buildings.length&&b.status==='rejected')throw b.reason;
   return [...buildings,...environment];
 }

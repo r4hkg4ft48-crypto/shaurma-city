@@ -205,7 +205,7 @@ async function analyzeRealCityProfile(marker){
   const confidence=quality==='photo'?.92:quality==='street'?.80:quality==='osm'?.58:.36;
   const neighborhood=uniqColors([...(palette.swatches||[]),...(osm.colors||[]),palette.wall,palette.accent,palette.roof],8);
   return {
-    version:2,
+    version:3,
     generated_at:new Date().toISOString(),
     quality,
     confidence,

@@ -61,6 +61,27 @@ function distMeters(a,b,originLat){
   const c=Math.cos(originLat*Math.PI/180),dx=(a[0]-b[0])*111320*c,dy=(a[1]-b[1])*110540;
   return Math.hypot(dx,dy);
 }
+function pointInRing(point,ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
+    const crosses=((yi>point[1])!==(yj>point[1]))&&(point[0]<(xj-xi)*(point[1]-yi)/((yj-yi)||1e-12)+xi);
+    if(crosses)inside=!inside;
+  }
+  return inside;
+}
+function pointToRingMeters(point,ring,originLon,originLat){
+  if(pointInRing(point,ring))return 0;
+  const P=toLocal(point[0],point[1],originLon,originLat);
+  let best=Infinity;
+  for(let i=0;i<ring.length-1;i++){
+    const A=toLocal(ring[i][0],ring[i][1],originLon,originLat),B=toLocal(ring[i+1][0],ring[i+1][1],originLon,originLat);
+    const vx=B[0]-A[0],vy=B[1]-A[1],wx=P[0]-A[0],wy=P[1]-A[1],d=vx*vx+vy*vy;
+    const t=d?clamp((wx*vx+wy*vy)/d,0,1):0,dx=P[0]-(A[0]+vx*t),dy=P[1]-(A[1]+vy*t);
+    best=Math.min(best,Math.hypot(dx,dy));
+  }
+  return best;
+}
 function edgeRect(a,b,depth,originLon,originLat,start=0,end=1){
   const A=toLocal(a[0],a[1],originLon,originLat),B=toLocal(b[0],b[1],originLon,originLat);
   const dx=B[0]-A[0],dy=B[1]-A[1],len=Math.hypot(dx,dy); if(len<0.6) return null;
@@ -104,8 +125,8 @@ function makeScene(elements,{lat,lon,venueId,radius}){
     const ring=el.geometry.map(p=>[Number(p.lon),Number(p.lat)]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
     if(ring.length<4) continue;
     const first=ring[0],last=ring[ring.length-1]; if(first[0]!==last[0]||first[1]!==last[1]) ring.push([...first]);
-    const tags=el.tags||{},id='osm-'+el.id,c=centroid(ring),distance=distMeters(c,center,lat),height=parseHeight(tags,id),floors=floorCount(height,tags),palette=paletteFor(venueId,tags,id);
-    buildings.push({id,ring,tags,c,distance,height,floors,palette});
+    const tags=el.tags||{},id='osm-'+el.id,c=centroid(ring),centroidDistance=distMeters(c,center,lat),distance=pointToRingMeters(center,ring,lon,lat),contains=distance===0,height=parseHeight(tags,id),floors=floorCount(height,tags),palette=paletteFor(venueId,tags,id);
+    buildings.push({id,ring,tags,c,distance,centroidDistance,contains,height,floors,palette});
   }
   buildings.sort((a,b)=>a.distance-b.distance);
   const limited=buildings.slice(0,90);

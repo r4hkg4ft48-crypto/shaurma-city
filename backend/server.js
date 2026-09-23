@@ -5,6 +5,7 @@ const {Pool}=require('pg');
 const crypto=require('crypto');
 const {analyzeRealCityProfile}=require('./realcity-analyzer');
 const {discoverMoscowVenues,appearanceFor}=require('./venue-discovery');
+const {installVenueOwner}=require('./venue-owner');
 
 const app=express();
 app.use(express.json({limit:'24mb'}));
@@ -506,6 +507,10 @@ function pushOwner(event,payload){
 function normalizeVenueId(value){
  const id=String(value||'').trim().toLowerCase().replace(/^venue_/,'');
  return /^[a-z0-9_-]{1,64}$/.test(id)?id:null;
+}
+function establishmentIdForVenue(venueId){
+ const id=normalizeVenueId(venueId);if(!id)return null;
+ return 'SC-MSK-'+crypto.createHash('md5').update(id).digest('hex').slice(0,10).toUpperCase();
 }
 async function resolveVenue(value,{includeInactive=false}={}){
  const id=normalizeVenueId(value)||DEFAULT_VENUE_ID;

@@ -177,6 +177,12 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_scene_url TEXT NOT NULL DEFAULT ''");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_poster TEXT NOT NULL DEFAULT ''");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_config JSONB NOT NULL DEFAULT '{}'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_reference_images JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_profile JSONB NOT NULL DEFAULT '{}'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_status TEXT NOT NULL DEFAULT 'pending'");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_quality TEXT NOT NULL DEFAULT 'heuristic'");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_updated_at TIMESTAMPTZ");
+ await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending' WHERE realcity_profile='{}'::jsonb");
  await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`

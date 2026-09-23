@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='90';
+const BUILD='91';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
@@ -82,7 +82,7 @@ function inject(){
  $('#rcSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(true)}});
  $('#rcNearby').onclick=locate;
  $('#rcRepaint').onclick=()=>selected&&focusVenue(selected,true);
- $('#rcMenu').onclick=()=>{if(!selected)return;const u=new URL(location.href);u.searchParams.set('venue',selected.venue_id);u.searchParams.set('establishment',selected.establishment_id||'');u.searchParams.set('marker',selected.marker_id||selected.id);u.searchParams.set('context','marker');u.searchParams.set('view','menu');u.searchParams.set('b',BUILD);location.href=u.toString()};
+ $('#rcMenu').onclick=()=>{if(!selected)return;const u=new URL(location.href);u.searchParams.set('source','map-marker');u.searchParams.set('venue',selected.venue_id);u.searchParams.set('establishment',selected.establishment_id||'');u.searchParams.set('marker',selected.marker_id||selected.id);u.searchParams.set('context','marker');u.searchParams.set('view','menu');u.searchParams.set('b',BUILD);if(selected.updated_at)u.searchParams.set('rev',String(Date.parse(selected.updated_at)||Date.now()));u.searchParams.delete('tgWebAppStartParam');u.searchParams.delete('startapp');location.href=u.toString()};
 }
 
 function status(msg,on=true){const el=$('#rcStatus');if(!el)return;el.textContent=msg;el.classList.toggle('show',!!on)}
@@ -775,7 +775,7 @@ async function focusVenue(m,replay=false){
  if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
  setSelectedMarkerVisual(m.id);updateVenueCardMarker(m);
  $('#rcVenueName').textContent=m.name||'Точка';$('#rcVenueAddress').textContent=m.address||'Москва';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
- $('#rcMenu').textContent=m.has_menu===false?'Подробнее':'Открыть меню';
+ $('#rcMenu').textContent='Открыть меню';
  clearScene();
  setFocusPoint(m);
  status('Анализируем фото и собираем фасады…');

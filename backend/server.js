@@ -6,7 +6,7 @@ const crypto=require('crypto');
 const {analyzeRealCityProfile}=require('./realcity-analyzer');
 
 const app=express();
-app.use(express.json({limit:'10mb'}));
+app.use(express.json({limit:'24mb'}));
 app.use((req,res,next)=>{
  res.setHeader('Access-Control-Allow-Origin','*');
  res.setHeader('Access-Control-Allow-Headers','Content-Type, X-Owner-Token, Authorization');
@@ -43,7 +43,7 @@ function queueRealCityProfile(markerId){
 async function bootstrapRealCityProfiles(){
  if(!DB)return;
  try{
-  const q=await DB.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<3) ORDER BY updated_at DESC LIMIT 24");
+  const q=await DB.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<4) ORDER BY updated_at DESC LIMIT 24");
   q.rows.forEach(row=>queueRealCityProfile(row.id));
  }catch(e){console.error('RealCity bootstrap:',e.message)}
 }
@@ -463,9 +463,24 @@ function publishVenue(venue){
  if(!clients.size)venueClients.delete(venue.venue_id);
 }
 
+function normalizeRealCityReferences(value){
+ const allowed=new Set(['hero_facade','street_left','street_right','neighbor','courtyard','environment']);
+ if(!Array.isArray(value))return [];
+ return value.slice(0,8).map((item,index)=>{
+  if(typeof item==='string'){
+   const src=String(item||'').trim();
+   return src.startsWith('data:image/')?{src,role:index===0?'hero_facade':'environment'}:null;
+  }
+  if(!item||typeof item!=='object')return null;
+  const src=String(item.src||item.image||item.data||'').trim();
+  if(!src.startsWith('data:image/'))return null;
+  const role=allowed.has(item.role)?item.role:(index===0?'hero_facade':'environment');
+  return {src,role};
+ }).filter(Boolean);
+}
 function markerPayload(body={}){
  const gallery=Array.isArray(body.gallery)?body.gallery.map(x=>String(x||'').trim()).filter(Boolean).slice(0,6):[];
- const realcity_reference_images=Array.isArray(body.realcity_reference_images)?body.realcity_reference_images.map(x=>String(x||'').trim()).filter(x=>x.startsWith('data:image/')).slice(0,4):[];
+ const realcity_reference_images=normalizeRealCityReferences(body.realcity_reference_images);
  return {
   venue_id:normalizeVenueId(body.venue_id),name:String(body.name||'').trim().slice(0,160),address:String(body.address||'').trim().slice(0,300),
   description:String(body.description||'').trim().slice(0,1400),lat:Number(body.lat),lon:Number(body.lon),hero_image:String(body.hero_image||'').trim().slice(0,1800000),
@@ -527,7 +542,7 @@ app.get('/api/shaurmeg/realcity-profile/:id',async(req,res)=>{
   const q=await DB.query("SELECT id,venue_id,realcity_profile,realcity_status,realcity_quality,realcity_updated_at FROM shaurmeg_markers WHERE id=$1 AND is_active=TRUE LIMIT 1",[req.params.id]);
   const row=q.rows[0];if(!row)return res.sendStatus(404);
   const profile=row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{};
-  if(row.realcity_status!=='ready'||Number(profile.version||0)<3)queueRealCityProfile(row.id);
+  if(row.realcity_status!=='ready'||Number(profile.version||0)<4)queueRealCityProfile(row.id);
   res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=600');
   res.json({marker_id:row.id,venue_id:row.venue_id,status:row.realcity_status||'pending',quality:row.realcity_quality||'heuristic',updated_at:row.realcity_updated_at||null,profile});
  }catch(e){res.status(500).json({error:'realcity_profile_failed'})}

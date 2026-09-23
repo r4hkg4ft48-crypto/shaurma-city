@@ -172,17 +172,21 @@ function classifyStyle(osm,palette){
   return s>.32?'mixed_storefront':'panel_simple';
 }
 async function analyzeUserReferences(marker){
-  const refs=[...(Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[]),marker.hero_image,...(Array.isArray(marker.gallery)?marker.gallery:[])].filter(Boolean).slice(0,5);
+  // Only photos explicitly marked as facade/environment references influence RealCity.
+  // Menu/hero/gallery photos often contain food and would corrupt facade colors.
+  const refs=(Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[]).filter(Boolean).slice(0,4);
   const palettes=[];
   for(const ref of refs){
     const buf=dataUrlBuffer(ref);if(!buf)continue;
-    try{const p=await extractPaletteFromBuffer(buf);if(p)palettes.push({palette:p,weight:2.4})}catch{}
+    try{const p=await extractPaletteFromBuffer(buf);if(p)palettes.push({palette:p,weight:3.2})}catch{}
   }
   return palettes;
 }
 function lepyoshkaBias(palette,venueId){
   if(String(venueId||'').toLowerCase()!=='lepyoshka')return palette;
-  return mergePalettes([{palette,weight:1},{palette:LEPYOSHKA_PALETTE,weight:2.1}],LEPYOSHKA_PALETTE);
+  // The first venue has verified facade references from the project.
+  // Keep that known facade palette stable until dedicated new references are uploaded.
+  return {...LEPYOSHKA_PALETTE,swatches:[LEPYOSHKA_PALETTE.wall,LEPYOSHKA_PALETTE.accent,LEPYOSHKA_PALETTE.windows,LEPYOSHKA_PALETTE.roof]};
 }
 async function analyzeRealCityProfile(marker){
   const safe={...marker,lat:Number(marker.lat),lon:Number(marker.lon)};
@@ -196,7 +200,8 @@ async function analyzeRealCityProfile(marker){
   if(osm.elements)weighted.push({palette:osm.palette,weight:street.palettes.length||user.length?.65:1.25});
   let palette=mergePalettes(weighted.length?weighted:[{palette:osm.palette||DEFAULT_PALETTE,weight:1}],DEFAULT_PALETTE);
   palette=lepyoshkaBias(palette,safe.venue_id);
-  const quality=user.length?'photo':street.palettes.length?'street':osm.elements?'osm':'heuristic';
+  const isLepe=String(safe.venue_id||'').toLowerCase()==='lepyoshka';
+  const quality=user.length?'photo':isLepe?'photo':street.palettes.length?'street':osm.elements?'osm':'heuristic';
   const confidence=quality==='photo'?.92:quality==='street'?.80:quality==='osm'?.58:.36;
   const neighborhood=uniqColors([...(palette.swatches||[]),...(osm.colors||[]),palette.wall,palette.accent,palette.roof],8);
   return {
@@ -211,6 +216,7 @@ async function analyzeRealCityProfile(marker){
     camera:{zoom:18.15,pitch:63,bearing:-18},
     sources:{
       user_reference_images:user.length,
+      verified_project_reference:isLepe&&!user.length,
       kartaview:{photo_count:street.meta.length,photos:street.meta},
       openstreetmap:{building_count:osm.elements||0}
     }

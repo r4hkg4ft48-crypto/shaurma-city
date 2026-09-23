@@ -164,3 +164,226 @@
 @media(prefers-reduced-motion:reduce){
   .rcVenueCard.show,.rcMarker.selected,.rcMarker.selected::before{animation:none!important}
 }
+
+
+/* BUILD 80 · Earth terrain + cinematic space arrival */
+:root{
+  --rc-paper:#18211b;
+  --rc-ink:#fbfaf5;
+  --rc-gold:#777970;
+  --rc-yellow:#fbfaf5;
+  --rc-line:rgba(235,239,230,.15);
+  --rc-muted:#c7cec2;
+}
+.realCityScreen{background:#1a211c}
+.realCityScreen::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 55%,rgba(184,204,173,.045) 0,rgba(117,143,105,.022) 30%,rgba(10,15,12,0) 58%),
+    radial-gradient(circle at 50% 50%,rgba(5,9,7,0) 48%,rgba(3,7,5,.22) 100%),
+    repeating-radial-gradient(circle at 22% 31%,rgba(255,255,255,.010) 0 1px,rgba(0,0,0,.012) 2px 4px);
+  mix-blend-mode:soft-light;
+  opacity:.92;
+}
+.realCityScreen::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:4;
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,247,224,.018),rgba(6,11,8,.03) 55%,rgba(1,4,3,.13));
+}
+.realCityTop,.rcStatus,.rcVenueCard{z-index:9}
+.realCityScreen .maplibregl-ctrl-top-right{z-index:7}
+
+.rcSearchCard,.rcVenueCard,.rcClose{
+  border-color:rgba(235,239,230,.15);
+  background:linear-gradient(145deg,rgba(24,34,27,.88),rgba(11,17,13,.78));
+  box-shadow:
+    0 22px 58px rgba(0,0,0,.46),
+    inset 0 1px 0 rgba(255,250,235,.07);
+}
+.rcSearchCard::before,.rcVenueCard::before{
+  background:linear-gradient(90deg,transparent,rgba(247,247,235,.50),transparent);
+}
+.rcSearchRow input,.rcNearby button,.rcRepaint{
+  background:rgba(31,43,34,.74);
+  border-color:rgba(235,239,230,.12);
+  color:#f9faf5;
+}
+.rcSearchRow input::placeholder{color:#9ca89b}
+.rcSearchRow input:focus{border-color:#e8eee2;box-shadow:0 0 0 3px rgba(219,231,211,.11)}
+.rcSearchRow button,.rcMenu{
+  background:#fbfaf5;
+  color:#18201a;
+  box-shadow:0 8px 22px rgba(255,255,245,.075),inset 0 1px 0 rgba(255,255,255,.85);
+}
+.rcLive{
+  background:#e9eee4;
+  color:#314133;
+  border-color:rgba(238,245,235,.28);
+  box-shadow:none;
+}
+.rcPinIcon,.rcMarker{
+  background:#fbfaf5;
+  color:#1a211c;
+}
+.rcMarker.selected{
+  box-shadow:0 12px 34px rgba(0,0,0,.46),0 0 0 1px rgba(244,248,239,.44),0 0 22px rgba(214,227,209,.18);
+}
+.rcMarker::before{
+  background:radial-gradient(circle,rgba(244,248,239,.18),rgba(194,213,185,.07) 46%,transparent 72%);
+}
+@keyframes rcMarkerGlow{
+  0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.44),0 0 0 1px rgba(244,248,239,.34),0 0 15px rgba(202,218,195,.12)}
+  50%{box-shadow:0 12px 34px rgba(0,0,0,.48),0 0 0 1px rgba(249,251,245,.52),0 0 26px rgba(211,227,205,.24)}
+}
+.realCityScreen .maplibregl-ctrl-group{
+  background:rgba(20,30,23,.79)!important;
+  border-color:rgba(235,239,230,.12)!important;
+  box-shadow:0 12px 34px rgba(0,0,0,.42)!important;
+}
+.realCityScreen .maplibregl-ctrl-group button:hover{background:rgba(236,241,230,.07)!important}
+.realCityScreen .maplibregl-ctrl-attrib{
+  background:rgba(14,22,17,.77)!important;
+  color:#c7cec2!important;
+}
+.realCityScreen .maplibregl-ctrl-attrib a{color:#eef2e8!important}
+
+/* Map reveal beneath the space intro */
+.realCityScreen.rc-intro-running .realCityMap{
+  opacity:.36;
+  transform:scale(1.055);
+  filter:blur(8px) brightness(.58) saturate(.72);
+}
+.realCityScreen.rc-intro-running .realCityTop,
+.realCityScreen.rc-intro-running .rcStatus,
+.realCityScreen.rc-intro-running .rcVenueCard,
+.realCityScreen.rc-intro-running .maplibregl-ctrl-top-right{
+  opacity:0;
+  transform:translateY(10px);
+  pointer-events:none;
+}
+.realCityMap{
+  transform:scale(1);
+  filter:none;
+  transition:opacity .9s ease,transform 1.35s cubic-bezier(.2,.75,.18,1),filter 1.2s ease;
+}
+.realCityTop,.rcStatus,.rcVenueCard,.realCityScreen .maplibregl-ctrl-top-right{
+  transition:opacity .75s ease,transform .9s cubic-bezier(.2,.75,.2,1);
+}
+.realCityScreen.rc-map-arriving .realCityMap{
+  opacity:.83;
+  transform:scale(1.022);
+  filter:blur(2px) brightness(.82) saturate(.94);
+}
+.realCityScreen.rc-map-arrived .realCityMap{
+  opacity:1;
+  transform:scale(1);
+  filter:none;
+}
+.realCityScreen.rc-map-arrived .realCityTop,
+.realCityScreen.rc-map-arrived .rcStatus,
+.realCityScreen.rc-map-arrived .rcVenueCard,
+.realCityScreen.rc-map-arrived .maplibregl-ctrl-top-right{
+  opacity:1;
+  transform:none;
+}
+
+/* Full-screen Milky Way → Sun → Earth intro */
+.rcSpaceIntro{
+  position:fixed;
+  inset:0;
+  z-index:1000;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  background:#000207;
+  overflow:hidden;
+  transition:opacity .45s ease,visibility .45s;
+}
+.rcSpaceIntro.active{opacity:1;visibility:visible;pointer-events:auto}
+.rcSpaceIntro.rcSpaceExit{opacity:0;pointer-events:none}
+#rcSpaceCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.rcSpaceGrain{
+  position:absolute;inset:-20%;pointer-events:none;opacity:.18;mix-blend-mode:screen;
+  background:
+    repeating-radial-gradient(circle at 28% 32%,rgba(255,255,255,.11) 0 .55px,transparent .7px 2.5px),
+    repeating-radial-gradient(circle at 72% 64%,rgba(132,170,220,.07) 0 .45px,transparent .65px 3px);
+  animation:rcSpaceGrainDrift 7s linear infinite;
+}
+.rcSpaceVignette{
+  position:absolute;inset:0;pointer-events:none;
+  box-shadow:inset 0 0 180px 48px rgba(0,0,0,.76),inset 0 0 42px 8px rgba(0,0,0,.35);
+  background:
+    linear-gradient(90deg,rgba(0,0,0,.20),transparent 10%,transparent 90%,rgba(0,0,0,.20)),
+    linear-gradient(180deg,rgba(0,0,0,.12),transparent 20%,transparent 80%,rgba(0,0,0,.22));
+}
+.rcSpaceHud{
+  position:absolute;
+  inset:max(env(safe-area-inset-top),16px) 16px max(env(safe-area-inset-bottom),16px);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  pointer-events:none;
+  color:rgba(241,247,250,.74);
+  font:700 9px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter",sans-serif;
+  letter-spacing:.19em;
+  text-transform:uppercase;
+  text-shadow:0 1px 12px rgba(0,0,0,.75);
+}
+.rcSpaceHudTop,.rcSpaceHudBottom{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rcSpaceDot{
+  width:5px;height:5px;border-radius:50%;background:#eff7ff;box-shadow:0 0 12px rgba(208,235,255,.8);
+  margin-right:7px;display:inline-block;animation:rcSpaceDot 1.5s ease-in-out infinite;
+}
+.rcSpaceHudTop{justify-content:flex-start}
+.rcSpaceHudBottom{color:rgba(216,229,236,.52);letter-spacing:.13em}
+.rcSpaceSkip{
+  position:absolute;
+  z-index:4;
+  top:max(calc(env(safe-area-inset-top) + 40px),52px);
+  right:16px;
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid rgba(226,238,245,.18);
+  border-radius:999px;
+  background:rgba(4,10,17,.42);
+  color:rgba(240,247,250,.82);
+  backdrop-filter:blur(14px);
+  font-size:10px;
+  font-weight:800;
+  opacity:0;
+  transform:translateY(-5px);
+  transition:.35s ease;
+}
+.rcSpaceSkip.show{opacity:1;transform:none}
+.rcSpaceFlash{
+  position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:
+    radial-gradient(circle at 50% 52%,rgba(255,255,255,.96) 0,rgba(209,239,255,.68) 15%,rgba(89,160,186,.16) 42%,transparent 70%);
+  mix-blend-mode:screen;
+}
+.rcSpaceFlash.show{animation:rcSpaceFlash .72s ease-out forwards}
+@keyframes rcSpaceFlash{
+  0%{opacity:0}
+  18%{opacity:.86}
+  52%{opacity:.24}
+  100%{opacity:0}
+}
+@keyframes rcSpaceDot{0%,100%{opacity:.38;transform:scale(.8)}50%{opacity:1;transform:scale(1.28)}}
+@keyframes rcSpaceGrainDrift{from{transform:translate3d(0,0,0) rotate(0)}to{transform:translate3d(3%,2%,0) rotate(.6deg)}}
+
+@media(max-width:390px){
+  .rcSpaceHud{inset:max(env(safe-area-inset-top),12px) 12px max(env(safe-area-inset-bottom),12px)}
+  .rcSpaceHudBottom{font-size:8px}
+  .rcSpaceSkip{right:12px}
+}
+@media(prefers-reduced-motion:reduce){
+  .rcSpaceGrain,.rcSpaceDot,.rcSpaceFlash{animation:none!important}
+  .realCityMap,.realCityTop,.rcStatus,.rcVenueCard{transition:none!important}
+}

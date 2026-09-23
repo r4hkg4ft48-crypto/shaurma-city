@@ -261,6 +261,26 @@ app.get('/api/health',(req,res)=>res.json({ok:true,mode:'shaurma-city',storage:D
 
 
 
+function canonicalVenueName(value){
+ return String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/gi,' ').replace(/\b(кафе|ресторан|быстрое питание|fast food|точка|киоск)\b/g,' ').replace(/\s+/g,' ').trim();
+}
+function venueNamesLikelySame(a,b){
+ const x=canonicalVenueName(a),y=canonicalVenueName(b);if(!x||!y)return false;
+ if(x===y||x.includes(y)||y.includes(x))return true;
+ const A=new Set(x.split(' ').filter(t=>t.length>2)),B=new Set(y.split(' ').filter(t=>t.length>2));
+ let common=0;for(const t of A)if(B.has(t))common++;
+ return common>=1&&common/Math.max(1,Math.min(A.size,B.size))>=.67;
+}
+async function findNearbyManualMatch(client,r){
+ const latPad=.00036,lonPad=.00058;
+ const q=await client.query(`SELECT id,venue_id,name,position_locked,appearance_locked,metadata_locked,source_suppressed,auto_imported
+  FROM shaurmeg_markers
+  WHERE lat BETWEEN $1 AND $2 AND lon BETWEEN $3 AND $4 AND source_provider=''
+  ORDER BY ((lat-$5)*(lat-$5)+(lon-$6)*(lon-$6)) ASC LIMIT 8`,
+  [r.lat-latPad,r.lat+latPad,r.lon-lonPad,r.lon+lonPad,r.lat,r.lon]);
+ return q.rows.find(x=>venueNamesLikelySame(x.name,r.name))||null;
+}
+
 async function runMoscowDiscovery({reason='auto'}={}){
  if(!DB)return null;if(discoveryJob)return discoveryJob;
  discoveryJob=(async()=>{
@@ -282,7 +302,13 @@ async function runMoscowDiscovery({reason='auto'}={}){
        updated_at=NOW()
      `,[r.venue_id,r.name,JSON.stringify({subtitle:'ЗАВЕДЕНИЕ НА КАРТЕ',builder_enabled:false,source:'openstreetmap'})]);
      const existing=await client.query("SELECT id,position_locked,appearance_locked,metadata_locked,source_suppressed FROM shaurmeg_markers WHERE source_provider=$1 AND source_id=$2 LIMIT 1",['openstreetmap',r.source_id]);
-     if(existing.rows[0]){
+     let attachedManual=null;
+     if(!existing.rows[0])attachedManual=await findNearbyManualMatch(client,r);
+     if(attachedManual){
+      await client.query(`UPDATE shaurmeg_markers SET source_provider='openstreetmap',source_id=$2,source_data=$3::jsonb,source_first_seen_at=COALESCE(source_first_seen_at,NOW()),source_last_seen_at=NOW(),source_checked_at=NOW(),verification_details=verification_details||$4::jsonb,relevance_score=GREATEST(relevance_score,$5),updated_at=NOW() WHERE id=$1`,
+       [attachedManual.id,r.source_id,JSON.stringify(r.source_data),JSON.stringify({linked_source:r.verification_details}),r.relevance_score]);
+      updated++;
+     }else if(existing.rows[0]){
       const x=existing.rows[0];
       await client.query(`
        UPDATE shaurmeg_markers SET
@@ -692,7 +718,7 @@ app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
   await client.query('BEGIN');
   const current=await client.query('SELECT venue_id FROM shaurmeg_markers WHERE id=$1 FOR UPDATE',[req.params.id]);if(!current.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
   const venueId=current.rows[0].venue_id;
-  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,gallery=$7::jsonb,realcity_reference_images=$8::jsonb,hours=$9,price_label=$10,is_active=$11,category=$12,marker_avatar=$13,marker_style=$14::jsonb,metadata_locked=TRUE,position_locked=TRUE,realcity_status='pending',updated_at=NOW() WHERE id=$15 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active,x.category,x.marker_avatar,JSON.stringify(x.marker_style),req.params.id]);
+  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,gallery=$7::jsonb,realcity_reference_images=$8::jsonb,hours=$9,price_label=$10,is_active=$11,category=$12,marker_avatar=$13,marker_style=$14::jsonb,metadata_locked=TRUE,position_locked=TRUE,appearance_locked=TRUE,realcity_status='pending',updated_at=NOW() WHERE id=$15 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active,x.category,x.marker_avatar,JSON.stringify(x.marker_style),req.params.id]);
   const venue=await client.query('UPDATE shaurma_venues SET name=$1,is_active=$2,updated_at=NOW() WHERE venue_id=$3 RETURNING *',[x.name,x.is_active,venueId]);
   await client.query('COMMIT');if(venue.rows[0])publishVenue(venue.rows[0]);queueRealCityProfile(req.params.id);res.json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker update:',e.message);res.status(500).json({error:'marker_update_failed'})}finally{client.release()}
@@ -752,7 +778,7 @@ app.post('/api/shaurmeg/admin/markers/:id/verify',async(req,res)=>{
  const status=['manual_verified','needs_review','closed'].includes(req.body?.status)?req.body.status:'manual_verified';
  const score=status==='manual_verified'?1:status==='closed'?0:.45;
  try{
-  const q=await DB.query("UPDATE shaurmeg_markers SET verification_status=$2,verification_score=$3,verification_details=COALESCE(verification_details,'{}'::jsonb)||$4::jsonb,is_active=CASE WHEN $2='closed' THEN FALSE ELSE is_active END,updated_at=NOW() WHERE id=$1 RETURNING id,verification_status,verification_score,is_active",[req.params.id,status,score,JSON.stringify({manual_verified_at:new Date().toISOString(),manual_note:String(req.body?.note||'').slice(0,300)})]);
+  const q=await DB.query("UPDATE shaurmeg_markers SET verification_status=$2,verification_score=$3,verification_details=COALESCE(verification_details,'{}'::jsonb)||$4::jsonb,is_active=CASE WHEN $2='closed' THEN FALSE WHEN $2='manual_verified' THEN TRUE ELSE is_active END,source_suppressed=CASE WHEN auto_imported AND $2='closed' THEN TRUE WHEN $2='manual_verified' THEN FALSE ELSE source_suppressed END,updated_at=NOW() WHERE id=$1 RETURNING id,verification_status,verification_score,is_active,source_suppressed",[req.params.id,status,score,JSON.stringify({manual_verified_at:new Date().toISOString(),manual_note:String(req.body?.note||'').slice(0,300)})]);
   if(!q.rows[0])return res.sendStatus(404);res.json(q.rows[0]);
  }catch(e){res.status(500).json({error:'verification_update_failed'})}
 });

@@ -608,7 +608,7 @@ const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-ap
 function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='client-bot',revision}={}){
  const u=new URL(PUBLIC_APP_URL+'/');
  u.searchParams.set('source',source);
- u.searchParams.set('b','89');
+ u.searchParams.set('b','90');
  if(venue_id)u.searchParams.set('venue',venue_id);
  if(establishment_id)u.searchParams.set('establishment',establishment_id);
  if(marker_id)u.searchParams.set('marker',String(marker_id));
@@ -680,7 +680,7 @@ async function sendClientBotVersion(chatId){
  const items=Array.isArray(ctx.venue.menu)?ctx.venue.menu.length:0;
  return clientTelegramApi('sendMessage',{
   chat_id:chatId,
-  text:'SHAURMEG CLIENT BUILD 89\n'+
+  text:'SHAURMEG CLIENT BUILD 90\n'+
        'Заведение: '+ctx.venue.name+'\n'+
        'ID: '+ctx.venue.establishment_id+'\n'+
        'Меню: '+items+' позиций · '+sections+' разделов\n'+

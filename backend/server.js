@@ -14,6 +14,7 @@ app.use((req,res,next)=>{
  next();
 });
 app.use(express.static(__dirname));
+require('./realcity')(app);
 
 const PORT=process.env.PORT||3000;
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;

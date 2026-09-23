@@ -1086,13 +1086,13 @@ app.post('/api/shaurma/orders',async(req,res)=>{
   const safePaymentStatus=['pending','paid','failed','cancelled'].includes(payment_status)?payment_status:'pending';
   if(DB){
    const q=await DB.query(
-    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *',
-    [num,JSON.stringify(normalizedItems),calculatedTotal,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null,venue.venue_id,venue.name]
+    'INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name,establishment_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *',
+    [num,JSON.stringify(normalizedItems),calculatedTotal,customer_name||(tgUser?.first_name||'Гость'),fulfillment==='delivery'?(phone||null):null,fulfillment==='delivery'?(address||null):null,comment||'',tgUser?'telegram':'web',tgUser?String(tgUser.id):null,tgUser?.username||null,tgUser?.first_name||null,fulfillment,safePaymentStatus,payment_method||null,venue.venue_id,venue.name,venue.establishment_id||establishmentIdForVenue(venue.venue_id)]
    );
    order=q.rows[0];
   }else{
    const d=readStore();d.shaurma_orders=d.shaurma_orders||[];
-   order={id:Date.now(),order_number:num,items:normalizedItems,total:calculatedTotal,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,venue_id:venue.venue_id,venue_name:venue.name,created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
+   order={id:Date.now(),order_number:num,items:normalizedItems,total:calculatedTotal,customer_name:customer_name||(tgUser?.first_name||'Гость'),phone:fulfillment==='delivery'?(phone||null):null,address:fulfillment==='delivery'?(address||null):null,comment:comment||'',status:'new',source:tgUser?'telegram':'web',telegram_user_id:tgUser?String(tgUser.id):null,telegram_username:tgUser?.username||null,telegram_first_name:tgUser?.first_name||null,fulfillment_type:fulfillment,payment_status:safePaymentStatus,payment_method:payment_method||null,venue_id:venue.venue_id,venue_name:venue.name,establishment_id:venue.establishment_id||establishmentIdForVenue(venue.venue_id),created_at:new Date().toISOString(),updated_at:new Date().toISOString()};
    d.shaurma_orders.push(order);writeStore(d);
   }
   pushOwner('order',order);

@@ -2,7 +2,7 @@
 'use strict';
 
 const VERSION='2';
-let activeRun=0,raf=0,resizeBound=false;
+let activeRun=0,raf=0,resizeBound=false,currentState=null;
 
 const $=(s,r=document)=>r.querySelector(s);
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -241,8 +241,8 @@ async function play({ready,mode='full'}={}){
   const runId=++activeRun,shortMode=mode==='short';
   const duration=shortMode?2600:7900;
   const state={canvas,ctx,stars:makeStars(shortMode?250:520),dust:makeDust(shortMode?0:400),earth:earthTexture(512),w:0,h:0,dpr:1};
-  resize(state);
-  if(!resizeBound){window.addEventListener('resize',()=>{if(root.classList.contains('active'))resize(state)},{passive:true});resizeBound=true}
+  currentState=state;resize(state);
+  if(!resizeBound){window.addEventListener('resize',()=>{if(root.classList.contains('active')&&currentState)resize(currentState)},{passive:true});resizeBound=true}
   root.classList.remove('rcSpaceExit');root.classList.add('active');root.setAttribute('aria-hidden','false');
   screen?.classList.add('rc-intro-running');screen?.classList.remove('rc-map-arrived');
   $('#rcSpaceSkip').classList.remove('show');

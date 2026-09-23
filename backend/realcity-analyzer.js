@@ -572,7 +572,7 @@ async function makeFacadeTexture(buf){
   try{
     const out=await sharp(buf,{failOn:'none'})
       .rotate()
-      .resize(128,256,{fit:'cover',position:'centre'})
+      .resize(128,256,{fit:'cover',position:'attention'})
       .modulate({brightness:1.03,saturation:.88})
       .sharpen({sigma:.65,m1:.8,m2:.35})
       .png({compressionLevel:9,palette:true,quality:82})

@@ -375,6 +375,22 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   });
 
   async function syncBot(){
+    const bootstrapCode=String(process.env.VENUE_OWNER_BOOTSTRAP_CLAIM_CODE||'').trim();
+    const bootstrapEstablishment=String(process.env.VENUE_OWNER_BOOTSTRAP_ESTABLISHMENT_ID||'').trim().toUpperCase();
+    if(DB&&bootstrapCode&&bootstrapEstablishment){
+      try{
+        const venue=(await DB.query("SELECT establishment_id FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[bootstrapEstablishment])).rows[0];
+        if(venue){
+          const hash=codeHash(bootstrapCode);
+          const existing=(await DB.query("SELECT id FROM shaurma_venue_invites WHERE code_hash=$1 LIMIT 1",[hash])).rows[0];
+          if(!existing)await DB.query(`
+            INSERT INTO shaurma_venue_invites(establishment_id,code_hash,role,permissions,expires_at,max_uses,created_by)
+            VALUES($1,$2,'owner',$3::jsonb,NOW()+INTERVAL '7 days',1,'bootstrap')
+          `,[bootstrapEstablishment,hash,JSON.stringify(DEFAULT_PERMISSIONS)]);
+          console.log('Venue owner bootstrap invite ready '+bootstrapEstablishment);
+        }
+      }catch(e){console.error('Venue owner bootstrap invite:',e.message)}
+    }
     if(!BOT_TOKEN){console.log('Venue owner bot token not configured');return}
     try{
       const info=await getBotInfo();

@@ -150,15 +150,16 @@ async function initDb(){
  await DB.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_shaurma_venues_establishment ON shaurma_venues(establishment_id)");
  for(const venue of SEEDED_VENUES.filter(v=>v.venue_id===DEFAULT_VENUE_ID)){
   await DB.query(`
-   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
-   VALUES($1,$2,$3,TRUE,$4::jsonb,$5::jsonb)
+   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id)
+   VALUES($1,$2,$3,TRUE,$4::jsonb,$5::jsonb,$6)
    ON CONFLICT(venue_id) DO UPDATE SET
     slug=EXCLUDED.slug,
+    establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),
     name=EXCLUDED.name,
     config=CASE WHEN shaurma_venues.config='{}'::jsonb THEN EXCLUDED.config ELSE shaurma_venues.config END,
     menu=CASE WHEN jsonb_array_length(shaurma_venues.menu)=0 THEN EXCLUDED.menu ELSE shaurma_venues.menu END,
     updated_at=NOW()
-  `,[venue.venue_id,venue.slug,venue.name,JSON.stringify(venue.config),JSON.stringify(venue.menu)]);
+  `,[venue.venue_id,venue.slug,venue.name,JSON.stringify(venue.config),JSON.stringify(venue.menu),establishmentIdForVenue(venue.venue_id)]);
  }
 
  await DB.query(`
@@ -346,13 +347,14 @@ async function runMoscowDiscovery({reason='auto'}={}){
     await client.query('BEGIN');
     for(const r of found.records){
      await client.query(`
-      INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
-      VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb)
+      INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id)
+      VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4)
       ON CONFLICT(venue_id) DO UPDATE SET
+       establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),
        name=CASE WHEN EXISTS(SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=$1 AND m.metadata_locked=TRUE) THEN shaurma_venues.name ELSE EXCLUDED.name END,
        is_active=CASE WHEN EXISTS(SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=$1 AND m.source_suppressed=TRUE) THEN FALSE ELSE TRUE END,
        updated_at=NOW()
-     `,[r.venue_id,r.name,JSON.stringify({subtitle:'ЗАВЕДЕНИЕ НА КАРТЕ',builder_enabled:false,source:'openstreetmap'})]);
+     `,[r.venue_id,r.name,JSON.stringify({subtitle:'ЗАВЕДЕНИЕ НА КАРТЕ',builder_enabled:false,source:'openstreetmap'}),establishmentIdForVenue(r.venue_id)]);
      const existing=await client.query("SELECT id,position_locked,appearance_locked,metadata_locked,source_suppressed FROM shaurmeg_markers WHERE source_provider=$1 AND source_id=$2 LIMIT 1",['openstreetmap',r.source_id]);
      let attachedManual=null;
      if(!existing.rows[0])attachedManual=await findNearbyManualMatch(client,r);
@@ -387,12 +389,12 @@ async function runMoscowDiscovery({reason='auto'}={}){
      }else{
       await client.query(`
        INSERT INTO shaurmeg_markers(
-        venue_id,name,address,description,lat,lon,hours,category,marker_style,
+        venue_id,establishment_id,name,address,description,lat,lon,hours,category,marker_style,
         source_provider,source_id,source_data,source_first_seen_at,source_last_seen_at,source_checked_at,
         verification_status,verification_score,verification_details,relevance_score,auto_imported,
         realcity_status,realcity_quality,is_active
-       ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,'openstreetmap',$10,$11::jsonb,NOW(),NOW(),NOW(),$12,$13,$14::jsonb,$15,TRUE,'pending','heuristic',TRUE)
-      `,[r.venue_id,r.name,r.address,r.description,r.lat,r.lon,r.hours,r.category,JSON.stringify(r.marker_style),r.source_id,JSON.stringify(r.source_data),r.verification_status,r.verification_score,JSON.stringify(r.verification_details),r.relevance_score]);
+       ) VALUES($1,$16,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,'openstreetmap',$10,$11::jsonb,NOW(),NOW(),NOW(),$12,$13,$14::jsonb,$15,TRUE,'pending','heuristic',TRUE)
+      `,[r.venue_id,r.name,r.address,r.description,r.lat,r.lon,r.hours,r.category,JSON.stringify(r.marker_style),r.source_id,JSON.stringify(r.source_data),r.verification_status,r.verification_score,JSON.stringify(r.verification_details),r.relevance_score,establishmentIdForVenue(r.venue_id)]);
       inserted++;
      }
     }
@@ -759,9 +761,9 @@ app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
  const client=await DB.connect();
  try{
   await client.query('BEGIN');
-  const venueId=x.venue_id||crypto.randomBytes(8).toString('hex');
-  const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false})]);
-  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,hours,price_label,is_active,category,marker_avatar,marker_style,realcity_status,realcity_quality,verification_status,verification_score,metadata_locked,position_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$14,$15::jsonb,'pending','heuristic','manual',1,TRUE,TRUE) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active,x.category,x.marker_avatar,JSON.stringify(x.marker_style)]);
+  const venueId=x.venue_id||crypto.randomBytes(8).toString('hex'),establishmentId=establishmentIdForVenue(venueId);
+  const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb,$5) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false}),establishmentId]);
+  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,establishment_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,hours,price_label,is_active,category,marker_avatar,marker_style,realcity_status,realcity_quality,verification_status,verification_score,metadata_locked,position_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16::jsonb,'pending','heuristic','manual',1,TRUE,TRUE) RETURNING *`,[venueId,establishmentId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active,x.category,x.marker_avatar,JSON.stringify(x.marker_style)]);
   await client.query('COMMIT');publishVenue(venue.rows[0]);queueRealCityProfile(q.rows[0].id);res.status(201).json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}finally{client.release()}
 });
@@ -936,12 +938,12 @@ app.put('/api/shaurma/venues/:venueId',async(req,res)=>{
  if(JSON.stringify(config).length>50000||JSON.stringify(menu).length>500000)return res.status(413).json({error:'venue_too_large'});
  try{
   const q=await DB.query(`
-   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
-   VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb)
+   INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id)
+   VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7)
    ON CONFLICT(venue_id) DO UPDATE SET slug=EXCLUDED.slug,name=EXCLUDED.name,is_active=EXCLUDED.is_active,
-    config=EXCLUDED.config,menu=EXCLUDED.menu,updated_at=NOW()
+    config=EXCLUDED.config,menu=EXCLUDED.menu,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()
    RETURNING *
-  `,[venueId,slug,name,body.is_active!==false,JSON.stringify(config),JSON.stringify(menu)]);
+  `,[venueId,slug,name,body.is_active!==false,JSON.stringify(config),JSON.stringify(menu),establishmentIdForVenue(venueId)]);
   publishVenue(q.rows[0]);
   res.json(q.rows[0]);
  }catch(e){

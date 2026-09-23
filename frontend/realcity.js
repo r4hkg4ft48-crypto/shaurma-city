@@ -56,7 +56,7 @@ function installLayers(){
   map.addLayer({id:'rc-details-layer',type:'fill-extrusion',source:'rc-details',paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false}});
 }
 async function loadMarkers(){
-  try{const r=await fetch(API+'/api/shaurmeg/markers',{cache:'no-store'});if(!r.ok)throw new Error();markers=await r.json();if(!Array.isArray(markers))markers=[]}catch{markers=[]}
+  try{const r=await fetch(API+'/api/shaurmeg/markers?lite=1',{cache:'no-store'});if(!r.ok)throw new Error();markers=await r.json();if(!Array.isArray(markers))markers=[]}catch{markers=[]}
   markerEls.forEach(v=>v.remove());markerEls.clear();
   for(const m of markers){
     if(!Number.isFinite(Number(m.lon))||!Number.isFinite(Number(m.lat)))continue;

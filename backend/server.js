@@ -568,10 +568,10 @@ async function resolveVenue(value,{includeInactive=false}={}){
  const id=normalizeVenueId(value)||DEFAULT_VENUE_ID;
  if(!DB){
   const venue=SEEDED_VENUES.find(v=>v.venue_id===id||v.slug===id);
-  return venue?{...venue,is_active:true}:null;
+  return venue?{...venue,establishment_id:establishmentIdForVenue(venue.venue_id),is_active:true}:null;
  }
  const where=includeInactive?'':' AND is_active=TRUE';
- const q=await DB.query(`SELECT venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE (venue_id=$1 OR slug=$1)${where} LIMIT 1`,[id]);
+ const q=await DB.query(`SELECT establishment_id,venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE (venue_id=$1 OR slug=$1)${where} LIMIT 1`,[id]);
  return q.rows[0]||null;
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}

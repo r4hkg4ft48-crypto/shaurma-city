@@ -634,7 +634,7 @@ app.get('/api/shaurma/venues',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
   if(!DB)return res.json([SEEDED_VENUES[0]].map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
-  const q=await DB.query(`SELECT DISTINCT v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.is_active=TRUE AND (v.venue_id=$1 OR m.id IS NOT NULL) ORDER BY v.name`,[DEFAULT_VENUE_ID]);
+  const q=await DB.query(`SELECT DISTINCT v.establishment_id,v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.is_active=TRUE AND (v.venue_id=$1 OR m.id IS NOT NULL) ORDER BY v.name`,[DEFAULT_VENUE_ID]);
   res.json(q.rows);
  }catch(e){console.error('venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
 });
@@ -644,7 +644,7 @@ app.get('/api/shaurma/admin/venues',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
   if(!DB)return res.json([SEEDED_VENUES[0]].map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
-  const q=await DB.query(`SELECT DISTINCT v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at,COUNT(m.id)::int AS marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.venue_id=$1 OR m.id IS NOT NULL GROUP BY v.venue_id ORDER BY v.name`,[DEFAULT_VENUE_ID]);
+  const q=await DB.query(`SELECT DISTINCT v.establishment_id,v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at,COUNT(m.id)::int AS marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.venue_id=$1 OR m.id IS NOT NULL GROUP BY v.venue_id ORDER BY v.name`,[DEFAULT_VENUE_ID]);
   res.json(q.rows);
  }catch(e){console.error('admin venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
 });
@@ -721,7 +721,7 @@ function markerValid(x,{requireVenue=true}={}){return (!requireVenue||x.venue_id
 function publicMarker(row){
  const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
  const style=normalizeMarkerStyle(row.marker_style,row.category||'shawarma');
- return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,category:row.category||'shawarma',marker_style:style,has_avatar:!!row.marker_avatar,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),source_provider:row.source_provider||'',realcity_status:row.realcity_status||'pending',realcity_quality:row.realcity_quality||'heuristic',realcity_updated_at:row.realcity_updated_at||null,menu};
+ return {id:row.id,marker_id:row.id,establishment_id:row.establishment_id||null,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,category:row.category||'shawarma',marker_style:style,has_avatar:!!row.marker_avatar,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),source_provider:row.source_provider||'',realcity_status:row.realcity_status||'pending',realcity_quality:row.realcity_quality||'heuristic',realcity_updated_at:row.realcity_updated_at||null,menu};
 }
 
 app.get('/api/shaurmeg/markers',async(req,res)=>{
@@ -738,7 +738,7 @@ app.get('/api/shaurmeg/admin/markers',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.json([]);
  try{
   if(req.query.summary==='1'){
-   const q=await DB.query(`SELECT id,venue_id,name,address,lat,lon,category,marker_style,(marker_avatar<>'') AS has_avatar,verification_status,verification_score,source_provider,source_id,auto_imported,position_locked,appearance_locked,metadata_locked,source_suppressed,is_active,updated_at FROM shaurmeg_markers ORDER BY id`);
+   const q=await DB.query(`SELECT id,establishment_id,venue_id,name,address,lat,lon,category,marker_style,(marker_avatar<>'') AS has_avatar,verification_status,verification_score,source_provider,source_id,auto_imported,position_locked,appearance_locked,metadata_locked,source_suppressed,is_active,updated_at FROM shaurmeg_markers ORDER BY id`);
    return res.json(q.rows.map(row=>({...row,marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,auto_imported:!!row.auto_imported,position_locked:!!row.position_locked,appearance_locked:!!row.appearance_locked,metadata_locked:!!row.metadata_locked,source_suppressed:!!row.source_suppressed,verification_score:Number(row.verification_score??1)})));
   }
   const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);
@@ -787,11 +787,11 @@ app.get('/api/shaurmeg/map-points',async(req,res)=>{
  res.setHeader('Cache-Control','public, max-age=120, stale-while-revalidate=600');
  if(!DB)return res.json([]);
  try{
-  const q=await DB.query(`SELECT m.id,m.venue_id,m.name,m.address,m.lat,m.lon,m.category,m.marker_style,(m.marker_avatar<>'') AS has_avatar,m.verification_status,m.verification_score,m.updated_at,(jsonb_array_length(v.menu)>0) AS has_menu
+  const q=await DB.query(`SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.lat,m.lon,m.category,m.marker_style,(m.marker_avatar<>'') AS has_avatar,m.verification_status,m.verification_score,m.updated_at,(jsonb_array_length(v.menu)>0) AS has_menu
     FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
     WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
     ORDER BY m.id`);
-  res.json(q.rows.map(row=>({id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,category:row.category||'shawarma',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,has_menu:!!row.has_menu,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),updated_at:row.updated_at})));
+  res.json(q.rows.map(row=>({id:row.id,marker_id:row.id,establishment_id:row.establishment_id||null,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,category:row.category||'shawarma',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,has_menu:!!row.has_menu,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),updated_at:row.updated_at})));
  }catch(e){console.error('map points:',e.message);res.status(500).json({error:'map_points_failed'})}
 });
 

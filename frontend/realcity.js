@@ -117,6 +117,8 @@ function installSceneLayers(styleLayers){
  const before=styleLayers.find(l=>l.type==='symbol')?.id;
  map.addSource('rc-buildings',{type:'geojson',data:EMPTY});
  map.addSource('rc-storefront',{type:'geojson',data:EMPTY});
+ map.addSource('rc-windows',{type:'geojson',data:EMPTY});
+ map.addSource('rc-accents',{type:'geojson',data:EMPTY});
  map.addSource('rc-balconies',{type:'geojson',data:EMPTY});
  map.addSource('rc-roofeq',{type:'geojson',data:EMPTY});
  map.addSource('rc-trees',{type:'geojson',data:EMPTY});
@@ -139,6 +141,14 @@ function installSceneLayers(styleLayers){
 
  addLayerSafe({id:'rc-storefront-layer',type:'fill-extrusion',source:'rc-storefront',paint:{
    'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-window-layer',type:'fill-extrusion',source:'rc-windows',paint:{
+   'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-accent-layer',type:'fill-extrusion',source:'rc-accents',paint:{
+   'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
  }},before);
 
  addLayerSafe({id:'rc-balcony-layer',type:'fill-extrusion',source:'rc-balconies',paint:{
@@ -359,38 +369,81 @@ function sceneFromVisibleMap(profile,m){
 
 function buildSceneGeo(profile,m,patternSet){
  const p=safeProfile(profile),scene=p.scene||{},blds=Array.isArray(scene.buildings)?scene.buildings:[],oLon=Number(m.lon),oLat=Number(m.lat);
- const bFeatures=[],store=[],balconies=[],roofeq=[];
+ const bFeatures=[],store=[],windows=[],accents=[],balconies=[],roofeq=[];
+ const markerPoint=[oLon,oLat];
+
+ function edgeLength(a,b){const A=local(a[0],a[1],oLon,oLat),B=local(b[0],b[1],oLon,oLat);return Math.hypot(B[0]-A[0],B[1]-A[1])}
+ function edgeDistance(a,b){
+   const A=local(a[0],a[1],oLon,oLat),B=local(b[0],b[1],oLon,oLat),P=[0,0],vx=B[0]-A[0],vy=B[1]-A[1],wx=P[0]-A[0],wy=P[1]-A[1],d=vx*vx+vy*vy,t=d?clamp((wx*vx+wy*vy)/d,0,1):0;
+   return Math.hypot(P[0]-(A[0]+vx*t),P[1]-(A[1]+vy*t));
+ }
+
  for(let i=0;i<blds.length;i++){
    const b=blds[i],ring=Array.isArray(b.ring)?b.ring:[];if(ring.length<4)continue;
    const role=b.role||'background',patterned=role==='hero'||role==='nearby'?1:0;
    const patternName=role==='hero'?patternSet.hero:'rcp-near-'+(1+(Number(b.pattern||i)%4));
+   const wall=b.palette?.wall||p.palette.wall,win=b.palette?.windows||p.palette.windows,accent=b.palette?.accent||p.palette.accent,storeColor=b.palette?.storefront||p.palette.storefront;
    bFeatures.push({type:'Feature',properties:{
-     id:b.id,height:Number(b.height)||9,role,patterned,pattern_name:patternName,
-     wall:b.palette?.wall||p.palette.wall,roof:b.palette?.roof||p.palette.roof
+     id:b.id,height:Number(b.height)||9,role,patterned,pattern_name:patternName,wall,roof:b.palette?.roof||p.palette.roof
    },geometry:{type:'Polygon',coordinates:[ring]}});
 
-   if(role==='hero'||(role==='nearby'&&i<6)){
-     const storeH=role==='hero'?Number(p.facade.storefront_height_m)||3.35:2.8;
-     if(role==='hero'&&p.facade.storefront || role==='nearby'){
-       store.push({type:'Feature',properties:{color:b.palette?.storefront||p.palette.storefront,height:Math.min(storeH,Number(b.height)||storeH)},geometry:{type:'Polygon',coordinates:[ring]}});
-     }
-   }
+   if(role==='hero'){
+     const edges=Array.from({length:ring.length-1},(_,e)=>({e,d:edgeDistance(ring[e],ring[e+1]),len:edgeLength(ring[e],ring[e+1])})).filter(x=>x.len>4).sort((a,b)=>a.d-b.d);
+     const frontEdges=edges.slice(0,Math.min(2,edges.length));
 
-   if(role==='hero'&&p.facade.balconies){
-     const floors=Math.min(Number(b.levels)||p.facade.levels||10,18),every=Math.max(1,Number(p.facade.balcony_every)||2);
-     for(let fl=2;fl<floors;fl+=every){
-       const z=fl*3.05+.32;
-       for(let e=0;e<ring.length-1;e++){
-         const r=edgeRect(ring[e],ring[e+1],Number(p.facade.balcony_depth_m)||.8,oLon,oLat,.16,.84);if(!r)continue;
-         balconies.push({type:'Feature',properties:{base:z,height:z+.18,color:shade(p.palette.wall,-18)},geometry:{type:'Polygon',coordinates:[r]}});
+     if(p.facade.storefront){
+       const storeH=Math.min(Number(p.facade.storefront_height_m)||3.35,Number(b.height)||3.35);
+       for(const ed of frontEdges){
+         const rr=edgeRect(ring[ed.e],ring[ed.e+1],.78,oLon,oLat,.025,.975);if(!rr)continue;
+         store.push({type:'Feature',properties:{color:storeColor,height:storeH},geometry:{type:'Polygon',coordinates:[rr]}});
        }
+     }
+
+     const floors=Math.min(Number(b.levels)||p.facade.levels||10,20);
+     const baseFloor=p.facade.storefront?1:0;
+     for(let fl=baseFloor;fl<floors;fl++){
+       const z=fl*3.05+1.02,top=Math.min(z+1.34,(Number(b.height)||z+1.34)-.12);if(top<=z)continue;
+       for(const ed of edges){
+         const count=clamp(Math.floor(ed.len/4.6),1,9),seg=1/count;
+         for(let w=0;w<count;w++){
+           const s=w*seg+seg*.24,t=(w+1)*seg-seg*.24,rr=edgeRect(ring[ed.e],ring[ed.e+1],.30,oLon,oLat,s,t);if(!rr)continue;
+           windows.push({type:'Feature',properties:{base:z,height:top,color:win},geometry:{type:'Polygon',coordinates:[rr]}});
+         }
+       }
+     }
+
+     if(p.facade.vertical_bands){
+       const bandEdges=edges.filter((_,idx)=>idx%Math.max(1,Number(p.facade.vertical_band_every)||3)===0).slice(0,6);
+       for(const ed of bandEdges){
+         const rr=edgeRect(ring[ed.e],ring[ed.e+1],.34,oLon,oLat,.04,.105);if(!rr)continue;
+         accents.push({type:'Feature',properties:{base:.2,height:Math.max(3,(Number(b.height)||9)-.28),color:accent},geometry:{type:'Polygon',coordinates:[rr]}});
+       }
+     }
+
+     if(p.facade.balconies){
+       const every=Math.max(1,Number(p.facade.balcony_every)||2);
+       const balconyEdges=edges.filter(x=>x.len>7).slice(0,Math.min(6,edges.length));
+       for(let fl=2;fl<floors;fl+=every){
+         const z=fl*3.05+.32;
+         for(const ed of balconyEdges){
+           const rr=edgeRect(ring[ed.e],ring[ed.e+1],Number(p.facade.balcony_depth_m)||.8,oLon,oLat,.12,.88);if(!rr)continue;
+           balconies.push({type:'Feature',properties:{base:z,height:z+.18,color:shade(wall,-18)},geometry:{type:'Polygon',coordinates:[rr]}});
+         }
+       }
+     }
+   }else if(role==='nearby'&&i<6){
+     const storeH=2.8;
+     const edges=Array.from({length:ring.length-1},(_,e)=>({e,d:edgeDistance(ring[e],ring[e+1]),len:edgeLength(ring[e],ring[e+1])})).filter(x=>x.len>5).sort((a,b)=>a.d-b.d);
+     if(edges[0]){
+       const rr=edgeRect(ring[edges[0].e],ring[edges[0].e+1],.52,oLon,oLat,.04,.96);
+       if(rr)store.push({type:'Feature',properties:{color:storeColor,height:Math.min(storeH,Number(b.height)||storeH)},geometry:{type:'Polygon',coordinates:[rr]}});
      }
    }
 
    if((role==='hero'||(role==='nearby'&&i<5))&&p.facade.roof_equipment){
-     const c=centroid(ring),base=Number(b.height)||9,count=role==='hero'?3:1;
+     const cc=centroid(ring),base=Number(b.height)||9,count=role==='hero'?3:1;
      for(let q=0;q<count;q++){
-       const rr=rectAround(c,role==='hero'?4.6:3.2,role==='hero'?3.0:2.4,oLon,oLat,(q-1)*4.8,(q%2)*2.2);
+       const rr=rectAround(cc,role==='hero'?4.6:3.2,role==='hero'?3.0:2.4,oLon,oLat,(q-1)*4.8,(q%2)*2.2);
        roofeq.push({type:'Feature',properties:{base,height:base+(role==='hero'?1.5:1.0),color:shade(b.palette?.roof||p.palette.roof,-8)},geometry:{type:'Polygon',coordinates:[rr]}});
      }
    }
@@ -400,12 +453,13 @@ function buildSceneGeo(profile,m,patternSet){
  return {
    buildings:{type:'FeatureCollection',features:bFeatures},
    storefront:{type:'FeatureCollection',features:store},
+   windows:{type:'FeatureCollection',features:windows},
+   accents:{type:'FeatureCollection',features:accents},
    balconies:{type:'FeatureCollection',features:balconies},
    roofeq:{type:'FeatureCollection',features:roofeq},
    trees:{type:'FeatureCollection',features:treeFeatures}
  };
 }
-
 function setBuiltinOpacity(v){for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-opacity',v)}catch{}}}
 function setSceneOpacity(v){
  const d=Math.max(0,Math.min(1,v));
@@ -414,6 +468,8 @@ function setSceneOpacity(v){
    map.setPaintProperty('rc-real-pattern','fill-extrusion-opacity',.99*d);
    map.setPaintProperty('rc-roofs','fill-extrusion-opacity',.98*d);
    map.setPaintProperty('rc-storefront-layer','fill-extrusion-opacity',.98*Math.max(0,(d-.08)/.92));
+   map.setPaintProperty('rc-window-layer','fill-extrusion-opacity',.99*Math.max(0,(d-.10)/.90));
+   map.setPaintProperty('rc-accent-layer','fill-extrusion-opacity',.96*Math.max(0,(d-.14)/.86));
    map.setPaintProperty('rc-balcony-layer','fill-extrusion-opacity',.98*Math.max(0,(d-.18)/.82));
    map.setPaintProperty('rc-roofeq-layer','fill-extrusion-opacity',.96*Math.max(0,(d-.12)/.88));
    map.setPaintProperty('rc-tree-shadow','circle-opacity',.42*Math.max(0,(d-.28)/.72));
@@ -421,7 +477,7 @@ function setSceneOpacity(v){
  }catch{}
 }
 function clearScene(){
- for(const id of ['rc-buildings','rc-storefront','rc-balconies','rc-roofeq','rc-trees'])map.getSource(id)?.setData(EMPTY);
+ for(const id of ['rc-buildings','rc-storefront','rc-windows','rc-accents','rc-balconies','rc-roofeq','rc-trees'])map.getSource(id)?.setData(EMPTY);
  try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0)}catch{}
  setSceneOpacity(0);setBuiltinOpacity(.84);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD)}catch{}}
@@ -467,6 +523,8 @@ async function focusVenue(m,replay=false){
  }
  map.getSource('rc-buildings').setData(readyGeo.buildings);
  map.getSource('rc-storefront').setData(readyGeo.storefront);
+ map.getSource('rc-windows').setData(readyGeo.windows);
+ map.getSource('rc-accents').setData(readyGeo.accents);
  map.getSource('rc-balconies').setData(readyGeo.balconies);
  map.getSource('rc-roofeq').setData(readyGeo.roofeq);
  map.getSource('rc-trees').setData(readyGeo.trees);

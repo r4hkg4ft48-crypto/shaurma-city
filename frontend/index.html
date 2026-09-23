@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">\n<meta name="shaurma-build" content="84">
+<meta charset="utf-8">\n<meta name="shaurma-build" content="85">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -1775,11 +1775,12 @@ body{
   #menu .add{width:40px!important;height:40px!important;font-size:22px!important}
 }
 
-.venueSwitch{justify-self:start;border:0;background:transparent;color:inherit;text-align:left;padding:0;max-width:160px}.venueSwitch b,.venueSwitch small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.venueSwitch b{font-size:12px}.venueSwitch small{font-size:9px;color:var(--muted)}.venueChooser{position:fixed;inset:0;z-index:95;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,5,10,.68);opacity:0;visibility:hidden;pointer-events:none;transition:.2s}.venueChooser.open{opacity:1;visibility:visible;pointer-events:auto}.venueChooserCard{width:min(680px,100%);max-height:78dvh;overflow:auto;padding:16px 16px calc(16px + var(--safeB));border-radius:26px 26px 0 0;background:#111923;border:1px solid var(--line)}.venueChooserList{display:grid;gap:8px;margin-top:12px}.venueChoice{width:100%;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:13px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.03);text-align:left}.venueChoice.active{border-color:rgba(47,109,246,.5);background:rgba(47,109,246,.08)}.venueChoice small{display:block;color:var(--muted);margin-top:3px}.venueChoice span{color:#8eafff;font-weight:850}.venueSwitch.locked{cursor:default;opacity:.96;border-color:rgba(122,184,255,.22);background:rgba(122,184,255,.055)}.venueSwitch.locked small{color:#7f9bb6}@media(max-width:540px){.venueSwitch{max-width:115px}.venueSwitch b{font-size:10px}}
+.venueSwitch{justify-self:start;border:0;background:transparent;color:inherit;text-align:left;padding:0;max-width:160px}.venueSwitch b,.venueSwitch small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.venueSwitch b{font-size:12px}.venueSwitch small{font-size:9px;color:var(--muted)}.venueChooser{position:fixed;inset:0;z-index:95;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,5,10,.68);opacity:0;visibility:hidden;pointer-events:none;transition:.2s}.venueChooser.open{opacity:1;visibility:visible;pointer-events:auto}.venueChooserCard{width:min(680px,100%);max-height:78dvh;overflow:auto;padding:16px 16px calc(16px + var(--safeB));border-radius:26px 26px 0 0;background:#111923;border:1px solid var(--line)}.venueChooserList{display:grid;gap:8px;margin-top:12px}.venueChoice{width:100%;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:13px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.03);text-align:left}.venueChoice.active{border-color:rgba(47,109,246,.5);background:rgba(47,109,246,.08)}.venueChoice small{display:block;color:var(--muted);margin-top:3px}.venueChoice span{color:#8eafff;font-weight:850}.venueSwitch.locked{cursor:default;opacity:.96;border-color:rgba(122,184,255,.22);background:rgba(122,184,255,.055)}.venueSwitch.locked small{color:#7f9bb6}
+.venueContextInfo{margin:0 16px 12px;padding:12px 13px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.025);display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.venueContextInfo[hidden]{display:none}.venueContextInfo b{font-size:13px}.venueContextInfo small{display:block;color:var(--muted);margin-top:3px;font-size:10px}.venueContextId{font:800 9px/1.2 ui-monospace,SFMono-Regular,monospace;color:#8fb7e1;text-align:right}.venueGallerySection[hidden]{display:none}.venueGalleryRail{display:flex;gap:9px;overflow:auto;padding-bottom:4px;scrollbar-width:none}.venueGalleryRail::-webkit-scrollbar{display:none}.venueGalleryRail img{width:min(72vw,330px);aspect-ratio:4/3;object-fit:cover;border-radius:17px;border:1px solid var(--line);flex:0 0 auto}@media(max-width:540px){.venueSwitch{max-width:115px}.venueSwitch b{font-size:10px}}
 </style>
 <script>
 (function(){
-  var build="84";
+  var build="85";
   try{
     var u=new URL(location.href);
     if(u.searchParams.get("b")!==build){u.searchParams.set("b",build);location.replace(u.toString());}
@@ -1787,12 +1788,13 @@ body{
 })();
 </script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="realcity.css?v=84">
+<link rel="stylesheet" href="realcity.css?v=85">
 </head>
 <body>
 <div class="app">
-<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 84</div></header>
+<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 85</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
+<div class="venueContextInfo" id="venueContextInfo" hidden><div><b id="venueContextAddress"></b><small id="venueContextMeta"></small></div><div class="venueContextId" id="venueContextId"></div></div>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
 <button class="cat" data-hero-filter="flatbread"><b>Лепёшка</b><small>Горячая и сытная</small></button>
@@ -1876,6 +1878,7 @@ body{
     </article>
   </div>
 </section>
+<section class="section venueGallerySection" id="venueGallerySection" hidden><div class="head"><div><div class="k">Заведение</div><h2>Фото</h2></div></div><div class="venueGalleryRail" id="venueGalleryRail"></div></section>
 <section class="section" id="menu"><div class="head"><div><div class="k">Выбирай</div><h2 id="menuTitle">Шаурма</h2></div><button class="link" id="showAll">Всё меню →</button></div><div class="menuFlavorBar" aria-hidden="true"><span>Горячий гриль</span><i></i><span>Свежие овощи</span><i></i><span>Соус по вкусу</span></div><div class="pills" id="menuPills"><button class="pill active" data-menu-filter="shawarma">🥙 Шаурма</button><button class="pill" data-menu-filter="flatbread">🫓 Лепёшка</button><button class="pill" data-menu-filter="sauces">🥫 Соусы</button><button class="pill" data-menu-filter="extras">🍟 Допы</button><button class="pill" data-menu-filter="drinks">🥤 Напитки</button><button class="pill" data-menu-filter="bakery">🥐 Выпечка</button></div><div class="grid" id="grid"><article class="card" data-static-cat="shawarma"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Шаурма классика"></div><div class="body"><h3>Шаурма классика</h3><p>Сочная курица, свежие овощи, фирменный соус</p><div class="row"><span class="price">280 ₽</span><button class="add" data-add="classic">+</button></div></div></article><article class="card" data-static-cat="shawarma"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Шаурма сырная"></div><div class="body"><h3>Шаурма сырная</h3><p>Горячая курица, сыр, овощи и соус</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="cheese">+</button></div></div></article><article class="card" data-static-cat="flatbread"><div class="pic"><img src="assets/embedded-7689bd82543f.webp" alt="Лепёшка"></div><div class="body"><h3>Лепёшка</h3><p>Сочная начинка в горячей лепёшке</p><div class="row"><span class="price">270 ₽</span><button class="add" data-add="flat">+</button></div></div></article><article class="card" data-static-cat="sauces"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Биг Тейсти"></div><div class="body"><h3>Биг Тейсти</h3><p>Сливочный и насыщенный</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="big">+</button></div></div></article><article class="card" data-static-cat="sauces"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Барбекю"></div><div class="body"><h3>Барбекю</h3><p>Дымный и густой</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="bbq">+</button></div></div></article><article class="card" data-static-cat="sauces"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Гранатовый"></div><div class="body"><h3>Гранатовый</h3><p>Яркий, с лёгкой кислинкой</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="gran">+</button></div></div></article><article class="card" data-static-cat="sauces"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Сырный"></div><div class="body"><h3>Сырный</h3><p>Густой и сливочный</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="cs">+</button></div></div></article><article class="card" data-static-cat="sauces"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Чесночный"></div><div class="body"><h3>Чесночный</h3><p>Мягкий и ароматный</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="gar">+</button></div></div></article><article class="card" data-static-cat="extras"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Картошка фри"></div><div class="body"><h3>Картошка фри</h3><p>Хрустящая добавка</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="fr">+</button></div></div></article><article class="card" data-static-cat="extras"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Халапеньо"></div><div class="body"><h3>Халапеньо</h3><p>Острота и характер</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="jal">+</button></div></div></article><article class="card" data-static-cat="extras"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Лук"></div><div class="body"><h3>Лук</h3><p>Добавим бесплатно</p><div class="row"><span class="price">0 ₽</span><button class="add" data-add="on">+</button></div></div></article><article class="card" data-static-cat="extras"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Сыр"></div><div class="body"><h3>Сыр</h3><p>Больше сливочного вкуса</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="che">+</button></div></div></article><article class="card" data-static-cat="drinks"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Кока-Кола"></div><div class="body"><h3>Кока-Кола</h3><p>Холодная</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="cola">+</button></div></div></article><article class="card" data-static-cat="drinks"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Компот"></div><div class="body"><h3>Компот</h3><p>Домашний вкус</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="kom">+</button></div></div></article><article class="card" data-static-cat="drinks"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Морс"></div><div class="body"><h3>Морс</h3><p>Ягодный и освежающий</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="mors">+</button></div></div></article><article class="card" data-static-cat="drinks"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Сок"></div><div class="body"><h3>Сок</h3><p>Холодный</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="juice">+</button></div></div></article><article class="card" data-static-cat="bakery"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Самса курица"></div><div class="body"><h3>Самса курица</h3><p>Горячая, хрустящая</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="sc">+</button></div></div></article><article class="card" data-static-cat="bakery"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Самса говядина"></div><div class="body"><h3>Самса говядина</h3><p>Сочная начинка, хрустящее тесто</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="sb">+</button></div></div></article><article class="card" data-static-cat="bakery"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Беляш"></div><div class="body"><h3>Беляш</h3><p>Горячий и сытный</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="bel">+</button></div></div></article><article class="card" data-static-cat="bakery"><div class="pic"><img src="assets/embedded-f7c4e042d559.webp" alt="Чебурек"></div><div class="body"><h3>Чебурек</h3><p>Хрустящий снаружи, сочный внутри</p><div class="row"><span class="pending">Уточнить цену</span><button class="add" data-add="ch">+</button></div></div></article></div></section>
 </div>
 <div class="venueChooser" id="venueChooser"><div class="venueChooserCard"><div class="shead"><div><div class="k">Точка заказа</div><h3>Выбери заведение</h3></div><button class="x" id="venueChooserClose">×</button></div><div class="venueChooserList" id="venueChooserList"><div class="tgUnavailable">Загружаем точки…</div></div></div></div><nav class="nav"><button class="active" data-go="#home"><span>⌂</span><small>Главная</small></button><button data-go="#menu"><span>▦</span><small>Меню</small></button><button id="cartBtn"><span>🛒</span><small>Корзина</small><em class="dot" id="dot">0</em></button><button id="navBuilder"><span>✦</span><small>Собрать</small></button><button id="myOrdersBtn"><span>◎</span><small>Профиль</small></button></nav>
@@ -1931,7 +1934,7 @@ const ACTIVE_MARKER_ID=/^\d+$/.test(String(LAUNCH_URL.searchParams.get("marker")
 const IS_MARKER_CONTEXT=LAUNCH_URL.searchParams.get("context")==="marker"&&!!ACTIVE_ESTABLISHMENT_ID&&!!ACTIVE_MARKER_ID;
 const SHOULD_OPEN_VENUE_MENU=LAUNCH_URL.searchParams.get("view")==="menu"||LAUNCH_URL.searchParams.get("open")==="menu";
 let activeVenue={venue_id:ACTIVE_VENUE_ID,slug:ACTIVE_VENUE_ID,name:"В Лепёшке",config:{},menu:[]};
-let venueLoaded=false,venueLoadFailed=false,venueMenuOpened=false,venueStream=null,availableVenues=[],venueSyncTimer=null,lastVenueUpdatedAt="";
+let venueLoaded=false,venueLoadFailed=false,venueMenuOpened=false,venueStream=null,availableVenues=[],venueSyncTimer=null,lastVenueUpdatedAt="",venueHeroImage="";
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
 let tgUser=null;
 let userProfile=null;
@@ -2023,7 +2026,9 @@ function renderMenuPills(){
 }
 function applyVenue(venue){
   if(!venue||typeof venue!=="object")return;
-  activeVenue=venue;
+  const previous=activeVenue,previousPresentation=previous&&previous.venue_id===venue.venue_id?previous.presentation:null;
+  const presentation=venue.presentation||previousPresentation||null;
+  activeVenue={...venue,presentation};
   lastVenueUpdatedAt=String(venue.updated_at||lastVenueUpdatedAt||"");
   document.title=venue.name+" · заказ";
   const accent=/^#[0-9a-f]{6}$/i.test(venue.config?.accent||"")?venue.config.accent:"#2f6df6";
@@ -2040,6 +2045,15 @@ function applyVenue(venue){
     const small=venueSwitch.querySelector("small");if(small)small.textContent=IS_MARKER_CONTEXT?"выбрано на карте":"сменить заведение";
   }
   if(sub)sub.textContent=String(venue.config?.subtitle||"МЕНЮ И ЗАКАЗ");
+  if(presentation){
+    venueHeroImage=String(presentation.hero_image||"");
+    if(venueHeroImage){const hi=$("#heroImg");if(hi)hi.src=venueHeroImage}
+    const heroCopy=document.querySelector("#home>div:first-child>p");if(heroCopy&&presentation.description)heroCopy.textContent=presentation.description;
+    const info=$("#venueContextInfo"),addr=$("#venueContextAddress"),meta=$("#venueContextMeta"),idEl=$("#venueContextId");
+    if(info){info.hidden=false;if(addr)addr.textContent=presentation.address||venue.name;const bits=[presentation.hours,presentation.price_label].filter(Boolean);if(meta)meta.textContent=bits.join(" · ")||"Меню и заказ";if(idEl)idEl.textContent=(activeVenue.establishment_id||"")+(presentation.id?"\nMARKER "+presentation.id:"")}
+    const gallery=[venueHeroImage,...(Array.isArray(presentation.gallery)?presentation.gallery:[])].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).slice(0,7);
+    const gs=$("#venueGallerySection"),gr=$("#venueGalleryRail");if(gs&&gr){gs.hidden=!gallery.length;gr.innerHTML=gallery.map((src,i)=>'<img src="'+src+'" alt="'+(i===0?'Фото заведения':'Галерея заведения')+'">').join("")}
+  }
   const builderEnabled=venue.config?.builder_enabled!==false;
   ["#builderPreview","#heroBuilder","#navBuilder"].forEach(selector=>{const node=$(selector);if(node)node.style.display=builderEnabled?"":"none"});
   const menu=normalizeVenueMenu(venue.menu);
@@ -2062,8 +2076,8 @@ async function loadVenue({quiet=false}={}){
       :API+"/api/shaurma/venues/"+encodeURIComponent(ACTIVE_VENUE_ID)+"?t="+Date.now();
     const r=await fetch(endpoint,{cache:"no-store",headers:{"Cache-Control":"no-cache"}});
     if(!r.ok)throw new Error("venue_"+r.status);
-    const payload=await r.json(),next=IS_MARKER_CONTEXT?payload.venue:payload;
-    if(IS_MARKER_CONTEXT&&(!payload.marker||payload.marker.establishment_id!==ACTIVE_ESTABLISHMENT_ID))throw new Error("menu_context_mismatch");
+    const payload=await r.json(),next=IS_MARKER_CONTEXT?{...payload.venue,presentation:payload.marker,updated_at:payload.context_updated_at||payload.venue?.updated_at}:payload;
+    if(IS_MARKER_CONTEXT&&(!payload.marker||payload.marker.establishment_id!==ACTIVE_ESTABLISHMENT_ID||String(payload.marker.id)!==ACTIVE_MARKER_ID))throw new Error("menu_context_mismatch");
     const changed=!venueLoaded||String(next.updated_at||"")!==String(lastVenueUpdatedAt||"");
     if(changed)applyVenue(next);
     return next;
@@ -2079,7 +2093,7 @@ async function loadVenue({quiet=false}={}){
 function connectVenueUpdates(){
   venueStream?.close();
   const streamVenue=cleanVenueId(activeVenue?.venue_id)||ACTIVE_VENUE_ID;
-  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=84&t="+Date.now());
+  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=85&t="+Date.now());
   venueStream.addEventListener("venue",event=>{try{applyVenue(JSON.parse(event.data))}catch{}});
   venueStream.onerror=()=>{if(!document.hidden)loadVenue({quiet:true})};
   clearInterval(venueSyncTimer);
@@ -2108,7 +2122,7 @@ function closeVenueChooser(){$("#venueChooser").classList.remove("open");documen
 function switchVenue(venueId){
   if(IS_MARKER_CONTEXT)return;
   const id=cleanVenueId(venueId);if(!id||id===activeVenue.venue_id){closeVenueChooser();return}
-  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","84");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
+  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","85");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
 }
 function syncMiniAppViewport(){
   const tg=window.Telegram&&window.Telegram.WebApp;
@@ -2220,7 +2234,7 @@ function preloadHeroImages(){
     im.src=src;
   });
 }
-function heroFor(cat){$("#heroMedia").classList.add("swap");setTimeout(()=>{$("#heroImg").src=CATIMG[cat]||IMG1;$("#heroLabel").textContent=TIT[cat]||"Шаурма";$("#heroSub").textContent=cat==="extras"?"Фри · халапеньо · лук · сыр":cat==="drinks"?"Кола · компот · морс · сок":cat==="flatbread"?"Фирменная лепёшка":"Сочная классика · сырная";$("#heroMedia").classList.remove("swap")},120)}
+function heroFor(cat){$("#heroMedia").classList.add("swap");setTimeout(()=>{$("#heroImg").src=(venueHeroImage&&cat==="shawarma")?venueHeroImage:(CATIMG[cat]||IMG1);$("#heroLabel").textContent=TIT[cat]||"Шаурма";$("#heroSub").textContent=cat==="extras"?"Фри · халапеньо · лук · сыр":cat==="drinks"?"Кола · компот · морс · сок":cat==="flatbread"?"Фирменная лепёшка":"Сочная классика · сырная";$("#heroMedia").classList.remove("swap")},120)}
 function render(){const grid=$("#grid");if(!venueLoaded){grid.innerHTML='<div class="card" style="padding:18px;grid-column:1/-1"><b>'+(venueLoadFailed?'Не удалось загрузить меню':'Загружаем меню заведения…')+'</b><p style="color:var(--muted);margin:7px 0 0">'+(venueLoadFailed?'Проверьте соединение и откройте приложение ещё раз.':'Позиции и цены появятся через несколько секунд.')+'</p></div>';return}const arr=P.filter(x=>!filter||x.c===filter);grid.innerHTML=arr.length?arr.map(x=>`<article class="card"><div class="pic">${x.i?'<img src="'+x.i+'">':''}</div><div class="body"><h3>${x.n}</h3><p>${x.d}</p><div class="row">${x.p===null?'<span class="pending">Уточнить цену</span>':'<span class="price">'+money(x.p)+'</span>'}<button class="add" data-add="${x.id}">+</button></div></div></article>`).join(""):'<div class="card" style="padding:18px;grid-column:1/-1"><b>В этой категории пока нет позиций</b><p style="color:var(--muted);margin:7px 0 0">Откройте «Всё меню» или выберите другую категорию.</p></div>'}
 function setFilter(c){filter=c;$("#menuTitle").textContent=TIT[c]||menuSections.find(s=>s.id===c)?.name||"Всё меню";$("[data-menu-filter]").forEach(x=>x.classList.toggle("active",x.dataset.menuFilter===c));render()}
 function setHeroFilter(c){
@@ -2420,7 +2434,7 @@ document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-buil
 
 $("#venueSwitch").onclick=openVenueChooser;$("#venueChooserClose").onclick=closeVenueChooser;$("#venueChooser").addEventListener("click",e=>{if(e.target===$("#venueChooser"))closeVenueChooser();const choice=e.target.closest("[data-venue-choice]");if(choice)switchVenue(choice.dataset.venueChoice)});$("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=submitOrder;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
 syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();
-try{const u=new URL(location.href);if(u.searchParams.get("b")!=="84"){u.searchParams.set("b","84");history.replaceState(null,"",u.toString())}}catch{}
+try{const u=new URL(location.href);if(u.searchParams.get("b")!=="85"){u.searchParams.set("b","85");history.replaceState(null,"",u.toString())}}catch{}
 if(IS_MARKER_CONTEXT){const sw=$("#venueSwitch");if(sw){sw.disabled=true;sw.classList.add("locked");const s=sw.querySelector("small");if(s)s.textContent="выбрано на карте"}}
 loadVenue().then(connectVenueUpdates);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadVenue({quiet:true})});
@@ -2743,5 +2757,5 @@ scene=function(id){
 };
 
 </script>
-<script src="space-intro.js?v=84"></script>\n<script src="realcity.js?v=84"></script>
+<script src="space-intro.js?v=85"></script>\n<script src="realcity.js?v=85"></script>
 </body></html>

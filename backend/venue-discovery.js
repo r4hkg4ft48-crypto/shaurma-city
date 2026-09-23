@@ -1,9 +1,10 @@
 'use strict';
 
 const OVERPASS_ENDPOINTS=[
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter'
+  'https://lz4.overpass-api.de/api/interpreter'
 ];
 
 const MOSCOW_BBOX='55.1390,36.8030,56.0220,38.0330';
@@ -164,9 +165,9 @@ function dedupe(records){
   }
   return out;
 }
-async function fetchOverpass(query,timeoutMs=9000,seed=0){
+async function fetchOverpass(query,timeoutMs=12000,seed=0){
   let last=null;
-  const attempts=Math.min(2,OVERPASS_ENDPOINTS.length);
+  const attempts=Math.min(3,OVERPASS_ENDPOINTS.length);
   for(let i=0;i<attempts;i++){
     const endpoint=OVERPASS_ENDPOINTS[(seed+i)%OVERPASS_ENDPOINTS.length];
     const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeoutMs);
@@ -213,7 +214,7 @@ async function mapLimit(items,limit,worker){
 async function discoverMoscowVenues(){
   const cells=moscowGrid(4,4);
   const settled=await mapLimit(cells,4,async(cell,i)=>{
-    const elements=await fetchOverpass(queryForBbox(cell.bbox),9000,i%OVERPASS_ENDPOINTS.length);
+    const elements=await fetchOverpass(queryForBbox(cell.bbox),12000,i%OVERPASS_ENDPOINTS.length);
     console.log('Moscow discovery cell',i+1+'/'+cells.length,'objects',elements.length);
     return {cell,elements};
   });

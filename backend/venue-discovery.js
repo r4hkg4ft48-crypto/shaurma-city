@@ -164,48 +164,80 @@ function dedupe(records){
   }
   return out;
 }
-async function fetchOverpass(query,timeoutMs=65000){
-  const controllers=[];
-  const attempts=OVERPASS_ENDPOINTS.map(endpoint=>(async()=>{
-    const ac=new AbortController();controllers.push(ac);const timer=setTimeout(()=>ac.abort(),timeoutMs);
+async function fetchOverpass(query,timeoutMs=26000,seed=0){
+  let last=null;
+  for(let i=0;i<OVERPASS_ENDPOINTS.length;i++){
+    const endpoint=OVERPASS_ENDPOINTS[(seed+i)%OVERPASS_ENDPOINTS.length];
+    const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeoutMs);
     try{
-      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-Moscow-Discovery/1.1'},body:'data='+encodeURIComponent(query),signal:ac.signal});
+      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-Moscow-Discovery/1.2'},body:'data='+encodeURIComponent(query),signal:ac.signal});
       if(!r.ok)throw new Error('overpass_'+r.status);
       const j=await r.json();
       if(!Array.isArray(j.elements))throw new Error('bad_overpass_response');
       return j.elements;
-    }finally{clearTimeout(timer)}
-  })());
-  try{return await Promise.any(attempts)}
-  catch(e){throw new Error('overpass_unavailable')}
-  finally{controllers.forEach(x=>{try{x.abort()}catch{}})}
+    }catch(e){last=e}finally{clearTimeout(timer)}
+  }
+  throw last||new Error('overpass_unavailable');
 }
-function queryFor(area=true){
-  const region=area
-    ? 'area["boundary"="administrative"]["name"="Москва"]["admin_level"="4"]->.m;'
-    : '';
-  const scope=area?'(area.m)':'('+MOSCOW_BBOX+')';
-  return '[out:json][timeout:60];'+region+'('+
+function queryForBbox(bbox){
+  const scope='('+bbox+')';
+  return '[out:json][timeout:24];('+
     'nwr'+scope+'["shop"~"^(bakery|pastry)$"];'+
     'nwr'+scope+'["amenity"~"^(fast_food|cafe|restaurant|food_court)$"]["cuisine"~"shawarma|kebab|doner_kebab|turkish|middle_eastern|arab|lebanese|uzbek|caucasian|georgian",i];'+
     'nwr'+scope+'["amenity"~"^(fast_food|cafe|restaurant|food_court)$"]["name"~"шаурм|шаверм|донер|кебаб|kebab|doner|shawarma|гирос|gyros|самс|тандыр|выпеч|пекарн|леп[её]ш|чебур|хачапур|пирож|бурек|borek",i];'+
     'nwr'+scope+'["shop"~"^(convenience|deli)$"]["name"~"шаурм|шаверм|донер|кебаб|kebab|doner|shawarma|самс|тандыр|выпеч|пекарн|леп[её]ш|чебур|хачапур",i];'+
   ');out center tags;';
 }
-async function discoverMoscowVenues(){
-  let elements=[],scope='moscow_admin_area';
-  try{
-    elements=await fetchOverpass(queryFor(true));
-    if(elements.length<40)throw new Error('area_query_too_small');
-  }catch(e){
-    scope='moscow_bbox_fallback';
-    elements=await fetchOverpass(queryFor(false));
+function moscowGrid(rows=5,cols=5){
+  const [south,west,north,east]=MOSCOW_BBOX.split(',').map(Number),cells=[];
+  const dh=(north-south)/rows,dw=(east-west)/cols;
+  for(let r=0;r<rows;r++)for(let col=0;col<cols;col++){
+    const s=south+r*dh,n=south+(r+1)*dh,w=west+col*dw,e=west+(col+1)*dw;
+    cells.push({index:cells.length,bbox:[s,w,n,e].map(x=>x.toFixed(6)).join(',')});
   }
+  return cells;
+}
+async function mapLimit(items,limit,worker){
+  const results=new Array(items.length);let next=0;
+  async function runner(){
+    while(true){
+      const i=next++;if(i>=items.length)return;
+      try{results[i]={status:'fulfilled',value:await worker(items[i],i)}}catch(reason){results[i]={status:'rejected',reason}}
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit,items.length)},runner));
+  return results;
+}
+
+async function discoverMoscowVenues(){
+  const cells=moscowGrid(5,5);
+  const settled=await mapLimit(cells,2,async(cell,i)=>{
+    const elements=await fetchOverpass(queryForBbox(cell.bbox),26000,i%OVERPASS_ENDPOINTS.length);
+    return {cell,elements};
+  });
+  const failed=[],elementMap=new Map();
+  for(let i=0;i<settled.length;i++){
+    const s=settled[i];
+    if(s.status==='rejected'){failed.push(cells[i].index);continue}
+    for(const el of s.value.elements||[])elementMap.set(String(el.type)+':'+String(el.id),el);
+  }
+  if(failed.length>Math.floor(cells.length*.44))throw new Error('overpass_grid_insufficient_coverage');
+  const elements=[...elementMap.values()];
   const raw=elements.map(recordFrom).filter(Boolean);
   const records=dedupe(raw);
   const counts={};
   for(const r of records)counts[r.category]=(counts[r.category]||0)+1;
-  return {provider:'openstreetmap',scope,queried_at:new Date().toISOString(),raw_count:raw.length,count:records.length,counts,records};
+  return {
+    provider:'openstreetmap',
+    scope:'moscow_bbox_grid_5x5',
+    queried_at:new Date().toISOString(),
+    raw_count:raw.length,
+    count:records.length,
+    counts,
+    failed_cells:failed,
+    coverage:Number(((cells.length-failed.length)/cells.length).toFixed(2)),
+    records
+  };
 }
 
 module.exports={discoverMoscowVenues,appearanceFor};

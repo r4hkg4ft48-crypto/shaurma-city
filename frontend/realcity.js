@@ -3,13 +3,13 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='78';
+const BUILD='79';
 const GOLD='#17324f';
 const MIDNIGHT={bg:'#06101d',land:'#081624',land2:'#0b1c2e',green:'#10263a',water:'#04101c',building:'#17324f',buildingTop:'#1f4064',road:'#edf4fb',roadSoft:'#6f879f',border:'#2d4863',label:'#f7fbff',labelMuted:'#a9bdd2',halo:'#06101d'};
 const EMPTY={type:'FeatureCollection',features:[]};
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
-let builtin3d=[],buildingLayers=[],dimmedLayers=[],profileCache=new Map();
+let builtin3d=[],buildingLayers=[],roadLayers=[],dimmedLayers=[],profileCache=new Map();
 
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -100,6 +100,7 @@ async function ensureMap(){
  applyMidnightBaseMap(layers);
  builtin3d=layers.filter(l=>l.type==='fill-extrusion'&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
  buildingLayers=layers.filter(l=>['fill','fill-extrusion'].includes(l.type)&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
+ roadLayers=layers.filter(l=>l.type==='line'&&(/road|street|transport|highway/i.test(String(l.id||''))||/transportation|road|highway/i.test(String(l['source-layer']||'')))).map(l=>l.id);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD);map.setPaintProperty(id,'fill-extrusion-opacity',.84)}catch{}}
  installSceneLayers(layers);
  installTreeImage();
@@ -169,6 +170,29 @@ function installSceneLayers(styleLayers){
  map.addSource('rc-balconies',{type:'geojson',data:EMPTY});
  map.addSource('rc-roofeq',{type:'geojson',data:EMPTY});
  map.addSource('rc-trees',{type:'geojson',data:EMPTY});
+ map.addSource('rc-focus',{type:'geojson',data:EMPTY});
+ map.addSource('rc-focus-roads',{type:'geojson',data:EMPTY});
+ map.addSource('rc-hero-highlight',{type:'geojson',data:EMPTY});
+
+ addLayerSafe({id:'rc-focus-aura',type:'circle',source:'rc-focus',paint:{
+   'circle-radius':['interpolate',['linear'],['zoom'],15,44,17,82,18.5,126,20,165],
+   'circle-color':'#79c7ff','circle-opacity':0,'circle-blur':.88,'circle-pitch-alignment':'map'
+ }},before);
+
+ addLayerSafe({id:'rc-focus-core',type:'circle',source:'rc-focus',paint:{
+   'circle-radius':['interpolate',['linear'],['zoom'],15,11,17,19,18.5,28,20,36],
+   'circle-color':'#dff3ff','circle-opacity':0,'circle-blur':.58,'circle-pitch-alignment':'map'
+ }},before);
+
+ addLayerSafe({id:'rc-focus-roads-glow',type:'line',source:'rc-focus-roads',paint:{
+   'line-color':'#78c8ff','line-width':['interpolate',['linear'],['zoom'],15,3,17,7,18.5,11,20,15],
+   'line-opacity':0,'line-blur':['interpolate',['linear'],['zoom'],15,2,18,5,20,7]
+ }},before);
+
+ addLayerSafe({id:'rc-focus-roads-line',type:'line',source:'rc-focus-roads',paint:{
+   'line-color':'#f5fbff','line-width':['interpolate',['linear'],['zoom'],15,.7,17,1.4,18.5,2.15,20,2.7],
+   'line-opacity':0
+ }},before);
 
  addLayerSafe({id:'rc-gold',type:'fill-extrusion',source:'rc-buildings',paint:{
    'fill-extrusion-color':GOLD,'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true
@@ -215,6 +239,25 @@ function installSceneLayers(styleLayers){
    'icon-image':'rc-tree','icon-size':['interpolate',['linear'],['zoom'],16,.28,18,.52,19,.68],
    'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-anchor':'bottom','icon-pitch-alignment':'viewport'
  },paint:{'icon-opacity':0}},undefined);
+
+ addLayerSafe({id:'rc-hero-roof-glow',type:'fill-extrusion',source:'rc-hero-highlight',paint:{
+   'fill-extrusion-color':'#dff3ff',
+   'fill-extrusion-height':['+', ['get','height'], .16],
+   'fill-extrusion-base':['-', ['get','height'], .12],
+   'fill-extrusion-opacity':0,
+   'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-hero-ground-glow',type:'line',source:'rc-hero-highlight',paint:{
+   'line-color':'#9fd8ff','line-width':['interpolate',['linear'],['zoom'],16,2,18,5,20,7],
+   'line-blur':['interpolate',['linear'],['zoom'],16,2,18,5,20,7],
+   'line-opacity':0
+ }},before);
+
+ addLayerSafe({id:'rc-hero-edge',type:'line',source:'rc-hero-highlight',paint:{
+   'line-color':'#f7fbff','line-width':['interpolate',['linear'],['zoom'],16,.5,18,1.25,20,1.8],
+   'line-opacity':0
+ }},before);
 }
 
 function installTreeImage(){
@@ -507,6 +550,55 @@ function buildSceneGeo(profile,m,patternSet){
    trees:{type:'FeatureCollection',features:treeFeatures}
  };
 }
+function setFocusPoint(m){
+ const lon=Number(m?.lon),lat=Number(m?.lat);
+ map.getSource('rc-focus')?.setData(Number.isFinite(lon)&&Number.isFinite(lat)?{type:'FeatureCollection',features:[{type:'Feature',properties:{},geometry:{type:'Point',coordinates:[lon,lat]}}]}:EMPTY);
+}
+function buildFocusRoads(m){
+ if(!roadLayers.length)return EMPTY;
+ try{
+   const point=map.project([Number(m.lon),Number(m.lat)]),pad=190;
+   const features=map.queryRenderedFeatures([[point.x-pad,point.y-pad],[point.x+pad,point.y+pad]],{layers:roadLayers})||[];
+   const out=[],seen=new Set();
+   for(const f of features){
+     if(!f?.geometry||!['LineString','MultiLineString'].includes(f.geometry.type))continue;
+     const coords=f.geometry.coordinates,first=f.geometry.type==='LineString'?coords?.[0]:coords?.[0]?.[0];
+     if(!first)continue;
+     const key=(f.id??'')+':'+Number(first[0]).toFixed(5)+':'+Number(first[1]).toFixed(5);
+     if(seen.has(key))continue;seen.add(key);
+     out.push({type:'Feature',properties:{},geometry:f.geometry});
+     if(out.length>=34)break;
+   }
+   return {type:'FeatureCollection',features:out};
+ }catch{return EMPTY}
+}
+function setHeroHighlight(buildings){
+ const hero=buildings?.features?.find(f=>f?.properties?.role==='hero');
+ map.getSource('rc-hero-highlight')?.setData(hero?{type:'FeatureCollection',features:[{type:'Feature',properties:{height:Number(hero.properties.height)||9},geometry:hero.geometry}]}:EMPTY);
+}
+function setFocusGlowOpacity(v){
+ const d=clamp(v,0,1);
+ try{
+   map.setPaintProperty('rc-focus-aura','circle-opacity',.19*d);
+   map.setPaintProperty('rc-focus-core','circle-opacity',.34*d);
+   map.setPaintProperty('rc-focus-roads-glow','line-opacity',.22*d);
+   map.setPaintProperty('rc-focus-roads-line','line-opacity',.78*d);
+   map.setPaintProperty('rc-hero-roof-glow','fill-extrusion-opacity',.16*d);
+   map.setPaintProperty('rc-hero-ground-glow','line-opacity',.42*d);
+   map.setPaintProperty('rc-hero-edge','line-opacity',.68*d);
+ }catch{}
+}
+function animateFocusGlow(token){
+ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:2100;
+ function frame(now){
+   if(token!==sceneToken)return;
+   const t=Math.min(1,(now-start)/dur),settle=.82,breath=.84+.16*Math.sin(t*Math.PI*3.2);
+   setFocusGlowOpacity(t<.55?(1-Math.pow(1-t/.55,3)):settle*breath);
+   if(t<1)requestAnimationFrame(frame);else setFocusGlowOpacity(.78);
+ }
+ requestAnimationFrame(frame);
+}
+
 function setBuiltinOpacity(v){for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-opacity',v)}catch{}}}
 function setSceneOpacity(v){
  const d=Math.max(0,Math.min(1,v));
@@ -524,7 +616,8 @@ function setSceneOpacity(v){
  }catch{}
 }
 function clearScene(){
- for(const id of ['rc-buildings','rc-storefront','rc-windows','rc-accents','rc-balconies','rc-roofeq','rc-trees'])map.getSource(id)?.setData(EMPTY);
+ for(const id of ['rc-buildings','rc-storefront','rc-windows','rc-accents','rc-balconies','rc-roofeq','rc-trees','rc-focus','rc-focus-roads','rc-hero-highlight'])map.getSource(id)?.setData(EMPTY);
+ setFocusGlowOpacity(0);
  try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0)}catch{}
  setSceneOpacity(0);setBuiltinOpacity(.84);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD)}catch{}}
@@ -548,6 +641,7 @@ async function focusVenue(m,replay=false){
  markerEls.forEach((mk,id)=>mk.getElement().classList.toggle('selected',id===String(m.id)));
  $('#rcVenueName').textContent=m.name||'Шаурма';$('#rcVenueAddress').textContent=m.address||'Рядом с вами';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
  clearScene();
+ setFocusPoint(m);
  status('Анализируем фото и собираем фасады…');
 
  const profilePromise=fetchProfile(m);
@@ -575,6 +669,8 @@ async function focusVenue(m,replay=false){
  map.getSource('rc-balconies').setData(readyGeo.balconies);
  map.getSource('rc-roofeq').setData(readyGeo.roofeq);
  map.getSource('rc-trees').setData(readyGeo.trees);
+ map.getSource('rc-focus-roads').setData(buildFocusRoads(m));
+ setHeroHighlight(readyGeo.buildings);
 
  try{
    map.setPaintProperty('rc-gold','fill-extrusion-opacity',.98);
@@ -582,7 +678,7 @@ async function focusVenue(m,replay=false){
  }catch{}
  setSceneOpacity(0);setBuiltinOpacity(.10);
 
- requestAnimationFrame(()=>requestAnimationFrame(animateMorph));
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{animateMorph();animateFocusGlow(token)}));
  $('#rcLive').textContent='REAL CITY · '+qualityLabel(p.quality);
  const src=p.texture?.source==='hero_reference'?'по фото фасада':p.quality==='street'?'по уличным снимкам':p.quality==='osm'?'по геометрии зданий':'по фотопрофилю';
  status('Квартал восстановлен '+src);

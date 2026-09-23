@@ -164,26 +164,28 @@ function dedupe(records){
   }
   return out;
 }
-async function fetchOverpass(query,timeoutMs=175000){
-  let last;
-  for(const endpoint of OVERPASS_ENDPOINTS){
-    const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeoutMs);
+async function fetchOverpass(query,timeoutMs=65000){
+  const controllers=[];
+  const attempts=OVERPASS_ENDPOINTS.map(endpoint=>(async()=>{
+    const ac=new AbortController();controllers.push(ac);const timer=setTimeout(()=>ac.abort(),timeoutMs);
     try{
-      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-Moscow-Discovery/1.0'},body:'data='+encodeURIComponent(query),signal:ac.signal});
+      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-Moscow-Discovery/1.1'},body:'data='+encodeURIComponent(query),signal:ac.signal});
       if(!r.ok)throw new Error('overpass_'+r.status);
       const j=await r.json();
       if(!Array.isArray(j.elements))throw new Error('bad_overpass_response');
       return j.elements;
-    }catch(e){last=e}finally{clearTimeout(timer)}
-  }
-  throw last||new Error('overpass_unavailable');
+    }finally{clearTimeout(timer)}
+  })());
+  try{return await Promise.any(attempts)}
+  catch(e){throw new Error('overpass_unavailable')}
+  finally{controllers.forEach(x=>{try{x.abort()}catch{}})}
 }
 function queryFor(area=true){
   const region=area
     ? 'area["boundary"="administrative"]["name"="Москва"]["admin_level"="4"]->.m;'
     : '';
   const scope=area?'(area.m)':'('+MOSCOW_BBOX+')';
-  return '[out:json][timeout:160];'+region+'('+
+  return '[out:json][timeout:60];'+region+'('+
     'nwr'+scope+'["shop"~"^(bakery|pastry)$"];'+
     'nwr'+scope+'["amenity"~"^(fast_food|cafe|restaurant|food_court)$"]["cuisine"~"shawarma|kebab|doner_kebab|turkish|middle_eastern|arab|lebanese|uzbek|caucasian|georgian",i];'+
     'nwr'+scope+'["amenity"~"^(fast_food|cafe|restaurant|food_court)$"]["name"~"шаурм|шаверм|донер|кебаб|kebab|doner|shawarma|гирос|gyros|самс|тандыр|выпеч|пекарн|леп[её]ш|чебур|хачапур|пирож|бурек|borek",i];'+

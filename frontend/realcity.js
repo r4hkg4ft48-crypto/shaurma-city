@@ -50,6 +50,7 @@ function installLayers(){
   map.addSource('rc-details',{type:'geojson',data:empty});
   map.addLayer({id:'rc-gold',type:'fill-extrusion',source:'rc-buildings',paint:{'fill-extrusion-color':'#d8b76c','fill-extrusion-height':['get','height'],'fill-extrusion-base':['coalesce',['get','base'],0],'fill-extrusion-opacity':0}});
   map.addLayer({id:'rc-real',type:'fill-extrusion',source:'rc-buildings',paint:{'fill-extrusion-color':['coalesce',['get','facade'],'#d2d2cf'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['coalesce',['get','base'],0],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true}});
+  map.addLayer({id:'rc-roofs',type:'fill-extrusion',source:'rc-buildings',paint:{'fill-extrusion-color':['coalesce',['get','roof'],'#b9b8b3'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['-',['get','height'],0.22],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false}});
   map.addLayer({id:'rc-details-layer',type:'fill-extrusion',source:'rc-details',paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false}});
 }
 async function loadMarkers(){
@@ -77,10 +78,10 @@ function locate(){
   status('Определяем ваше место…');navigator.geolocation.getCurrentPosition(p=>{status('',false);map.easeTo({center:[p.coords.longitude,p.coords.latitude],zoom:16.5,duration:700})},()=>{status('Не удалось получить геолокацию');setTimeout(()=>status('',false),1800)},{enableHighAccuracy:false,timeout:6500,maximumAge:120000});
 }
 function setBuiltinOpacity(v){for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-opacity',v)}catch{}}}
-function clearScene(){const empty={type:'FeatureCollection',features:[]};map.getSource('rc-buildings')?.setData(empty);map.getSource('rc-details')?.setData(empty);try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0);map.setPaintProperty('rc-real','fill-extrusion-opacity',0);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',0)}catch{};setBuiltinOpacity(.82)}
+function clearScene(){const empty={type:'FeatureCollection',features:[]};map.getSource('rc-buildings')?.setData(empty);map.getSource('rc-details')?.setData(empty);try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0);map.setPaintProperty('rc-real','fill-extrusion-opacity',0);map.setPaintProperty('rc-roofs','fill-extrusion-opacity',0);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',0)}catch{};setBuiltinOpacity(.82)}
 function animateFacade(){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:1050;
-  function frame(now){const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',.96*(1-e));map.setPaintProperty('rc-real','fill-extrusion-opacity',.96*e);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',.98*Math.max(0,(e-.18)/.82));}catch{};setBuiltinOpacity(.08+.12*(1-e));if(t<1)requestAnimationFrame(frame)}requestAnimationFrame(frame)
+  function frame(now){const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',.96*(1-e));map.setPaintProperty('rc-real','fill-extrusion-opacity',.96*e);map.setPaintProperty('rc-roofs','fill-extrusion-opacity',.98*e);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',.98*Math.max(0,(e-.18)/.82));}catch{};setBuiltinOpacity(.08+.12*(1-e));if(t<1)requestAnimationFrame(frame)}requestAnimationFrame(frame)
 }
 async function focusVenue(m,replay=false){
   if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
@@ -94,7 +95,7 @@ async function focusVenue(m,replay=false){
     const u=new URL(API+'/api/shaurmeg/realcity');u.searchParams.set('lat',m.lat);u.searchParams.set('lon',m.lon);u.searchParams.set('radius','190');u.searchParams.set('venue_id',m.venue_id||'');
     const r=await fetch(u.toString(),{cache:'no-store'});if(!r.ok)throw new Error('source');const scene=await r.json();if(token!==sceneToken)return;
     map.getSource('rc-buildings').setData(scene.buildings);map.getSource('rc-details').setData(scene.details);
-    map.setPaintProperty('rc-gold','fill-extrusion-opacity',.96);map.setPaintProperty('rc-real','fill-extrusion-opacity',0);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',0);setBuiltinOpacity(.12);
+    map.setPaintProperty('rc-gold','fill-extrusion-opacity',.96);map.setPaintProperty('rc-real','fill-extrusion-opacity',0);map.setPaintProperty('rc-roofs','fill-extrusion-opacity',0);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',0);setBuiltinOpacity(.12);
     setTimeout(()=>{if(token===sceneToken){animateFacade();status(scene.stats?.buildings?`Перерисовано домов: ${scene.stats.buildings}`:'Фасады готовы');setTimeout(()=>status('',false),1400)}},220);
   }catch{
     if(token!==sceneToken)return;

@@ -3,13 +3,13 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='80';
+const BUILD='81';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
-let builtin3d=[],buildingLayers=[],roadLayers=[],dimmedLayers=[],profileCache=new Map();
+let builtin3d=[],buildingLayers=[],roadLayers=[],dimmedLayers=[],profileCache=new Map(),venueSourceReady=false;
 
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -101,8 +101,9 @@ function close(){
 async function ensureMap(){
  if(map)return map;
  await ensureDeps();
- map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.62,55.75],zoom:10.4,pitch:48,bearing:-14,attributionControl:true,maxPitch:78});
+ map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:78});
  map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
+ map.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Каталог заведений: © OpenStreetMap contributors · ODbL'}),'bottom-right');
  await new Promise(resolve=>map.once('load',resolve));
 
  const layers=map.getStyle().layers||[];
@@ -114,6 +115,9 @@ async function ensureMap(){
  installSceneLayers(layers);
  installTreeImage();
  dimPoiLayers(layers);
+ installVenueLayers(layers);
+ map.on('moveend',renderVisibleVenueMarkers);
+ map.on('zoomend',renderVisibleVenueMarkers);
  await loadMarkers();
 
  if(directVenueId){
@@ -304,30 +308,142 @@ function dimPoiLayers(layers){
  }
 }
 
-async function loadMarkers(){
- try{const r=await fetch(API+'/api/shaurmeg/markers?lite=1',{cache:'no-store'});if(!r.ok)throw new Error();markers=await r.json();if(!Array.isArray(markers))markers=[]}catch{markers=[]}
+function defaultVenueStyle(category='shawarma'){
+ const base={shape:'pin',size:42,scale:1,opacity:1,pulse:false,label_visible:false};
+ if(category==='shawarma')return {...base,icon:'🥙',background:'#f1c96f',border:'#fff7df',text:'#24190d',glow:'#e8bd59',pulse:true};
+ if(category==='doner_kebab')return {...base,icon:'🥙',background:'#d99b58',border:'#fff2df',text:'#25180d',glow:'#d79245'};
+ if(category==='bakery')return {...base,icon:'🥐',background:'#c9a676',border:'#f7ead8',text:'#2b2117',glow:'#b88e5e'};
+ if(category==='middle_eastern')return {...base,icon:'🍽️',background:'#a88d67',border:'#eee5d6',text:'#241f18',glow:'#9b815f'};
+ return {...base,icon:'•',background:'#8f9585',border:'#eef0e8',text:'#182018',glow:'#78846f'};
+}
+function venueStyle(m){return m?.marker_style&&typeof m.marker_style==='object'?{...defaultVenueStyle(m.category),...m.marker_style}:defaultVenueStyle(m?.category)}
+function venueFeature(m){
+ const s=venueStyle(m),isSelected=selected&&String(selected.id)===String(m.id);
+ return {type:'Feature',id:Number(m.id),properties:{
+  id:String(m.id),venue_id:String(m.venue_id||''),name:String(m.name||''),category:String(m.category||'shawarma'),
+  icon:String(s.icon||'•'),background:String(s.background||'#8f9585'),border:String(s.border||'#fff'),
+  text:String(s.text||'#182018'),glow:String(s.glow||'#78846f'),shape:String(s.shape||'pin'),
+  size:Number(s.size)||42,opacity:Number(s.opacity)||1,pulse:s.pulse?1:0,has_avatar:m.has_avatar?1:0,
+  selected:isSelected?1:0,verified:(m.verification_status==='manual_verified'||Number(m.verification_score)>=.78)?1:0
+ },geometry:{type:'Point',coordinates:[Number(m.lon),Number(m.lat)]}};
+}
+function venueGeoJSON(){return {type:'FeatureCollection',features:markers.filter(m=>Number.isFinite(Number(m.lon))&&Number.isFinite(Number(m.lat))).map(venueFeature)}}
+function syncVenueSource(){if(!venueSourceReady)return;try{map.getSource('rc-venues')?.setData(venueGeoJSON())}catch{}}
+function installVenueLayers(styleLayers){
+ if(map.getSource('rc-venues')){venueSourceReady=true;return}
+ const before=styleLayers.find(l=>l.type==='symbol')?.id;
+ map.addSource('rc-venues',{type:'geojson',data:EMPTY,cluster:true,clusterMaxZoom:14,clusterRadius:52});
+
+ addLayerSafe({id:'rc-venue-cluster-halo',type:'circle',source:'rc-venues',filter:['has','point_count'],maxzoom:15,paint:{
+  'circle-radius':['step',['get','point_count'],24,25,30,100,38,400,46,1200,56],
+  'circle-color':'rgba(247,244,237,.18)','circle-blur':.68,'circle-opacity':.82
+ }},before);
+ addLayerSafe({id:'rc-venue-cluster',type:'circle',source:'rc-venues',filter:['has','point_count'],maxzoom:15,paint:{
+  'circle-radius':['step',['get','point_count'],16,25,20,100,25,400,30,1200,36],
+  'circle-color':'#242a24','circle-opacity':.92,'circle-stroke-width':2.5,'circle-stroke-color':'#f8f5ec'
+ }},before);
+ addLayerSafe({id:'rc-venue-cluster-count',type:'symbol',source:'rc-venues',filter:['has','point_count'],maxzoom:15,layout:{
+  'text-field':['get','point_count_abbreviated'],'text-size':['step',['get','point_count'],11,100,12,1000,13],
+  'text-font':['Noto Sans Regular']
+ },paint:{'text-color':'#fffdf7','text-halo-color':'rgba(0,0,0,.22)','text-halo-width':.5}},before);
+
+ addLayerSafe({id:'rc-venue-point-glow',type:'circle',source:'rc-venues',filter:['!',['has','point_count']],maxzoom:15.25,paint:{
+  'circle-radius':['interpolate',['linear'],['zoom'],10,5,13,8,15,13],
+  'circle-color':['case',['==',['get','selected'],1],'#fffdf8',['get','glow']],
+  'circle-opacity':['case',['==',['get','selected'],1],.34,.14],
+  'circle-blur':.68
+ }},before);
+ addLayerSafe({id:'rc-venue-point',type:'circle',source:'rc-venues',filter:['!',['has','point_count']],maxzoom:15.25,paint:{
+  'circle-radius':['interpolate',['linear'],['zoom'],10,3.8,13,6.5,15,10],
+  'circle-color':['get','background'],
+  'circle-opacity':['get','opacity'],
+  'circle-stroke-width':['case',['==',['get','selected'],1],3,1.6],
+  'circle-stroke-color':['get','border']
+ }},before);
+ addLayerSafe({id:'rc-venue-point-icon',type:'symbol',source:'rc-venues',filter:['!',['has','point_count']],minzoom:12.2,maxzoom:15.25,layout:{
+  'text-field':['get','icon'],'text-size':['interpolate',['linear'],['zoom'],12.2,8,14,11,15.2,15],
+  'text-allow-overlap':true,'text-ignore-placement':true
+ },paint:{'text-color':['get','text'],'text-halo-color':'rgba(255,255,255,.10)','text-halo-width':.3}},before);
+
+ map.on('click','rc-venue-cluster',async e=>{
+  const f=e.features?.[0];if(!f)return;
+  try{const zoom=await map.getSource('rc-venues').getClusterExpansionZoom(f.properties.cluster_id);map.easeTo({center:f.geometry.coordinates,zoom:Math.min(16,zoom),duration:520})}catch{}
+ });
+ const openFromFeature=e=>{const id=String(e.features?.[0]?.properties?.id||'');const m=markers.find(x=>String(x.id)===id);if(m)focusVenue(m)};
+ map.on('click','rc-venue-point',openFromFeature);
+ map.on('click','rc-venue-point-icon',openFromFeature);
+ ['rc-venue-cluster','rc-venue-point','rc-venue-point-icon'].forEach(id=>{
+  map.on('mouseenter',id,()=>map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave',id,()=>map.getCanvas().style.cursor='');
+ });
+ venueSourceReady=true;
+}
+function markerAvatarUrl(m){return API+'/api/shaurmeg/markers/'+encodeURIComponent(m.id)+'/avatar?v='+encodeURIComponent(String(m.updated_at||m.verification_score||BUILD))}
+function makeVenueMarkerElement(m){
+ const s=venueStyle(m),el=document.createElement('button');el.type='button';el.className='rcMarker rcMarkerDynamic';el.title=m.name||'Точка';
+ const size=Math.max(30,Math.min(68,Number(s.size)||42));
+ el.style.width=size+'px';el.style.height=size+'px';el.style.background=s.background;el.style.borderColor=s.border;el.style.color=s.text;el.style.opacity=String(s.opacity??1);
+ el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'8px':s.shape==='rounded'?'15px':'16px 16px 16px 5px';
+ el.style.boxShadow='0 9px 24px rgba(0,0,0,.36),0 0 18px '+s.glow+'44';
+ if(s.pulse)el.classList.add('pulse');
+ if(selected&&String(selected.id)===String(m.id))el.classList.add('selected');
+ if(m.has_avatar){
+  const img=document.createElement('img');img.src=markerAvatarUrl(m);img.alt='';img.loading='lazy';img.decoding='async';
+  img.onerror=()=>{img.remove();el.textContent=s.icon||'•'};el.appendChild(img);
+ }else el.textContent=s.icon||'•';
+ el.onclick=e=>{e.stopPropagation();focusVenue(m)};
+ return el;
+}
+function renderVisibleVenueMarkers(){
  markerEls.forEach(v=>v.remove());markerEls.clear();
- for(const m of markers){
-   if(!Number.isFinite(Number(m.lon))||!Number.isFinite(Number(m.lat)))continue;
-   const el=document.createElement('button');el.type='button';el.className='rcMarker';el.textContent='🥙';el.title=m.name||'Шаурма';el.onclick=e=>{e.stopPropagation();focusVenue(m)};
-   const mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([Number(m.lon),Number(m.lat)]).addTo(map);markerEls.set(String(m.id),mk);
+ if(!map||map.getZoom()<15.15)return;
+ const b=map.getBounds(),visible=markers.filter(m=>Number(m.lon)>=b.getWest()&&Number(m.lon)<=b.getEast()&&Number(m.lat)>=b.getSouth()&&Number(m.lat)<=b.getNorth());
+ if(visible.length>220)return;
+ for(const m of visible){
+  const el=makeVenueMarkerElement(m);
+  const mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([Number(m.lon),Number(m.lat)]).addTo(map);
+  markerEls.set(String(m.id),mk);
  }
+}
+function setSelectedMarkerVisual(id){
+ syncVenueSource();
+ markerEls.forEach((mk,key)=>mk.getElement().classList.toggle('selected',String(key)===String(id)));
+}
+async function loadMarkers(){
+ try{
+  const r=await fetch(API+'/api/shaurmeg/map-points?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw new Error();
+  markers=await r.json();if(!Array.isArray(markers))markers=[];
+ }catch{markers=[]}
+ syncVenueSource();renderVisibleVenueMarkers();
 }
 function fitMarkers(){
  if(!map||!markers.length)return;
  const valid=markers.filter(m=>Number.isFinite(Number(m.lon))&&Number.isFinite(Number(m.lat)));if(!valid.length)return;
  if(valid.length===1){map.jumpTo({center:[Number(valid[0].lon),Number(valid[0].lat)],zoom:15.8,pitch:48});return}
  const b=new maplibregl.LngLatBounds();valid.forEach(m=>b.extend([Number(m.lon),Number(m.lat)]));
- map.fitBounds(b,{padding:{top:150,bottom:120,left:35,right:35},maxZoom:15.3,duration:0});
+ map.fitBounds(b,{padding:{top:150,bottom:120,left:35,right:35},maxZoom:11.2,duration:0});
+}
+function resultIcon(m){
+ const s=venueStyle(m);
+ if(m.has_avatar)return '<img src="'+markerAvatarUrl(m)+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:10px">';
+ return esc(s.icon||'•');
 }
 function search(commit){
  const q=$('#rcSearch').value.trim().toLowerCase(),box=$('#rcResults');
  if(!q){box.classList.remove('show');box.innerHTML='';return}
- const found=markers.filter(m=>[m.name,m.address,m.description].join(' ').toLowerCase().includes(q)).slice(0,7);
- box.innerHTML=found.map((m,i)=>`<button class="rcResult" type="button" data-i="${i}"><i>🥙</i><span><b>${esc(m.name||'Шаурма')}</b><small>${esc(m.address||'')}</small></span></button>`).join('')||'<div style="padding:10px;font-size:11px;color:var(--rc-muted)">Ничего не найдено</div>';
+ const found=markers.filter(m=>[m.name,m.address,m.category].join(' ').toLowerCase().includes(q)).slice(0,12);
+ box.innerHTML=found.map((m,i)=>`<button class="rcResult" type="button" data-i="${i}"><i style="overflow:hidden;background:${esc(venueStyle(m).background)}">${resultIcon(m)}</i><span><b>${esc(m.name||'Точка')}</b><small>${esc(m.address||'')}</small></span></button>`).join('')||'<div style="padding:10px;font-size:11px;color:var(--rc-muted)">Ничего не найдено</div>';
  box.classList.add('show');$$('.rcResult',box).forEach((el,i)=>el.onclick=()=>{box.classList.remove('show');focusVenue(found[i])});
  if(commit&&found[0]){box.classList.remove('show');focusVenue(found[0])}
 }
+function updateVenueCardMarker(m){
+ const el=$('#rcPinIcon');if(!el)return;const s=venueStyle(m);
+ el.style.background=s.background;el.style.color=s.text;el.style.border='2px solid '+s.border;el.style.overflow='hidden';el.innerHTML='';
+ if(m.has_avatar){const img=document.createElement('img');img.src=markerAvatarUrl(m);img.alt='';img.onerror=()=>{img.remove();el.textContent=s.icon||'•'};el.appendChild(img)}else el.textContent=s.icon||'•';
+}
+
+
 function locate(){
  if(!navigator.geolocation){status('Геолокация не поддерживается');setTimeout(()=>status('',false),1600);return}
  status('Определяем ваше место…');
@@ -656,8 +772,9 @@ function waitForIdle(timeout=1200){return new Promise(resolve=>{let done=false;c
 
 async function focusVenue(m,replay=false){
  if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
- markerEls.forEach((mk,id)=>mk.getElement().classList.toggle('selected',id===String(m.id)));
- $('#rcVenueName').textContent=m.name||'Шаурма';$('#rcVenueAddress').textContent=m.address||'Рядом с вами';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
+ setSelectedMarkerVisual(m.id);updateVenueCardMarker(m);
+ $('#rcVenueName').textContent=m.name||'Точка';$('#rcVenueAddress').textContent=m.address||'Москва';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
+ $('#rcMenu').textContent=m.has_menu===false?'Подробнее':'Открыть меню';
  clearScene();
  setFocusPoint(m);
  status('Анализируем фото и собираем фасады…');

@@ -3,289 +3,450 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='73';
+const BUILD='74';
 const GOLD='#d7b46a';
-const DEFAULT_PROFILE={
-  version:2,quality:'heuristic',confidence:.36,
-  palette:{wall:'#d3d1cc',accent:'#8a7463',windows:'#29343d',storefront:'#24282b',roof:'#b7b4ae'},
-  neighborhood_palette:['#d3d1cc','#c7c4bd','#bbb8b1','#a99e92','#8a7463'],
-  building_style:'panel_simple',
-  camera:{zoom:18.15,pitch:63,bearing:-18}
-};
+const EMPTY={type:'FeatureCollection',features:[]};
 
-let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0;
-let builtin3d=[],buildingLayers=[],buildingSourceId='openmaptiles',buildingSourceLayer='building';
-let directVenueId='',profileCache=new Map();
+let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
+let builtin3d=[],dimmedLayers=[],profileCache=new Map();
 
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 
 function normalizeVenue(v){return String(v||'').trim().toLowerCase().replace(/^venue_/,'')}
-function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
-function clamp(n,a,b){return Math.max(a,Math.min(b,n))}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function hexRgb(hex){const m=String(hex||'').match(/^#([0-9a-f]{6})$/i);return m?[parseInt(m[1].slice(0,2),16),parseInt(m[1].slice(2,4),16),parseInt(m[1].slice(4,6),16)]:null}
 function rgbHex(r,g,b){const x=n=>clamp(Math.round(n),0,255).toString(16).padStart(2,'0');return '#'+x(r)+x(g)+x(b)}
-function shade(hex,delta){const c=hexRgb(hex);if(!c)return hex;return rgbHex(c[0]+delta,c[1]+delta,c[2]+delta)}
-function safeProfile(p){
-  const x=p&&typeof p==='object'?p:{},pal=x.palette&&typeof x.palette==='object'?x.palette:{};
-  return {
-    ...DEFAULT_PROFILE,...x,
-    palette:{...DEFAULT_PROFILE.palette,...pal},
-    neighborhood_palette:Array.isArray(x.neighborhood_palette)&&x.neighborhood_palette.length?x.neighborhood_palette:DEFAULT_PROFILE.neighborhood_palette,
-    camera:{...DEFAULT_PROFILE.camera,...(x.camera||{})}
-  };
-}
+function shade(hex,d){const c=hexRgb(hex);return c?rgbHex(c[0]+d,c[1]+d,c[2]+d):hex}
+function alpha(hex,a){const c=hexRgb(hex);return c?`rgba(${c[0]},${c[1]},${c[2]},${a})`:hex}
 function qualityLabel(q){return ({photo:'PHOTO',street:'STREET',osm:'OSM',heuristic:'AUTO'})[q]||'AUTO'}
 
+const DEFAULT_PROFILE={
+ version:4,quality:'heuristic',confidence:.35,building_style:'panel_simple',
+ palette:{wall:'#d3d1cc',accent:'#8a7463',windows:'#29343d',storefront:'#24282b',roof:'#b7b4ae',ground:'#d9d5cc'},
+ neighborhood_palette:['#d3d1cc','#c8c5be','#bcb9b1','#aaa39a','#8a7463'],
+ facade:{levels:9,window_rows:8,window_columns:5,window_width_ratio:.54,window_height_ratio:.48,panel_grid:true,balconies:false,balcony_every:2,balcony_depth_m:.65,vertical_bands:true,vertical_band_every:3,storefront:true,storefront_height_m:3.35,roof_equipment:true,material:'panel'},
+ environment:{tree_density:.3,vegetation_ratio:.12,ground_color:'#d9d5cc'},
+ camera:{zoom:18.35,pitch:61,bearing:-20},
+ scene:{buildings:[],trees:[]},
+ texture:{hero_data_url:null,source:'procedural'}
+};
+function safeProfile(p){
+ const x=p&&typeof p==='object'?p:{};
+ return {
+   ...DEFAULT_PROFILE,...x,
+   palette:{...DEFAULT_PROFILE.palette,...(x.palette||{})},
+   facade:{...DEFAULT_PROFILE.facade,...(x.facade||{})},
+   environment:{...DEFAULT_PROFILE.environment,...(x.environment||{})},
+   camera:{...DEFAULT_PROFILE.camera,...(x.camera||{})},
+   scene:{...DEFAULT_PROFILE.scene,...(x.scene||{})},
+   texture:{...DEFAULT_PROFILE.texture,...(x.texture||{})},
+   neighborhood_palette:Array.isArray(x.neighborhood_palette)&&x.neighborhood_palette.length?x.neighborhood_palette:DEFAULT_PROFILE.neighborhood_palette
+ };
+}
+
 function ensureDeps(){
-  if(!document.querySelector('link[data-realcity-maplibre]')){const l=document.createElement('link');l.rel='stylesheet';l.href='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css';l.dataset.realcityMaplibre='1';document.head.appendChild(l)}
-  if(window.maplibregl)return Promise.resolve();
-  return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js';s.async=true;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)});
+ if(!document.querySelector('link[data-realcity-maplibre]')){
+   const l=document.createElement('link');l.rel='stylesheet';l.href='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css';l.dataset.realcityMaplibre='1';document.head.appendChild(l);
+ }
+ if(window.maplibregl)return Promise.resolve();
+ return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js';s.async=true;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)});
 }
 
 function inject(){
-  if($('#realCityScreen'))return;
-  document.body.insertAdjacentHTML('beforeend',`
-  <button id="realCityOpen" type="button" aria-label="Открыть карту">Карта</button>
-  <section class="realCityScreen" id="realCityScreen" aria-hidden="true">
-    <div class="realCityMap" id="realCityMap"></div>
-    <div class="realCityTop">
-      <button class="rcClose" id="rcClose" type="button" aria-label="Закрыть карту">×</button>
-      <div class="rcSearchCard">
-        <div class="rcBrand"><b>шаурмег</b><small>REAL CITY · ${BUILD}</small></div>
-        <div class="rcSearchRow"><input id="rcSearch" inputmode="search" placeholder="Метро, улица или заведение" autocomplete="off"><button id="rcFind" type="button">Найти</button></div>
-        <div class="rcNearby"><button id="rcNearby" type="button">◎ Вы рядом</button></div>
-        <div class="rcResults" id="rcResults"></div>
-      </div>
-    </div>
-    <div class="rcStatus" id="rcStatus">Анализируем район…</div>
-    <div class="rcVenueCard" id="rcVenueCard">
-      <div class="rcVenueHead"><div class="rcPinIcon">🥙</div><div><b id="rcVenueName"></b><small id="rcVenueAddress"></small></div><span class="rcLive" id="rcLive">REAL CITY</span></div>
-      <div class="rcVenueActions"><button class="rcMenu" id="rcMenu" type="button">Открыть меню</button><button class="rcRepaint" id="rcRepaint" type="button">↻ Ещё раз</button></div>
-    </div>
-  </section>`);
-  $('#realCityOpen').onclick=open;
-  $('#rcClose').onclick=close;
-  $('#rcFind').onclick=()=>search(true);
-  $('#rcSearch').addEventListener('input',()=>search(false));
-  $('#rcSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(true)}});
-  $('#rcNearby').onclick=locate;
-  $('#rcRepaint').onclick=()=>selected&&focusVenue(selected,true);
-  $('#rcMenu').onclick=()=>{if(!selected)return;const u=new URL(location.href);u.searchParams.set('venue',selected.venue_id||'lepyoshka');u.searchParams.set('view','menu');u.searchParams.set('b',BUILD);location.href=u.toString()};
+ if($('#realCityScreen'))return;
+ document.body.insertAdjacentHTML('beforeend',`
+ <button id="realCityOpen" type="button" aria-label="Открыть карту">Карта</button>
+ <section class="realCityScreen" id="realCityScreen" aria-hidden="true">
+   <div class="realCityMap" id="realCityMap"></div>
+   <div class="realCityTop">
+     <button class="rcClose" id="rcClose" type="button" aria-label="Закрыть карту">×</button>
+     <div class="rcSearchCard">
+       <div class="rcBrand"><b>шаурмег</b><small>REAL CITY · ${BUILD}</small></div>
+       <div class="rcSearchRow"><input id="rcSearch" inputmode="search" placeholder="Метро, улица или заведение" autocomplete="off"><button id="rcFind" type="button">Найти</button></div>
+       <div class="rcNearby"><button id="rcNearby" type="button">◎ Вы рядом</button></div>
+       <div class="rcResults" id="rcResults"></div>
+     </div>
+   </div>
+   <div class="rcStatus" id="rcStatus">Собираем реальный квартал…</div>
+   <div class="rcVenueCard" id="rcVenueCard">
+     <div class="rcVenueHead"><div class="rcPinIcon">🥙</div><div><b id="rcVenueName"></b><small id="rcVenueAddress"></small></div><span class="rcLive" id="rcLive">REAL CITY</span></div>
+     <div class="rcVenueActions"><button class="rcMenu" id="rcMenu" type="button">Открыть меню</button><button class="rcRepaint" id="rcRepaint" type="button">↻ Ещё раз</button></div>
+   </div>
+ </section>`);
+ $('#realCityOpen').onclick=open;
+ $('#rcClose').onclick=close;
+ $('#rcFind').onclick=()=>search(true);
+ $('#rcSearch').addEventListener('input',()=>search(false));
+ $('#rcSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(true)}});
+ $('#rcNearby').onclick=locate;
+ $('#rcRepaint').onclick=()=>selected&&focusVenue(selected,true);
+ $('#rcMenu').onclick=()=>{if(!selected)return;const u=new URL(location.href);u.searchParams.set('venue',selected.venue_id);u.searchParams.set('view','menu');u.searchParams.set('b',BUILD);location.href=u.toString()};
 }
 
 function status(msg,on=true){const el=$('#rcStatus');if(!el)return;el.textContent=msg;el.classList.toggle('show',!!on)}
 function open(){const s=$('#realCityScreen');s.classList.add('open');s.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';ensureMap().then(()=>map.resize()).catch(()=>status('Карта временно недоступна'))}
-function close(){const s=$('#realCityScreen');s.classList.remove('open');s.setAttribute('aria-hidden','true');document.body.style.overflow='';$('#rcResults').classList.remove('show')}
+function close(){const s=$('#realCityScreen');s.classList.remove('open');s.setAttribute('aria-hidden','true');document.body.style.overflow='';$('#rcResults')?.classList.remove('show')}
 
 async function ensureMap(){
-  if(map)return map;
-  await ensureDeps();
-  map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.62,55.75],zoom:10.2,pitch:48,bearing:-14,attributionControl:true,maxPitch:80});
-  map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
-  await new Promise(resolve=>map.once('load',resolve));
+ if(map)return map;
+ await ensureDeps();
+ map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.62,55.75],zoom:10.4,pitch:48,bearing:-14,attributionControl:true,maxPitch:78});
+ map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
+ await new Promise(resolve=>map.once('load',resolve));
 
-  const layers=map.getStyle().layers||[];
-  const buildingTemplate=layers.find(l=>l['source-layer']==='building'&&l.source);
-  if(buildingTemplate){buildingSourceId=buildingTemplate.source;buildingSourceLayer=buildingTemplate['source-layer']||'building'}
-  builtin3d=layers.filter(l=>l.type==='fill-extrusion'&&l['source-layer']==='building').map(l=>l.id);
-  buildingLayers=layers.filter(l=>['fill','fill-extrusion'].includes(l.type)&&l['source-layer']==='building').map(l=>l.id);
-  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD);map.setPaintProperty(id,'fill-extrusion-opacity',.88)}catch{}}
-  try{map.setLight({anchor:'viewport',color:'#fff0c9',intensity:.42,position:[1.15,165,38]})}catch{}
+ const layers=map.getStyle().layers||[];
+ builtin3d=layers.filter(l=>l.type==='fill-extrusion'&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
+ for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD);map.setPaintProperty(id,'fill-extrusion-opacity',.84)}catch{}}
+ installSceneLayers(layers);
+ installTreeImage();
+ dimPoiLayers(layers);
+ await loadMarkers();
 
-  installLayers(layers);
-  await loadMarkers();
-
-  if(directVenueId){
-    const m=markers.find(x=>normalizeVenue(x.venue_id)===directVenueId);
-    if(m)setTimeout(()=>focusVenue(m),180);else fitMarkers();
-  }else fitMarkers();
-  return map;
+ if(directVenueId){
+   const m=markers.find(x=>normalizeVenue(x.venue_id)===directVenueId);
+   if(m)setTimeout(()=>focusVenue(m),180);else fitMarkers();
+ }else fitMarkers();
+ return map;
 }
 
-function addLayerSafe(layer,before){
-  try{map.addLayer(layer,before)}catch{try{map.addLayer(layer)}catch{}}
-}
-function installLayers(styleLayers){
-  if(map.getLayer('rc-world-real'))return;
-  const before=styleLayers.find(l=>l.type==='symbol')?.id;
-  addLayerSafe({
-    id:'rc-world-real',type:'fill-extrusion',source:buildingSourceId,'source-layer':buildingSourceLayer,minzoom:14,
-    filter:['!=',['get','hide_3d'],true],
-    paint:{
-      'fill-extrusion-color':'#d3d1cc',
-      'fill-extrusion-height':['coalesce',['get','render_height'],['*',['coalesce',['get','levels'],3],3.05],9],
-      'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-      'fill-extrusion-opacity':0,
-      'fill-extrusion-vertical-gradient':true
-    }
-  },before);
-  addLayerSafe({
-    id:'rc-world-roof',type:'fill-extrusion',source:buildingSourceId,'source-layer':buildingSourceLayer,minzoom:14,
-    filter:['!=',['get','hide_3d'],true],
-    paint:{
-      'fill-extrusion-color':'#b7b4ae',
-      'fill-extrusion-height':['coalesce',['get','render_height'],['*',['coalesce',['get','levels'],3],3.05],9],
-      'fill-extrusion-base':['-', ['coalesce',['get','render_height'],['*',['coalesce',['get','levels'],3],3.05],9], .18],
-      'fill-extrusion-opacity':0,
-      'fill-extrusion-vertical-gradient':false
-    }
-  },before);
+function addLayerSafe(layer,before){try{map.addLayer(layer,before)}catch{try{map.addLayer(layer)}catch{}}}
+function installSceneLayers(styleLayers){
+ if(map.getSource('rc-buildings'))return;
+ const before=styleLayers.find(l=>l.type==='symbol')?.id;
+ map.addSource('rc-buildings',{type:'geojson',data:EMPTY});
+ map.addSource('rc-storefront',{type:'geojson',data:EMPTY});
+ map.addSource('rc-balconies',{type:'geojson',data:EMPTY});
+ map.addSource('rc-roofeq',{type:'geojson',data:EMPTY});
+ map.addSource('rc-trees',{type:'geojson',data:EMPTY});
 
-  const empty={type:'FeatureCollection',features:[]};
-  map.addSource('rc-hero',{type:'geojson',data:empty});
-  map.addSource('rc-details',{type:'geojson',data:empty});
-  addLayerSafe({id:'rc-hero-layer',type:'fill-extrusion',source:'rc-hero',paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true}},before);
-  addLayerSafe({id:'rc-details-layer',type:'fill-extrusion',source:'rc-details',paint:{'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false}},before);
+ addLayerSafe({id:'rc-gold',type:'fill-extrusion',source:'rc-buildings',paint:{
+   'fill-extrusion-color':GOLD,'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true
+ }},before);
+
+ addLayerSafe({id:'rc-real-color',type:'fill-extrusion',source:'rc-buildings',filter:['==',['get','patterned'],0],paint:{
+   'fill-extrusion-color':['get','wall'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true
+ }},before);
+
+ addLayerSafe({id:'rc-real-pattern',type:'fill-extrusion',source:'rc-buildings',filter:['==',['get','patterned'],1],paint:{
+   'fill-extrusion-pattern':['get','pattern_name'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-roofs',type:'fill-extrusion',source:'rc-buildings',paint:{
+   'fill-extrusion-color':['get','roof'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['-', ['get','height'], .22],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-storefront-layer',type:'fill-extrusion',source:'rc-storefront',paint:{
+   'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':0,'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-balcony-layer',type:'fill-extrusion',source:'rc-balconies',paint:{
+   'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':false
+ }},before);
+
+ addLayerSafe({id:'rc-roofeq-layer',type:'fill-extrusion',source:'rc-roofeq',paint:{
+   'fill-extrusion-color':['get','color'],'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],'fill-extrusion-opacity':0,'fill-extrusion-vertical-gradient':true
+ }},before);
+
+ addLayerSafe({id:'rc-tree-shadow',type:'circle',source:'rc-trees',paint:{
+   'circle-radius':['interpolate',['linear'],['zoom'],16,3,18,7,19,10],
+   'circle-color':'rgba(42,48,34,.22)','circle-blur':.35,'circle-opacity':0
+ }},before);
+
+ addLayerSafe({id:'rc-tree-symbol',type:'symbol',source:'rc-trees',layout:{
+   'icon-image':'rc-tree','icon-size':['interpolate',['linear'],['zoom'],16,.28,18,.52,19,.68],
+   'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-anchor':'bottom','icon-pitch-alignment':'viewport'
+ },paint:{'icon-opacity':0}},undefined);
+}
+
+function installTreeImage(){
+ if(map.hasImage('rc-tree'))return;
+ const c=document.createElement('canvas');c.width=64;c.height=64;const x=c.getContext('2d');
+ x.clearRect(0,0,64,64);
+ x.fillStyle='rgba(45,36,25,.78)';x.fillRect(29,39,6,20);
+ x.fillStyle='#405c36';x.beginPath();x.arc(32,28,18,0,Math.PI*2);x.fill();
+ x.fillStyle='#557449';x.beginPath();x.arc(23,28,11,0,Math.PI*2);x.fill();x.beginPath();x.arc(39,24,12,0,Math.PI*2);x.fill();
+ x.fillStyle='rgba(181,203,143,.38)';x.beginPath();x.arc(26,20,7,0,Math.PI*2);x.fill();
+ map.addImage('rc-tree',x.getImageData(0,0,64,64),{pixelRatio:2});
+}
+
+function dimPoiLayers(layers){
+ dimmedLayers=[];
+ for(const l of layers){
+   if(l.type!=='symbol')continue;
+   const id=String(l.id||'').toLowerCase();
+   if(/road|street|place|city|town|village|district/.test(id))continue;
+   if(!/poi|shop|amenity|transit|station|housenumber|building|restaurant|school|hospital|parking|bus|rail/.test(id))continue;
+   try{
+     const text=map.getPaintProperty(l.id,'text-opacity'),icon=map.getPaintProperty(l.id,'icon-opacity');
+     dimmedLayers.push({id:l.id,text,icon});
+     map.setPaintProperty(l.id,'text-opacity',.18);map.setPaintProperty(l.id,'icon-opacity',.12);
+   }catch{}
+ }
 }
 
 async function loadMarkers(){
-  try{const r=await fetch(API+'/api/shaurmeg/markers?lite=1',{cache:'no-store'});if(!r.ok)throw new Error();markers=await r.json();if(!Array.isArray(markers))markers=[]}catch{markers=[]}
-  markerEls.forEach(v=>v.remove());markerEls.clear();
-  for(const m of markers){
-    if(!Number.isFinite(Number(m.lon))||!Number.isFinite(Number(m.lat)))continue;
-    const el=document.createElement('button');el.type='button';el.className='rcMarker';el.textContent='🥙';el.title=m.name||'Шаурма';
-    el.onclick=e=>{e.stopPropagation();focusVenue(m)};
-    const mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([Number(m.lon),Number(m.lat)]).addTo(map);markerEls.set(String(m.id),mk);
-  }
+ try{const r=await fetch(API+'/api/shaurmeg/markers?lite=1',{cache:'no-store'});if(!r.ok)throw new Error();markers=await r.json();if(!Array.isArray(markers))markers=[]}catch{markers=[]}
+ markerEls.forEach(v=>v.remove());markerEls.clear();
+ for(const m of markers){
+   if(!Number.isFinite(Number(m.lon))||!Number.isFinite(Number(m.lat)))continue;
+   const el=document.createElement('button');el.type='button';el.className='rcMarker';el.textContent='🥙';el.title=m.name||'Шаурма';el.onclick=e=>{e.stopPropagation();focusVenue(m)};
+   const mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([Number(m.lon),Number(m.lat)]).addTo(map);markerEls.set(String(m.id),mk);
+ }
 }
-
 function fitMarkers(){
-  if(!map||!markers.length)return;
-  const valid=markers.filter(m=>Number.isFinite(Number(m.lon))&&Number.isFinite(Number(m.lat)));if(!valid.length)return;
-  if(valid.length===1){map.jumpTo({center:[Number(valid[0].lon),Number(valid[0].lat)],zoom:15.8,pitch:50});return}
-  const b=new maplibregl.LngLatBounds();valid.forEach(m=>b.extend([Number(m.lon),Number(m.lat)]));
-  map.fitBounds(b,{padding:{top:150,bottom:120,left:35,right:35},maxZoom:15.3,duration:0});
+ if(!map||!markers.length)return;
+ const valid=markers.filter(m=>Number.isFinite(Number(m.lon))&&Number.isFinite(Number(m.lat)));if(!valid.length)return;
+ if(valid.length===1){map.jumpTo({center:[Number(valid[0].lon),Number(valid[0].lat)],zoom:15.8,pitch:48});return}
+ const b=new maplibregl.LngLatBounds();valid.forEach(m=>b.extend([Number(m.lon),Number(m.lat)]));
+ map.fitBounds(b,{padding:{top:150,bottom:120,left:35,right:35},maxZoom:15.3,duration:0});
 }
 function search(commit){
-  const q=$('#rcSearch').value.trim().toLowerCase(),box=$('#rcResults');
-  if(!q){box.classList.remove('show');box.innerHTML='';return}
-  const found=markers.filter(m=>[m.name,m.address,m.description].join(' ').toLowerCase().includes(q)).slice(0,7);
-  box.innerHTML=found.map((m,i)=>`<button class="rcResult" type="button" data-i="${i}"><i>🥙</i><span><b>${esc(m.name||'Шаурма')}</b><small>${esc(m.address||'')}</small></span></button>`).join('')||'<div style="padding:10px;font-size:11px;color:var(--rc-muted)">Ничего не найдено</div>';
-  box.classList.add('show');$$('.rcResult',box).forEach((el,i)=>el.onclick=()=>{box.classList.remove('show');focusVenue(found[i])});
-  if(commit&&found[0]){box.classList.remove('show');focusVenue(found[0])}
+ const q=$('#rcSearch').value.trim().toLowerCase(),box=$('#rcResults');
+ if(!q){box.classList.remove('show');box.innerHTML='';return}
+ const found=markers.filter(m=>[m.name,m.address,m.description].join(' ').toLowerCase().includes(q)).slice(0,7);
+ box.innerHTML=found.map((m,i)=>`<button class="rcResult" type="button" data-i="${i}"><i>🥙</i><span><b>${esc(m.name||'Шаурма')}</b><small>${esc(m.address||'')}</small></span></button>`).join('')||'<div style="padding:10px;font-size:11px;color:var(--rc-muted)">Ничего не найдено</div>';
+ box.classList.add('show');$$('.rcResult',box).forEach((el,i)=>el.onclick=()=>{box.classList.remove('show');focusVenue(found[i])});
+ if(commit&&found[0]){box.classList.remove('show');focusVenue(found[0])}
 }
 function locate(){
-  if(!navigator.geolocation){status('Геолокация не поддерживается');setTimeout(()=>status('',false),1600);return}
-  status('Определяем ваше место…');navigator.geolocation.getCurrentPosition(p=>{status('',false);map.easeTo({center:[p.coords.longitude,p.coords.latitude],zoom:16.5,duration:700})},()=>{status('Не удалось получить геолокацию');setTimeout(()=>status('',false),1800)},{enableHighAccuracy:false,timeout:6500,maximumAge:120000});
+ if(!navigator.geolocation){status('Геолокация не поддерживается');setTimeout(()=>status('',false),1600);return}
+ status('Определяем ваше место…');
+ navigator.geolocation.getCurrentPosition(p=>{status('',false);map.easeTo({center:[p.coords.longitude,p.coords.latitude],zoom:16.5,duration:700})},()=>{status('Не удалось получить геолокацию');setTimeout(()=>status('',false),1800)},{enableHighAccuracy:false,timeout:6500,maximumAge:120000});
 }
 
 async function fetchProfile(m){
-  if(profileCache.has(String(m.id)))return profileCache.get(String(m.id));
-  try{
-    const r=await fetch(API+'/api/shaurmeg/realcity-profile/'+encodeURIComponent(m.id),{cache:'no-store'});
-    if(!r.ok)throw new Error();
-    const j=await r.json(),p=safeProfile(j.profile);
-    p.quality=j.quality||p.quality;p.status=j.status||'ready';profileCache.set(String(m.id),p);return p;
-  }catch{return safeProfile(DEFAULT_PROFILE)}
+ const key=String(m.id);
+ if(profileCache.has(key)&&Number(profileCache.get(key)?.version)>=4)return profileCache.get(key);
+ let last=null;
+ for(let attempt=0;attempt<4;attempt++){
+   try{
+     const r=await fetch(API+'/api/shaurmeg/realcity-profile/'+encodeURIComponent(m.id)+'?v=4&t='+Date.now(),{cache:'no-store'});
+     if(r.ok){
+       const j=await r.json();last=safeProfile(j.profile);last.quality=j.quality||last.quality;last.status=j.status||'ready';
+       if(Number(last.version)>=4&&Array.isArray(last.scene?.buildings)&&last.scene.buildings.length){profileCache.set(key,last);return last}
+     }
+   }catch{}
+   if(attempt<3)await new Promise(r=>setTimeout(r,700+attempt*400));
+ }
+ return last||safeProfile(DEFAULT_PROFILE);
 }
 
-function worldColorExpression(profile){
-  const p=safeProfile(profile),sw=p.neighborhood_palette||[],wall=p.palette.wall,accent=p.palette.accent;
-  const c0=sw[0]||shade(wall,10),c1=sw[1]||wall,c2=sw[2]||shade(wall,-9),c3=sw[3]||shade(accent,8);
-  return ['interpolate',['linear'],['coalesce',['get','render_height'],['*',['coalesce',['get','levels'],3],3.05],10],0,c0,12,c1,28,c2,55,c3,95,shade(wall,-18)];
+function canvasImageData(c){return c.getContext('2d').getImageData(0,0,c.width,c.height)}
+function addOrReplaceImage(name,data,pixelRatio=1){
+ try{if(map.hasImage(name))map.removeImage(name)}catch{}
+ try{map.addImage(name,data,{pixelRatio})}catch{}
 }
-function applyWorldProfile(profile){
-  const p=safeProfile(profile);
-  try{
-    map.setPaintProperty('rc-world-real','fill-extrusion-color',worldColorExpression(p));
-    map.setPaintProperty('rc-world-roof','fill-extrusion-color',p.palette.roof);
-    map.setLight({anchor:'viewport',color:shade(p.palette.wall,45),intensity:.50,position:[1.2,155,40]});
-  }catch{}
+function makeFacadePattern(name,palette,facade,variant=0,style='panel_simple'){
+ const c=document.createElement('canvas');c.width=64;c.height=128;const x=c.getContext('2d');
+ const wall=palette.wall||'#d3d1cc',accent=palette.accent||'#8a7463',win=palette.windows||'#29343d';
+ x.fillStyle=wall;x.fillRect(0,0,64,128);
+
+ if(String(style).includes('brick')||facade.material==='brick'){
+   x.strokeStyle=alpha(shade(wall,-30),.33);x.lineWidth=1;
+   for(let y=8;y<128;y+=8){x.beginPath();x.moveTo(0,y+.5);x.lineTo(64,y+.5);x.stroke();const shift=((y/8)%2)*8;for(let xx=-shift;xx<64;xx+=16){x.beginPath();x.moveTo(xx+.5,y-8);x.lineTo(xx+.5,y);x.stroke()}}
+ }else{
+   x.strokeStyle=alpha(shade(wall,-28),facade.panel_grid?.24:.12);x.lineWidth=.75;
+   for(let y=0;y<128;y+=32){x.beginPath();x.moveTo(0,y+.5);x.lineTo(64,y+.5);x.stroke()}
+   for(let xx=0;xx<64;xx+=16){x.beginPath();x.moveTo(xx+.5,0);x.lineTo(xx+.5,128);x.stroke()}
+ }
+
+ if(facade.vertical_bands){
+   const bandX=(variant*13)%48;
+   x.fillStyle=alpha(accent,.82);x.fillRect(bandX,0,7,128);
+   x.fillStyle=alpha(shade(accent,18),.26);x.fillRect(bandX+1,0,1,128);
+ }
+
+ const cols=2,rows=4;
+ for(let r=0;r<rows;r++){
+   for(let col=0;col<cols;col++){
+     const ox=8+col*30+((variant%2)*2),oy=10+r*29;
+     x.fillStyle=alpha(shade(wall,-28),.38);x.fillRect(ox-2,oy-2,18,16);
+     x.fillStyle=win;x.fillRect(ox,oy,14,12);
+     x.fillStyle='rgba(170,198,214,.18)';x.fillRect(ox+1,oy+1,5,2);
+     x.fillStyle='rgba(255,255,255,.14)';x.fillRect(ox+1,oy+1,1,10);
+   }
+   if(facade.balconies&&((r+1)%Math.max(1,facade.balcony_every||2)===0)){
+     const y=24+r*29;x.fillStyle=alpha(shade(wall,-24),.90);x.fillRect(4,y,56,3);
+     x.strokeStyle='rgba(56,61,62,.42)';x.lineWidth=1;x.strokeRect(6,y-5,52,5);
+   }
+ }
+ addOrReplaceImage(name,canvasImageData(c),1);
+ return name;
 }
-function setBuiltinOpacity(v){for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-opacity',v)}catch{}}}
-function setRealOpacity(v){
-  try{map.setPaintProperty('rc-world-real','fill-extrusion-opacity',v);map.setPaintProperty('rc-world-roof','fill-extrusion-opacity',Math.min(.98,v+.02));map.setPaintProperty('rc-hero-layer','fill-extrusion-opacity',v);map.setPaintProperty('rc-details-layer','fill-extrusion-opacity',Math.max(0,(v-.16)/.84))}catch{}
+async function addPhotoPattern(name,dataUrl){
+ if(!dataUrl)return false;
+ return new Promise(resolve=>{
+   const img=new Image();
+   img.onload=()=>{
+     try{
+       const c=document.createElement('canvas');c.width=128;c.height=256;const x=c.getContext('2d');x.drawImage(img,0,0,128,256);
+       const glaze=x.createLinearGradient(0,0,128,0);glaze.addColorStop(0,'rgba(255,255,255,.03)');glaze.addColorStop(.55,'rgba(255,255,255,0)');glaze.addColorStop(1,'rgba(0,0,0,.05)');x.fillStyle=glaze;x.fillRect(0,0,128,256);
+       addOrReplaceImage(name,canvasImageData(c),1);resolve(true);
+     }catch{resolve(false)}
+   };
+   img.onerror=()=>resolve(false);img.src=dataUrl;
+ });
 }
-function clearScene(){
-  const empty={type:'FeatureCollection',features:[]};map.getSource('rc-hero')?.setData(empty);map.getSource('rc-details')?.setData(empty);
-  setRealOpacity(0);setBuiltinOpacity(.88);
-  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD)}catch{}}
-  try{map.setLight({anchor:'viewport',color:'#fff0c9',intensity:.42,position:[1.15,165,38]})}catch{}
+async function installPatterns(profile){
+ const p=safeProfile(profile),names=['rcp-hero','rcp-near-1','rcp-near-2','rcp-near-3','rcp-near-4'];
+ let hero='rcp-hero';
+ if(p.texture?.hero_data_url){
+   const ok=await addPhotoPattern('rcp-hero-photo',p.texture.hero_data_url);
+   if(ok)hero='rcp-hero-photo';
+ }
+ makeFacadePattern('rcp-hero',p.palette,p.facade,0,p.building_style);
+ const sw=p.neighborhood_palette||[];
+ for(let i=1;i<=4;i++){
+   const wall=sw[(i-1)%Math.max(1,sw.length)]||shade(p.palette.wall,(i-2)*7);
+   const pal={...p.palette,wall,accent:sw[(i+2)%Math.max(1,sw.length)]||p.palette.accent,roof:shade(p.palette.roof,(i-2)*5)};
+   makeFacadePattern('rcp-near-'+i,pal,{...p.facade,balconies:i%2===0?p.facade.balconies:false,vertical_bands:i%3!==0},i,p.building_style);
+ }
+ return {hero,names};
 }
-function animateMorph(){
-  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:1120;
-  function frame(now){const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);setBuiltinOpacity(.88*(1-e)+.035);setRealOpacity(.97*e);if(t<1)requestAnimationFrame(frame)}
-  requestAnimationFrame(frame);
-}
-function waitForIdle(timeout=1050){return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;clearTimeout(timer);try{map.off('idle',finish)}catch{};resolve()};const timer=setTimeout(finish,timeout);map.once('idle',finish)})}
 
 function local(lon,lat,oLon,oLat){const k=Math.cos(oLat*Math.PI/180);return[(lon-oLon)*111320*k,(lat-oLat)*110540]}
 function fromLocal(x,y,oLon,oLat){const k=Math.cos(oLat*Math.PI/180);return[oLon+x/(111320*k),oLat+y/110540]}
-function centroid(r){let x=0,y=0,n=0;for(const p of r){if(Array.isArray(p)&&p.length>=2){x+=p[0];y+=p[1];n++}}return n?[x/n,y/n]:[0,0]}
-function pointInRing(p,r){let inside=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const a=r[i],b=r[j],hit=((a[1]>p[1])!==(b[1]>p[1]))&&(p[0]<(b[0]-a[0])*(p[1]-a[1])/((b[1]-a[1])||1e-12)+a[0]);if(hit)inside=!inside}return inside}
-function ringDistance(p,r,oLon,oLat){if(pointInRing(p,r))return 0;const P=local(p[0],p[1],oLon,oLat);let best=1e9;for(let i=0;i<r.length-1;i++){const A=local(r[i][0],r[i][1],oLon,oLat),B=local(r[i+1][0],r[i+1][1],oLon,oLat),vx=B[0]-A[0],vy=B[1]-A[1],wx=P[0]-A[0],wy=P[1]-A[1],d=vx*vx+vy*vy,t=d?clamp((wx*vx+wy*vy)/d,0,1):0,dx=P[0]-(A[0]+vx*t),dy=P[1]-(A[1]+vy*t);best=Math.min(best,Math.hypot(dx,dy))}return best}
-function edgeRect(a,b,depth,oLon,oLat,start,end){const A=local(a[0],a[1],oLon,oLat),B=local(b[0],b[1],oLon,oLat),dx=B[0]-A[0],dy=B[1]-A[1],len=Math.hypot(dx,dy);if(len<.8)return null;const nx=-dy/len,ny=dx/len,p0=[A[0]+dx*start,A[1]+dy*start],p1=[A[0]+dx*end,A[1]+dy*end],d=depth/2,pts=[[p0[0]+nx*d,p0[1]+ny*d],[p1[0]+nx*d,p1[1]+ny*d],[p1[0]-nx*d,p1[1]-ny*d],[p0[0]-nx*d,p0[1]-ny*d],[p0[0]+nx*d,p0[1]+ny*d]];return pts.map(p=>fromLocal(p[0],p[1],oLon,oLat))}
-function featureRings(f){const g=f?.geometry;if(!g)return[];if(g.type==='Polygon')return g.coordinates?.[0]?[g.coordinates[0]]:[];if(g.type==='MultiPolygon')return(g.coordinates||[]).map(p=>p?.[0]).filter(Boolean);return[]}
-function featureHeight(props,id){const h=Number(props.render_height??props.height),lv=Number(props.levels);if(Number.isFinite(h)&&h>2)return clamp(h,3,140);if(Number.isFinite(lv)&&lv>0)return clamp(lv*3.05,3,140);let n=0;for(const ch of String(id))n=(n*31+ch.charCodeAt(0))>>>0;return 9+(n%8)*3.05}
-
-function buildDetails(m,profile){
-  if(!buildingLayers.length)return null;
-  let raw=[];try{raw=map.queryRenderedFeatures(undefined,{layers:buildingLayers})||[]}catch{return null}
-  const p=safeProfile(profile),center=[Number(m.lon),Number(m.lat)],oLon=center[0],oLat=center[1],items=[],seen=new Set();
-  for(const f of raw){
-    const props=f.properties||{};
-    for(const ring0 of featureRings(f)){
-      const ring=ring0.map(x=>[Number(x[0]),Number(x[1])]).filter(x=>Number.isFinite(x[0])&&Number.isFinite(x[1]));if(ring.length<4)continue;
-      const first=ring[0],last=ring[ring.length-1];if(first[0]!==last[0]||first[1]!==last[1])ring.push([...first]);
-      const c0=centroid(ring),sig=(f.id!=null?String(f.id):c0[0].toFixed(5)+','+c0[1].toFixed(5));if(seen.has(sig))continue;seen.add(sig);
-      const d=ringDistance(center,ring,oLon,oLat);if(d>150)continue;
-      const height=featureHeight(props,sig),floors=clamp(Math.round(Number(props.levels)||height/3.05),1,35);items.push({sig,ring,d,height,floors});
-    }
-  }
-  if(!items.length)return null;items.sort((a,b)=>a.d-b.d);const chosen=items.slice(0,10),hero=chosen[0],details=[];
-  const heroFeature={type:'Feature',properties:{color:p.palette.wall,height:hero.height},geometry:{type:'Polygon',coordinates:[hero.ring]}};
-  for(const b of chosen.slice(0,7)){
-    const heroish=b===hero,pal=heroish?p.palette:{
-      wall:p.neighborhood_palette[(chosen.indexOf(b)+1)%p.neighborhood_palette.length]||p.palette.wall,
-      accent:shade(p.palette.accent,(chosen.indexOf(b)%3-1)*10),windows:p.palette.windows,storefront:p.palette.storefront,roof:p.palette.roof
-    };
-    if(heroish)details.push({type:'Feature',properties:{base:.12,height:Math.min(3.3,b.height),color:pal.storefront},geometry:{type:'Polygon',coordinates:[b.ring]}});
-    const floors=Math.min(b.floors,14);
-    for(let fl=1;fl<floors;fl++){
-      const base=fl*3.05+1,height=Math.min(base+1.18,b.height-.2);if(height<=base)continue;
-      for(let e=0;e<b.ring.length-1;e++){
-        const A=local(b.ring[e][0],b.ring[e][1],oLon,oLat),B=local(b.ring[e+1][0],b.ring[e+1][1],oLon,oLat),len=Math.hypot(B[0]-A[0],B[1]-A[1]);if(len<3)continue;
-        const count=Math.min(15,Math.max(1,Math.floor(len/5.3)));
-        for(let w=0;w<count;w++){const seg=1/count,rect=edgeRect(b.ring[e],b.ring[e+1],heroish?.54:.42,oLon,oLat,w*seg+seg*.2,(w+1)*seg-seg*.2);if(rect)details.push({type:'Feature',properties:{base,height,color:pal.windows},geometry:{type:'Polygon',coordinates:[rect]}})}
-      }
-    }
-    if(heroish){
-      for(let e=0;e<b.ring.length-1;e+=2){const rect=edgeRect(b.ring[e],b.ring[e+1],.72,oLon,oLat,.055,.15);if(rect)details.push({type:'Feature',properties:{base:.25,height:Math.max(3,b.height-.22),color:pal.accent},geometry:{type:'Polygon',coordinates:[rect]}})}
-      if(String(p.building_style).includes('balcon'))for(let fl=2;fl<Math.min(b.floors,14);fl+=2){for(let e=0;e<b.ring.length-1;e++){const ledge=edgeRect(b.ring[e],b.ring[e+1],.95,oLon,oLat,.18,.82);if(ledge){const z=fl*3.05+.35;details.push({type:'Feature',properties:{base:z,height:z+.16,color:shade(p.palette.wall,-18)},geometry:{type:'Polygon',coordinates:[ledge]}})}}}
-    }
-  }
-  return {hero:{type:'FeatureCollection',features:[heroFeature]},details:{type:'FeatureCollection',features:details},count:chosen.length};
+function centroid(r){let x=0,y=0,n=0;for(const p of r){x+=p[0];y+=p[1];n++}return n?[x/n,y/n]:[0,0]}
+function edgeRect(a,b,depth,oLon,oLat,start,end){
+ const A=local(a[0],a[1],oLon,oLat),B=local(b[0],b[1],oLon,oLat),dx=B[0]-A[0],dy=B[1]-A[1],len=Math.hypot(dx,dy);if(len<.8)return null;
+ const nx=-dy/len,ny=dx/len,p0=[A[0]+dx*start,A[1]+dy*start],p1=[A[0]+dx*end,A[1]+dy*end],d=depth/2;
+ return [[p0[0]+nx*d,p0[1]+ny*d],[p1[0]+nx*d,p1[1]+ny*d],[p1[0]-nx*d,p1[1]-ny*d],[p0[0]-nx*d,p0[1]-ny*d],[p0[0]+nx*d,p0[1]+ny*d]].map(v=>fromLocal(v[0],v[1],oLon,oLat));
+}
+function rectAround(center,w,h,oLon,oLat,shiftX=0,shiftY=0){
+ const C=local(center[0],center[1],oLon,oLat),x=C[0]+shiftX,y=C[1]+shiftY;
+ return [[x-w/2,y-h/2],[x+w/2,y-h/2],[x+w/2,y+h/2],[x-w/2,y+h/2],[x-w/2,y-h/2]].map(v=>fromLocal(v[0],v[1],oLon,oLat));
 }
 
+function buildSceneGeo(profile,m,patternSet){
+ const p=safeProfile(profile),scene=p.scene||{},blds=Array.isArray(scene.buildings)?scene.buildings:[],oLon=Number(m.lon),oLat=Number(m.lat);
+ const bFeatures=[],store=[],balconies=[],roofeq=[];
+ for(let i=0;i<blds.length;i++){
+   const b=blds[i],ring=Array.isArray(b.ring)?b.ring:[];if(ring.length<4)continue;
+   const role=b.role||'background',patterned=role==='hero'||role==='nearby'?1:0;
+   const patternName=role==='hero'?patternSet.hero:'rcp-near-'+(1+(Number(b.pattern||i)%4));
+   bFeatures.push({type:'Feature',properties:{
+     id:b.id,height:Number(b.height)||9,role,patterned,pattern_name:patternName,
+     wall:b.palette?.wall||p.palette.wall,roof:b.palette?.roof||p.palette.roof
+   },geometry:{type:'Polygon',coordinates:[ring]}});
+
+   if(role==='hero'||(role==='nearby'&&i<6)){
+     const storeH=role==='hero'?Number(p.facade.storefront_height_m)||3.35:2.8;
+     if(role==='hero'&&p.facade.storefront || role==='nearby'){
+       store.push({type:'Feature',properties:{color:b.palette?.storefront||p.palette.storefront,height:Math.min(storeH,Number(b.height)||storeH)},geometry:{type:'Polygon',coordinates:[ring]}});
+     }
+   }
+
+   if(role==='hero'&&p.facade.balconies){
+     const floors=Math.min(Number(b.levels)||p.facade.levels||10,18),every=Math.max(1,Number(p.facade.balcony_every)||2);
+     for(let fl=2;fl<floors;fl+=every){
+       const z=fl*3.05+.32;
+       for(let e=0;e<ring.length-1;e++){
+         const r=edgeRect(ring[e],ring[e+1],Number(p.facade.balcony_depth_m)||.8,oLon,oLat,.16,.84);if(!r)continue;
+         balconies.push({type:'Feature',properties:{base:z,height:z+.18,color:shade(p.palette.wall,-18)},geometry:{type:'Polygon',coordinates:[r]}});
+       }
+     }
+   }
+
+   if((role==='hero'||(role==='nearby'&&i<5))&&p.facade.roof_equipment){
+     const c=centroid(ring),base=Number(b.height)||9,count=role==='hero'?3:1;
+     for(let q=0;q<count;q++){
+       const rr=rectAround(c,role==='hero'?4.6:3.2,role==='hero'?3.0:2.4,oLon,oLat,(q-1)*4.8,(q%2)*2.2);
+       roofeq.push({type:'Feature',properties:{base,height:base+(role==='hero'?1.5:1.0),color:shade(b.palette?.roof||p.palette.roof,-8)},geometry:{type:'Polygon',coordinates:[rr]}});
+     }
+   }
+ }
+
+ const treeFeatures=(Array.isArray(scene.trees)?scene.trees:[]).slice(0,75).map((t,i)=>({type:'Feature',properties:{source:t.source||'auto',size:.85+(i%5)*.06},geometry:{type:'Point',coordinates:[Number(t.lon),Number(t.lat)]}}));
+ return {
+   buildings:{type:'FeatureCollection',features:bFeatures},
+   storefront:{type:'FeatureCollection',features:store},
+   balconies:{type:'FeatureCollection',features:balconies},
+   roofeq:{type:'FeatureCollection',features:roofeq},
+   trees:{type:'FeatureCollection',features:treeFeatures}
+ };
+}
+
+function setBuiltinOpacity(v){for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-opacity',v)}catch{}}}
+function setSceneOpacity(v){
+ const d=Math.max(0,Math.min(1,v));
+ try{
+   map.setPaintProperty('rc-real-color','fill-extrusion-opacity',.96*d);
+   map.setPaintProperty('rc-real-pattern','fill-extrusion-opacity',.99*d);
+   map.setPaintProperty('rc-roofs','fill-extrusion-opacity',.98*d);
+   map.setPaintProperty('rc-storefront-layer','fill-extrusion-opacity',.98*Math.max(0,(d-.08)/.92));
+   map.setPaintProperty('rc-balcony-layer','fill-extrusion-opacity',.98*Math.max(0,(d-.18)/.82));
+   map.setPaintProperty('rc-roofeq-layer','fill-extrusion-opacity',.96*Math.max(0,(d-.12)/.88));
+   map.setPaintProperty('rc-tree-shadow','circle-opacity',.42*Math.max(0,(d-.28)/.72));
+   map.setPaintProperty('rc-tree-symbol','icon-opacity',.98*Math.max(0,(d-.30)/.70));
+ }catch{}
+}
+function clearScene(){
+ for(const id of ['rc-buildings','rc-storefront','rc-balconies','rc-roofeq','rc-trees'])map.getSource(id)?.setData(EMPTY);
+ try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0)}catch{}
+ setSceneOpacity(0);setBuiltinOpacity(.84);
+ for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD)}catch{}}
+ try{map.setLight({anchor:'viewport',color:'#fff0c9',intensity:.42,position:[1.15,165,38]})}catch{}
+}
+function animateMorph(){
+ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:1280;
+ function frame(now){
+   const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);
+   try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',.98*(1-e))}catch{}
+   setBuiltinOpacity(.84*(1-e)+.02);
+   setSceneOpacity(e);
+   if(t<1)requestAnimationFrame(frame);
+ }
+ requestAnimationFrame(frame);
+}
+function waitForIdle(timeout=1200){return new Promise(resolve=>{let done=false;const f=()=>{if(done)return;done=true;clearTimeout(timer);try{map.off('idle',f)}catch{};resolve()};const timer=setTimeout(f,timeout);map.once('idle',f)})}
+
 async function focusVenue(m,replay=false){
-  if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
-  markerEls.forEach((mk,id)=>mk.getElement().classList.toggle('selected',id===String(m.id)));
-  $('#rcVenueName').textContent=m.name||'Шаурма';$('#rcVenueAddress').textContent=m.address||'Рядом с вами';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
-  clearScene();
+ if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
+ markerEls.forEach((mk,id)=>mk.getElement().classList.toggle('selected',id===String(m.id)));
+ $('#rcVenueName').textContent=m.name||'Шаурма';$('#rcVenueAddress').textContent=m.address||'Рядом с вами';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
+ clearScene();
+ status('Анализируем фото и собираем фасады…');
 
-  const profilePromise=fetchProfile(m);
-  const initial=profileCache.get(String(m.id))||safeProfile(DEFAULT_PROFILE),cam=initial.camera;
-  map.easeTo({center:[Number(m.lon),Number(m.lat)],zoom:Number(cam.zoom)||18.15,pitch:Number(cam.pitch)||63,bearing:Number(cam.bearing)||-18,duration:replay?560:920,easing:t=>1-Math.pow(1-t,3)});
-  status('Считываем фасады и цвета района…');
+ const profilePromise=fetchProfile(m);
+ const initial=profileCache.get(String(m.id))||safeProfile(DEFAULT_PROFILE),cam=initial.camera;
+ map.easeTo({center:[Number(m.lon),Number(m.lat)],zoom:Number(cam.zoom)||18.35,pitch:Number(cam.pitch)||61,bearing:Number(cam.bearing)||-20,offset:[0,60],duration:replay?620:980,easing:t=>1-Math.pow(1-t,3)});
 
-  const [,profile]=await Promise.all([waitForIdle(replay?720:1120),profilePromise]);if(token!==sceneToken)return;
-  const p=safeProfile(profile);applyWorldProfile(p);
-  const detail=buildDetails(m,p);
-  if(detail){map.getSource('rc-hero')?.setData(detail.hero);map.getSource('rc-details')?.setData(detail.details)}
-  $('#rcLive').textContent='REAL CITY · '+qualityLabel(p.quality);
-  animateMorph();
-  const sourceText=p.quality==='photo'?'по фото фасада':p.quality==='street'?'по уличным снимкам':p.quality==='osm'?'по данным зданий':'автоматически';
-  status('Фасады окрашены '+sourceText);
-  setTimeout(()=>{if(token===sceneToken)status('',false)},1700);
+ const [,profile]=await Promise.all([waitForIdle(replay?760:1220),profilePromise]);if(token!==sceneToken)return;
+ const p=safeProfile(profile);
+ const patterns=await installPatterns(p);if(token!==sceneToken)return;
+ const geo=buildSceneGeo(p,m,patterns);
+
+ if(!geo.buildings.features.length){
+   status('Профиль квартала обновляется…');
+   setTimeout(()=>{if(token===sceneToken)focusVenue(m,true)},1500);
+   return;
+ }
+ map.getSource('rc-buildings').setData(geo.buildings);
+ map.getSource('rc-storefront').setData(geo.storefront);
+ map.getSource('rc-balconies').setData(geo.balconies);
+ map.getSource('rc-roofeq').setData(geo.roofeq);
+ map.getSource('rc-trees').setData(geo.trees);
+
+ try{
+   map.setPaintProperty('rc-gold','fill-extrusion-opacity',.98);
+   map.setLight({anchor:'viewport',color:shade(p.palette.wall,52),intensity:.55,position:[1.1,150,42]});
+ }catch{}
+ setSceneOpacity(0);setBuiltinOpacity(.10);
+
+ requestAnimationFrame(()=>requestAnimationFrame(animateMorph));
+ $('#rcLive').textContent='REAL CITY · '+qualityLabel(p.quality);
+ const src=p.texture?.source==='hero_reference'?'по фото фасада':p.quality==='street'?'по уличным снимкам':p.quality==='osm'?'по геометрии зданий':'по фотопрофилю';
+ status('Квартал восстановлен '+src);
+ setTimeout(()=>{if(token===sceneToken)status('',false)},1900);
 }
 
 async function init(){
-  inject();
-  const url=new URL(location.href),tgStart=window.Telegram?.WebApp?.initDataUnsafe?.start_param||url.searchParams.get('tgWebAppStartParam')||'';
-  directVenueId=normalizeVenue(url.searchParams.get('venue')||tgStart);
-  const shouldOpen=url.searchParams.get('view')!=='menu';
-  if(shouldOpen)setTimeout(open,40);else ensureDeps().catch(()=>{});
+ inject();
+ const url=new URL(location.href),tgStart=window.Telegram?.WebApp?.initDataUnsafe?.start_param||url.searchParams.get('tgWebAppStartParam')||'';
+ directVenueId=normalizeVenue(url.searchParams.get('venue')||tgStart);
+ const shouldOpen=url.searchParams.get('view')!=='menu';
+ if(shouldOpen)setTimeout(open,40);else ensureDeps().catch(()=>{});
 }
-
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();

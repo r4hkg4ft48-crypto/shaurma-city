@@ -10,3 +10,157 @@
 .rcMarker{width:46px;height:46px;display:grid;place-items:center;border:3px solid #fff;border-radius:16px 16px 16px 5px;background:#f7fbff;color:#0b1a2a;font-size:24px;box-shadow:0 9px 24px rgba(0,0,0,.38);transition:transform .2s}.rcMarker.selected{transform:scale(1.12);box-shadow:0 10px 30px rgba(185,215,255,.26)}
 @media(max-width:390px){.realCityTop{grid-template-columns:38px minmax(0,1fr);gap:6px}.rcClose{width:38px;height:38px;border-radius:13px}.rcSearchCard{padding:7px}.rcBrand b{font-size:16px}.rcSearchRow input,.rcSearchRow button{height:41px}.realCityScreen .maplibregl-ctrl-top-right{top:127px}.rcStatus{top:147px}}
 @media(prefers-reduced-motion:reduce){.realCityScreen,.rcVenueCard,.rcStatus,.rcMarker{transition:none!important}}
+
+
+/* BUILD 79 · cinematic midnight focus */
+.realCityScreen::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:3;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 58%,rgba(107,187,255,.075) 0,rgba(64,137,205,.035) 25%,rgba(6,16,29,0) 50%),
+    radial-gradient(circle at 50% 50%,rgba(6,16,29,0) 48%,rgba(1,7,15,.24) 100%);
+  mix-blend-mode:screen;
+}
+.realCityTop,.rcStatus,.rcVenueCard{z-index:9}
+.realCityScreen .maplibregl-ctrl-top-right{z-index:6}
+.realCityScreen .maplibregl-ctrl-group{
+  background:rgba(6,18,32,.78)!important;
+  border:1px solid rgba(197,226,255,.12)!important;
+  box-shadow:0 12px 34px rgba(0,0,0,.42),0 0 24px rgba(104,177,255,.06)!important;
+  backdrop-filter:blur(18px) saturate(135%);
+}
+.realCityScreen .maplibregl-ctrl-group button{
+  background:transparent!important;
+  border-color:rgba(197,226,255,.09)!important;
+}
+.realCityScreen .maplibregl-ctrl-group button:hover{background:rgba(165,211,255,.08)!important}
+.realCityScreen .maplibregl-ctrl button .maplibregl-ctrl-icon{filter:invert(1) brightness(1.65) saturate(.35)}
+.realCityScreen .maplibregl-ctrl-attrib{
+  color:#a8bfd6!important;
+  border:1px solid rgba(197,226,255,.08);
+  border-radius:8px 0 0 0;
+  backdrop-filter:blur(14px);
+}
+.realCityScreen .maplibregl-ctrl-attrib a{color:#dbeeff!important}
+
+.rcSearchCard{
+  position:relative;
+  overflow:hidden;
+  border:1px solid rgba(202,229,255,.17);
+  background:linear-gradient(145deg,rgba(11,30,49,.86),rgba(5,16,29,.74));
+  box-shadow:
+    0 20px 55px rgba(0,0,0,.45),
+    0 0 0 1px rgba(197,226,255,.035),
+    0 0 36px rgba(87,164,235,.075),
+    inset 0 1px 0 rgba(235,247,255,.10);
+  backdrop-filter:blur(24px) saturate(145%);
+}
+.rcSearchCard::before{
+  content:"";
+  position:absolute;
+  left:12%;
+  right:12%;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(219,240,255,.68),transparent);
+  opacity:.55;
+}
+.rcVenueCard{
+  position:absolute;
+  overflow:hidden;
+  border:1px solid rgba(205,231,255,.18);
+  background:linear-gradient(150deg,rgba(10,29,48,.91),rgba(5,16,29,.83));
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.54),
+    0 0 0 1px rgba(193,225,255,.035),
+    0 0 42px rgba(96,178,255,.095),
+    inset 0 1px 0 rgba(235,247,255,.11);
+  backdrop-filter:blur(26px) saturate(150%);
+}
+.rcVenueCard::before{
+  content:"";
+  position:absolute;
+  left:8%;
+  right:8%;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(224,243,255,.74),transparent);
+  opacity:.64;
+}
+.rcVenueCard.show{animation:rcCardArrival .48s cubic-bezier(.2,.8,.2,1)}
+@keyframes rcCardArrival{
+  0%{filter:brightness(.88);box-shadow:0 20px 44px rgba(0,0,0,.44),0 0 0 rgba(112,190,255,0)}
+  65%{filter:brightness(1.04);box-shadow:0 28px 70px rgba(0,0,0,.54),0 0 50px rgba(112,190,255,.13)}
+  100%{filter:brightness(1)}
+}
+.rcClose{
+  border:1px solid rgba(204,230,255,.16);
+  background:rgba(7,20,34,.82);
+  box-shadow:0 12px 30px rgba(0,0,0,.38),0 0 24px rgba(109,184,255,.055),inset 0 1px 0 rgba(235,247,255,.08);
+  backdrop-filter:blur(20px);
+}
+.rcStatus.show{
+  border-color:rgba(205,233,255,.22);
+  background:rgba(4,14,26,.89);
+  box-shadow:0 12px 34px rgba(0,0,0,.46),0 0 26px rgba(101,181,255,.12),inset 0 1px 0 rgba(239,248,255,.08);
+}
+.rcSearchRow input{
+  border-color:rgba(198,226,255,.13);
+  background:rgba(12,31,50,.76);
+  box-shadow:inset 0 1px 0 rgba(231,245,255,.035);
+}
+.rcSearchRow input::placeholder{color:#7890a9}
+.rcNearby button,.rcRepaint{
+  border-color:rgba(199,228,255,.14);
+  background:rgba(14,35,56,.72);
+  box-shadow:inset 0 1px 0 rgba(235,247,255,.04);
+}
+.rcMenu,.rcSearchRow button{
+  box-shadow:0 8px 24px rgba(191,226,255,.12),inset 0 1px 0 rgba(255,255,255,.72);
+}
+.rcLive{
+  border:1px solid rgba(184,219,249,.24);
+  background:rgba(197,228,255,.92);
+  box-shadow:0 0 18px rgba(127,195,255,.16);
+}
+.rcPinIcon{
+  box-shadow:0 10px 28px rgba(0,0,0,.30),0 0 24px rgba(156,211,255,.16),inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+.rcMarker{
+  position:relative;
+  isolation:isolate;
+  border-color:#f8fcff;
+  background:#f7fbff;
+  box-shadow:0 10px 28px rgba(0,0,0,.40),0 0 0 rgba(137,202,255,0);
+  will-change:transform,box-shadow;
+}
+.rcMarker::before{
+  content:"";
+  position:absolute;
+  inset:-10px;
+  z-index:-1;
+  border-radius:24px 24px 24px 10px;
+  background:radial-gradient(circle,rgba(217,242,255,.22),rgba(113,190,255,.08) 44%,transparent 72%);
+  opacity:0;
+  transform:scale(.72);
+}
+.rcMarker.selected{
+  transform:scale(1.12);
+  animation:rcMarkerGlow 2.7s ease-in-out infinite;
+}
+.rcMarker.selected::before{animation:rcMarkerAura 2.7s ease-in-out infinite}
+@keyframes rcMarkerGlow{
+  0%,100%{box-shadow:0 10px 30px rgba(0,0,0,.42),0 0 0 1px rgba(227,245,255,.38),0 0 18px rgba(118,194,255,.18)}
+  50%{box-shadow:0 12px 34px rgba(0,0,0,.44),0 0 0 1px rgba(239,250,255,.58),0 0 32px rgba(118,194,255,.36)}
+}
+@keyframes rcMarkerAura{
+  0%,100%{opacity:.42;transform:scale(.78)}
+  50%{opacity:.88;transform:scale(1.18)}
+}
+@media(prefers-reduced-motion:reduce){
+  .rcVenueCard.show,.rcMarker.selected,.rcMarker.selected::before{animation:none!important}
+}

@@ -1142,6 +1142,8 @@ app.get('/api/shaurma/stats',async(req,res)=>{
  }catch(e){res.status(500).json({error:e.message})}
 });
 
+const venueOwnerSystem=installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner});
+
 const sendOwner=(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.sendFile(path.join(__dirname,'shaurma-owner.html'))};
 const sendShaurmegOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurmeg-owner.html'));
 app.get('/shaurma-owner',sendOwner);
@@ -1151,4 +1153,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

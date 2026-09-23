@@ -651,8 +651,23 @@ app.get('/api/shaurmeg/markers',async(req,res)=>{
 
 app.get('/api/shaurmeg/admin/markers',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.json([]);
- try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);res.json(q.rows.map(row=>({...publicMarker(row),marker_avatar:row.marker_avatar||'',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),realcity_reference_images:Array.isArray(row.realcity_reference_images)?row.realcity_reference_images:[],realcity_profile:row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{},source_id:row.source_id||'',source_data:row.source_data||{},verification_details:row.verification_details||{},auto_imported:!!row.auto_imported,position_locked:!!row.position_locked,appearance_locked:!!row.appearance_locked,metadata_locked:!!row.metadata_locked,source_suppressed:!!row.source_suppressed,is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at})))}
- catch(e){res.status(500).json({error:'marker_list_failed'})}
+ try{
+  if(req.query.summary==='1'){
+   const q=await DB.query(`SELECT id,venue_id,name,address,lat,lon,category,marker_style,(marker_avatar<>'') AS has_avatar,verification_status,verification_score,source_provider,source_id,auto_imported,position_locked,appearance_locked,metadata_locked,source_suppressed,is_active,updated_at FROM shaurmeg_markers ORDER BY id`);
+   return res.json(q.rows.map(row=>({...row,marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,auto_imported:!!row.auto_imported,position_locked:!!row.position_locked,appearance_locked:!!row.appearance_locked,metadata_locked:!!row.metadata_locked,source_suppressed:!!row.source_suppressed,verification_score:Number(row.verification_score??1)})));
+  }
+  const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);
+  res.json(q.rows.map(row=>({...publicMarker(row),marker_avatar:row.marker_avatar||'',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),realcity_reference_images:Array.isArray(row.realcity_reference_images)?row.realcity_reference_images:[],realcity_profile:row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{},source_id:row.source_id||'',source_data:row.source_data||{},verification_details:row.verification_details||{},auto_imported:!!row.auto_imported,position_locked:!!row.position_locked,appearance_locked:!!row.appearance_locked,metadata_locked:!!row.metadata_locked,source_suppressed:!!row.source_suppressed,is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at})));
+ }catch(e){res.status(500).json({error:'marker_list_failed'})}
+});
+
+app.get('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.sendStatus(404);
+ try{
+  const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id WHERE m.id=$1 LIMIT 1`,[req.params.id]);
+  const row=q.rows[0];if(!row)return res.sendStatus(404);
+  res.json({...publicMarker(row),marker_avatar:row.marker_avatar||'',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),realcity_reference_images:Array.isArray(row.realcity_reference_images)?row.realcity_reference_images:[],realcity_profile:row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{},source_id:row.source_id||'',source_data:row.source_data||{},verification_details:row.verification_details||{},auto_imported:!!row.auto_imported,position_locked:!!row.position_locked,appearance_locked:!!row.appearance_locked,metadata_locked:!!row.metadata_locked,source_suppressed:!!row.source_suppressed,is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at});
+ }catch(e){res.status(500).json({error:'marker_read_failed'})}
 });
 
 app.post('/api/shaurmeg/admin/markers',async(req,res)=>{

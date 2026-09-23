@@ -448,8 +448,11 @@ function publicMarker(row){
 app.get('/api/shaurmeg/markers',async(req,res)=>{
  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
  if(!DB)return res.json([]);
- try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id WHERE m.is_active=TRUE AND v.is_active=TRUE ORDER BY m.updated_at DESC`);res.json(q.rows.map(publicMarker))}
- catch(e){console.error('marker list:',e.message);res.status(500).json({error:'marker_list_failed'})}
+ try{
+  const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id WHERE m.is_active=TRUE AND v.is_active=TRUE ORDER BY m.updated_at DESC`);
+  if(req.query.lite==='1')return res.json(q.rows.map(row=>({id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hours:row.hours,price_label:row.price_label})));
+  res.json(q.rows.map(publicMarker));
+ }catch(e){console.error('marker list:',e.message);res.status(500).json({error:'marker_list_failed'})}
 });
 
 app.get('/api/shaurmeg/admin/markers',async(req,res)=>{

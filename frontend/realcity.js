@@ -8,7 +8,7 @@ const GOLD='#d7b46a';
 const EMPTY={type:'FeatureCollection',features:[]};
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
-let builtin3d=[],dimmedLayers=[],profileCache=new Map();
+let builtin3d=[],buildingLayers=[],dimmedLayers=[],profileCache=new Map();
 
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -97,6 +97,7 @@ async function ensureMap(){
 
  const layers=map.getStyle().layers||[];
  builtin3d=layers.filter(l=>l.type==='fill-extrusion'&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
+ buildingLayers=layers.filter(l=>['fill','fill-extrusion'].includes(l.type)&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD);map.setPaintProperty(id,'fill-extrusion-opacity',.84)}catch{}}
  installSceneLayers(layers);
  installTreeImage();
@@ -318,6 +319,44 @@ function rectAround(center,w,h,oLon,oLat,shiftX=0,shiftY=0){
  return [[x-w/2,y-h/2],[x+w/2,y-h/2],[x+w/2,y+h/2],[x-w/2,y+h/2],[x-w/2,y-h/2]].map(v=>fromLocal(v[0],v[1],oLon,oLat));
 }
 
+function ringsFromFeature(f){
+ const g=f?.geometry;if(!g)return[];
+ if(g.type==='Polygon')return g.coordinates?.[0]?[g.coordinates[0]]:[];
+ if(g.type==='MultiPolygon')return (g.coordinates||[]).map(p=>p?.[0]).filter(Boolean);
+ return[];
+}
+function featureHeight(props,id){
+ const h=Number(props?.render_height??props?.height),lv=Number(props?.levels??props?.['building:levels']);
+ if(Number.isFinite(h)&&h>2)return clamp(h,3,150);
+ if(Number.isFinite(lv)&&lv>0)return clamp(lv*3.05,3,150);
+ let n=0;for(const ch of String(id))n=(n*31+ch.charCodeAt(0))>>>0;return 9+(n%7)*3.05;
+}
+function approxDistance(a,b,lat){const k=Math.cos(lat*Math.PI/180);return Math.hypot((a[0]-b[0])*111320*k,(a[1]-b[1])*110540)}
+function sceneFromVisibleMap(profile,m){
+ if(!buildingLayers.length)return null;
+ let raw=[];try{raw=map.queryRenderedFeatures(undefined,{layers:buildingLayers})||[]}catch{return null}
+ const center=[Number(m.lon),Number(m.lat)],seen=new Set(),items=[];
+ for(const f of raw){
+   const props=f.properties||{};
+   for(const ring0 of ringsFromFeature(f)){
+     const ring=ring0.map(v=>[Number(v[0]),Number(v[1])]).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));if(ring.length<4)continue;
+     const first=ring[0],last=ring[ring.length-1];if(first[0]!==last[0]||first[1]!==last[1])ring.push([...first]);
+     const cc=centroid(ring),sig=(f.id!=null?String(f.id):cc[0].toFixed(5)+','+cc[1].toFixed(5));if(seen.has(sig))continue;seen.add(sig);
+     const d=approxDistance(cc,center,center[1]);if(d>220)continue;
+     const h=featureHeight(props,sig),lv=clamp(Math.round(Number(props.levels)||h/3.05),1,35);
+     items.push({sig,ring,d,h,lv});
+   }
+ }
+ if(!items.length)return null;
+ items.sort((a,b)=>a.d-b.d);
+ const p=safeProfile(profile),sw=p.neighborhood_palette||[],buildings=items.slice(0,70).map((b,i)=>({
+   id:'tile-'+b.sig,ring:b.ring,height:b.h,levels:b.lv,distance:b.d,
+   role:i===0?'hero':i<10?'nearby':'background',style:i===0?p.building_style:'mixed_residential',pattern:i===0?0:1+(i%4),
+   palette:{wall:i===0?p.palette.wall:(sw[i%Math.max(1,sw.length)]||p.palette.wall),accent:p.palette.accent,windows:p.palette.windows,storefront:p.palette.storefront,roof:p.palette.roof}
+ }));
+ return {...p,scene:{...(p.scene||{}),buildings,hero_building_id:buildings[0]?.id||null}};
+}
+
 function buildSceneGeo(profile,m,patternSet){
  const p=safeProfile(profile),scene=p.scene||{},blds=Array.isArray(scene.buildings)?scene.buildings:[],oLon=Number(m.lon),oLat=Number(m.lat);
  const bFeatures=[],store=[],balconies=[],roofeq=[];
@@ -417,16 +456,20 @@ async function focusVenue(m,replay=false){
  const patterns=await installPatterns(p);if(token!==sceneToken)return;
  const geo=buildSceneGeo(p,m,patterns);
 
- if(!geo.buildings.features.length){
-   status('Профиль квартала обновляется…');
-   setTimeout(()=>{if(token===sceneToken)focusVenue(m,true)},1500);
-   return;
+ let readyGeo=geo;
+ if(!readyGeo.buildings.features.length){
+   const fallback=sceneFromVisibleMap(p,m);
+   if(fallback)readyGeo=buildSceneGeo(fallback,m,patterns);
  }
- map.getSource('rc-buildings').setData(geo.buildings);
- map.getSource('rc-storefront').setData(geo.storefront);
- map.getSource('rc-balconies').setData(geo.balconies);
- map.getSource('rc-roofeq').setData(geo.roofeq);
- map.getSource('rc-trees').setData(geo.trees);
+ if(!readyGeo.buildings.features.length){
+   status('Не удалось получить геометрию домов — оставили базовую карту');
+   setBuiltinOpacity(.84);setTimeout(()=>{if(token===sceneToken)status('',false)},1800);return;
+ }
+ map.getSource('rc-buildings').setData(readyGeo.buildings);
+ map.getSource('rc-storefront').setData(readyGeo.storefront);
+ map.getSource('rc-balconies').setData(readyGeo.balconies);
+ map.getSource('rc-roofeq').setData(readyGeo.roofeq);
+ map.getSource('rc-trees').setData(readyGeo.trees);
 
  try{
    map.setPaintProperty('rc-gold','fill-extrusion-opacity',.98);

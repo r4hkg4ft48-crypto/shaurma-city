@@ -130,6 +130,7 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS venue_name TEXT NOT NULL DEFAULT 'В Лепёшке'");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_telegram_user ON shaurma_orders(telegram_user_id, created_at DESC)");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_venue_created ON shaurma_orders(venue_id, created_at DESC)");
+ await DB.query("ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS establishment_id TEXT NOT NULL DEFAULT ''");
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_venues(
@@ -144,6 +145,9 @@ async function initDb(){
   );
   CREATE INDEX IF NOT EXISTS idx_shaurma_venues_active ON shaurma_venues(is_active, name);
  `);
+ await DB.query("ALTER TABLE shaurma_venues ADD COLUMN IF NOT EXISTS establishment_id TEXT");
+ await DB.query("UPDATE shaurma_venues SET establishment_id='SC-MSK-'||UPPER(SUBSTR(MD5(venue_id),1,10)) WHERE establishment_id IS NULL OR establishment_id=''");
+ await DB.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_shaurma_venues_establishment ON shaurma_venues(establishment_id)");
  for(const venue of SEEDED_VENUES.filter(v=>v.venue_id===DEFAULT_VENUE_ID)){
   await DB.query(`
    INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu)
@@ -204,6 +208,9 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS appearance_locked BOOLEAN NOT NULL DEFAULT FALSE");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS metadata_locked BOOLEAN NOT NULL DEFAULT FALSE");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS source_suppressed BOOLEAN NOT NULL DEFAULT FALSE");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS establishment_id TEXT");
+ await DB.query("UPDATE shaurmeg_markers m SET establishment_id=v.establishment_id FROM shaurma_venues v WHERE m.venue_id=v.venue_id AND (m.establishment_id IS NULL OR m.establishment_id='')");
+ await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_establishment ON shaurmeg_markers(establishment_id)");
  await DB.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_shaurmeg_markers_source ON shaurmeg_markers(source_provider,source_id) WHERE source_provider<>'' AND source_id<>''");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_category ON shaurmeg_markers(category,is_active)");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_geo ON shaurmeg_markers(lat,lon)");
@@ -226,6 +233,49 @@ async function initDb(){
  `);
  await DB.query("UPDATE shaurmeg_discovery_runs SET status='interrupted',details=COALESCE(details,'{}'::jsonb)||jsonb_build_object('interrupted_at',NOW()),finished_at=NOW() WHERE status='running'");
  await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending' WHERE realcity_profile='{}'::jsonb");
+ await DB.query("UPDATE shaurma_orders o SET establishment_id=v.establishment_id FROM shaurma_venues v WHERE o.venue_id=v.venue_id AND (o.establishment_id IS NULL OR o.establishment_id='')");
+ await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_establishment_created ON shaurma_orders(establishment_id,created_at DESC)");
+ await DB.query(`
+  CREATE TABLE IF NOT EXISTS shaurma_venue_admins(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL REFERENCES shaurma_venues(establishment_id) ON UPDATE CASCADE ON DELETE CASCADE,
+    telegram_user_id TEXT NOT NULL,
+    telegram_username TEXT NOT NULL DEFAULT '',
+    telegram_first_name TEXT NOT NULL DEFAULT '',
+    role TEXT NOT NULL DEFAULT 'owner',
+    permissions JSONB NOT NULL DEFAULT '["menu","profile","media","appearance","orders"]'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    added_by TEXT NOT NULL DEFAULT 'superadmin',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(establishment_id,telegram_user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_venue_admins_user ON shaurma_venue_admins(telegram_user_id,is_active);
+  CREATE TABLE IF NOT EXISTS shaurma_venue_invites(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL REFERENCES shaurma_venues(establishment_id) ON UPDATE CASCADE ON DELETE CASCADE,
+    code_hash TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'owner',
+    permissions JSONB NOT NULL DEFAULT '["menu","profile","media","appearance","orders"]'::jsonb,
+    expires_at TIMESTAMPTZ NOT NULL,
+    max_uses INT NOT NULL DEFAULT 1,
+    uses INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by TEXT NOT NULL DEFAULT 'superadmin',
+    last_used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_venue_invites_establishment ON shaurma_venue_invites(establishment_id,is_active);
+  CREATE TABLE IF NOT EXISTS shaurma_venue_audit(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL,
+    telegram_user_id TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_venue_audit_establishment ON shaurma_venue_audit(establishment_id,created_at DESC);
+ `);
  await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`

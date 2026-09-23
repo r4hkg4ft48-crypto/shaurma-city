@@ -94,13 +94,12 @@ function edgeRect(a,b,depth,originLon,originLat,start=0,end=1){
   return pts.map(p=>fromLocal(p[0],p[1],originLon,originLat));
 }
 function paletteFor(venueId,tags,id){
-  if(String(venueId||'').toLowerCase()==='lepyoshka') return {...LEPYOSHKA};
   const base={...PALETTES[hashString(id)%PALETTES.length]};
   const tagged=colorFromTag(tags['building:colour']||tags['building:color']);
   if(tagged) base.wall=tagged;
   const mat=String(tags['building:material']||'').toLowerCase();
-  if(mat.includes('brick')) base.accent='#805c49';
-  if(mat.includes('glass')){ base.wall='#8997a3'; base.windows='#1f2c35'; }
+  if(mat.includes('brick')){ base.wall='#b58f78'; base.accent='#775947'; base.roof='#9c8879'; }
+  if(mat.includes('glass')){ base.wall='#8997a3'; base.windows='#1f2c35'; base.accent='#667887'; }
   return base;
 }
 async function fetchOverpass(lat,lon,radius){
@@ -131,6 +130,7 @@ function makeScene(elements,{lat,lon,venueId,radius}){
   buildings.sort((a,b)=>a.distance-b.distance);
   const limited=buildings.slice(0,90);
   const hero=limited[0]||null;
+  if(hero&&String(venueId||'').toLowerCase()==='lepyoshka')hero.palette={...LEPYOSHKA};
   const buildingFeatures=limited.map((b,i)=>({type:'Feature',id:i+1,properties:{id:b.id,height:b.height,base:0,facade:b.palette.wall,roof:b.palette.roof,distance:Math.round(b.distance),hero:b===hero?1:0},geometry:{type:'Polygon',coordinates:[b.ring]}}));
   const detailFeatures=[];
   const detailed=limited.filter((b,i)=>i<6&&b.distance<95);

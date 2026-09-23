@@ -2,7 +2,7 @@
 
 const sharp=require('sharp');
 
-const PROFILE_VERSION=4;
+const PROFILE_VERSION=5;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'

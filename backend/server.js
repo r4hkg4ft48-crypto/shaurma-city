@@ -952,6 +952,25 @@ app.put('/api/shaurma/venues/:venueId',async(req,res)=>{
  }
 });
 
+app.put('/api/shaurma/admin/establishments/:establishmentId/venue',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const establishmentId=String(req.params.establishmentId||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return res.status(400).json({error:'bad_establishment_id'});
+ const body=req.body||{},config=body.config&&typeof body.config==='object'&&!Array.isArray(body.config)?body.config:{},menu=Array.isArray(body.menu)?body.menu:[];
+ if(JSON.stringify(config).length>50000||JSON.stringify(menu).length>700000)return res.status(413).json({error:'venue_too_large'});
+ try{
+  const q=await DB.query(`
+   UPDATE shaurma_venues
+   SET config=$2::jsonb,menu=$3::jsonb,is_active=COALESCE($4,is_active),updated_at=NOW()
+   WHERE establishment_id=$1
+   RETURNING *
+  `,[establishmentId,JSON.stringify(config),JSON.stringify(menu),typeof body.is_active==='boolean'?body.is_active:null]);
+  if(!q.rows[0])return res.sendStatus(404);
+  publishVenue(q.rows[0]);res.json(q.rows[0]);
+ }catch(e){console.error('establishment venue update:',e.message);res.status(500).json({error:'venue_update_failed'})}
+});
+
 app.get('/api/shaurma/stream',(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);
  res.setHeader('Content-Type','text/event-stream');

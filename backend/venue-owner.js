@@ -127,6 +127,37 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   async function sendOwnerBotMessage(chatId,text,extra={}){
     return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',disable_web_page_preview:true,...extra});
   }
+  function ownerAppUrl(establishmentId='',tab='profile'){
+    const u=new URL(OWNER_APP_URL);
+    if(establishmentId)u.searchParams.set('establishment',String(establishmentId));
+    if(tab)u.searchParams.set('tab',String(tab));
+    u.searchParams.set('v','2');
+    return u.toString();
+  }
+  function canUse(access,permission){
+    const permissions=Array.isArray(access?.permissions)?access.permissions:DEFAULT_PERMISSIONS;
+    return access?.role==='owner'||permissions.includes(permission);
+  }
+  async function sendOwnerAccessList(chatId,userId,{tab='profile',title}={}){
+    const all=await accessesFor(userId);
+    const list=tab==='menu'?all.filter(x=>canUse(x,'menu')):all;
+    if(!list.length){
+      return sendOwnerBotMessage(chatId,'У вас пока нет подключённых заведений.\n\nДобавьте заведение командой <code>/add КОД</code> или через кнопку «Моё заведение».');
+    }
+    const rows=list.slice(0,40).map(x=>[{
+      text:(tab==='menu'?'🍽 ':'🏪 ')+String(x.name||'Заведение'),
+      web_app:{url:ownerAppUrl(x.establishment_id,tab)}
+    }]);
+    rows.push([{text:'＋ Добавить ещё заведение',web_app:{url:ownerAppUrl('', 'add')}}]);
+    return sendOwnerBotMessage(chatId,
+      String(title||(
+        tab==='menu'
+          ?'<b>Управление меню</b>\nВыберите заведение:'
+          :'<b>Мои заведения</b>\nПодключено: '+list.length
+      )),
+      {reply_markup:{inline_keyboard:rows}}
+    );
+  }
   async function claimForTelegramUser(user,code){
     if(!DB)throw new Error('persistent_storage_required');
     const normalized=normalizeCode(code);
@@ -375,30 +406,81 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const msg=req.body?.message;if(!msg?.from?.id||!msg.chat?.id)return;
     const user=msg.from,text=String(msg.text||'').trim();
     try{
-      const start=text.match(/^\/start(?:\s+(.+))?$/i);
+      const start=text.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
       if(start){
         const param=String(start[1]||'');
         if(param.startsWith('claim_')){
           const code=param.slice(6);
           try{
             const access=await claimForTelegramUser(user,code);
-            await sendOwnerBotMessage(msg.chat.id,'✅ Доступ подключён\n\n<b>'+String(access?.name||'Заведение')+'</b>\nID: <code>'+String(access?.establishment_id||'')+'</code>',{reply_markup:{inline_keyboard:[[{text:'Открыть кабинет',web_app:{url:OWNER_APP_URL}}]]}});
-          }catch{await sendOwnerBotMessage(msg.chat.id,'Код доступа недействителен или уже использован. Запросите новый код у администратора Shaurmeg.')}
+            const count=(await accessesFor(user.id)).length;
+            await sendOwnerBotMessage(
+              msg.chat.id,
+              '✅ Доступ подключён\n\n<b>'+String(access?.name||'Заведение')+'</b>\nID: <code>'+String(access?.establishment_id||'')+'</code>\n\nВсего подключено заведений: <b>'+count+'</b>.',
+              {reply_markup:{inline_keyboard:[
+                [{text:'🍽 Управлять меню',web_app:{url:ownerAppUrl(access?.establishment_id,'menu')}}],
+                [{text:'🏪 Открыть карточку',web_app:{url:ownerAppUrl(access?.establishment_id,'profile')}}],
+                [{text:'Все заведения',web_app:{url:ownerAppUrl('', 'venues')}}]
+              ]}}
+            );
+          }catch{
+            await sendOwnerBotMessage(msg.chat.id,'Код доступа недействителен или уже использован. Запросите новый код у администратора Shaurmeg.');
+          }
           return;
         }
         const access=await accessesFor(user.id);
-        const textOut=access.length
-          ?'Ваш кабинет Shaurmeg готов. Доступно заведений: <b>'+access.length+'</b>.'
-          :'Бот владельца Shaurmeg. Чтобы подключить заведение, откройте ссылку-приглашение или введите код доступа в кабинете.';
-        await sendOwnerBotMessage(msg.chat.id,textOut,{reply_markup:{inline_keyboard:[[{text:'Открыть кабинет',web_app:{url:OWNER_APP_URL}}]]}});
+        if(access.length){
+          await sendOwnerAccessList(msg.chat.id,user.id,{title:'<b>Кабинет владельца Shaurmeg</b>\nУправляйте всеми своими заведениями из одного бота.'});
+        }else{
+          await sendOwnerBotMessage(msg.chat.id,'Бот владельца Shaurmeg.\n\nЧтобы подключить первое заведение, откройте ссылку-приглашение или отправьте команду <code>/add КОД</code>.',{reply_markup:{inline_keyboard:[[{text:'Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
+        }
         return;
       }
-      if(/^\/id$/i.test(text)){await sendOwnerBotMessage(msg.chat.id,'Ваш Telegram ID: <code>'+String(user.id)+'</code>');return}
+
+      if(/^\/venues(?:@[A-Za-z0-9_]+)?$/i.test(text)){
+        await sendOwnerAccessList(msg.chat.id,user.id,{tab:'profile'});
+        return;
+      }
+      if(/^\/menu(?:@[A-Za-z0-9_]+)?$/i.test(text)){
+        await sendOwnerAccessList(msg.chat.id,user.id,{tab:'menu'});
+        return;
+      }
+      if(/^\/id(?:@[A-Za-z0-9_]+)?$/i.test(text)){
+        await sendOwnerBotMessage(msg.chat.id,'Ваш Telegram ID: <code>'+String(user.id)+'</code>');
+        return;
+      }
+
+      const add=text.match(/^\/add(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{6,40})$/i);
+      if(add){
+        try{
+          const access=await claimForTelegramUser(user,add[1]);
+          const count=(await accessesFor(user.id)).length;
+          await sendOwnerBotMessage(
+            msg.chat.id,
+            '✅ Добавлено ещё одно заведение: <b>'+String(access?.name||'Заведение')+'</b>\nID: <code>'+String(access?.establishment_id||'')+'</code>\n\nВсего заведений: <b>'+count+'</b>.',
+            {reply_markup:{inline_keyboard:[
+              [{text:'🍽 Управлять его меню',web_app:{url:ownerAppUrl(access?.establishment_id,'menu')}}],
+              [{text:'Все мои заведения',web_app:{url:ownerAppUrl('', 'venues')}}]
+            ]}}
+          );
+        }catch{
+          await sendOwnerBotMessage(msg.chat.id,'Не получилось добавить заведение. Код недействителен, истёк или уже использован.');
+        }
+        return;
+      }
+      if(/^\/add(?:@[A-Za-z0-9_]+)?$/i.test(text)){
+        await sendOwnerBotMessage(msg.chat.id,'Чтобы добавить ещё одно заведение, отправьте:\n<code>/add КОД</code>\n\nИли откройте кабинет и нажмите «＋ Заведение».',{reply_markup:{inline_keyboard:[[{text:'＋ Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
+        return;
+      }
+
       if(/^[A-Za-z0-9_-]{6,40}$/.test(text)){
         try{
           const access=await claimForTelegramUser(user,text);
-          await sendOwnerBotMessage(msg.chat.id,'✅ Подключено: <b>'+String(access?.name||'Заведение')+'</b>',{reply_markup:{inline_keyboard:[[{text:'Открыть кабинет',web_app:{url:OWNER_APP_URL}}]]}});
-        }catch{await sendOwnerBotMessage(msg.chat.id,'Не получилось применить этот код. Проверьте его или запросите новый.')}
+          const count=(await accessesFor(user.id)).length;
+          await sendOwnerBotMessage(msg.chat.id,'✅ Подключено: <b>'+String(access?.name||'Заведение')+'</b>\nВсего заведений: <b>'+count+'</b>.',{reply_markup:{inline_keyboard:[[{text:'🍽 Управлять меню',web_app:{url:ownerAppUrl(access?.establishment_id,'menu')}}],[{text:'Все заведения',web_app:{url:ownerAppUrl('', 'venues')}}]]}});
+        }catch{
+          await sendOwnerBotMessage(msg.chat.id,'Не получилось применить этот код. Проверьте его или запросите новый.');
+        }
       }
     }catch(e){console.error('Venue owner bot update:',e.message)}
   });
@@ -428,8 +510,14 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     if(!BOT_TOKEN){console.log('Venue owner bot token not configured');return}
     try{
       const info=await getBotInfo();
-      await botApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Моё заведение',web_app:{url:OWNER_APP_URL}}});
-      await botApi('setMyCommands',{commands:[{command:'start',description:'Открыть кабинет владельца'},{command:'id',description:'Показать Telegram ID'}]});
+      await botApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Мои заведения',web_app:{url:ownerAppUrl('', 'venues')}}});
+      await botApi('setMyCommands',{commands:[
+        {command:'start',description:'Открыть кабинет владельца'},
+        {command:'venues',description:'Мои заведения'},
+        {command:'menu',description:'Управление меню'},
+        {command:'add',description:'Добавить ещё заведение'},
+        {command:'id',description:'Показать Telegram ID'}
+      ]});
       if(WEBHOOK_SECRET)await botApi('setWebhook',{url:BASE_URL+'/api/venue-owner-bot/webhook/'+WEBHOOK_SECRET,allowed_updates:['message'],drop_pending_updates:false});
       console.log('Venue owner bot synced @'+String(info.username||''));
     }catch(e){console.error('Venue owner bot sync:',e.message)}

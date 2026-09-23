@@ -2,7 +2,7 @@
 'use strict';
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='68';
+const BUILD='69';
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,builtin3d=[],buildingLayers=[];
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
 

@@ -3,6 +3,7 @@ const path=require('path');
 const fs=require('fs');
 const {Pool}=require('pg');
 const crypto=require('crypto');
+const {analyzeRealCityProfile}=require('./realcity-analyzer');
 
 const app=express();
 app.use(express.json({limit:'10mb'}));
@@ -19,6 +20,34 @@ require('./realcity')(app);
 const PORT=process.env.PORT||3000;
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
+
+const realCityJobs=new Map();
+function queueRealCityProfile(markerId){
+ if(!DB)return null;
+ const key=String(markerId);if(realCityJobs.has(key))return realCityJobs.get(key);
+ const job=(async()=>{
+  try{
+   await DB.query("UPDATE shaurmeg_markers SET realcity_status='processing' WHERE id=$1",[markerId]);
+   const q=await DB.query("SELECT id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
+   const marker=q.rows[0];if(!marker)return;
+   const profile=await analyzeRealCityProfile(marker);
+   await DB.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[markerId,JSON.stringify(profile),profile.quality||'heuristic']);
+   console.log('RealCity profile ready:',markerId,profile.quality);
+  }catch(e){
+   console.error('RealCity profile:',markerId,e.message);
+   await DB.query("UPDATE shaurmeg_markers SET realcity_status='failed',realcity_updated_at=NOW() WHERE id=$1",[markerId]).catch(()=>{});
+  }
+ })().finally(()=>realCityJobs.delete(key));
+ realCityJobs.set(key,job);return job;
+}
+async function bootstrapRealCityProfiles(){
+ if(!DB)return;
+ try{
+  const q=await DB.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<2) ORDER BY updated_at DESC LIMIT 24");
+  q.rows.forEach(row=>queueRealCityProfile(row.id));
+ }catch(e){console.error('RealCity bootstrap:',e.message)}
+}
+
 const DEFAULT_VENUE_ID='lepyoshka';
 const venueClients=new Map();
 const DEFAULT_VENUE={venue_id:DEFAULT_VENUE_ID,slug:DEFAULT_VENUE_ID,name:'В Лепёшке',is_active:true,config:{},menu:[]};
@@ -430,19 +459,17 @@ function publishVenue(venue){
 
 function markerPayload(body={}){
  const gallery=Array.isArray(body.gallery)?body.gallery.map(x=>String(x||'').trim()).filter(Boolean).slice(0,6):[];
- const rawConfig=body.immersive_config&&typeof body.immersive_config==='object'&&!Array.isArray(body.immersive_config)?body.immersive_config:{};
- const immersive_config={bearing:Number(rawConfig.bearing)||0,pitch:Math.max(20,Math.min(85,Number(rawConfig.pitch)||68)),zoom:Math.max(15,Math.min(20,Number(rawConfig.zoom)||18.2)),entry_mode:['orbit','walk','fly'].includes(rawConfig.entry_mode)?rawConfig.entry_mode:'orbit'};
+ const realcity_reference_images=Array.isArray(body.realcity_reference_images)?body.realcity_reference_images.map(x=>String(x||'').trim()).filter(x=>x.startsWith('data:image/')).slice(0,4):[];
  return {
   venue_id:normalizeVenueId(body.venue_id),name:String(body.name||'').trim().slice(0,160),address:String(body.address||'').trim().slice(0,300),
-  description:String(body.description||'').trim().slice(0,1400),lat:Number(body.lat),lon:Number(body.lon),hero_image:String(body.hero_image||'').trim().slice(0,1800000),panorama_image:String(body.panorama_image||'').trim().slice(0,4200000),
-  immersive_scene_url:String(body.immersive_scene_url||'').trim().slice(0,2000),immersive_poster:String(body.immersive_poster||'').trim().slice(0,2400000),immersive_config,
-  gallery,hours:String(body.hours||'').trim().slice(0,160),price_label:String(body.price_label||'').trim().slice(0,80),is_active:body.is_active!==false
+  description:String(body.description||'').trim().slice(0,1400),lat:Number(body.lat),lon:Number(body.lon),hero_image:String(body.hero_image||'').trim().slice(0,1800000),
+  gallery,realcity_reference_images,hours:String(body.hours||'').trim().slice(0,160),price_label:String(body.price_label||'').trim().slice(0,80),is_active:body.is_active!==false
  };
 }
 function markerValid(x,{requireVenue=true}={}){return (!requireVenue||x.venue_id)&&x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon)&&x.lat>=-90&&x.lat<=90&&x.lon>=-180&&x.lon<=180}
 function publicMarker(row){
  const menu=Array.isArray(row.menu)?row.menu.slice(0,6).map(x=>({id:String(x.id||''),name:String(x.n||x.name||'Позиция'),description:String(x.d||x.description||''),price:x.p??x.price??null,category:String(x.c||x.category||'')})):[];
- return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,panorama_image:row.panorama_image||'',immersive_scene_url:row.immersive_scene_url||'',immersive_poster:row.immersive_poster||'',immersive_config:row.immersive_config&&typeof row.immersive_config==='object'?row.immersive_config:{},gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,menu};
+ return {id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hero_image:row.hero_image,gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours,price_label:row.price_label,realcity_status:row.realcity_status||'pending',realcity_quality:row.realcity_quality||'heuristic',realcity_updated_at:row.realcity_updated_at||null,menu};
 }
 
 app.get('/api/shaurmeg/markers',async(req,res)=>{
@@ -450,14 +477,14 @@ app.get('/api/shaurmeg/markers',async(req,res)=>{
  if(!DB)return res.json([]);
  try{
   const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id WHERE m.is_active=TRUE AND v.is_active=TRUE ORDER BY m.updated_at DESC`);
-  if(req.query.lite==='1')return res.json(q.rows.map(row=>({id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hours:row.hours,price_label:row.price_label})));
+  if(req.query.lite==='1')return res.json(q.rows.map(row=>({id:row.id,venue_id:row.venue_id,name:row.name,address:row.address,description:row.description,lat:row.lat,lon:row.lon,hours:row.hours,price_label:row.price_label,realcity_status:row.realcity_status||'pending',realcity_quality:row.realcity_quality||'heuristic'})));
   res.json(q.rows.map(publicMarker));
  }catch(e){console.error('marker list:',e.message);res.status(500).json({error:'marker_list_failed'})}
 });
 
 app.get('/api/shaurmeg/admin/markers',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.json([]);
- try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);res.json(q.rows.map(row=>({...publicMarker(row),is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at})))}
+ try{const q=await DB.query(`SELECT m.*,v.menu FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id ORDER BY m.updated_at DESC`);res.json(q.rows.map(row=>({...publicMarker(row),realcity_reference_images:Array.isArray(row.realcity_reference_images)?row.realcity_reference_images:[],realcity_profile:row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{},is_active:row.is_active,created_at:row.created_at,updated_at:row.updated_at})))}
  catch(e){res.status(500).json({error:'marker_list_failed'})}
 });
 
@@ -469,8 +496,8 @@ app.post('/api/shaurmeg/admin/markers',async(req,res)=>{
   await client.query('BEGIN');
   const venueId=x.venue_id||crypto.randomBytes(8).toString('hex');
   const venue=await client.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu) VALUES($1,$1,$2,$3,$4::jsonb,'[]'::jsonb) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,is_active=EXCLUDED.is_active,updated_at=NOW() RETURNING *`,[venueId,x.name,x.is_active,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false})]);
-  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,panorama_image,immersive_scene_url,immersive_poster,immersive_config,gallery,hours,price_label,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15) RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,x.immersive_scene_url,x.immersive_poster,JSON.stringify(x.immersive_config),JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active]);
-  await client.query('COMMIT');publishVenue(venue.rows[0]);res.status(201).json(q.rows[0]);
+  const q=await client.query(`INSERT INTO shaurmeg_markers(venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,hours,price_label,is_active,realcity_status,realcity_quality) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,'pending','heuristic') RETURNING *`,[venueId,x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active]);
+  await client.query('COMMIT');publishVenue(venue.rows[0]);queueRealCityProfile(q.rows[0].id);res.status(201).json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker create:',e.message);res.status(500).json({error:'marker_create_failed'})}finally{client.release()}
 });
 
@@ -482,11 +509,30 @@ app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
   await client.query('BEGIN');
   const current=await client.query('SELECT venue_id FROM shaurmeg_markers WHERE id=$1 FOR UPDATE',[req.params.id]);if(!current.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
   const venueId=current.rows[0].venue_id;
-  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,panorama_image=$7,immersive_scene_url=$8,immersive_poster=$9,immersive_config=$10::jsonb,gallery=$11::jsonb,hours=$12,price_label=$13,is_active=$14,updated_at=NOW() WHERE id=$15 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,x.panorama_image,x.immersive_scene_url,x.immersive_poster,JSON.stringify(x.immersive_config),JSON.stringify(x.gallery),x.hours,x.price_label,x.is_active,req.params.id]);
+  const q=await client.query(`UPDATE shaurmeg_markers SET name=$1,address=$2,description=$3,lat=$4,lon=$5,hero_image=$6,gallery=$7::jsonb,realcity_reference_images=$8::jsonb,hours=$9,price_label=$10,is_active=$11,realcity_status='pending',updated_at=NOW() WHERE id=$12 RETURNING *`,[x.name,x.address,x.description,x.lat,x.lon,x.hero_image,JSON.stringify(x.gallery),JSON.stringify(x.realcity_reference_images),x.hours,x.price_label,x.is_active,req.params.id]);
   const venue=await client.query('UPDATE shaurma_venues SET name=$1,is_active=$2,updated_at=NOW() WHERE venue_id=$3 RETURNING *',[x.name,x.is_active,venueId]);
-  await client.query('COMMIT');if(venue.rows[0])publishVenue(venue.rows[0]);res.json(q.rows[0]);
+  await client.query('COMMIT');if(venue.rows[0])publishVenue(venue.rows[0]);queueRealCityProfile(req.params.id);res.json(q.rows[0]);
  }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error('marker update:',e.message);res.status(500).json({error:'marker_update_failed'})}finally{client.release()}
 });
+
+app.get('/api/shaurmeg/realcity-profile/:id',async(req,res)=>{
+ if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ try{
+  const q=await DB.query("SELECT id,venue_id,realcity_profile,realcity_status,realcity_quality,realcity_updated_at FROM shaurmeg_markers WHERE id=$1 AND is_active=TRUE LIMIT 1",[req.params.id]);
+  const row=q.rows[0];if(!row)return res.sendStatus(404);
+  const profile=row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{};
+  if(row.realcity_status!=='ready'||Number(profile.version||0)<2)queueRealCityProfile(row.id);
+  res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=600');
+  res.json({marker_id:row.id,venue_id:row.venue_id,status:row.realcity_status||'pending',quality:row.realcity_quality||'heuristic',updated_at:row.realcity_updated_at||null,profile});
+ }catch(e){res.status(500).json({error:'realcity_profile_failed'})}
+});
+
+app.post('/api/shaurmeg/admin/markers/:id/rebuild-realcity',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const q=await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending' WHERE id=$1 RETURNING id",[req.params.id]);
+ if(!q.rows[0])return res.sendStatus(404);queueRealCityProfile(req.params.id);res.status(202).json({ok:true,status:'pending'});
+});
+
 
 app.delete('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
@@ -746,4 +792,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await syncTelegramMiniApp();await syncAdminTelegramMiniApp()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

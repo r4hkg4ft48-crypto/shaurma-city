@@ -19,6 +19,7 @@ app.use(express.static(__dirname));
 require('./realcity')(app);
 
 const PORT=process.env.PORT||3000;
+const VENUE_DISCOVERY_ENABLED=process.env.VENUE_DISCOVERY_ENABLED==='true';
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 
@@ -358,7 +359,7 @@ async function runMoscowDiscovery({reason='auto'}={}){
  return discoveryJob;
 }
 async function maybeAutoDiscoverMoscow(reason='startup'){
- if(!DB||discoveryJob)return;
+ if(!VENUE_DISCOVERY_ENABLED||!DB||discoveryJob)return;
  try{
   const q=await DB.query("SELECT finished_at FROM shaurmeg_discovery_runs WHERE provider='openstreetmap' AND region='moscow' AND status='ready' ORDER BY finished_at DESC LIMIT 1");
   const last=q.rows[0]?.finished_at?new Date(q.rows[0].finished_at).getTime():0;
@@ -799,6 +800,7 @@ app.get('/api/shaurmeg/catalog-stats',async(req,res)=>{
 
 app.post('/api/shaurmeg/admin/discovery/moscow',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);
+ if(!VENUE_DISCOVERY_ENABLED)return res.status(409).json({error:'discovery_disabled',message:'Каталог зафиксирован. Новые точки добавляются вручную.'});
  const promise=runMoscowDiscovery({reason:'manual'});res.status(202).json({ok:true,running:true});
  promise.catch(()=>{});
 });
@@ -1092,4 +1094,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp();maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

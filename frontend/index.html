@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">\n<meta name="shaurma-build" content="72">
+<meta charset="utf-8">\n<meta name="shaurma-build" content="73">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -1779,7 +1779,7 @@ body{
 </style>
 <script>
 (function(){
-  var build="72";
+  var build="73";
   try{
     var u=new URL(location.href);
     if(u.searchParams.get("b")!==build){u.searchParams.set("b",build);location.replace(u.toString());}
@@ -1787,11 +1787,11 @@ body{
 })();
 </script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="realcity.css?v=72">
+<link rel="stylesheet" href="realcity.css?v=73">
 </head>
 <body>
 <div class="app">
-<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 72</div></header>
+<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 73</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <section class="cats">
 <button class="cat active" data-hero-filter="shawarma"><b>Шаурма</b><small>Сочные хиты</small></button>
@@ -1925,7 +1925,7 @@ function venueFromLaunch(){
   return cleanVenueId(url.searchParams.get("venue")||url.searchParams.get("tgWebAppStartParam")||tg?.initDataUnsafe?.start_param)||DEFAULT_VENUE_ID;
 }
 const ACTIVE_VENUE_ID=venueFromLaunch();
-const SHOULD_OPEN_VENUE_MENU=Boolean(cleanVenueId(new URL(location.href).searchParams.get("venue")||new URL(location.href).searchParams.get("tgWebAppStartParam")||(window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.initDataUnsafe&&window.Telegram.WebApp.initDataUnsafe.start_param))||new URL(location.href).searchParams.get("open")==="menu");
+const SHOULD_OPEN_VENUE_MENU=new URL(location.href).searchParams.get("view")==="menu"||new URL(location.href).searchParams.get("open")==="menu";
 let activeVenue={venue_id:ACTIVE_VENUE_ID,slug:ACTIVE_VENUE_ID,name:"В Лепёшке",config:{},menu:[]};
 let venueLoaded=false,venueLoadFailed=false,venueMenuOpened=false,venueStream=null,availableVenues=[];
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
@@ -2046,7 +2046,7 @@ async function openVenueChooser(){$("#venueChooser").classList.add("open");docum
 function closeVenueChooser(){$("#venueChooser").classList.remove("open");document.body.style.overflow=""}
 function switchVenue(venueId){
   const id=cleanVenueId(venueId);if(!id||id===activeVenue.venue_id){closeVenueChooser();return}
-  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("open","menu");u.searchParams.set("v","65");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
+  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","73");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
 }
 function syncMiniAppViewport(){
   const tg=window.Telegram&&window.Telegram.WebApp;
@@ -2671,5 +2671,5 @@ scene=function(id){
 };
 
 </script>
-<script src="realcity.js?v=72"></script>
+<script src="realcity.js?v=73"></script>
 </body></html>

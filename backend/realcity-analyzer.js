@@ -348,25 +348,33 @@ function paletteFromTags(tags,index,basePalette){
 function roundRing(ring){
   return ring.map(p=>[Number(p[0].toFixed(6)),Number(p[1].toFixed(6))]);
 }
+async function overpassQuery(query,timeout=8000){
+  let last=null;
+  for(const endpoint of OVERPASS_ENDPOINTS){
+    const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeout);
+    try{
+      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-RealCity/4.1'},body:'data='+encodeURIComponent(query),signal:ac.signal});
+      if(!r.ok)throw new Error('overpass_'+r.status);
+      const j=await r.json();
+      if(!Array.isArray(j.elements))throw new Error('bad_overpass');
+      return j.elements;
+    }catch(e){last=e}finally{clearTimeout(timer)}
+  }
+  throw last||new Error('overpass_unavailable');
+}
 async function fetchOsmWorld(marker,radius=190){
-  const q='[out:json][timeout:14];('+
-    'way["building"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+  const buildingsQ='[out:json][timeout:12];way["building"](around:'+radius+','+marker.lat+','+marker.lon+');out geom tags;';
+  const environmentQ='[out:json][timeout:12];('+
     'node["natural"="tree"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["leisure"="park"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["landuse"="grass"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["highway"](around:'+radius+','+marker.lat+','+marker.lon+');'+
-  ');out geom tags center;';
-  let elements=[];
-  for(const endpoint of OVERPASS_ENDPOINTS){
-    const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),8000);
-    try{
-      const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8','User-Agent':'Shaurmeg-RealCity/4.0'},body:'data='+encodeURIComponent(q),signal:ac.signal});
-      if(!r.ok)throw new Error('overpass_'+r.status);
-      const j=await r.json();elements=Array.isArray(j.elements)?j.elements:[];
-      if(elements.length)break;
-    }catch{}finally{clearTimeout(timer)}
-  }
-  return elements;
+  ');out geom tags;';
+  const [b,e]=await Promise.allSettled([overpassQuery(buildingsQ,8500),overpassQuery(environmentQ,6500)]);
+  const buildings=b.status==='fulfilled'?b.value:[];
+  const environment=e.status==='fulfilled'?e.value:[];
+  if(!buildings.length&&b.status==='rejected')throw b.reason;
+  return [...buildings,...environment];
 }
 function osmWorld(elements,marker,basePalette){
   const center=[marker.lon,marker.lat],buildings=[],trees=[],greens=[],roads=[];

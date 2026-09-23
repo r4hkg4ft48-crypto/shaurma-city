@@ -95,7 +95,7 @@ function rcCentroid(r){let x=0,y=0,n=0;for(const p of r){if(Array.isArray(p)&&p.
 function rcPointInRing(p,r){let inside=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const a=r[i],b=r[j],hit=((a[1]>p[1])!==(b[1]>p[1]))&&(p[0]<(b[0]-a[0])*(p[1]-a[1])/((b[1]-a[1])||1e-12)+a[0]);if(hit)inside=!inside}return inside}
 function rcRingDistance(p,r,oLon,oLat){if(rcPointInRing(p,r))return 0;const P=rcLocal(p[0],p[1],oLon,oLat);let best=1e9;for(let i=0;i<r.length-1;i++){const A=rcLocal(r[i][0],r[i][1],oLon,oLat),B=rcLocal(r[i+1][0],r[i+1][1],oLon,oLat),vx=B[0]-A[0],vy=B[1]-A[1],wx=P[0]-A[0],wy=P[1]-A[1],d=vx*vx+vy*vy,t=d?rcClamp((wx*vx+wy*vy)/d,0,1):0,dx=P[0]-(A[0]+vx*t),dy=P[1]-(A[1]+vy*t);best=Math.min(best,Math.hypot(dx,dy))}return best}
 function rcEdgeRect(a,b,depth,oLon,oLat,start,end){const A=rcLocal(a[0],a[1],oLon,oLat),B=rcLocal(b[0],b[1],oLon,oLat),dx=B[0]-A[0],dy=B[1]-A[1],len=Math.hypot(dx,dy);if(len<.8)return null;const ux=dx/len,uy=dy/len,nx=-uy,ny=ux,p0=[A[0]+dx*start,A[1]+dy*start],p1=[A[0]+dx*end,A[1]+dy*end],d=depth/2,pts=[[p0[0]+nx*d,p0[1]+ny*d],[p1[0]+nx*d,p1[1]+ny*d],[p1[0]-nx*d,p1[1]-ny*d],[p0[0]-nx*d,p0[1]-ny*d],[p0[0]+nx*d,p0[1]+ny*d]];return pts.map(p=>rcFromLocal(p[0],p[1],oLon,oLat))}
-function rcPalette(venueId,p,id){if(String(venueId||'').toLowerCase()==='lepyoshka')return{wall:'#d5d5d1',accent:'#735845',windows:'#28343e',storefront:'#202429',roof:'#b9b9b4'};const q={...RC_PALETTES[rcHash(id)%RC_PALETTES.length]},tag=String(p.colour||p.color||p['building:colour']||'');if(/^#[0-9a-f]{6}$/i.test(tag))q.wall=tag;const mat=String(p.material||p['building:material']||'').toLowerCase();if(mat.includes('brick'))q.accent='#805c49';return q}
+function rcPalette(venueId,p,id){const q={...RC_PALETTES[rcHash(id)%RC_PALETTES.length]},tag=String(p.colour||p.color||p['building:colour']||'');if(/^#[0-9a-f]{6}$/i.test(tag))q.wall=tag;const mat=String(p.material||p['building:material']||'').toLowerCase();if(mat.includes('brick')){q.wall='#b58f78';q.accent='#775947';q.roof='#9c8879'}if(mat.includes('glass')){q.wall='#84939f';q.windows='#21303b';q.accent='#667887'}return q}
 function rcHeight(p,id){const direct=rcNum(p.render_height??p.height),levels=rcNum(p.levels??p['building:levels']);if(direct)return rcClamp(direct,3,120);if(levels)return rcClamp(levels*3.05,3,120);return 9+(rcHash(id)%8)*3.05}
 function rcRings(feature){
  const g=feature?.geometry;if(!g)return[];
@@ -120,6 +120,7 @@ function rcVisibleScene(m){
    });
  }
  if(!items.length)return null;items.sort((a,b)=>a.distance-b.distance);const chosen=items.slice(0,80),hero=chosen[0];
+ if(hero&&String(m.venue_id||'').toLowerCase()==='lepyoshka')hero.palette={wall:'#d5d5d1',accent:'#735845',windows:'#28343e',storefront:'#202429',roof:'#b9b9b4'};
  const buildings={type:'FeatureCollection',features:chosen.map((b,i)=>({type:'Feature',id:i+1,properties:{id:b.id,height:b.height,base:0,facade:b.palette.wall,roof:b.palette.roof,distance:Math.round(b.distance),hero:b===hero?1:0},geometry:{type:'Polygon',coordinates:[b.ring]}}))};
  const detailFeatures=[];
  for(const b of chosen.filter((x,i)=>i<7&&x.distance<115)){
@@ -134,7 +135,10 @@ function rcVisibleScene(m){
        for(let w=0;w<count;w++){const seg=1/count,s=w*seg+seg*.19,t=(w+1)*seg-seg*.19,rect=rcEdgeRect(b.ring[e],b.ring[e+1],heroish?.52:.4,oLon,oLat,s,t);if(rect)detailFeatures.push({type:'Feature',properties:{base,height,color:b.palette.windows,kind:'window'},geometry:{type:'Polygon',coordinates:[rect]}})}
      }
    }
-   if(heroish){for(let e=0;e<b.ring.length-1;e+=2){const rect=rcEdgeRect(b.ring[e],b.ring[e+1],.68,oLon,oLat,.055,.14);if(rect)detailFeatures.push({type:'Feature',properties:{base:.25,height:Math.max(3,b.height-.22),color:b.palette.accent,kind:'accent'},geometry:{type:'Polygon',coordinates:[rect]}})}}
+   if(heroish){
+     for(let e=0;e<b.ring.length-1;e+=2){const rect=rcEdgeRect(b.ring[e],b.ring[e+1],.68,oLon,oLat,.055,.14);if(rect)detailFeatures.push({type:'Feature',properties:{base:.25,height:Math.max(3,b.height-.22),color:b.palette.accent,kind:'accent'},geometry:{type:'Polygon',coordinates:[rect]}})}
+     for(let fl=2;fl<Math.min(b.floors,13);fl+=2){for(let e=0;e<b.ring.length-1;e++){const ledge=rcEdgeRect(b.ring[e],b.ring[e+1],.9,oLon,oLat,.17,.83);if(ledge){const z=fl*3.05+.35;detailFeatures.push({type:'Feature',properties:{base:z,height:z+.16,color:'#b8b5ae',kind:'balcony'},geometry:{type:'Polygon',coordinates:[ledge]}})}}}
+   }
  }
  return{buildings,details:{type:'FeatureCollection',features:detailFeatures},stats:{buildings:buildings.features.length,details:detailFeatures.length},source:'map-vector'};
 }

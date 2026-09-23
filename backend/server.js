@@ -574,6 +574,17 @@ async function resolveVenue(value,{includeInactive=false}={}){
  const q=await DB.query(`SELECT establishment_id,venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE (venue_id=$1 OR slug=$1)${where} LIMIT 1`,[id]);
  return q.rows[0]||null;
 }
+async function resolveVenueByEstablishment(value,{includeInactive=false}={}){
+ const establishmentId=String(value||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return null;
+ if(!DB){
+  const venue=SEEDED_VENUES.find(v=>establishmentIdForVenue(v.venue_id)===establishmentId);
+  return venue?{...venue,establishment_id:establishmentId,is_active:true}:null;
+ }
+ const where=includeInactive?'':' AND is_active=TRUE';
+ const q=await DB.query(`SELECT establishment_id,venue_id,slug,name,is_active,config,menu,created_at,updated_at FROM shaurma_venues WHERE establishment_id=$1${where} LIMIT 1`,[establishmentId]);
+ return q.rows[0]||null;
+}
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
 let clientBotInfo=null;
 async function clientTelegramApi(method,body={}){
@@ -900,6 +911,40 @@ app.delete('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
  }catch(e){await client.query('ROLLBACK').catch(()=>{});res.status(500).json({error:'marker_delete_failed'})}finally{client.release()}
 });
 
+app.get('/api/shaurma/menu-context',async(req,res)=>{
+ try{
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+  const markerId=String(req.query.marker_id||'').trim();
+  const establishmentId=String(req.query.establishment_id||'').trim().toUpperCase();
+  if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+  if(!/^\d+$/.test(markerId))return res.status(400).json({error:'bad_marker_id'});
+  if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return res.status(400).json({error:'bad_establishment_id'});
+  const q=await DB.query(`
+    SELECT m.id AS marker_id,m.establishment_id,m.venue_id,m.name AS marker_name,m.address,m.lat,m.lon,
+           v.slug,v.name,v.is_active,v.config,v.menu,v.updated_at
+    FROM shaurmeg_markers m
+    JOIN shaurma_venues v ON v.establishment_id=m.establishment_id AND v.venue_id=m.venue_id
+    WHERE m.id=$1 AND m.establishment_id=$2
+      AND m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
+    LIMIT 1
+  `,[markerId,establishmentId]);
+  const row=q.rows[0];if(!row)return res.status(404).json({error:'menu_context_not_found'});
+  res.json({
+    marker:{id:row.marker_id,establishment_id:row.establishment_id,venue_id:row.venue_id,name:row.marker_name,address:row.address,lat:row.lat,lon:row.lon},
+    venue:{establishment_id:row.establishment_id,venue_id:row.venue_id,slug:row.slug,name:row.name,is_active:row.is_active,config:row.config||{},menu:Array.isArray(row.menu)?row.menu:[],updated_at:row.updated_at}
+  });
+ }catch(e){console.error('menu context:',e.message);res.status(500).json({error:'menu_context_failed'})}
+});
+
+app.get('/api/shaurma/establishments/:establishmentId',async(req,res)=>{
+ try{
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+  const venue=await resolveVenueByEstablishment(req.params.establishmentId);
+  if(!venue)return res.status(404).json({error:'establishment_not_found'});
+  res.json(venue);
+ }catch(e){console.error('establishment read:',e.message);res.status(500).json({error:'establishment_read_failed'})}
+});
+
 app.get('/api/shaurma/venues/:venueId',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
@@ -1071,7 +1116,7 @@ app.get('/api/shaurma/my-stream',(req,res)=>{
 });
 
 app.post('/api/shaurma/orders',async(req,res)=>{
- const {items,total,customer_name,phone,address,comment,telegram_init_data,fulfillment_type,payment_status,payment_method,venue_id}=req.body||{};
+ const {items,total,customer_name,phone,address,comment,telegram_init_data,fulfillment_type,payment_status,payment_method,venue_id,establishment_id,marker_id}=req.body||{};
  const sess=telegramSession(req);
  let tgUser=sess?sess.user:null;
  if(!tgUser && telegram_init_data){
@@ -1083,10 +1128,18 @@ app.post('/api/shaurma/orders',async(req,res)=>{
  if(fulfillment==='delivery' && !address)return res.status(400).json({error:'address_required'});
  const requestedVenueId=normalizeVenueId(venue_id||DEFAULT_VENUE_ID);
  if(!requestedVenueId)return res.status(400).json({error:'bad_venue_id'});
+ const requestedEstablishment=String(establishment_id||'').trim().toUpperCase();
+ const requestedMarker=String(marker_id||'').trim();
  const num=orderNumber();
  try{
-  const venue=await resolveVenue(requestedVenueId);
+  let venue=requestedEstablishment?await resolveVenueByEstablishment(requestedEstablishment):await resolveVenue(requestedVenueId);
   if(!venue)return res.status(404).json({error:'venue_not_found'});
+  if(venue.venue_id!==requestedVenueId)return res.status(409).json({error:'venue_context_mismatch'});
+  if(requestedMarker){
+   if(!DB||!/^\d+$/.test(requestedMarker))return res.status(400).json({error:'bad_marker_id'});
+   const mq=await DB.query("SELECT id FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND venue_id=$3 AND is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE LIMIT 1",[requestedMarker,venue.establishment_id,venue.venue_id]);
+   if(!mq.rows[0])return res.status(409).json({error:'marker_context_mismatch'});
+  }
   const venueMenu=new Map((Array.isArray(venue.menu)?venue.menu:[]).map(item=>[String(item.id),item]));
   const normalizedItems=[];
   for(const item of items){

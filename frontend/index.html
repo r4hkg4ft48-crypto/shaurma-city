@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">\n<meta name="shaurma-build" content="85">
+<meta charset="utf-8">\n<meta name="shaurma-build" content="86">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -1780,7 +1780,7 @@ body{
 </style>
 <script>
 (function(){
-  var build="85";
+  var build="86";
   try{
     var u=new URL(location.href);
     if(u.searchParams.get("b")!==build){u.searchParams.set("b",build);location.replace(u.toString());}
@@ -1788,11 +1788,11 @@ body{
 })();
 </script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="realcity.css?v=85">
+<link rel="stylesheet" href="realcity.css?v=86">
 </head>
 <body>
 <div class="app">
-<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 85</div></header>
+<style>:root{--venue-accent:#2f6df6}.pill.active,.add,.link{border-color:var(--venue-accent)!important}.pill.active,.add{background:var(--venue-accent)!important}.brand i,.k{color:var(--venue-accent)!important}</style><header class="top"><button class="venueSwitch" id="venueSwitch"><b id="venueSwitchName">Выбрать точку</b><small>сменить заведение</small></button><div class="brand"><b id="venueBrand">SHAURMA <i>CITY</i></b><small id="venueBrandSub">FOOD SYSTEM</small></div><div class="build">BUILD 86</div></header>
 <section class="hero" id="home"><div><div class="k">Горячая. Сочная. Твоя.</div><h1><span>Шаурма,</span><br>которую хочется<br>прямо сейчас.</h1><p>Сочный гриль, свежие овощи и соус по твоему вкусу. Собери свою — мы сделаем горячей.</p><div class="actions"><button class="pri" id="heroBuilder">Собрать шаурму</button><button class="sec" data-go="#menu">Смотреть меню</button></div><div class="heroSignals"><span>Гриль</span><span>Свежие овощи</span><span>Соус по вкусу</span></div></div><div class="foodhero" id="heroMedia"><img id="heroImg" src="assets/shawarma-main.webp" alt="Шаурма и лепёшка"><div class="heroChip"><b id="heroLabel">Шаурма</b><small id="heroSub">Сочная классика · сырная</small></div></div></section>
 <div class="venueContextInfo" id="venueContextInfo" hidden><div><b id="venueContextAddress"></b><small id="venueContextMeta"></small></div><div class="venueContextId" id="venueContextId"></div></div>
 <section class="cats">
@@ -1922,17 +1922,19 @@ body{
 const API="https://shaurma-city-api.onrender.com";
 const DEFAULT_VENUE_ID="lepyoshka";
 function cleanVenueId(value){const id=String(value||"").trim().toLowerCase().replace(/^venue_/,"");return /^[a-z0-9_-]{1,64}$/.test(id)?id:""}
-function venueFromLaunch(){
-  const tg=window.Telegram&&window.Telegram.WebApp;
-  const url=new URL(location.href);
-  return cleanVenueId(url.searchParams.get("venue")||url.searchParams.get("tgWebAppStartParam")||tg?.initDataUnsafe?.start_param)||DEFAULT_VENUE_ID;
-}
 const LAUNCH_URL=new URL(location.href);
-const ACTIVE_VENUE_ID=venueFromLaunch();
-const ACTIVE_ESTABLISHMENT_ID=/^SC-MSK-[A-F0-9]{10}$/.test(String(LAUNCH_URL.searchParams.get("establishment")||"").trim().toUpperCase())?String(LAUNCH_URL.searchParams.get("establishment")).trim().toUpperCase():"";
-const ACTIVE_MARKER_ID=/^\d+$/.test(String(LAUNCH_URL.searchParams.get("marker")||"").trim())?String(LAUNCH_URL.searchParams.get("marker")).trim():"";
-const IS_MARKER_CONTEXT=LAUNCH_URL.searchParams.get("context")==="marker"&&!!ACTIVE_ESTABLISHMENT_ID&&!!ACTIVE_MARKER_ID;
-const SHOULD_OPEN_VENUE_MENU=LAUNCH_URL.searchParams.get("view")==="menu"||LAUNCH_URL.searchParams.get("open")==="menu";
+const LAUNCH_TG=window.Telegram&&window.Telegram.WebApp;
+const LAUNCH_START_VENUE=cleanVenueId(LAUNCH_URL.searchParams.get("tgWebAppStartParam")||LAUNCH_TG?.initDataUnsafe?.start_param);
+const LAUNCH_URL_VENUE=cleanVenueId(LAUNCH_URL.searchParams.get("venue"));
+const ACTIVE_VENUE_ID=LAUNCH_START_VENUE||LAUNCH_URL_VENUE||DEFAULT_VENUE_ID;
+const RAW_ESTABLISHMENT=/^SC-MSK-[A-F0-9]{10}$/.test(String(LAUNCH_URL.searchParams.get("establishment")||"").trim().toUpperCase())?String(LAUNCH_URL.searchParams.get("establishment")).trim().toUpperCase():"";
+const RAW_MARKER=/^\d+$/.test(String(LAUNCH_URL.searchParams.get("marker")||"").trim())?String(LAUNCH_URL.searchParams.get("marker")).trim():"";
+const CONTEXT_MATCHES_LAUNCH=!LAUNCH_START_VENUE||!LAUNCH_URL_VENUE||LAUNCH_START_VENUE===LAUNCH_URL_VENUE;
+const TELEGRAM_LEPESH_DEFAULT=!!LAUNCH_TG?.initData&&!LAUNCH_START_VENUE&&!LAUNCH_URL_VENUE;
+const ACTIVE_ESTABLISHMENT_ID=CONTEXT_MATCHES_LAUNCH?RAW_ESTABLISHMENT:(TELEGRAM_LEPESH_DEFAULT?"SC-MSK-B7441AB59F":"");
+const ACTIVE_MARKER_ID=CONTEXT_MATCHES_LAUNCH?RAW_MARKER:(TELEGRAM_LEPESH_DEFAULT?"1":"");
+const IS_MARKER_CONTEXT=(LAUNCH_URL.searchParams.get("context")==="marker"&&CONTEXT_MATCHES_LAUNCH&&!!ACTIVE_ESTABLISHMENT_ID&&!!ACTIVE_MARKER_ID)||TELEGRAM_LEPESH_DEFAULT;
+const SHOULD_OPEN_VENUE_MENU=IS_MARKER_CONTEXT||LAUNCH_URL.searchParams.get("view")==="menu"||LAUNCH_URL.searchParams.get("open")==="menu";
 let activeVenue={venue_id:ACTIVE_VENUE_ID,slug:ACTIVE_VENUE_ID,name:"В Лепёшке",config:{},menu:[]};
 let venueLoaded=false,venueLoadFailed=false,venueMenuOpened=false,venueStream=null,availableVenues=[],venueSyncTimer=null,lastVenueUpdatedAt="",venueHeroImage="";
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
@@ -2093,7 +2095,7 @@ async function loadVenue({quiet=false}={}){
 function connectVenueUpdates(){
   venueStream?.close();
   const streamVenue=cleanVenueId(activeVenue?.venue_id)||ACTIVE_VENUE_ID;
-  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=85&t="+Date.now());
+  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=86&t="+Date.now());
   venueStream.addEventListener("venue",event=>{try{applyVenue(JSON.parse(event.data))}catch{}});
   venueStream.onerror=()=>{if(!document.hidden)loadVenue({quiet:true})};
   clearInterval(venueSyncTimer);
@@ -2122,7 +2124,7 @@ function closeVenueChooser(){$("#venueChooser").classList.remove("open");documen
 function switchVenue(venueId){
   if(IS_MARKER_CONTEXT)return;
   const id=cleanVenueId(venueId);if(!id||id===activeVenue.venue_id){closeVenueChooser();return}
-  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","85");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
+  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","86");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
 }
 function syncMiniAppViewport(){
   const tg=window.Telegram&&window.Telegram.WebApp;
@@ -2434,7 +2436,8 @@ document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-buil
 
 $("#venueSwitch").onclick=openVenueChooser;$("#venueChooserClose").onclick=closeVenueChooser;$("#venueChooser").addEventListener("click",e=>{if(e.target===$("#venueChooser"))closeVenueChooser();const choice=e.target.closest("[data-venue-choice]");if(choice)switchVenue(choice.dataset.venueChoice)});$("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=submitOrder;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
 syncMiniAppViewport();preloadHeroImages();setFilter("shawarma");setHeroFilter("shawarma");cartRender();syncBuilder();syncFulfillmentUI();renderMyOrders();
-try{const u=new URL(location.href);if(u.searchParams.get("b")!=="85"){u.searchParams.set("b","85");history.replaceState(null,"",u.toString())}}catch{}
+try{const u=new URL(location.href);if(u.searchParams.get("b")!=="86"){u.searchParams.set("b","86");history.replaceState(null,"",u.toString())}}catch{}
+if(TELEGRAM_LEPESH_DEFAULT){try{const u=new URL(location.href);u.searchParams.set("venue","lepyoshka");u.searchParams.set("establishment","SC-MSK-B7441AB59F");u.searchParams.set("marker","1");u.searchParams.set("context","marker");u.searchParams.set("view","menu");history.replaceState(null,"",u.toString())}catch{}}
 if(IS_MARKER_CONTEXT){const sw=$("#venueSwitch");if(sw){sw.disabled=true;sw.classList.add("locked");const s=sw.querySelector("small");if(s)s.textContent="выбрано на карте"}}
 loadVenue().then(connectVenueUpdates);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadVenue({quiet:true})});
@@ -2757,5 +2760,5 @@ scene=function(id){
 };
 
 </script>
-<script src="space-intro.js?v=85"></script>\n<script src="realcity.js?v=85"></script>
+<script src="space-intro.js?v=86"></script>\n<script src="realcity.js?v=86"></script>
 </body></html>

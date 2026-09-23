@@ -103,7 +103,7 @@ async function focusVenue(m,replay=false){
 }
 async function init(){
   inject();
-  const url=new URL(location.href),shouldOpen=url.searchParams.get('view')!=='menu'&&!url.searchParams.get('venue');
+  const url=new URL(location.href),tgStart=window.Telegram?.WebApp?.initDataUnsafe?.start_param||url.searchParams.get('tgWebAppStartParam')||'',directVenue=url.searchParams.get('venue')||tgStart,shouldOpen=url.searchParams.get('view')!=='menu'&&!directVenue;
   if(shouldOpen)setTimeout(open,60);
   else ensureDeps().catch(()=>{});
 }

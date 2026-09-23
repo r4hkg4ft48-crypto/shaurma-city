@@ -602,20 +602,83 @@ async function getClientBotInfo(){
  clientBotInfo=j.result;
  return clientBotInfo;
 }
+const CLIENT_BOT_WEBHOOK_SECRET=String(process.env.CLIENT_TELEGRAM_WEBHOOK_SECRET||'').trim();
+const PUBLIC_API_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,'');
+const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,'');
+function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='client-bot'}={}){
+ const u=new URL(PUBLIC_APP_URL+'/');
+ u.searchParams.set('source',source);
+ u.searchParams.set('b','88');
+ if(venue_id)u.searchParams.set('venue',venue_id);
+ if(establishment_id)u.searchParams.set('establishment',establishment_id);
+ if(marker_id)u.searchParams.set('marker',String(marker_id));
+ if(establishment_id&&marker_id)u.searchParams.set('context','marker');
+ u.searchParams.set('view','menu');
+ return u.toString();
+}
+async function botVenueContext(venueId){
+ const venue=await resolveVenue(venueId);
+ if(!venue)return null;
+ let marker=null;
+ if(DB){
+  const q=await DB.query(`
+    SELECT id,establishment_id,venue_id,name,address
+    FROM shaurmeg_markers
+    WHERE venue_id=$1 AND establishment_id=$2 AND is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE
+    ORDER BY CASE WHEN COALESCE(auto_imported,FALSE)=FALSE THEN 0 ELSE 1 END,id
+    LIMIT 1
+  `,[venue.venue_id,venue.establishment_id]);
+  marker=q.rows[0]||null;
+ }
+ return {venue,marker,url:clientMiniAppUrl({
+  venue_id:venue.venue_id,
+  establishment_id:marker?.establishment_id||venue.establishment_id,
+  marker_id:marker?.id||null,
+  source:'telegram-bot'
+ })};
+}
+function parseClientStart(text){
+ const raw=String(text||'').trim();
+ const m=raw.match(/^\/(?:start|menu)(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
+ if(!m)return null;
+ const param=String(m[1]||'').trim();
+ if(/^venue_[a-z0-9_-]{1,80}$/i.test(param))return {venue_id:normalizeVenueId(param.slice(6))};
+ if(/^[a-z0-9_-]{1,80}$/i.test(param))return {venue_id:normalizeVenueId(param)};
+ return {venue_id:DEFAULT_VENUE_ID};
+}
+async function sendClientBotMenu(chatId,venueId){
+ const ctx=await botVenueContext(venueId||DEFAULT_VENUE_ID);
+ if(!ctx)return clientTelegramApi('sendMessage',{chat_id:chatId,text:'Заведение не найдено или временно недоступно.'});
+ const title=String(ctx.marker?.name||ctx.venue.name||'Заведение');
+ const where=ctx.marker?.address?('\n'+ctx.marker.address):'';
+ return clientTelegramApi('sendMessage',{
+  chat_id:chatId,
+  text:'🥙 '+title+where+'\n\nМеню, цены и наличие загружаются из единой базы Shaurmeg.',
+  reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:ctx.url}}]]}
+ });
+}
 async function syncTelegramMiniApp(){
- const token=process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN;
+ const token=clientBotToken();
  if(!token){console.log('Telegram client bot token not configured');return}
  try{
-  await getClientBotInfo();
-  const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
-   method:'POST',
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Открыть Шаурмег',web_app:{url:String(process.env.CLIENT_MINI_APP_URL||'https://shaurma-city-app.onrender.com/?source=lepeshka-bot&b=87&venue=lepyoshka&establishment=SC-MSK-B7441AB59F&marker=1&context=marker&view=menu').trim()}}})
-  });
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
-  await clientTelegramApi('deleteWebhook',{drop_pending_updates:false});
-  console.log('Telegram Mini App menu synced to Shaurma City');
+  const info=await getClientBotInfo();
+  const defaultCtx=await botVenueContext(DEFAULT_VENUE_ID);
+  const menuUrl=defaultCtx?.url||String(process.env.CLIENT_MINI_APP_URL||clientMiniAppUrl({venue_id:DEFAULT_VENUE_ID})).trim();
+  await clientTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Меню',web_app:{url:menuUrl}}});
+  await clientTelegramApi('setMyCommands',{commands:[
+   {command:'start',description:'Открыть меню'},
+   {command:'menu',description:'Меню заведения'}
+  ]});
+  if(CLIENT_BOT_WEBHOOK_SECRET){
+   await clientTelegramApi('setWebhook',{
+    url:PUBLIC_API_URL+'/api/client-bot/webhook/'+CLIENT_BOT_WEBHOOK_SECRET,
+    allowed_updates:['message'],
+    drop_pending_updates:false
+   });
+  }else{
+   console.warn('CLIENT_TELEGRAM_WEBHOOK_SECRET is not configured; client bot commands are disabled');
+  }
+  console.log('Telegram client bot fully synced @'+String(info.username||''));
  }catch(e){console.error('Telegram Mini App sync:',e.message)}
 }
 
@@ -667,8 +730,8 @@ app.get('/api/shaurma/client-config',async(req,res)=>{
   const botUsername=botInfo?.username||'';
   if(!botUsername)return res.status(503).json({error:'telegram_not_configured'});
   const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
-  const base=shortName?`https://t.me/${botUsername}/${shortName}?startapp=venue_{venue_id}`:`https://t.me/${botUsername}?startapp=venue_{venue_id}`;
-  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base});
+  const base=`https://t.me/${botUsername}?start=venue_{venue_id}`;
+  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base,launch_mode:'bot_message_web_app'});
  }catch(e){console.error('client config:',e.message);res.status(502).json({error:'telegram_lookup_failed'})}
 });
 
@@ -1214,6 +1277,40 @@ app.get('/api/shaurma/stats',async(req,res)=>{
    revenue:rows.filter(x=>x.status!=='cancelled').reduce((a,x)=>a+(Number(x.total)||0),0)
   });
  }catch(e){res.status(500).json({error:e.message})}
+});
+
+app.post('/api/client-bot/webhook/:secret',async(req,res)=>{
+ if(!CLIENT_BOT_WEBHOOK_SECRET||req.params.secret!==CLIENT_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
+ res.sendStatus(200);
+ try{
+  const msg=req.body?.message;if(!msg?.chat?.id)return;
+  const start=parseClientStart(msg.text);
+  if(start){await sendClientBotMenu(msg.chat.id,start.venue_id||DEFAULT_VENUE_ID);return}
+  if(String(msg.text||'').trim().toLowerCase()==='меню'){await sendClientBotMenu(msg.chat.id,DEFAULT_VENUE_ID)}
+ }catch(e){console.error('client bot webhook:',e.message)}
+});
+
+app.get('/api/shaurma/client-bot-status',async(req,res)=>{
+ try{
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+  const [info,menu,webhook]=await Promise.all([
+   getClientBotInfo(),
+   clientTelegramApi('getChatMenuButton',{}),
+   clientTelegramApi('getWebhookInfo',{})
+  ]);
+  const expected=await botVenueContext(DEFAULT_VENUE_ID);
+  res.json({
+   username:info?.username||'',
+   has_main_mini_app:Boolean(info?.has_main_web_app),
+   chat_menu_type:menu?.type||null,
+   chat_menu_url:menu?.web_app?.url||null,
+   expected_menu_url:expected?.url||null,
+   webhook_owned:Boolean(webhook?.url&&webhook.url.startsWith(PUBLIC_API_URL+'/api/client-bot/webhook/')),
+   webhook_pending:Number(webhook?.pending_update_count||0),
+   webhook_last_error:webhook?.last_error_message||null,
+   launch_mode:'bot_message_web_app'
+  });
+ }catch(e){res.status(502).json({error:'client_bot_status_failed',message:e.message})}
 });
 
 const venueOwnerSystem=installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner});

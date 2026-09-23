@@ -12,6 +12,37 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   let botInfo=null;
 
   const DEFAULT_PERMISSIONS=['menu','profile','media','appearance','orders'];
+  const LEGACY_SECTIONS=[
+    {id:'shawarma',name:'Шаурма',emoji:'🥙',active:true},
+    {id:'flatbread',name:'Лепёшка / тарелка',emoji:'🫓',active:true},
+    {id:'sauces',name:'Соусы',emoji:'🥫',active:true},
+    {id:'extras',name:'Допы',emoji:'🍟',active:true},
+    {id:'drinks',name:'Напитки',emoji:'🥤',active:true},
+    {id:'bakery',name:'Выпечка',emoji:'🥐',active:true}
+  ];
+  function slugSection(v){
+    let s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');
+    if(!s)s='section_'+crypto.randomBytes(3).toString('hex');
+    return s.slice(0,48);
+  }
+  function normalizeMenuSections(input,menu=[]){
+    const raw=Array.isArray(input)?input:[];
+    const seen=new Set(),out=[];
+    for(let i=0;i<raw.length&&out.length<40;i++){
+      const x=raw[i]&&typeof raw[i]==='object'?raw[i]:{},id=slugSection(x.id||x.name||('section_'+i));
+      if(seen.has(id))continue;seen.add(id);
+      const name=String(x.name||x.title||id).trim().slice(0,80);if(!name)continue;
+      out.push({id,name,emoji:String(x.emoji||'').trim().slice(0,8),active:x.active!==false,order:out.length});
+    }
+    const used=[...new Set((Array.isArray(menu)?menu:[]).map(x=>String(x?.c||x?.category||'').trim()).filter(Boolean))];
+    for(const idRaw of used){
+      const id=slugSection(idRaw);if(seen.has(id))continue;seen.add(id);
+      const legacy=LEGACY_SECTIONS.find(x=>x.id===id);
+      out.push({id,name:legacy?.name||idRaw,emoji:legacy?.emoji||'',active:true,order:out.length});
+    }
+    if(!out.length)return LEGACY_SECTIONS.map((x,i)=>({...x,order:i}));
+    return out.map((x,i)=>({...x,order:i}));
+  }
   const normalizeCode=v=>String(v||'').trim().toUpperCase().replace(/\s+/g,'');
   const codeHash=v=>crypto.createHash('sha256').update('venue-owner-claim:'+normalizeCode(v)).digest('hex');
   const publicAccess=row=>({
@@ -238,18 +269,21 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const normalized=menu.map((x,i)=>({
       id:String(x.id||('item_'+i)).trim().slice(0,100),
       n:String(x.n||x.name||'Позиция').trim().slice(0,160),
-      c:String(x.c||x.category||'shawarma').trim().slice(0,60),
+      c:slugSection(x.c||x.category||'shawarma'),
       d:String(x.d||x.description||'').trim().slice(0,700),
       p:Math.max(0,Math.min(100000,Number(x.p??x.price)||0)),
-      image:String(x.image||'').trim().slice(0,700000),
+      image:String(x.image||x.i||'').trim().slice(0,700000),
       active:x.active!==false
     })).filter(x=>x.id&&x.n);
     if(JSON.stringify(normalized).length>700000)return res.status(413).json({error:'menu_too_large'});
+    const sections=normalizeMenuSections(req.body?.sections,normalized);
     try{
-      const q=await DB.query("UPDATE shaurma_venues SET menu=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[req.params.establishmentId,JSON.stringify(normalized)]);
-      if(!q.rows[0])return res.sendStatus(404);
-      publishVenue(q.rows[0]);await audit(req.params.establishmentId,auth.session.sub,'menu_updated',{items:normalized.length});
-      res.json({ok:true,menu:normalized});
+      const current=await DB.query("SELECT config FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[req.params.establishmentId]);
+      if(!current.rows[0])return res.sendStatus(404);
+      const config={...(current.rows[0].config||{}),menu_sections:sections};
+      const q=await DB.query("UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[req.params.establishmentId,JSON.stringify(normalized),JSON.stringify(config)]);
+      publishVenue(q.rows[0]);await audit(req.params.establishmentId,auth.session.sub,'menu_updated',{items:normalized.length,sections:sections.length});
+      res.json({ok:true,menu:normalized,sections});
     }catch(e){res.status(500).json({error:'menu_update_failed'})}
   });
 

@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='74';
+const BUILD='75';
 const GOLD='#d7b46a';
 const EMPTY={type:'FeatureCollection',features:[]};
 
@@ -218,14 +218,14 @@ function locate(){
 
 async function fetchProfile(m){
  const key=String(m.id);
- if(profileCache.has(key)&&Number(profileCache.get(key)?.version)>=4)return profileCache.get(key);
+ if(profileCache.has(key)&&Number(profileCache.get(key)?.version)>=5)return profileCache.get(key);
  let last=null;
  for(let attempt=0;attempt<4;attempt++){
    try{
-     const r=await fetch(API+'/api/shaurmeg/realcity-profile/'+encodeURIComponent(m.id)+'?v=4&t='+Date.now(),{cache:'no-store'});
+     const r=await fetch(API+'/api/shaurmeg/realcity-profile/'+encodeURIComponent(m.id)+'?v=5&t='+Date.now(),{cache:'no-store'});
      if(r.ok){
        const j=await r.json();last=safeProfile(j.profile);last.quality=j.quality||last.quality;last.status=j.status||'ready';
-       if(Number(last.version)>=4&&Array.isArray(last.scene?.buildings)&&last.scene.buildings.length){profileCache.set(key,last);return last}
+       if(Number(last.version)>=5&&Array.isArray(last.scene?.buildings)&&last.scene.buildings.length){profileCache.set(key,last);return last}
      }
    }catch{}
    if(attempt<3)await new Promise(r=>setTimeout(r,700+attempt*400));

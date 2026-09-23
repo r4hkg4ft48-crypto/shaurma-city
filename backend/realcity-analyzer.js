@@ -501,6 +501,20 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
   };
 }
 
+async function makeFacadeTexture(buf){
+  try{
+    const out=await sharp(buf,{failOn:'none'})
+      .rotate()
+      .resize(128,256,{fit:'cover',position:'centre'})
+      .modulate({brightness:1.03,saturation:.88})
+      .sharpen({sigma:.65,m1:.8,m2:.35})
+      .png({compressionLevel:9,palette:true,quality:82})
+      .toBuffer();
+    if(out.byteLength>180000)return null;
+    return 'data:image/png;base64,'+out.toString('base64');
+  }catch{return null}
+}
+
 async function analyzeUserReferences(marker){
   const raw=Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[];
   const refs=raw.map(normalizeRef).filter(Boolean).slice(0,8),analyses=[];
@@ -509,7 +523,8 @@ async function analyzeUserReferences(marker){
     try{
       const features=await extractImageFeatures(buf);
       const heroRole=ref.role==='hero_facade';
-      analyses.push({role:ref.role,features,palette:features.palette,weight:heroRole?3.6:2.25});
+      const texture=heroRole?await makeFacadeTexture(buf):null;
+      analyses.push({role:ref.role,features,palette:features.palette,weight:heroRole?3.6:2.25,texture});
     }catch{}
   }
   return analyses;
@@ -586,6 +601,7 @@ async function analyzeRealCityProfile(marker){
     },
     neighborhood_palette:uniqColors([...(environmentPalette.swatches||[]),environmentPalette.wall,environmentPalette.accent,environmentPalette.roof],8),
     facade,
+    texture:{hero_data_url:heroRefs.find(x=>x.texture)?.texture||null,source:heroRefs.some(x=>x.texture)?'hero_reference':'procedural'},
     environment:{
       tree_density:Number(treeDensity.toFixed(2)),
       vegetation_ratio:Number(photoVegetation.toFixed(3)),

@@ -654,10 +654,17 @@ async function sendClientBotMenu(chatId,venueId){
  if(!ctx)return clientTelegramApi('sendMessage',{chat_id:chatId,text:'Заведение не найдено или временно недоступно.'});
  const title=String(ctx.marker?.name||ctx.venue.name||'Заведение');
  const where=ctx.marker?.address?('\n'+ctx.marker.address):'';
+ const sections=(Array.isArray(ctx.venue.config?.menu_sections)?ctx.venue.config.menu_sections:[]).filter(x=>x?.active!==false).map(x=>String(x.emoji||'')+' '+String(x.name||'')).map(x=>x.trim()).filter(Boolean);
+ const items=Array.isArray(ctx.venue.menu)?ctx.venue.menu.length:0;
+ const updated=ctx.venue.updated_at?new Date(ctx.venue.updated_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'}):'—';
  return clientTelegramApi('sendMessage',{
   chat_id:chatId,
-  text:'🥙 '+title+where+'\n\nМеню, цены и наличие загружаются из единой базы Shaurmeg.',
-  reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:ctx.url}}]]}
+  text:'🥙 '+title+where+'\n\n'+
+       'Сейчас в базе: '+items+' позиций'+(sections.length?' · '+sections.length+' разделов':'')+'\n'+
+       (sections.length?'Разделы: '+sections.join(' · ')+'\n':'')+
+       'Обновлено: '+updated+' МСК\n\n'+
+       'Кнопка ниже открывает свежую версию меню напрямую из текущей базы.',
+  reply_markup:{inline_keyboard:[[{text:'Открыть актуальное меню',web_app:{url:ctx.url}}]]}
  });
 }
 async function refreshClientBotMenuButton(venueId=DEFAULT_VENUE_ID){

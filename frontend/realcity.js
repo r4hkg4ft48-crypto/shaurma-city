@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='72';
+const BUILD='73';
 const GOLD='#d7b46a';
 const DEFAULT_PROFILE={
   version:2,quality:'heuristic',confidence:.36,

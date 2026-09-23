@@ -222,6 +222,7 @@ async function initDb(){
   );
   CREATE INDEX IF NOT EXISTS idx_shaurmeg_discovery_runs_latest ON shaurmeg_discovery_runs(provider,region,started_at DESC);
  `);
+ await DB.query("UPDATE shaurmeg_discovery_runs SET status='interrupted',details=COALESCE(details,'{}'::jsonb)||jsonb_build_object('interrupted_at',NOW()),finished_at=NOW() WHERE status='running'");
  await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending' WHERE realcity_profile='{}'::jsonb");
  await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
@@ -319,7 +320,7 @@ async function runMoscowDiscovery({reason='auto'}={}){
     }
     await client.query('COMMIT');
    }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
-   await DB.query("UPDATE shaurmeg_discovery_runs SET status='ready',raw_count=$2,discovered_count=$3,inserted_count=$4,updated_count=$5,details=$6::jsonb,finished_at=NOW() WHERE id=$1",[runId,found.raw_count,found.count,inserted,updated,JSON.stringify({scope:found.scope,categories:found.counts,queried_at:found.queried_at})]);
+   await DB.query("UPDATE shaurmeg_discovery_runs SET status='ready',raw_count=$2,discovered_count=$3,inserted_count=$4,updated_count=$5,details=$6::jsonb,finished_at=NOW() WHERE id=$1",[runId,found.raw_count,found.count,inserted,updated,JSON.stringify({scope:found.scope,categories:found.counts,queried_at:found.queried_at,coverage:found.coverage??1,failed_cells:found.failed_cells||[]})]);
    console.log('Moscow discovery ready:',found.count,'inserted',inserted,'updated',updated);
    return {count:found.count,inserted,updated,categories:found.counts};
   }catch(e){

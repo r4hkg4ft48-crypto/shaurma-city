@@ -4,7 +4,7 @@ const sharp=require('sharp');
 const {VectorTile}=require('@mapbox/vector-tile');
 const Pbf=require('pbf');
 
-const PROFILE_VERSION=5;
+const PROFILE_VERSION=6;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'

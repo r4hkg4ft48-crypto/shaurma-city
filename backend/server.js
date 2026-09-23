@@ -605,14 +605,15 @@ async function getClientBotInfo(){
 const CLIENT_BOT_WEBHOOK_SECRET=String(process.env.CLIENT_TELEGRAM_WEBHOOK_SECRET||'').trim();
 const PUBLIC_API_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,'');
 const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,'');
-function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='client-bot'}={}){
+function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='client-bot',revision}={}){
  const u=new URL(PUBLIC_APP_URL+'/');
  u.searchParams.set('source',source);
- u.searchParams.set('b','88');
+ u.searchParams.set('b','89');
  if(venue_id)u.searchParams.set('venue',venue_id);
  if(establishment_id)u.searchParams.set('establishment',establishment_id);
  if(marker_id)u.searchParams.set('marker',String(marker_id));
  if(establishment_id&&marker_id)u.searchParams.set('context','marker');
+ if(revision)u.searchParams.set('rev',String(revision));
  u.searchParams.set('view','menu');
  return u.toString();
 }
@@ -630,11 +631,13 @@ async function botVenueContext(venueId){
   `,[venue.venue_id,venue.establishment_id]);
   marker=q.rows[0]||null;
  }
+ const revision=venue.updated_at?new Date(venue.updated_at).getTime():Date.now();
  return {venue,marker,url:clientMiniAppUrl({
   venue_id:venue.venue_id,
   establishment_id:marker?.establishment_id||venue.establishment_id,
   marker_id:marker?.id||null,
-  source:'telegram-bot'
+  source:'telegram-bot',
+  revision
  })};
 }
 function parseClientStart(text){
@@ -657,17 +660,38 @@ async function sendClientBotMenu(chatId,venueId){
   reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:ctx.url}}]]}
  });
 }
+async function refreshClientBotMenuButton(venueId=DEFAULT_VENUE_ID){
+ const ctx=await botVenueContext(venueId);
+ if(!ctx)return;
+ await clientTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Меню',web_app:{url:ctx.url}}});
+ return ctx;
+}
+async function sendClientBotVersion(chatId){
+ const ctx=await botVenueContext(DEFAULT_VENUE_ID);
+ if(!ctx)return clientTelegramApi('sendMessage',{chat_id:chatId,text:'Диагностика недоступна.'});
+ const sections=Array.isArray(ctx.venue.config?.menu_sections)?ctx.venue.config.menu_sections.length:0;
+ const items=Array.isArray(ctx.venue.menu)?ctx.venue.menu.length:0;
+ return clientTelegramApi('sendMessage',{
+  chat_id:chatId,
+  text:'SHAURMEG CLIENT BUILD 89\n'+
+       'Заведение: '+ctx.venue.name+'\n'+
+       'ID: '+ctx.venue.establishment_id+'\n'+
+       'Меню: '+items+' позиций · '+sections+' разделов\n'+
+       'Обновлено: '+String(ctx.venue.updated_at||'—')
+ });
+}
+
 async function syncTelegramMiniApp(){
  const token=clientBotToken();
  if(!token){console.log('Telegram client bot token not configured');return}
  try{
   const info=await getClientBotInfo();
-  const defaultCtx=await botVenueContext(DEFAULT_VENUE_ID);
+  const defaultCtx=await refreshClientBotMenuButton(DEFAULT_VENUE_ID);
   const menuUrl=defaultCtx?.url||String(process.env.CLIENT_MINI_APP_URL||clientMiniAppUrl({venue_id:DEFAULT_VENUE_ID})).trim();
-  await clientTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Меню',web_app:{url:menuUrl}}});
   await clientTelegramApi('setMyCommands',{commands:[
    {command:'start',description:'Открыть меню'},
-   {command:'menu',description:'Меню заведения'}
+   {command:'menu',description:'Меню заведения'},
+   {command:'version',description:'Проверить версию и синхронизацию'}
   ]});
   if(CLIENT_BOT_WEBHOOK_SECRET){
    await clientTelegramApi('setWebhook',{
@@ -736,10 +760,13 @@ app.get('/api/shaurma/client-config',async(req,res)=>{
 });
 
 function publishVenue(venue){
- const clients=venueClients.get(venue.venue_id);if(!clients)return;
- const payload='event: venue\ndata: '+JSON.stringify(venue)+'\n\n';
- for(const client of clients){try{client.write(payload)}catch{clients.delete(client)}}
- if(!clients.size)venueClients.delete(venue.venue_id);
+ const clients=venueClients.get(venue.venue_id);
+ if(clients){
+  const payload='event: venue\ndata: '+JSON.stringify(venue)+'\n\n';
+  for(const client of clients){try{client.write(payload)}catch{clients.delete(client)}}
+  if(!clients.size)venueClients.delete(venue.venue_id);
+ }
+ if(venue?.venue_id===DEFAULT_VENUE_ID)refreshClientBotMenuButton(DEFAULT_VENUE_ID).catch(e=>console.error('client bot menu refresh:',e.message));
 }
 
 function normalizeRealCityReferences(value){
@@ -1284,9 +1311,11 @@ app.post('/api/client-bot/webhook/:secret',async(req,res)=>{
  res.sendStatus(200);
  try{
   const msg=req.body?.message;if(!msg?.chat?.id)return;
-  const start=parseClientStart(msg.text);
+  const rawText=String(msg.text||'').trim();
+  if(/^\/version(?:@[A-Za-z0-9_]+)?$/i.test(rawText)){await sendClientBotVersion(msg.chat.id);return}
+  const start=parseClientStart(rawText);
   if(start){await sendClientBotMenu(msg.chat.id,start.venue_id||DEFAULT_VENUE_ID);return}
-  if(String(msg.text||'').trim().toLowerCase()==='меню'){await sendClientBotMenu(msg.chat.id,DEFAULT_VENUE_ID)}
+  if(rawText.toLowerCase()==='меню'){await sendClientBotMenu(msg.chat.id,DEFAULT_VENUE_ID)}
  }catch(e){console.error('client bot webhook:',e.message)}
 });
 

@@ -68,7 +68,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API=location.origin,$=s=>document.querySelector(s),$=s=>[...document.querySelectorAll(s)];
+const API=location.origin,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_LAUNCH.searchParams.get('establishment')||''),REQUESTED_TAB=String(OWNER_LAUNCH.searchParams.get('tab')||'');
 let session=sessionStorage.getItem('venue_owner_session')||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],hero='',gallery=[],avatar='',markerStyle={},orderStream=null,launchApplied=false;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
@@ -79,8 +79,8 @@ async function compress(file,maxW=1500,maxH=1100,q=.82){return new Promise((reso
 function setClaim(show,text=''){if(text)$('#err').textContent=text;$('#claim').style.display=show?'grid':'none';$('#app').hidden=show}
 function activateTab(name){
  const btn=$('[data-tab="'+name+'"]');if(!btn)return;
- $('[data-tab]').forEach(x=>x.classList.toggle('active',x===btn));
- $('.pane').forEach(x=>x.classList.remove('active'));
+ $$('[data-tab]').forEach(x=>x.classList.toggle('active',x===btn));
+ $$('.pane').forEach(x=>x.classList.remove('active'));
  $('#'+name+'Pane')?.classList.add('active');
  if(name==='orders')loadOrders();
 }
@@ -156,7 +156,7 @@ $('#addVenueCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('#confirm
 $('#addVenueModal').addEventListener('click',e=>{if(e.target===$('#addVenueModal'))closeAddVenue()});
 $('#venueAccessList').addEventListener('click',e=>{const b=e.target.closest('[data-open-access]');if(!b)return;currentId=b.dataset.openAccess;closeAddVenue();openVenue(currentId)});
 window.addEventListener('beforeunload',()=>orderStream?.close());
-$('[data-tab]').forEach(b=>b.onclick=()=>activateTab(b.dataset.tab));
+$$('[data-tab]').forEach(b=>b.onclick=()=>activateTab(b.dataset.tab));
 $('#heroFile').onchange=async e=>{const f=e.target.files[0];if(f){hero=await compress(f);renderMedia()}e.target.value=''};
 $('#galleryFile').onchange=async e=>{for(const f of [...e.target.files].slice(0,6-gallery.length))gallery.push(await compress(f,1200,900,.78));renderMedia();e.target.value=''};
 $('#avatarFile').onchange=async e=>{const f=e.target.files[0];if(f){avatar=await compress(f,420,420,.84);renderMedia();renderStylePreview()}e.target.value=''};

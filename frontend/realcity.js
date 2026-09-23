@@ -3,8 +3,9 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='77';
-const GOLD='#d7b46a';
+const BUILD='78';
+const GOLD='#17324f';
+const MIDNIGHT={bg:'#06101d',land:'#081624',land2:'#0b1c2e',green:'#10263a',water:'#04101c',building:'#17324f',buildingTop:'#1f4064',road:'#edf4fb',roadSoft:'#6f879f',border:'#2d4863',label:'#f7fbff',labelMuted:'#a9bdd2',halo:'#06101d'};
 const EMPTY={type:'FeatureCollection',features:[]};
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
@@ -96,6 +97,7 @@ async function ensureMap(){
  await new Promise(resolve=>map.once('load',resolve));
 
  const layers=map.getStyle().layers||[];
+ applyMidnightBaseMap(layers);
  builtin3d=layers.filter(l=>l.type==='fill-extrusion'&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
  buildingLayers=layers.filter(l=>['fill','fill-extrusion'].includes(l.type)&&(l['source-layer']==='building'||/building/i.test(l.id))).map(l=>l.id);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD);map.setPaintProperty(id,'fill-extrusion-opacity',.84)}catch{}}
@@ -112,6 +114,51 @@ async function ensureMap(){
 }
 
 function addLayerSafe(layer,before){try{map.addLayer(layer,before)}catch{try{map.addLayer(layer)}catch{}}}
+function applyMidnightBaseMap(layers){
+ for(const l of layers){
+   const id=String(l.id||'').toLowerCase(),sl=String(l['source-layer']||'').toLowerCase(),key=id+' '+sl;
+   try{
+     if(l.type==='background'){
+       map.setPaintProperty(l.id,'background-color',MIDNIGHT.bg);
+       map.setPaintProperty(l.id,'background-opacity',1);
+     }else if(l.type==='fill'){
+       let color=MIDNIGHT.land,opacity=.96;
+       if(/water|ocean|lake|river/.test(key)){color=MIDNIGHT.water;opacity=1}
+       else if(/park|grass|wood|forest|landcover|vegetation|cemetery/.test(key)){color=MIDNIGHT.green;opacity=.96}
+       else if(/building/.test(key)){color=MIDNIGHT.building;opacity=.94}
+       else if(/industrial|commercial|residential|landuse/.test(key)){color=MIDNIGHT.land2;opacity=.9}
+       map.setPaintProperty(l.id,'fill-color',color);
+       map.setPaintProperty(l.id,'fill-opacity',opacity);
+       try{map.setPaintProperty(l.id,'fill-outline-color',/building/.test(key)?MIDNIGHT.buildingTop:shade(color,12))}catch{}
+     }else if(l.type==='fill-extrusion'){
+       if(/building/.test(key)){
+         map.setPaintProperty(l.id,'fill-extrusion-color',MIDNIGHT.building);
+         map.setPaintProperty(l.id,'fill-extrusion-opacity',.91);
+         try{map.setPaintProperty(l.id,'fill-extrusion-vertical-gradient',true)}catch{}
+       }
+     }else if(l.type==='line'){
+       let color=MIDNIGHT.border,opacity=.62;
+       if(/motorway|trunk|primary|secondary/.test(key)){color=MIDNIGHT.road;opacity=.88}
+       else if(/road|street|transport|path|rail/.test(key)){color=MIDNIGHT.roadSoft;opacity=.72}
+       else if(/waterway|river|stream/.test(key)){color='#36516b';opacity=.72}
+       else if(/boundary|admin/.test(key)){color='#375875';opacity=.52}
+       map.setPaintProperty(l.id,'line-color',color);
+       map.setPaintProperty(l.id,'line-opacity',opacity);
+     }else if(l.type==='symbol'){
+       try{map.setPaintProperty(l.id,'text-color',/road|street|place|city|district/.test(key)?MIDNIGHT.label:MIDNIGHT.labelMuted)}catch{}
+       try{map.setPaintProperty(l.id,'text-halo-color',MIDNIGHT.halo)}catch{}
+       try{map.setPaintProperty(l.id,'text-halo-width',1.4)}catch{}
+       try{map.setPaintProperty(l.id,'text-halo-blur',.35)}catch{}
+       try{map.setPaintProperty(l.id,'icon-opacity',.72)}catch{}
+     }else if(l.type==='raster'){
+       try{map.setPaintProperty(l.id,'raster-saturation',-.6)}catch{}
+       try{map.setPaintProperty(l.id,'raster-brightness-max',.42)}catch{}
+       try{map.setPaintProperty(l.id,'raster-contrast',.18)}catch{}
+     }
+   }catch{}
+ }
+ try{map.setLight({anchor:'viewport',color:'#b9d7ff',intensity:.34,position:[1.15,165,38]})}catch{}
+}
 function installSceneLayers(styleLayers){
  if(map.getSource('rc-buildings'))return;
  const before=styleLayers.find(l=>l.type==='symbol')?.id;
@@ -481,7 +528,7 @@ function clearScene(){
  try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',0)}catch{}
  setSceneOpacity(0);setBuiltinOpacity(.84);
  for(const id of builtin3d){try{map.setPaintProperty(id,'fill-extrusion-color',GOLD)}catch{}}
- try{map.setLight({anchor:'viewport',color:'#fff0c9',intensity:.42,position:[1.15,165,38]})}catch{}
+ try{map.setLight({anchor:'viewport',color:'#b9d7ff',intensity:.34,position:[1.15,165,38]})}catch{}
 }
 function animateMorph(){
  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:1280;

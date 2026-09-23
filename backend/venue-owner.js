@@ -198,7 +198,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const client=await DB.connect();
     try{
       await client.query('BEGIN');
-      const current=await client.query("SELECT v.config,m.category,m.marker_style FROM shaurma_venues v LEFT JOIN LATERAL (SELECT category,marker_style FROM shaurmeg_markers WHERE establishment_id=v.establishment_id ORDER BY id LIMIT 1) m ON TRUE WHERE v.establishment_id=$1 FOR UPDATE",[est]);
+      const current=await client.query("SELECT v.config,m.category,m.marker_style FROM shaurma_venues v LEFT JOIN LATERAL (SELECT category,marker_style FROM shaurmeg_markers WHERE establishment_id=v.establishment_id ORDER BY id LIMIT 1) m ON TRUE WHERE v.establishment_id=$1",[est]);
       if(!current.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
       const currentConfig=current.rows[0].config||{};
       const safeConfig={...currentConfig};
@@ -259,6 +259,28 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
       const q=await DB.query("SELECT * FROM shaurma_orders WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 200",[req.params.establishmentId]);
       res.json(q.rows);
     }catch(e){res.status(500).json({error:'orders_read_failed'})}
+  });
+
+  app.get('/api/venue-owner/establishments/:establishmentId/stream',async(req,res)=>{
+    const auth=await requireAccess(req,res,req.params.establishmentId,'orders');if(!auth)return;
+    const establishmentId=req.params.establishmentId;
+    res.setHeader('Content-Type','text/event-stream');
+    res.setHeader('Cache-Control','no-cache, no-transform');
+    res.setHeader('Connection','keep-alive');
+    res.flushHeaders?.();
+    let lastSeen=new Date(Date.now()-5000).toISOString();
+    res.write('event: ready\ndata: '+JSON.stringify({ok:true,establishment_id:establishmentId})+'\n\n');
+    const tick=setInterval(async()=>{
+      try{
+        const q=await DB.query("SELECT * FROM shaurma_orders WHERE establishment_id=$1 AND updated_at>$2 ORDER BY updated_at ASC LIMIT 50",[establishmentId,lastSeen]);
+        for(const order of q.rows){
+          lastSeen=new Date(order.updated_at||Date.now()).toISOString();
+          res.write('event: order\ndata: '+JSON.stringify(order)+'\n\n');
+        }
+        res.write(': ping\n\n');
+      }catch{}
+    },4000);
+    req.on('close',()=>clearInterval(tick));
   });
 
   app.patch('/api/venue-owner/establishments/:establishmentId/orders/:orderId',async(req,res)=>{

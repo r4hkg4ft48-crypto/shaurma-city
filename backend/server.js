@@ -920,7 +920,8 @@ app.get('/api/shaurma/menu-context',async(req,res)=>{
   if(!/^\d+$/.test(markerId))return res.status(400).json({error:'bad_marker_id'});
   if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return res.status(400).json({error:'bad_establishment_id'});
   const q=await DB.query(`
-    SELECT m.id AS marker_id,m.establishment_id,m.venue_id,m.name AS marker_name,m.address,m.lat,m.lon,
+    SELECT m.id AS marker_id,m.establishment_id,m.venue_id,m.name AS marker_name,m.address,m.description,m.lat,m.lon,
+           m.hero_image,m.gallery,m.hours,m.price_label,m.marker_avatar,m.marker_style,m.updated_at AS marker_updated_at,
            v.slug,v.name,v.is_active,v.config,v.menu,v.updated_at
     FROM shaurmeg_markers m
     JOIN shaurma_venues v ON v.establishment_id=m.establishment_id AND v.venue_id=m.venue_id
@@ -930,8 +931,9 @@ app.get('/api/shaurma/menu-context',async(req,res)=>{
   `,[markerId,establishmentId]);
   const row=q.rows[0];if(!row)return res.status(404).json({error:'menu_context_not_found'});
   res.json({
-    marker:{id:row.marker_id,establishment_id:row.establishment_id,venue_id:row.venue_id,name:row.marker_name,address:row.address,lat:row.lat,lon:row.lon},
-    venue:{establishment_id:row.establishment_id,venue_id:row.venue_id,slug:row.slug,name:row.name,is_active:row.is_active,config:row.config||{},menu:Array.isArray(row.menu)?row.menu:[],updated_at:row.updated_at}
+    marker:{id:row.marker_id,establishment_id:row.establishment_id,venue_id:row.venue_id,name:row.marker_name,address:row.address,description:row.description||'',hero_image:row.hero_image||'',gallery:Array.isArray(row.gallery)?row.gallery:[],hours:row.hours||'',price_label:row.price_label||'',marker_avatar:row.marker_avatar||'',marker_style:normalizeMarkerStyle(row.marker_style,'shawarma'),lat:row.lat,lon:row.lon,updated_at:row.marker_updated_at},
+    venue:{establishment_id:row.establishment_id,venue_id:row.venue_id,slug:row.slug,name:row.name,is_active:row.is_active,config:row.config||{},menu:Array.isArray(row.menu)?row.menu:[],updated_at:row.updated_at},
+    context_updated_at:new Date(Math.max(new Date(row.updated_at||0).getTime(),new Date(row.marker_updated_at||0).getTime())).toISOString()
   });
  }catch(e){console.error('menu context:',e.message);res.status(500).json({error:'menu_context_failed'})}
 });

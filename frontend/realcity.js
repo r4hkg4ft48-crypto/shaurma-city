@@ -460,6 +460,7 @@ async function fetchProfile(m){
      if(r.ok){
        const j=await r.json();last=safeProfile(j.profile);last.quality=j.quality||last.quality;last.status=j.status||'ready';
        if(Number(last.version)>=7&&Array.isArray(last.scene?.buildings)&&last.scene.buildings.length){profileCache.set(key,last);return last}
+       if((j.status==='pending'||j.status==='processing')&&Number(j.profile?.version||0)<7)return last
      }
    }catch{}
    if(attempt<3)await new Promise(r=>setTimeout(r,700+attempt*400));

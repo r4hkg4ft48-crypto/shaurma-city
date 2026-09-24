@@ -6,6 +6,7 @@
 <header class="topbar glass"><button class="iconBtn" id="back">‹</button><div class="brand"><div><b id="topName">Меню</b><small id="topAddress">ЗАГРУЗКА</small></div></div><div class="grow"></div><button class="iconBtn" id="profileBtn">◉</button></header>
 <main class="page">
   <section class="heroPanel" id="hero"><img id="heroImg" class="hidden" alt=""><div class="heroCopy"><span class="eyebrow">выбранная точка</span><h1 id="venueName">Загрузка…</h1><p id="venueMeta"></p></div></section>
+  <section class="section hidden" id="builderEntry"><button class="builderEntry" id="openBuilder"><span><small>СОБЕРИ СВОЮ</small><b>Шаурма под твой вкус</b><em>Основа → соусы → добавки</em></span><strong>✦</strong></button></section>
   <section class="section"><div class="sectionHead"><div><small>МЕНЮ</small><h2>Выбери своё</h2></div><small id="menuCount"></small></div><div class="chips" id="chips"></div><div class="menuGrid" id="menuGrid"></div></section>
 </main>
 <button class="floatCart hidden" id="cartBtn"><span><span id="cartCount">0</span> · Корзина</span><b id="cartTotal">0 ₽</b></button>
@@ -15,6 +16,13 @@
   <div class="segment" id="fulfillment"><button class="active" data-value="cafe">В заведении</button><button data-value="delivery">Доставка</button></div>
   <div class="formGrid" style="margin-top:12px"><div class="field"><label>Имя</label><input id="customer" placeholder="Как к вам обращаться"></div><div class="field delivery hidden"><label>Телефон</label><input id="phone" inputmode="tel" placeholder="+7…"></div><div class="field delivery hidden"><label>Адрес доставки</label><input id="address" placeholder="Улица, дом, квартира"></div><div class="field"><label>Комментарий</label><textarea id="comment" placeholder="Пожелания к заказу"></textarea></div><div class="notice">Оплата в этой чистой версии пока фиксируется как «при получении». Данные карты приложение не хранит.</div></div>
   <button class="primaryBtn" style="width:100%;min-height:52px;margin-top:12px" id="placeOrder">Оформить заказ</button>
+</section>
+<section class="sheet" id="builderSheet"><div class="sheetHandle"></div><div class="sheetHead"><div><small class="eyebrow">конструктор</small><h2>Собери свою</h2></div><button class="iconBtn" data-close>×</button></div>
+  <div class="builderBlock"><small>1 · Основа</small><div class="builderOptions" id="builderTypes"></div></div>
+  <div class="builderBlock"><small>2 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
+  <div class="builderBlock"><small>3 · Добавки</small><div class="builderOptions" id="builderExtras"></div></div>
+  <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
+  <button class="primaryBtn" style="width:100%;min-height:52px" id="addBuilder">Добавить в корзину</button>
 </section>
 <section class="sheet" id="profileSheet"><div class="sheetHandle"></div><div class="sheetHead"><h2>Мои заказы</h2><button class="iconBtn" data-close>×</button></div><div id="myOrders" class="list"></div></section>
 <div class="toast" id="toast"></div>

@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='101';
+const BUILD='102';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
@@ -23,7 +23,7 @@ function alpha(hex,a){const c=hexRgb(hex);return c?`rgba(${c[0]},${c[1]},${c[2]}
 function qualityLabel(q){return ({photo:'PHOTO',street:'STREET',osm:'OSM',heuristic:'AUTO'})[q]||'AUTO'}
 
 const DEFAULT_PROFILE={
- version:4,quality:'heuristic',confidence:.35,building_style:'panel_simple',
+ version:8,quality:'heuristic',confidence:.35,building_style:'panel_simple',
  palette:{wall:'#d3d1cc',accent:'#8a7463',windows:'#29343d',storefront:'#24282b',roof:'#b7b4ae',ground:'#d9d5cc'},
  neighborhood_palette:['#d3d1cc','#c8c5be','#bcb9b1','#aaa39a','#8a7463'],
  facade:{levels:9,window_rows:8,window_columns:5,window_width_ratio:.54,window_height_ratio:.48,panel_grid:true,balconies:false,balcony_every:2,balcony_depth_m:.65,vertical_bands:true,vertical_band_every:3,storefront:true,storefront_height_m:3.35,roof_equipment:true,material:'panel'},
@@ -545,20 +545,16 @@ async function addPhotoPattern(name,dataUrl){
  });
 }
 async function installPatterns(profile){
- const p=safeProfile(profile),names=['rcp-hero','rcp-near-1','rcp-near-2','rcp-near-3','rcp-near-4'];
- let hero='rcp-hero';
- if(p.texture?.hero_data_url){
-   const ok=await addPhotoPattern('rcp-hero-photo',p.texture.hero_data_url);
-   if(ok)hero='rcp-hero-photo';
- }
- makeFacadePattern('rcp-hero',p.palette,p.facade,0,p.building_style);
+ const p=safeProfile(profile),names=['rcp-near-1','rcp-near-2','rcp-near-3','rcp-near-4'];
+ // IMPORTANT: the selected/hero building is never textured with the source photo.
+ // Reference photos are analysis input only; the building itself is recolored from the extracted palette.
  const sw=p.neighborhood_palette||[];
  for(let i=1;i<=4;i++){
    const wall=sw[(i-1)%Math.max(1,sw.length)]||shade(p.palette.wall,(i-2)*7);
    const pal={...p.palette,wall,accent:sw[(i+2)%Math.max(1,sw.length)]||p.palette.accent,roof:shade(p.palette.roof,(i-2)*5)};
    makeFacadePattern('rcp-near-'+i,pal,{...p.facade,balconies:i%2===0?p.facade.balconies:false,vertical_bands:i%3!==0},i,p.building_style);
  }
- return {hero,names};
+ return {hero:null,names};
 }
 
 function local(lon,lat,oLon,oLat){const k=Math.cos(oLat*Math.PI/180);return[(lon-oLon)*111320*k,(lat-oLat)*110540]}
@@ -625,8 +621,8 @@ function buildSceneGeo(profile,m,patternSet){
 
  for(let i=0;i<blds.length;i++){
    const b=blds[i],ring=Array.isArray(b.ring)?b.ring:[];if(ring.length<4)continue;
-   const role=b.role||'background',patterned=role==='hero'||role==='nearby'?1:0;
-   const patternName=role==='hero'?patternSet.hero:'rcp-near-'+(1+(Number(b.pattern||i)%4));
+   const role=b.role||'background',patterned=role==='nearby'?1:0;
+   const patternName=role==='nearby'?'rcp-near-'+(1+(Number(b.pattern||i)%4)):'';
    const wall=b.palette?.wall||p.palette.wall,win=b.palette?.windows||p.palette.windows,accent=b.palette?.accent||p.palette.accent,storeColor=b.palette?.storefront||p.palette.storefront;
    bFeatures.push({type:'Feature',properties:{
      id:b.id,height:Number(b.height)||9,role,patterned,pattern_name:patternName,wall,roof:b.palette?.roof||p.palette.roof
@@ -840,7 +836,7 @@ async function focusVenue(m,replay=false){
 
  requestAnimationFrame(()=>requestAnimationFrame(()=>{animateMorph();animateFocusGlow(token)}));
  $('#rcLive').textContent='REAL CITY · '+qualityLabel(p.quality);
- const src=p.texture?.source==='hero_reference'?'по фото фасада':p.quality==='street'?'по уличным снимкам':p.quality==='osm'?'по геометрии зданий':'по фотопрофилю';
+ const src=p.quality==='photo'?'по цветам фасада с фото':p.quality==='street'?'по цветам уличных снимков':p.quality==='osm'?'по геометрии зданий':'по фотопрофилю';
  status('Квартал восстановлен '+src);
  setTimeout(()=>{if(token===sceneToken)status('',false)},1900);
 }

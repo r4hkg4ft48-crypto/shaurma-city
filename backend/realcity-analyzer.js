@@ -4,7 +4,7 @@ const sharp=require('sharp');
 const {VectorTile}=require('@mapbox/vector-tile');
 const Pbf=require('pbf');
 
-const PROFILE_VERSION=7;
+const PROFILE_VERSION=8;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
@@ -557,7 +557,7 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
       role:isHero?'hero':index<10?'nearby':'background',
       style:bStyle,
       pattern:isHero?0:1+(index%4),
-      palette:{wall:palette.wall,accent:palette.accent,windows:palette.windows,storefront:palette.storefront,roof:palette.roof}
+      palette:{wall:palette.wall,accent:palette.accent,windows:palette.windows,storefront:palette.storefront,roof:palette.roof,swatches:Array.isArray(palette.swatches)?palette.swatches.slice(0,8):[]}
     };
   });
   return {
@@ -590,8 +590,9 @@ async function analyzeUserReferences(marker){
     try{
       const features=await extractImageFeatures(buf);
       const heroRole=ref.role==='hero_facade';
-      const texture=heroRole?await makeFacadeTexture(buf):null;
-      analyses.push({role:ref.role,features,palette:features.palette,weight:heroRole?3.6:2.25,texture});
+      // Reference photos are used only to infer facade colors/structure.
+      // Never turn the photograph itself into a map texture.
+      analyses.push({role:ref.role,features,palette:features.palette,weight:heroRole?5.2:2.25});
     }catch{}
   }
   return analyses;
@@ -615,10 +616,11 @@ async function analyzeRealCityProfile(marker){
   if(String(osmSeed.dominantMaterial).includes('glass')){osmPalette.wall='#8997a3';osmPalette.windows='#1f2c35';osmPalette.accent='#667887'}
   osmPalette.swatches=uniqColors([...osmSeed.colors,osmPalette.wall,osmPalette.accent,osmPalette.roof],8);
 
-  const heroWeighted=[
-    ...heroRefs.map(x=>({palette:x.palette,weight:x.weight})),
-    ...streetAnalyses.map(x=>({palette:x.palette,weight:heroRefs.length?.65:1.7})),
-    {palette:osmPalette,weight:heroRefs.length?.35:1}
+  const heroWeighted=heroRefs.length?[
+    ...heroRefs.map(x=>({palette:x.palette,weight:x.weight}))
+  ]:[
+    ...streetAnalyses.map(x=>({palette:x.palette,weight:1.7})),
+    {palette:osmPalette,weight:1}
   ];
   const envWeighted=[
     ...envRefs.map(x=>({palette:x.palette,weight:x.weight})),
@@ -668,7 +670,7 @@ async function analyzeRealCityProfile(marker){
     },
     neighborhood_palette:uniqColors([...(environmentPalette.swatches||[]),environmentPalette.wall,environmentPalette.accent,environmentPalette.roof],8),
     facade,
-    texture:{hero_data_url:heroRefs.find(x=>x.texture)?.texture||null,source:heroRefs.some(x=>x.texture)?'hero_reference':'procedural'},
+    texture:{hero_data_url:null,source:heroRefs.length?'palette_reference':'procedural'},
     environment:{
       tree_density:Number(treeDensity.toFixed(2)),
       vegetation_ratio:Number(photoVegetation.toFixed(3)),

@@ -10,6 +10,16 @@ const D=require('./domain');
 const router=express.Router();
 
 function fail(res,e,fallback='server_error'){console.error(fallback,e);res.status(e.status||500).json({error:e.message||fallback})}
+const DEFAULT_VENUE_PERMISSIONS=['menu','profile','media','appearance','orders'];
+function normalizeInviteCode(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
+function inviteCodeHash(v){return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeInviteCode(v)).digest('hex')}
+async function ownerAccesses(userId){
+  const q=await db.query(`SELECT a.establishment_id,a.role,a.permissions,v.name,v.venue_id,
+    (SELECT id FROM shaurmeg_markers m WHERE m.establishment_id=a.establishment_id ORDER BY id LIMIT 1) marker_id
+    FROM shaurma_venue_admins a JOIN shaurma_venues v ON v.establishment_id=a.establishment_id
+    WHERE a.telegram_user_id=$1 AND a.is_active=TRUE AND v.is_active=TRUE ORDER BY v.name`,[String(userId)]);
+  return q.rows;
+}
 function publicUser(row){
   return row?{id:String(row.telegram_user_id),username:row.username||'',first_name:row.first_name||'',last_name:row.last_name||'',profile:row.profile||{},favorites:Array.isArray(row.favorites)?row.favorites:[],preferences:row.preferences||{},payment:{provider:row.payment_provider||null,card_brand:row.payment_card_brand||null,card_last4:row.payment_card_last4||null,autopay_enabled:!!row.autopay_enabled,linked:!!row.payment_card_last4}}:null;
 }
@@ -135,6 +145,45 @@ router.get('/admin/venues',auth.requireOwner,async(req,res)=>{
   try{const q=await db.query(`SELECT v.*,COUNT(m.id)::int marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id GROUP BY v.venue_id ORDER BY v.name`);res.json(q.rows)}
   catch(e){fail(res,e,'admin_venues_failed')}
 });
+router.get('/admin/venues/:establishmentId/admins',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
+    const q=await db.query('SELECT id,establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,created_at,updated_at FROM shaurma_venue_admins WHERE establishment_id=$1 ORDER BY created_at',[est]);
+    res.json(q.rows);
+  }catch(e){fail(res,e,'venue_admins_failed')}
+});
+router.post('/admin/venues/:establishmentId/admins',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId),uid=String(req.body?.telegram_user_id||'').trim();
+    if(!est||!/^\d{4,20}$/.test(uid))return res.status(400).json({error:'invalid_owner_access'});
+    const permissions=Array.isArray(req.body?.permissions)?req.body.permissions:DEFAULT_VENUE_PERMISSIONS;
+    const q=await db.query(`INSERT INTO shaurma_venue_admins(establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,added_by)
+      VALUES($1,$2,$3,$4,$5,$6::jsonb,TRUE,'superadmin')
+      ON CONFLICT(establishment_id,telegram_user_id) DO UPDATE SET role=EXCLUDED.role,permissions=EXCLUDED.permissions,is_active=TRUE,updated_at=NOW()
+      RETURNING *`,[est,uid,String(req.body?.telegram_username||''),String(req.body?.telegram_first_name||''),String(req.body?.role||'owner'),JSON.stringify(permissions)]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,'superadmin','owner_access_granted',$2::jsonb)",[est,JSON.stringify({telegram_user_id:uid})]);
+    res.status(201).json(q.rows[0]);
+  }catch(e){fail(res,e,'venue_admin_create_failed')}
+});
+router.delete('/admin/venues/:establishmentId/admins/:telegramUserId',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
+    const q=await db.query('UPDATE shaurma_venue_admins SET is_active=FALSE,updated_at=NOW() WHERE establishment_id=$1 AND telegram_user_id=$2 RETURNING id',[est,String(req.params.telegramUserId)]);
+    if(!q.rows[0])return res.sendStatus(404);res.json({ok:true});
+  }catch(e){fail(res,e,'venue_admin_delete_failed')}
+});
+router.post('/admin/venues/:establishmentId/invites',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
+    const venue=await db.query('SELECT name FROM shaurma_venues WHERE establishment_id=$1',[est]);if(!venue.rows[0])return res.sendStatus(404);
+    const code='OWN-'+crypto.randomBytes(5).toString('hex').toUpperCase(),hours=Math.max(1,Math.min(168,Number(req.body?.hours)||72));
+    const permissions=Array.isArray(req.body?.permissions)?req.body.permissions:DEFAULT_VENUE_PERMISSIONS;
+    const q=await db.query(`INSERT INTO shaurma_venue_invites(establishment_id,code_hash,role,permissions,expires_at,max_uses,is_active,created_by)
+      VALUES($1,$2,$3,$4::jsonb,NOW()+($5::text||' hours')::interval,1,TRUE,'superadmin') RETURNING id,establishment_id,role,permissions,expires_at`,
+      [est,inviteCodeHash(code),String(req.body?.role||'owner'),JSON.stringify(permissions),String(hours)]);
+    res.status(201).json({...q.rows[0],code,venue_name:venue.rows[0].name});
+  }catch(e){fail(res,e,'venue_invite_create_failed')}
+});
 router.get('/admin/markers',auth.requireOwner,async(req,res)=>{
   try{const q=await db.query('SELECT * FROM shaurmeg_markers ORDER BY id');res.json(q.rows.map(x=>({...x,marker_style:D.markerStyle(x.marker_style)})))}
   catch(e){fail(res,e,'admin_markers_failed')}
@@ -186,9 +235,31 @@ router.patch('/admin/orders/:id',auth.requireOwner,async(req,res)=>{
 router.post('/venue-owner/auth/telegram',async(req,res)=>{
   try{
     const user=auth.verifyInitData(req.body?.initData||'',config.VENUE_OWNER_BOT_TOKEN);
-    const q=await db.query(`SELECT a.establishment_id,a.role,a.permissions,v.name,v.venue_id FROM shaurma_venue_admins a JOIN shaurma_venues v ON v.establishment_id=a.establishment_id WHERE a.telegram_user_id=$1 AND a.is_active=TRUE AND v.is_active=TRUE ORDER BY v.name`,[String(user.id)]);
-    res.json({ok:true,session:auth.sign(user,'venue'),user:{id:String(user.id),username:user.username||'',first_name:user.first_name||''},establishments:q.rows});
+    const accesses=await ownerAccesses(user.id);
+    res.json({ok:true,session:auth.sign(user,'venue'),user:{id:String(user.id),username:user.username||'',first_name:user.first_name||''},establishments:accesses});
   }catch(e){fail(res,e,'venue_owner_auth_failed')}
+});
+router.get('/venue-owner/me',auth.requireSession('venue'),async(req,res)=>{
+  try{res.json({user:{id:String(req.session.sub),username:req.session.username||'',first_name:req.session.first_name||''},establishments:await ownerAccesses(req.session.sub)})}
+  catch(e){fail(res,e,'venue_owner_me_failed')}
+});
+router.post('/venue-owner/claim',auth.requireSession('venue'),async(req,res)=>{
+  const code=normalizeInviteCode(req.body?.code);
+  if(!/^OWN-[A-F0-9]{10}$/.test(code))return res.status(400).json({error:'bad_claim_code'});
+  try{
+    const access=await db.tx(async client=>{
+      const q=await client.query('SELECT * FROM shaurma_venue_invites WHERE code_hash=$1 AND is_active=TRUE AND expires_at>NOW() AND uses<max_uses FOR UPDATE',[inviteCodeHash(code)]);
+      const inv=q.rows[0];if(!inv)throw Object.assign(new Error('claim_code_invalid_or_expired'),{status:400});
+      await client.query(`INSERT INTO shaurma_venue_admins(establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,added_by)
+        VALUES($1,$2,$3,$4,$5,$6::jsonb,TRUE,'invite')
+        ON CONFLICT(establishment_id,telegram_user_id) DO UPDATE SET role=EXCLUDED.role,permissions=EXCLUDED.permissions,is_active=TRUE,updated_at=NOW()`,
+        [inv.establishment_id,String(req.session.sub),req.session.username||'',req.session.first_name||'',inv.role,JSON.stringify(inv.permissions||DEFAULT_VENUE_PERMISSIONS)]);
+      await client.query('UPDATE shaurma_venue_invites SET uses=uses+1,is_active=CASE WHEN uses+1>=max_uses THEN FALSE ELSE is_active END,last_used_at=NOW() WHERE id=$1',[inv.id]);
+      await client.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'access_claimed',$3::jsonb)",[inv.establishment_id,String(req.session.sub),JSON.stringify({invite_id:inv.id})]);
+      return inv.establishment_id;
+    });
+    res.json({ok:true,establishment_id:access,establishments:await ownerAccesses(req.session.sub)});
+  }catch(e){fail(res,e,'venue_owner_claim_failed')}
 });
 async function venueAccess(req,res,permission){
   const s=auth.readToken(req,'venue');if(!s){res.status(401).json({error:'unauthorized'});return null}

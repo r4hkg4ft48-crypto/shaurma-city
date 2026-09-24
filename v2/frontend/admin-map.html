@@ -18,6 +18,13 @@
       <div class="rowBtns"><button class="plainBtn" type="button" id="grantOwner">Выдать доступ</button><button class="plainBtn" type="button" id="inviteOwner">Создать код</button></div>
       <div class="notice hidden" id="inviteOutput" style="margin-top:8px"></div>
     </div>
+    <div class="panel hidden" id="realcityTools" style="margin:0">
+      <small class="eyebrow">REAL CITY</small><h3 style="margin:5px 0 8px">Фасад → цвета здания</h3>
+      <div class="field"><label>Фото фасада и окружения</label><input id="facadeFiles" type="file" accept="image/*" multiple></div>
+      <div class="notice">Первое фото считается главным фасадом. Фото используются только для анализа цветов и структуры — не накладываются текстурой на дом.</div>
+      <div class="rowBtns"><button class="plainBtn" type="button" id="analyzeFacade">Анализировать и перекрасить</button><button class="plainBtn" type="button" id="rebuildRealcity">Пересобрать</button></div>
+      <div id="realcityStatus" style="font-size:12px;color:var(--muted)"></div>
+    </div>
     <div class="rowBtns"><button class="primaryBtn" type="submit">Сохранить</button><button class="dangerBtn hidden" type="button" id="deletePoint">Удалить</button></div></div>
   </form>
 </aside></div>

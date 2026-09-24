@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f12"><title>Шаурмег · владелец</title><link rel="stylesheet" href="app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body class="adminShell">
+<header class="adminTop"><div class="brandMark">Ш</div><div><h1>Моё заведение</h1><small id="ownerName">OWNER CONTROL</small></div><div class="grow"></div><select id="venueSelect" class="plainBtn"></select></header>
+<main style="max-width:980px;margin:auto;padding:14px 14px calc(var(--safe-b) + 30px)">
+<div class="tabs"><button class="tab active" data-tab="profile">Профиль</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="orders">Заказы</button></div>
+<section id="profile" class="panel"><h2>Профиль точки</h2><div class="formGrid"><div class="field"><label>Название</label><input id="vName"></div><div class="field"><label>Адрес</label><input id="vAddress"></div><div class="field"><label>Описание</label><textarea id="vDescription"></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Часы</label><input id="vHours"></div><div class="field"><label>Цена</label><input id="vPrice"></div></div><button class="primaryBtn" id="saveProfile">Сохранить профиль</button></div></section>
+<section id="menu" class="panel hidden"><div class="sectionHead"><h2>Меню</h2><button class="plainBtn" id="addItem">＋ Позиция</button></div><div class="menuEditor" id="menuEditor"></div><button class="primaryBtn" style="margin-top:12px" id="saveMenu">Сохранить меню</button></section>
+<section id="orders" class="panel hidden"><div class="sectionHead"><h2>Заказы</h2><small id="ordersLive">LIVE</small></div><div class="list" id="ordersList"></div></section>
+</main>
+<div class="loginGate" id="gate"><div class="loginCard"><span class="eyebrow">Shaurmeg partner</span><h1>Кабинет владельца</h1><p>Откройте эту админку через подключённого Telegram-бота владельца. Доступ выдаётся отдельно для каждого заведения.</p><div class="notice" id="gateText">Проверяем Telegram-доступ…</div></div></div>
+<div class="toast" id="toast"></div><script src="config.js"></script><script src="admin-venue.js"></script>
+</body></html>

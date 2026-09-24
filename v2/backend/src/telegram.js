@@ -2,10 +2,18 @@
 const config=require('./config');
 const db=require('./db');
 
-async function call(token,method,body={}){
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function call(token,method,body={},attempt=0){
   if(!token)return null;
   const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.description||method+'_failed');return j.result;
+  const j=await r.json().catch(()=>({}));
+  if((r.status===429||j.error_code===429)&&attempt<3){
+    const retry=Math.max(1,Number(j.parameters?.retry_after)||1);
+    await sleep(retry*1000+250);
+    return call(token,method,body,attempt+1);
+  }
+  if(!r.ok||!j.ok)throw new Error(j.description||method+'_failed');
+  return j.result;
 }
 function menuUrl(marker,est){
   const u=new URL(config.PUBLIC_APP_URL+'/menu.html');u.searchParams.set('marker',String(marker));u.searchParams.set('establishment',String(est));return u.toString();
@@ -14,24 +22,29 @@ async function sync(){
   const mapUrl=config.PUBLIC_APP_URL+'/index.html';
   const adminUrl=config.PUBLIC_APP_URL+'/admin-map.html';
   const venueUrl=config.PUBLIC_APP_URL+'/admin-venue.html';
-  const work=[];
+  const tasks=[];
+  const add=(name,fn)=>tasks.push({name,fn});
   if(config.AGGREGATOR_BOT_TOKEN){
-    work.push(call(config.AGGREGATOR_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}}));
-    work.push(call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'}]}));
-    work.push(call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',allowed_updates:['message']}));
+    add('aggregator.menu',()=>call(config.AGGREGATOR_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}}));
+    add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'}]}));
+    add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',allowed_updates:['message']}));
   }
   if(config.CLIENT_BOT_TOKEN){
-    work.push(call(config.CLIENT_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Выбрать заведение',web_app:{url:mapUrl}}}));
-    work.push(call(config.CLIENT_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть меню выбранной точки'},{command:'menu',description:'Открыть меню'}]}));
-    work.push(call(config.CLIENT_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/client',allowed_updates:['message']}));
+    add('client.menu',()=>call(config.CLIENT_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Выбрать заведение',web_app:{url:mapUrl}}}));
+    add('client.commands',()=>call(config.CLIENT_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть меню выбранной точки'},{command:'menu',description:'Открыть меню'}]}));
+    add('client.webhook',()=>call(config.CLIENT_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/client',allowed_updates:['message']}));
   }
-  if(config.ADMIN_BOT_TOKEN)work.push(call(config.ADMIN_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Админка карты',web_app:{url:adminUrl}}}));
-  if(config.VENUE_OWNER_BOT_TOKEN)work.push(call(config.VENUE_OWNER_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Мои заведения',web_app:{url:venueUrl}}}));
-  const result=await Promise.allSettled(work);
-  const failed=result.filter(x=>x.status==='rejected');
-  console.log('Shaurmeg v2 Telegram sync · '+(result.length-failed.length)+' ok · '+failed.length+' failed · app '+config.PUBLIC_APP_URL);
-  failed.forEach(x=>console.error('Shaurmeg v2 Telegram sync:',x.reason?.message||x.reason));
-  return {ok:failed.length===0,total:result.length,failed:failed.length};
+  if(config.ADMIN_BOT_TOKEN)add('admin.menu',()=>call(config.ADMIN_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Админка карты',web_app:{url:adminUrl}}}));
+  if(config.VENUE_OWNER_BOT_TOKEN)add('venue.menu',()=>call(config.VENUE_OWNER_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Мои заведения',web_app:{url:venueUrl}}}));
+
+  let ok=0,failed=0;
+  for(const task of tasks){
+    try{await task.fn();ok++}
+    catch(e){failed++;console.error('Shaurmeg v2 Telegram sync '+task.name+':',e.message)}
+    await sleep(180);
+  }
+  console.log('Shaurmeg v2 Telegram sync · '+ok+' ok · '+failed+' failed · app '+config.PUBLIC_APP_URL);
+  return {ok:failed===0,total:tasks.length,failed};
 }
 function install(app){
   app.post('/api/v2/telegram/aggregator',async(req,res)=>{

@@ -115,6 +115,22 @@ async function ensureSchema(){
     UNIQUE(establishment_id,telegram_user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS shaurma_venue_invites(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL,
+    code_hash TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'owner',
+    permissions JSONB NOT NULL DEFAULT '["menu","profile","media","appearance","orders"]'::jsonb,
+    expires_at TIMESTAMPTZ NOT NULL,
+    max_uses INT NOT NULL DEFAULT 1,
+    uses INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by TEXT NOT NULL DEFAULT 'superadmin',
+    last_used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_venue_invites_establishment ON shaurma_venue_invites(establishment_id,is_active);
+
   CREATE TABLE IF NOT EXISTS shaurma_venue_audit(
     id BIGSERIAL PRIMARY KEY,
     establishment_id TEXT NOT NULL,

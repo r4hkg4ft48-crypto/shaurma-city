@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f12">
-<title>Шаурмег · меню</title><link rel="stylesheet" href="app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>Шаурмег · меню</title><script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script><script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head><body>
 <header class="topbar glass"><button class="iconBtn" id="back">‹</button><div class="brand"><div><b id="topName">Меню</b><small id="topAddress">ЗАГРУЗКА</small></div></div><div class="grow"></div><button class="iconBtn" id="profileBtn">◉</button></header>
 <main class="page">
@@ -26,5 +26,5 @@
 </section>
 <section class="sheet" id="profileSheet"><div class="sheetHandle"></div><div class="sheetHead"><h2>Мои заказы</h2><button class="iconBtn" data-close>×</button></div><div id="myOrders" class="list"></div></section>
 <div class="toast" id="toast"></div>
-<script src="config.js"></script><script src="menu.js"></script>
+<script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load(entry));})(window.__SHAURMEG_ASSET_VERSION__,'menu.js');</script>
 </body></html>

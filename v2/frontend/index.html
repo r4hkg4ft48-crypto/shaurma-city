@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#0b0f12"><title>Шаурмег · карта</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
-<link rel="stylesheet" href="app.css">
+<script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
 </head>
@@ -23,5 +23,5 @@
 </article>
 <div class="boot" id="boot"><div class="bootLogo"><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small><div class="pulse"></div></div></div>
 <div class="toast" id="toast"></div>
-<script src="config.js"></script><script src="map.js"></script>
+<script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load(entry));})(window.__SHAURMEG_ASSET_VERSION__,'map.js');</script>
 </body></html>

@@ -18,7 +18,7 @@ jobs:
           node-version: "22"
       - name: JavaScript syntax
         run: |
-          find v2 backend/v2 -name '*.js' -print0 | xargs -0 -n1 node --check
+          find v2 -name '*.js' -print0 | xargs -0 -n1 node --check
           node --check backend/server.js
       - name: Install API dependencies
         working-directory: v2/backend
@@ -28,7 +28,7 @@ jobs:
         run: npm install --ignore-scripts
       - name: Load production adapter modules
         working-directory: backend
-        run: node -e "require('./v2/domain');require('./v2/auth');require('./v2/schema');require('./v2/realtime');require('./v2/realcity-service');require('./v2/routes')"
+        run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/routes')"
       - name: Load API modules
         working-directory: v2/backend
         run: node -e "require('./src/domain');require('./src/auth');require('./src/schema');require('./src/realtime');require('./src/realcity-service');require('./src/routes')"

@@ -111,8 +111,14 @@ router.post('/orders',async(req,res)=>{
     const menu=new Map(ctx.venue.menu.filter(x=>x.active!==false).map(x=>[String(x.id),x]));
     const normalized=[];
     for(const i of items){
+      const q=Math.max(1,Math.min(50,Math.floor(Number(i.q)||1)));
+      if(i.builder){
+        const built=D.priceBuilder(ctx.venue.config,i.builder);
+        if(!built)return res.status(400).json({error:'invalid_builder_selection'});
+        normalized.push({...built,q});continue;
+      }
       const src=menu.get(String(i.id));if(!src)return res.status(400).json({error:'item_not_in_menu',item_id:i.id});
-      const q=Math.max(1,Math.min(50,Math.floor(Number(i.q)||1))),p=Number(src.p??src.price);
+      const p=Number(src.p??src.price);
       if(!Number.isFinite(p)||p<0)return res.status(400).json({error:'invalid_price'});
       normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p,q,detail:String(i.detail||'').slice(0,500)});
     }

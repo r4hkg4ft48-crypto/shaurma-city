@@ -56,5 +56,41 @@ function normalizeMenu(input){
     active:x.active!==false
   })).filter(x=>x.id&&x.n);
 }
+const LEGACY_LEPESH_BUILDER={
+  types:[{id:'shawarma',name:'Шаурма',price:330},{id:'flatbread',name:'Лепёшка',price:320}],
+  sauces:[
+    {id:'standard',name:'Стандартные соусы'},{id:'big_tasty',name:'Биг Тейсти'},{id:'bbq',name:'Барбекю'},
+    {id:'pomegranate',name:'Гранатовый'},{id:'cheese',name:'Сырный'},{id:'garlic',name:'Чесночный'}
+  ],
+  extras:[
+    {id:'fries',name:'Картошка фри'},{id:'jalapeno',name:'Халапеньо'},{id:'onion',name:'Лук'},{id:'cheese',name:'Сыр'}
+  ],
+  min_sauces:1,max_sauces:6,max_extras:4
+};
+function builderConfig(config={}){
+  if(config.builder_enabled!==true&&!config.builder)return null;
+  const raw=config.builder&&typeof config.builder==='object'?config.builder:null;
+  if(!raw)return JSON.parse(JSON.stringify(LEGACY_LEPESH_BUILDER));
+  const norm=(arr,withPrice=false)=>(Array.isArray(arr)?arr:[]).slice(0,30).map((x,i)=>({
+    id:String(x.id||'opt_'+i).trim().slice(0,60),
+    name:String(x.name||x.n||x.id||'Опция').trim().slice(0,100),
+    ...(withPrice?{price:clamp(Number(x.price??x.p)||0,0,100000)}:{})
+  })).filter(x=>x.id&&x.name);
+  const types=norm(raw.types,true),sauces=norm(raw.sauces),extras=norm(raw.extras);
+  if(!types.length||!sauces.length)return null;
+  return {types,sauces,extras,min_sauces:clamp(Number(raw.min_sauces)||1,1,10),max_sauces:clamp(Number(raw.max_sauces)||sauces.length,1,sauces.length),max_extras:clamp(Number(raw.max_extras)||extras.length,0,extras.length)};
+}
+function priceBuilder(config,payload={}){
+  const cfg=builderConfig(config);if(!cfg)return null;
+  const type=cfg.types.find(x=>x.id===String(payload.type||''));if(!type)return null;
+  const sauceIds=[...new Set(Array.isArray(payload.sauces)?payload.sauces.map(String):[])];
+  const extraIds=[...new Set(Array.isArray(payload.extras)?payload.extras.map(String):[])];
+  const sauces=sauceIds.map(id=>cfg.sauces.find(x=>x.id===id)).filter(Boolean);
+  const extras=extraIds.map(id=>cfg.extras.find(x=>x.id===id)).filter(Boolean);
+  if(sauces.length!==sauceIds.length||extras.length!==extraIds.length)return null;
+  if(sauces.length<cfg.min_sauces||sauces.length>cfg.max_sauces||extras.length>cfg.max_extras)return null;
+  const detail='Соусы: '+sauces.map(x=>x.name).join(', ')+' · Добавки: '+(extras.length?extras.map(x=>x.name).join(', '):'без добавок');
+  return {id:'custom_builder',n:type.name+' · своя сборка',p:type.price,detail,builder:{type:type.id,sauces:sauceIds,extras:extraIds}};
+}
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,orderNumber,clamp};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp};

@@ -287,11 +287,14 @@
   filter:none;
 }
 .realCityScreen.rc-map-arrived .realCityTop,
-.realCityScreen.rc-map-arrived .rcStatus,
-.realCityScreen.rc-map-arrived .rcVenueCard,
 .realCityScreen.rc-map-arrived .maplibregl-ctrl-top-right{
   opacity:1;
   transform:none;
+}
+.realCityScreen.rc-map-arrived .rcStatus:not(.show){opacity:0}
+.realCityScreen.rc-map-arrived .rcVenueCard:not(.show){
+  opacity:0;
+  transform:translateY(calc(100% + 40px));
 }
 
 /* Full-screen Milky Way → Sun → Earth intro */
@@ -414,3 +417,11 @@
 }
 .rcResult i img{width:100%;height:100%;display:block;object-fit:cover}
 @media(prefers-reduced-motion:reduce){.rcMarkerDynamic.pulse{animation:none!important}}
+
+/* BUILD 105 · Telegram WebView map reliability */
+.realCityMap{z-index:1;min-width:100%;min-height:100%;background:#1a211c}
+.realCityMap .maplibregl-canvas-container,.realCityMap canvas{width:100%!important;height:100%!important}
+.realCityScreen.open .realCityMap{visibility:visible}
+.realCityScreen:not(.rc-intro-running) .realCityMap{opacity:1}
+.realCityScreen.rc-map-arrived .rcStatus.show{opacity:1}
+.realCityScreen.rc-map-arrived .rcVenueCard.show{opacity:1;transform:none}

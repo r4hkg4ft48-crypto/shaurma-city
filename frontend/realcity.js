@@ -3,7 +3,14 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='104';
+const FALLBACK_STYLE={
+ version:8,
+ sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},
+ layers:[{id:'osm-raster',type:'raster',source:'osm',minzoom:0,maxzoom:22,paint:{
+  'raster-opacity':1,'raster-saturation':-.22,'raster-contrast':.08,'raster-brightness-min':.10,'raster-brightness-max':.78
+ }}]
+};
+const BUILD='105';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
@@ -145,7 +152,9 @@ function inject(){
 function status(msg,on=true){const el=$('#rcStatus');if(!el)return;el.textContent=msg;el.classList.toggle('show',!!on)}
 function open(){
  const s=$('#realCityScreen');s.classList.add('open');s.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
- const ready=ensureMap().then(()=>{map.resize();return map}).catch(e=>{reportMapError(e,'ensureMap');status('Не удалось загрузить карту · повторите открытие');throw e});
+ $('#rcVenueCard')?.classList.remove('show');
+ status('Загружаем карту…');
+ const ready=ensureMap().then(()=>{map.resize();if(!selected)status('',false);return map}).catch(e=>{reportMapError(e,'ensureMap');status('Не удалось загрузить карту · повторите открытие');throw e});
  const intro=window.RealCitySpaceIntro;
  if(intro){intro.play({ready,mode:intro.preferredMode()}).catch(()=>{});}
  return ready;
@@ -155,14 +164,54 @@ function close(){
  const s=$('#realCityScreen');s.classList.remove('open','rc-map-arrived','rc-intro-running');s.setAttribute('aria-hidden','true');document.body.style.overflow='';$('#rcResults')?.classList.remove('show');
 }
 
+function createMapInstance(style){
+ const instance=new maplibregl.Map({
+  container:'realCityMap',style,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,
+  attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false
+ });
+ instance.on('error',e=>{const err=e?.error||e;reportMapError(err,'maplibre')});
+ instance.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
+ instance.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Каталог заведений: © OpenStreetMap contributors · ODbL'}),'bottom-right');
+ return instance;
+}
+function waitForMapLoad(instance,timeoutMs){
+ return new Promise((resolve,reject)=>{
+  let done=false;
+  const onLoad=()=>finish();
+  const finish=(err)=>{if(done)return;done=true;clearTimeout(timer);try{instance.off('load',onLoad)}catch{};err?reject(err):resolve(instance)};
+  const timer=setTimeout(()=>finish(new Error('map_style_load_timeout')),timeoutMs);
+  instance.once('load',onLoad);
+ });
+}
 async function ensureMap(){
  if(map)return map;
  await ensureDeps();
- try{map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false})}catch(e){reportMapError(e,'map-constructor');throw e};
- map.on('error',e=>{const err=e?.error||e;reportMapError(err,'maplibre');});
- map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
- map.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Каталог заведений: © OpenStreetMap contributors · ODbL'}),'bottom-right');
- await new Promise(resolve=>map.once('load',resolve));
+
+ let primaryError=null;
+ try{
+  map=createMapInstance(STYLE);
+  await waitForMapLoad(map,5500);
+ }catch(e){
+  primaryError=e;
+  reportMapError(e,'primary-style');
+  try{map?.remove()}catch{}
+  map=null;
+  const el=$('#realCityMap');if(el)el.innerHTML='';
+ }
+
+ if(!map){
+  status('Основной слой недоступен · включаем резервный…');
+  try{
+   map=createMapInstance(FALLBACK_STYLE);
+   await waitForMapLoad(map,6500);
+  }catch(e){
+   reportMapError(e,'fallback-style');
+   try{map?.remove()}catch{}
+   map=null;
+   throw e;
+  }
+ }
+ if(primaryError)console.warn('RealCity primary style fallback:',primaryError.message);
 
  const layers=map.getStyle().layers||[];
  applyEarthBaseMap(layers);

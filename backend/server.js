@@ -1537,9 +1537,9 @@ app.get('/admin',sendOwner);
 app.get('/owner',sendOwner);
 app.get('/shaurmeg-owner',sendShaurmegOwner);
 
-const {router:v2Router}=require('./v2/routes');
-const v2Schema=require('./v2/schema');
-const v2RealCity=require('./v2/realcity-service');
+const {router:v2Router}=require('../v2/backend/src/routes');
+const v2Schema=require('../v2/backend/src/schema');
+const v2RealCity=require('../v2/backend/src/realcity-service');
 app.use('/api/v2',v2Router);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));

@@ -6,8 +6,9 @@ const csv=v=>clean(v).split(',').map(x=>x.trim()).filter(Boolean);
 module.exports={
   PORT:Number(process.env.PORT||3000),
   DATABASE_URL:clean(process.env.DATABASE_URL),
-  PUBLIC_API_URL:clean(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,''),
-  PUBLIC_APP_URL:clean(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,''),
+  PUBLIC_API_URL:clean(process.env.V2_PUBLIC_API_URL||process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,''),
+  PUBLIC_APP_URL:clean(process.env.V2_PUBLIC_APP_URL||process.env.PUBLIC_APP_URL||'https://shaurmeg-v2-app.onrender.com').replace(/\/+$/,''),
+  TELEGRAM_CUTOVER:clean(process.env.V2_TELEGRAM_CUTOVER).toLowerCase()==='true',
   CLIENT_BOT_TOKEN:clean(process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN),
   AGGREGATOR_BOT_TOKEN:clean(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN),
   ADMIN_BOT_TOKEN:clean(process.env.ADMIN_TELEGRAM_BOT_TOKEN),

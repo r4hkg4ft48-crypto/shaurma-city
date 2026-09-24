@@ -6,6 +6,7 @@ const config=require('./config');
 const auth=require('./auth');
 const rt=require('./realtime');
 const D=require('./domain');
+const realcity=require('./realcity-service');
 
 const router=express.Router();
 
@@ -205,6 +206,27 @@ router.put('/admin/markers/:id',auth.requireOwner,async(req,res)=>{
     const q=await db.query(`UPDATE shaurmeg_markers SET name=$2,address=$3,description=$4,lat=$5,lon=$6,hero_image=$7,gallery=$8::jsonb,hours=$9,price_label=$10,marker_avatar=$11,marker_style=$12::jsonb,category=$13,is_active=$14,position_locked=TRUE,metadata_locked=TRUE,appearance_locked=TRUE,updated_at=NOW() WHERE id=$1 RETURNING *`,[req.params.id,String(b.name).trim(),String(b.address||''),String(b.description||''),lat,lon,String(b.hero_image||''),JSON.stringify(Array.isArray(b.gallery)?b.gallery:[]),String(b.hours||''),String(b.price_label||''),String(b.marker_avatar||''),JSON.stringify(D.markerStyle(b.marker_style)),String(b.category||'shawarma'),b.is_active!==false]);
     if(!q.rows[0])return res.sendStatus(404);await db.query('UPDATE shaurma_venues SET name=$2,is_active=$3,updated_at=NOW() WHERE venue_id=$1',[q.rows[0].venue_id,q.rows[0].name,q.rows[0].is_active]);res.json(q.rows[0]);
   }catch(e){fail(res,e,'marker_update_failed')}
+});
+router.put('/admin/markers/:id/realcity',auth.requireOwner,async(req,res)=>{
+  try{
+    const saved=await realcity.saveReferences(req.params.id,req.body?.reference_images);
+    if(!saved)return res.sendStatus(404);
+    res.status(202).json({...saved,profile_version:realcity.PROFILE_VERSION});
+  }catch(e){fail(res,e,'realcity_reference_update_failed')}
+});
+router.post('/admin/markers/:id/realcity/rebuild',auth.requireOwner,async(req,res)=>{
+  try{
+    const q=await db.query("UPDATE shaurmeg_markers SET realcity_status='pending',updated_at=NOW() WHERE id=$1 RETURNING id",[req.params.id]);
+    if(!q.rows[0])return res.sendStatus(404);
+    realcity.queue(req.params.id)?.catch(()=>{});
+    res.status(202).json({ok:true,status:'pending',profile_version:realcity.PROFILE_VERSION});
+  }catch(e){fail(res,e,'realcity_rebuild_failed')}
+});
+router.get('/admin/markers/:id/realcity',auth.requireOwner,async(req,res)=>{
+  try{
+    const q=await db.query("SELECT id,realcity_status,realcity_quality,realcity_updated_at,realcity_profile,jsonb_array_length(realcity_reference_images) reference_count FROM shaurmeg_markers WHERE id=$1",[req.params.id]);
+    if(!q.rows[0])return res.sendStatus(404);res.json(q.rows[0]);
+  }catch(e){fail(res,e,'realcity_read_failed')}
 });
 router.delete('/admin/markers/:id',auth.requireOwner,async(req,res)=>{
   try{const q=await db.query('UPDATE shaurmeg_markers SET is_active=FALSE,source_suppressed=TRUE,updated_at=NOW() WHERE id=$1 RETURNING id,venue_id',[req.params.id]);if(!q.rows[0])return res.sendStatus(404);await db.query('UPDATE shaurma_venues SET is_active=FALSE,updated_at=NOW() WHERE venue_id=$1',[q.rows[0].venue_id]);res.json({ok:true})}

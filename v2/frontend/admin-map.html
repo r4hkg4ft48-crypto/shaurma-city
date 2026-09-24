@@ -12,6 +12,12 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><div class="field"><label>Иконка</label><input id="icon" value="🥙"></div><div class="field"><label>Фон метки</label><input id="background" value="#10221b"></div></div>
     <div class="field"><label>Часы работы</label><input id="hours"></div><div class="field"><label>Ценовой уровень</label><input id="price"></div>
     <div class="notice">Долгое нажатие по карте подставляет координаты. После создания точка получает стабильный establishment ID и отдельное меню.</div>
+    <div class="panel hidden" id="ownerTools" style="margin:0">
+      <small style="color:var(--muted)">ESTABLISHMENT ID</small><b id="establishmentLabel" style="display:block;margin:3px 0 10px"></b>
+      <div class="field"><label>Telegram ID владельца</label><input id="ownerTgId" inputmode="numeric" placeholder="Например 123456789"></div>
+      <div class="rowBtns"><button class="plainBtn" type="button" id="grantOwner">Выдать доступ</button><button class="plainBtn" type="button" id="inviteOwner">Создать код</button></div>
+      <div class="notice hidden" id="inviteOutput" style="margin-top:8px"></div>
+    </div>
     <div class="rowBtns"><button class="primaryBtn" type="submit">Сохранить</button><button class="dangerBtn hidden" type="button" id="deletePoint">Удалить</button></div></div>
   </form>
 </aside></div>

@@ -1,0 +1,116 @@
+{
+  "version": 103,
+  "project": "shaurmeg-realcity",
+  "source_of_truth": "r4hkg4ft48-crypto/shaurma-city@main",
+  "public_urls": {
+    "app": "https://shaurma-city-app.onrender.com",
+    "api": "https://shaurma-city-api.onrender.com",
+    "map": "https://shaurma-city-app.onrender.com/map.html"
+  },
+  "bots": {
+    "aggregator": {
+      "username": "@Shaurmeggbot",
+      "role": "map-only"
+    },
+    "order": {
+      "username": "@LepeshkaJulbot",
+      "role": "order-only"
+    },
+    "venue_owner": {
+      "username": "@Shefofbotsbot",
+      "role": "multi-venue-owner"
+    },
+    "admin": {
+      "username": "@BossLeshkaBot",
+      "role": "admin-only"
+    }
+  },
+  "routing": {
+    "marker_context": [
+      "marker_id",
+      "venue_id",
+      "establishment_id"
+    ],
+    "aggregator_to_order": "telegram-start-parameter",
+    "start_parameter": "order_<marker_id>",
+    "order_context_required": true
+  },
+  "map": {
+    "renderer": "MapLibre GL",
+    "style_url": "https://tiles.openfreemap.org/styles/liberty",
+    "theme": "earth-midnight",
+    "render_world_copies": false,
+    "max_pitch": 72,
+    "antialias": false,
+    "marker_anchor": "center",
+    "cluster_max_zoom": 14,
+    "cluster_radius": 52,
+    "selected_dom_marker_only": true,
+    "selected_dom_marker_min_zoom": 15.15
+  },
+  "cinematic_intro": {
+    "enabled": true,
+    "stages": [
+      "MILKY WAY // LOCAL ARM",
+      "SOLAR VECTOR",
+      "SOLAR TRANSIT",
+      "EARTH APPROACH",
+      "ATMOSPHERIC ENTRY"
+    ],
+    "full_duration_ms": 7900,
+    "short_duration_ms": 2600,
+    "mobile_fps_cap": 40
+  },
+  "realcity": {
+    "enabled": true,
+    "profile_version": 8,
+    "strategy": "recolor-existing-building-geometry",
+    "facade_reference_mode": "palette-and-structure-only",
+    "source_photo_as_texture": false,
+    "base_building_color": "#777970",
+    "focus_camera": {
+      "zoom": 18.35,
+      "pitch": 61,
+      "bearing": -20,
+      "offset_y": 60
+    },
+    "morph_duration_ms": 1280,
+    "focus_glow": true,
+    "building_details": [
+      "wall",
+      "windows",
+      "storefront",
+      "accents",
+      "balconies",
+      "roof",
+      "roof_equipment",
+      "trees"
+    ],
+    "geometry_sources": [
+      "OpenFreeMap vector buildings",
+      "OpenStreetMap/Overpass"
+    ],
+    "visual_reference_sources": [
+      "user facade photos",
+      "KartaView where available"
+    ]
+  },
+  "persistence": {
+    "preserve_marker_settings": true,
+    "locks": [
+      "position_locked",
+      "appearance_locked",
+      "metadata_locked"
+    ],
+    "imports_must_respect_locks": true,
+    "source_identity": [
+      "source_provider",
+      "source_id"
+    ],
+    "order_history_preserved": true
+  },
+  "establishments": {
+    "mak": "SC-MSK-5E435A0F67",
+    "v_lepyoshke": "SC-MSK-B7441AB59F"
+  }
+}

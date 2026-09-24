@@ -2,11 +2,29 @@
 'use strict';
 
 const API='https://shaurma-city-api.onrender.com';
-const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='102';
+let STYLE='https://tiles.openfreemap.org/styles/liberty';
+const BUILD='103';
 const GOLD='#777970';
-const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
+let EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
+
+let MAP_CONFIG={version:103};
+let mapConfigPromise=null;
+async function loadMapConfig(){
+ if(mapConfigPromise)return mapConfigPromise;
+ mapConfigPromise=fetch('map-config.json?v=103',{cache:'no-store'})
+  .then(r=>r.ok?r.json():null)
+  .then(cfg=>{
+    if(cfg&&typeof cfg==='object'){
+      MAP_CONFIG=cfg;
+      if(cfg.map?.style_url)STYLE=String(cfg.map.style_url);
+    }
+    return MAP_CONFIG;
+  })
+  .catch(()=>MAP_CONFIG);
+ return mapConfigPromise;
+}
+
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
 let builtin3d=[],buildingLayers=[],roadLayers=[],dimmedLayers=[],profileCache=new Map(),venueSourceReady=false;
@@ -119,6 +137,7 @@ function close(){
 
 async function ensureMap(){
  if(map)return map;
+ await loadMapConfig();
  await ensureDeps();
  map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false});
  map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');

@@ -24,6 +24,13 @@ const VENUE_DISCOVERY_ENABLED=process.env.VENUE_DISCOVERY_ENABLED==='true';
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 
+const MAP_CONFIG_FILE=path.join(__dirname,'../frontend/map-config.json');
+function readMapConfig(){
+ try{return JSON.parse(fs.readFileSync(MAP_CONFIG_FILE,'utf8'))}catch{return {version:103}}
+}
+const MAP_CONFIG=readMapConfig();
+
+
 const realCityJobs=new Map();
 let discoveryJob=null;
 function queueRealCityProfile(markerId){
@@ -675,11 +682,8 @@ async function getClientBotInfo(){
 const CLIENT_BOT_WEBHOOK_SECRET=String(process.env.CLIENT_TELEGRAM_WEBHOOK_SECRET||'').trim();
 const PUBLIC_API_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,'');
 const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,'');
-const PUBLIC_MAP_ESTABLISHMENT_ALLOWLIST=String(
- process.env.PUBLIC_MAP_ESTABLISHMENT_ALLOWLIST||'SC-MSK-5E435A0F67,SC-MSK-B7441AB59F'
-).split(',').map(x=>x.trim().toUpperCase()).filter(x=>/^SC-MSK-[A-F0-9]{10}$/.test(x));
 const ORDER_BUILD='100';
-const MAP_BUILD='100';
+const MAP_BUILD=String(MAP_CONFIG.version||103);
 
 function adminTelegramBotToken(){
  return String(process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
@@ -1011,6 +1015,11 @@ app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
 });
 
 
+app.get('/api/shaurmeg/map-config',(req,res)=>{
+ res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=300');
+ res.json(MAP_CONFIG);
+});
+
 app.get('/api/shaurmeg/map-points',async(req,res)=>{
  res.setHeader('Cache-Control','public, max-age=15, stale-while-revalidate=60');
  if(!DB)return res.json([]);
@@ -1020,7 +1029,6 @@ app.get('/api/shaurmeg/map-points',async(req,res)=>{
     WHERE m.is_active=TRUE
       AND v.is_active=TRUE
       AND COALESCE(m.source_suppressed,FALSE)=FALSE
-      AND m.establishment_id = ANY($1::text[])
       AND (
         COALESCE(m.auto_imported,FALSE)=FALSE
         OR COALESCE(m.position_locked,FALSE)=TRUE
@@ -1031,7 +1039,7 @@ app.get('/api/shaurmeg/map-points',async(req,res)=>{
         COALESCE(m.auto_imported,FALSE)=FALSE
         OR COALESCE(m.relevance_score,0)>=0.66
       )
-    ORDER BY COALESCE(m.auto_imported,FALSE) ASC, COALESCE(m.position_locked,FALSE) DESC, COALESCE(m.verification_score,0) DESC, m.id`,[PUBLIC_MAP_ESTABLISHMENT_ALLOWLIST]);
+    ORDER BY COALESCE(m.auto_imported,FALSE) ASC, COALESCE(m.position_locked,FALSE) DESC, COALESCE(m.verification_score,0) DESC, m.id`);
   res.json(q.rows.map(row=>({id:row.id,marker_id:row.id,establishment_id:row.establishment_id||null,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,category:row.category||'shawarma',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,has_menu:!!row.has_menu,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),relevance_score:Number(row.relevance_score??1),position_locked:!!row.position_locked,source_provider:row.source_provider||'',updated_at:row.updated_at})));
  }catch(e){console.error('map points:',e.message);res.status(500).json({error:'map_points_failed'})}
 });
@@ -1518,4 +1526,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||103)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

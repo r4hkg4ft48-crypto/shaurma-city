@@ -314,6 +314,30 @@ router.get('/venue-owner/establishments/:establishmentId/orders',async(req,res)=
   try{const q=await db.query('SELECT * FROM shaurma_orders WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 200',[a.est]);res.json(q.rows)}
   catch(e){fail(res,e,'venue_owner_orders_failed')}
 });
+router.patch('/venue-owner/establishments/:establishmentId/orders/:orderId',async(req,res)=>{
+  const a=await venueAccess(req,res,'orders');if(!a)return;
+  const status=String(req.body?.status||'');
+  if(!['new','cooking','ready','done','cancelled'].includes(status))return res.status(400).json({error:'bad_status'});
+  try{
+    const q=await db.query('UPDATE shaurma_orders SET status=$3,updated_at=NOW() WHERE id=$1 AND establishment_id=$2 RETURNING *',[req.params.orderId,a.est,status]);
+    const order=q.rows[0];if(!order)return res.sendStatus(404);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'order_status_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({order_id:order.id,status})]);
+    rt.pushOwner('update',order);rt.pushVenue(a.est,'update',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'update',order);
+    res.json(order);
+  }catch(e){fail(res,e,'venue_owner_order_update_failed')}
+});
+router.patch('/venue-owner/establishments/:establishmentId/appearance',async(req,res)=>{
+  const a=await venueAccess(req,res,'appearance');if(!a)return;
+  try{
+    const q=await db.query('SELECT category,marker_style,marker_avatar FROM shaurmeg_markers WHERE establishment_id=$1 ORDER BY id LIMIT 1',[a.est]);
+    if(!q.rows[0])return res.sendStatus(404);
+    const style=D.markerStyle(req.body?.marker_style||q.rows[0].marker_style);
+    const avatar=String(req.body?.marker_avatar??q.rows[0].marker_avatar??'').trim().slice(0,900000);
+    await db.query('UPDATE shaurmeg_markers SET marker_style=$2::jsonb,marker_avatar=$3,appearance_locked=TRUE,updated_at=NOW() WHERE establishment_id=$1',[a.est,JSON.stringify(style),avatar]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'appearance_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({icon:style.icon,background:style.background})]);
+    res.json({ok:true,marker_style:style,has_avatar:!!avatar});
+  }catch(e){fail(res,e,'venue_owner_appearance_failed')}
+});
 router.get('/venue-owner/establishments/:establishmentId/stream',async(req,res)=>{
   const a=await venueAccess(req,res,'orders');if(!a)return;const close=rt.stream(res,rt.venueSet(a.est));req.on('close',close);
 });

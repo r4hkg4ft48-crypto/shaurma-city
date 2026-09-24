@@ -421,6 +421,76 @@ async function maybeAutoDiscoverMoscow(reason='startup'){
  }catch(e){console.error('Auto discovery check:',e.message)}
 }
 
+const PURGE_VENUES_MIGRATION='2026-09-24_keep_only_mak_and_lepyoshka_v1';
+async function purgeRemovedVenueRecordsOnce(){
+ if(!DB)return;
+ await DB.query(`CREATE TABLE IF NOT EXISTS shaurma_migrations(
+   migration_key TEXT PRIMARY KEY,
+   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+   details JSONB NOT NULL DEFAULT '{}'::jsonb
+ )`);
+ const done=await DB.query('SELECT 1 FROM shaurma_migrations WHERE migration_key=$1 LIMIT 1',[PURGE_VENUES_MIGRATION]);
+ if(done.rows[0])return;
+
+ const keepIds=['SC-MSK-5E435A0F67','SC-MSK-B7441AB59F'];
+ const keep=await DB.query(
+   'SELECT establishment_id,venue_id,name FROM shaurma_venues WHERE establishment_id=ANY($1::text[]) ORDER BY establishment_id',
+   [keepIds]
+ );
+ if(keep.rows.length!==2){
+   throw new Error('venue_purge_aborted_keep_set_incomplete:'+JSON.stringify(keep.rows.map(x=>x.establishment_id)));
+ }
+
+ const client=await DB.connect();
+ try{
+   await client.query('BEGIN');
+
+   const removed=await client.query(
+     'SELECT establishment_id,venue_id,name FROM shaurma_venues WHERE NOT (establishment_id=ANY($1::text[])) ORDER BY venue_id',
+     [keepIds]
+   );
+   const removedEst=removed.rows.map(x=>x.establishment_id).filter(Boolean);
+
+   const markerDel=await client.query(
+     'DELETE FROM shaurmeg_markers WHERE NOT (establishment_id=ANY($1::text[]))',
+     [keepIds]
+   );
+
+   let auditCount=0;
+   if(removedEst.length){
+     const auditDel=await client.query(
+       'DELETE FROM shaurma_venue_audit WHERE establishment_id=ANY($1::text[])',
+       [removedEst]
+     );
+     auditCount=auditDel.rowCount||0;
+   }
+
+   const venueDel=await client.query(
+     'DELETE FROM shaurma_venues WHERE NOT (establishment_id=ANY($1::text[]))',
+     [keepIds]
+   );
+
+   await client.query(
+     'INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb)',
+     [PURGE_VENUES_MIGRATION,JSON.stringify({
+       kept:keep.rows,
+       removed_venues:removed.rows,
+       deleted_venues:venueDel.rowCount||0,
+       deleted_markers:markerDel.rowCount||0,
+       deleted_audit_rows:auditCount,
+       historical_orders_preserved:true
+     })]
+   );
+   await client.query('COMMIT');
+   console.log('Venue purge complete · kept 2 · removed venues',venueDel.rowCount||0,'markers',markerDel.rowCount||0,'audit',auditCount,'orders preserved');
+ }catch(e){
+   await client.query('ROLLBACK').catch(()=>{});
+   throw e;
+ }finally{
+   client.release();
+ }
+}
+
 const ownerClients=new Set();
 const telegramClients=new Map();
 
@@ -1448,4 +1518,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

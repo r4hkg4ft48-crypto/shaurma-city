@@ -2,29 +2,11 @@
 'use strict';
 
 const API='https://shaurma-city-api.onrender.com';
-let STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='103';
+const STYLE='https://tiles.openfreemap.org/styles/liberty';
+const BUILD='104';
 const GOLD='#777970';
-let EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
+const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
-
-let MAP_CONFIG={version:103};
-let mapConfigPromise=null;
-async function loadMapConfig(){
- if(mapConfigPromise)return mapConfigPromise;
- mapConfigPromise=fetch('map-config.json?v=103',{cache:'no-store'})
-  .then(r=>r.ok?r.json():null)
-  .then(cfg=>{
-    if(cfg&&typeof cfg==='object'){
-      MAP_CONFIG=cfg;
-      if(cfg.map?.style_url)STYLE=String(cfg.map.style_url);
-    }
-    return MAP_CONFIG;
-  })
-  .catch(()=>MAP_CONFIG);
- return mapConfigPromise;
-}
-
 
 let map=null,markers=[],markerEls=new Map(),selected=null,sceneToken=0,directVenueId='';
 let builtin3d=[],buildingLayers=[],roadLayers=[],dimmedLayers=[],profileCache=new Map(),venueSourceReady=false;
@@ -64,12 +46,50 @@ function safeProfile(p){
  };
 }
 
+let mapLibrePromise=null;
+function ensureMapLibreCss(){
+ if(document.querySelector('link[data-realcity-maplibre]'))return;
+ const urls=[
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css',
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css'
+ ];
+ const l=document.createElement('link');l.rel='stylesheet';l.dataset.realcityMaplibre='1';let i=0;
+ l.onerror=()=>{i++;if(i<urls.length)l.href=urls[i]};
+ l.href=urls[0];document.head.appendChild(l);
+}
+function loadMapLibreScript(url,timeout=6500){
+ return new Promise((resolve,reject)=>{
+  const s=document.createElement('script'),timer=setTimeout(()=>{try{s.remove()}catch{};reject(new Error('maplibre_timeout'))},timeout);
+  s.src=url;s.async=true;
+  s.onload=()=>{clearTimeout(timer);window.maplibregl?resolve():reject(new Error('maplibre_missing_global'))};
+  s.onerror=()=>{clearTimeout(timer);reject(new Error('maplibre_load_failed'))};
+  document.head.appendChild(s);
+ });
+}
 function ensureDeps(){
- if(!document.querySelector('link[data-realcity-maplibre]')){
-   const l=document.createElement('link');l.rel='stylesheet';l.href='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css';l.dataset.realcityMaplibre='1';document.head.appendChild(l);
- }
+ ensureMapLibreCss();
  if(window.maplibregl)return Promise.resolve();
- return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js';s.async=true;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)});
+ if(mapLibrePromise)return mapLibrePromise;
+ const urls=[
+  'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js',
+  'https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js'
+ ];
+ mapLibrePromise=(async()=>{
+  let last=null;
+  for(const url of urls){
+   try{await loadMapLibreScript(url);return}catch(e){last=e}
+  }
+  throw last||new Error('maplibre_unavailable');
+ })().catch(e=>{mapLibrePromise=null;throw e});
+ return mapLibrePromise;
+}
+
+
+let lastMapErrorAt=0;
+function reportMapError(error,stage='runtime'){
+ const now=Date.now();if(now-lastMapErrorAt<3000)return;lastMapErrorAt=now;
+ const payload={build:BUILD,stage,message:String(error?.message||error||'unknown').slice(0,500),stack:String(error?.stack||'').slice(0,1600),href:String(location.href||'').slice(0,900),ua:String(navigator.userAgent||'').slice(0,500)};
+ try{fetch(API+'/api/shaurmeg/client-map-error',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),keepalive:true}).catch(()=>{})}catch{}
 }
 
 let orderBotConfigPromise=null;
@@ -125,7 +145,7 @@ function inject(){
 function status(msg,on=true){const el=$('#rcStatus');if(!el)return;el.textContent=msg;el.classList.toggle('show',!!on)}
 function open(){
  const s=$('#realCityScreen');s.classList.add('open');s.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
- const ready=ensureMap().then(()=>{map.resize();return map}).catch(e=>{status('Карта временно недоступна');throw e});
+ const ready=ensureMap().then(()=>{map.resize();return map}).catch(e=>{reportMapError(e,'ensureMap');status('Не удалось загрузить карту · повторите открытие');throw e});
  const intro=window.RealCitySpaceIntro;
  if(intro){intro.play({ready,mode:intro.preferredMode()}).catch(()=>{});}
  return ready;
@@ -137,9 +157,9 @@ function close(){
 
 async function ensureMap(){
  if(map)return map;
- await loadMapConfig();
  await ensureDeps();
- map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false});
+ try{map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false})}catch(e){reportMapError(e,'map-constructor');throw e};
+ map.on('error',e=>{const err=e?.error||e;reportMapError(err,'maplibre');});
  map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
  map.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Каталог заведений: © OpenStreetMap contributors · ODbL'}),'bottom-right');
  await new Promise(resolve=>map.once('load',resolve));
@@ -859,6 +879,9 @@ async function focusVenue(m,replay=false){
  status('Квартал восстановлен '+src);
  setTimeout(()=>{if(token===sceneToken)status('',false)},1900);
 }
+
+window.addEventListener('error',e=>reportMapError(e?.error||e?.message||'window_error','window'));
+window.addEventListener('unhandledrejection',e=>reportMapError(e?.reason||'unhandled_rejection','promise'));
 
 async function init(){
  inject();

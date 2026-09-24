@@ -2,7 +2,7 @@ name: v2-validate
 
 on:
   push:
-    branches: [shaurmeg-v2-clean, v2-telegram-cutover]
+    branches: [shaurmeg-v2-clean, v2-telegram-cutover, v2-telegram-rate-limit-fix]
   pull_request:
     paths:
       - "v2/**"

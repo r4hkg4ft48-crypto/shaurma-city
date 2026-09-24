@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='100';
+const BUILD='101';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
@@ -120,7 +120,7 @@ function close(){
 async function ensureMap(){
  if(map)return map;
  await ensureDeps();
- map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:78});
+ map=new maplibregl.Map({container:'realCityMap',style:STYLE,center:[37.6176,55.7558],zoom:10.4,pitch:48,bearing:-14,attributionControl:false,maxPitch:72,renderWorldCopies:false,fadeDuration:160,antialias:false});
  map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'top-right');
  map.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Каталог заведений: © OpenStreetMap contributors · ODbL'}),'bottom-right');
  await new Promise(resolve=>map.once('load',resolve));
@@ -366,7 +366,7 @@ function installVenueLayers(styleLayers){
   'text-font':['Noto Sans Regular']
  },paint:{'text-color':'#fffdf7','text-halo-color':'rgba(0,0,0,.22)','text-halo-width':.5}},before);
 
- addLayerSafe({id:'rc-venue-point-glow',type:'circle',source:'rc-venues',filter:['!',['has','point_count']],maxzoom:15.25,paint:{
+ addLayerSafe({id:'rc-venue-point-glow',type:'circle',source:'rc-venues',filter:['!',['has','point_count']],maxzoom:24,paint:{
   'circle-radius':['interpolate',['linear'],['zoom'],10,5,13,8,15,13],
   'circle-color':['case',['==',['get','selected'],1],'#fffdf8',['get','glow']],
   'circle-opacity':['case',['==',['get','selected'],1],.34,.14],
@@ -379,9 +379,9 @@ function installVenueLayers(styleLayers){
   'circle-stroke-width':['case',['==',['get','selected'],1],3,1.6],
   'circle-stroke-color':['get','border']
  }},before);
- addLayerSafe({id:'rc-venue-point-icon',type:'symbol',source:'rc-venues',filter:['!',['has','point_count']],minzoom:12.2,maxzoom:15.25,layout:{
+ addLayerSafe({id:'rc-venue-point-icon',type:'symbol',source:'rc-venues',filter:['!',['has','point_count']],minzoom:12.2,maxzoom:24,layout:{
   'text-field':['get','icon'],'text-size':['interpolate',['linear'],['zoom'],12.2,8,14,11,15.2,15],
-  'text-allow-overlap':true,'text-ignore-placement':true
+  'text-allow-overlap':false,'text-ignore-placement':false
  },paint:{'text-color':['get','text'],'text-halo-color':'rgba(255,255,255,.10)','text-halo-width':.3}},before);
 
  map.on('click','rc-venue-cluster',async e=>{
@@ -415,18 +415,19 @@ function makeVenueMarkerElement(m){
 }
 function renderVisibleVenueMarkers(){
  markerEls.forEach(v=>v.remove());markerEls.clear();
- if(!map||map.getZoom()<15.15)return;
- const b=map.getBounds(),visible=markers.filter(m=>Number(m.lon)>=b.getWest()&&Number(m.lon)<=b.getEast()&&Number(m.lat)>=b.getSouth()&&Number(m.lat)<=b.getNorth());
- if(visible.length>220)return;
- for(const m of visible){
-  const el=makeVenueMarkerElement(m);
-  const mk=new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([Number(m.lon),Number(m.lat)]).addTo(map);
-  markerEls.set(String(m.id),mk);
- }
+ if(!map||!selected||map.getZoom()<15.15)return;
+ const lon=Number(selected.lon),lat=Number(selected.lat);
+ if(!Number.isFinite(lon)||!Number.isFinite(lat))return;
+ const b=map.getBounds();
+ if(lon<b.getWest()||lon>b.getEast()||lat<b.getSouth()||lat>b.getNorth())return;
+ const el=makeVenueMarkerElement(selected);
+ el.classList.add('selected');
+ const mk=new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([lon,lat]).addTo(map);
+ markerEls.set(String(selected.id),mk);
 }
 function setSelectedMarkerVisual(id){
  syncVenueSource();
- markerEls.forEach((mk,key)=>mk.getElement().classList.toggle('selected',String(key)===String(id)));
+ renderVisibleVenueMarkers();
 }
 async function loadMarkers(){
  try{
@@ -744,8 +745,10 @@ function setFocusGlowOpacity(v){
 }
 function animateFocusGlow(token){
  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:2100;
+ const minFrame=matchMedia('(pointer:coarse)').matches?32:16;let last=0;
  function frame(now){
    if(token!==sceneToken)return;
+   if(now-last<minFrame){requestAnimationFrame(frame);return}last=now;
    const t=Math.min(1,(now-start)/dur),settle=.82,breath=.84+.16*Math.sin(t*Math.PI*3.2);
    setFocusGlowOpacity(t<.55?(1-Math.pow(1-t/.55,3)):settle*breath);
    if(t<1)requestAnimationFrame(frame);else setFocusGlowOpacity(.78);
@@ -779,7 +782,9 @@ function clearScene(){
 }
 function animateMorph(){
  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,start=performance.now(),dur=reduce?1:1280;
+ const minFrame=matchMedia('(pointer:coarse)').matches?32:16;let last=0;
  function frame(now){
+   if(now-last<minFrame){requestAnimationFrame(frame);return}last=now;
    const t=Math.min(1,(now-start)/dur),e=1-Math.pow(1-t,3);
    try{map.setPaintProperty('rc-gold','fill-extrusion-opacity',.98*(1-e))}catch{}
    setBuiltinOpacity(.84*(1-e)+.02);

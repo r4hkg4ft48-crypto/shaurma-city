@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 
-const VERSION='2';
+const VERSION='3';
 let activeRun=0,raf=0,resizeBound=false,currentState=null;
 
 const $=(s,r=document)=>r.querySelector(s);
@@ -87,7 +87,7 @@ function earthTexture(size=512){
 }
 
 function resize(state){
-  const c=state.canvas,dpr=Math.min(2,window.devicePixelRatio||1);
+  const c=state.canvas,dpr=Math.min(matchMedia('(pointer:coarse)').matches?1.45:1.8,window.devicePixelRatio||1);
   state.w=Math.max(1,innerWidth);state.h=Math.max(1,innerHeight);state.dpr=dpr;
   c.width=Math.floor(state.w*dpr);c.height=Math.floor(state.h*dpr);c.style.width=state.w+'px';c.style.height=state.h+'px';
   state.ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -240,7 +240,8 @@ async function play({ready,mode='full'}={}){
   }
   const runId=++activeRun,shortMode=mode==='short';
   const duration=shortMode?2600:7900;
-  const state={canvas,ctx,stars:makeStars(shortMode?250:520),dust:makeDust(shortMode?0:400),earth:earthTexture(512),w:0,h:0,dpr:1};
+  const mobile=matchMedia('(pointer:coarse)').matches&&Math.min(innerWidth,innerHeight)<900;
+  const state={canvas,ctx,stars:makeStars(shortMode?(mobile?150:220):(mobile?330:480)),dust:makeDust(shortMode?0:(mobile?220:340)),earth:earthTexture(mobile?384:512),w:0,h:0,dpr:1};
   currentState=state;resize(state);
   if(!resizeBound){window.addEventListener('resize',()=>{if(root.classList.contains('active')&&currentState)resize(currentState)},{passive:true});resizeBound=true}
   root.classList.remove('rcSpaceExit');root.classList.add('active');root.setAttribute('aria-hidden','false');
@@ -250,8 +251,10 @@ async function play({ready,mode='full'}={}){
 
   const start=performance.now();
   await new Promise(resolve=>{
+    let lastFrame=0;const minFrame=mobile?25:16;
     function tick(now){
       if(runId!==activeRun){resolve();return}
+      if(now-lastFrame<minFrame){raf=requestAnimationFrame(tick);return}lastFrame=now;
       const p=clamp((now-start)/duration,0,1);
       drawFrame(state,p,shortMode);
       const [stage,tele]=stageText(p,shortMode);

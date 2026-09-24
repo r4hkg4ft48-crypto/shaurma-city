@@ -939,14 +939,26 @@ app.put('/api/shaurmeg/admin/markers/:id',async(req,res)=>{
 
 
 app.get('/api/shaurmeg/map-points',async(req,res)=>{
- res.setHeader('Cache-Control','public, max-age=120, stale-while-revalidate=600');
+ res.setHeader('Cache-Control','public, max-age=15, stale-while-revalidate=60');
  if(!DB)return res.json([]);
  try{
-  const q=await DB.query(`SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.lat,m.lon,m.category,m.marker_style,(m.marker_avatar<>'') AS has_avatar,m.verification_status,m.verification_score,m.updated_at,(jsonb_array_length(v.menu)>0) AS has_menu
+  const q=await DB.query(`SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.lat,m.lon,m.category,m.marker_style,(m.marker_avatar<>'') AS has_avatar,m.verification_status,m.verification_score,m.relevance_score,m.auto_imported,m.position_locked,m.source_provider,m.updated_at,(jsonb_array_length(v.menu)>0) AS has_menu
     FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
-    WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
-    ORDER BY m.id`);
-  res.json(q.rows.map(row=>({id:row.id,marker_id:row.id,establishment_id:row.establishment_id||null,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,category:row.category||'shawarma',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,has_menu:!!row.has_menu,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),updated_at:row.updated_at})));
+    WHERE m.is_active=TRUE
+      AND v.is_active=TRUE
+      AND COALESCE(m.source_suppressed,FALSE)=FALSE
+      AND (
+        COALESCE(m.auto_imported,FALSE)=FALSE
+        OR COALESCE(m.position_locked,FALSE)=TRUE
+        OR m.verification_status IN ('manual_verified','source_verified','source_supported')
+        OR COALESCE(m.verification_score,0)>=0.58
+      )
+      AND (
+        COALESCE(m.auto_imported,FALSE)=FALSE
+        OR COALESCE(m.relevance_score,0)>=0.66
+      )
+    ORDER BY COALESCE(m.auto_imported,FALSE) ASC, COALESCE(m.position_locked,FALSE) DESC, COALESCE(m.verification_score,0) DESC, m.id`);
+  res.json(q.rows.map(row=>({id:row.id,marker_id:row.id,establishment_id:row.establishment_id||null,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,category:row.category||'shawarma',marker_style:normalizeMarkerStyle(row.marker_style,row.category||'shawarma'),has_avatar:!!row.has_avatar,has_menu:!!row.has_menu,verification_status:row.verification_status||'manual',verification_score:Number(row.verification_score??1),relevance_score:Number(row.relevance_score??1),position_locked:!!row.position_locked,source_provider:row.source_provider||'',updated_at:row.updated_at})));
  }catch(e){console.error('map points:',e.message);res.status(500).json({error:'map_points_failed'})}
 });
 

@@ -515,7 +515,7 @@ function publicUserProfile(row){
  };
 }
 function adminSessionSecret(){
- const token=process.env.ADMIN_TELEGRAM_BOT_TOKEN||process.env.OWNER_API_TOKEN||'';
+ const token=adminTelegramBotToken()||process.env.OWNER_API_TOKEN||'';
  if(!token)throw new Error('admin_not_configured');
  return crypto.createHmac('sha256','ShaurmaCityAdminSessionV1').update(token).digest();
 }
@@ -605,39 +605,72 @@ async function getClientBotInfo(){
 const CLIENT_BOT_WEBHOOK_SECRET=String(process.env.CLIENT_TELEGRAM_WEBHOOK_SECRET||'').trim();
 const PUBLIC_API_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,'');
 const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,'');
-function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='client-bot',revision}={}){
- const u=new URL(PUBLIC_APP_URL+'/');
+const ORDER_BUILD='100';
+const MAP_BUILD='100';
+
+function adminTelegramBotToken(){
+ return String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
+}
+function aggregatorBotToken(){
+ return String(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN||process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
+}
+const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/map.html').trim();
+const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
+let aggregatorBotInfo=null;
+
+async function aggregatorTelegramApi(method,body={}){
+ const token=aggregatorBotToken();if(!token)throw new Error('aggregator_telegram_not_configured');
+ const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));return j.result;
+}
+async function getAggregatorBotInfo(){
+ if(aggregatorBotInfo)return aggregatorBotInfo;
+ const token=aggregatorBotToken();if(!token)return null;
+ const r=await fetch('https://api.telegram.org/bot'+token+'/getMe');
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
+ aggregatorBotInfo=j.result;return aggregatorBotInfo;
+}
+function aggregatorMapUrl(){
+ const u=new URL(PUBLIC_MAP_URL);
+ u.searchParams.set('source','shaurmeggbot');
+ u.searchParams.set('view','map');
+ u.searchParams.set('b',MAP_BUILD);
+ return u.toString();
+}
+function clientMiniAppUrl({venue_id,establishment_id,marker_id,source='order-bot',revision}={}){
+ const u=new URL(PUBLIC_APP_URL+'/index.html');
  u.searchParams.set('source',source);
- u.searchParams.set('b','91');
+ u.searchParams.set('b',ORDER_BUILD);
  if(venue_id)u.searchParams.set('venue',venue_id);
  if(establishment_id)u.searchParams.set('establishment',establishment_id);
  if(marker_id)u.searchParams.set('marker',String(marker_id));
- if(establishment_id&&marker_id)u.searchParams.set('context','marker');
+ if(venue_id&&establishment_id&&marker_id)u.searchParams.set('context','marker');
  if(revision)u.searchParams.set('rev',String(revision));
  u.searchParams.set('view','menu');
  return u.toString();
 }
-async function botVenueContext(venueId){
- const venue=await resolveVenue(venueId);
- if(!venue)return null;
- let marker=null;
- if(DB){
-  const q=await DB.query(`
-    SELECT id,establishment_id,venue_id,name,address
-    FROM shaurmeg_markers
-    WHERE venue_id=$1 AND establishment_id=$2 AND is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE
-    ORDER BY CASE WHEN COALESCE(auto_imported,FALSE)=FALSE THEN 0 ELSE 1 END,id
-    LIMIT 1
-  `,[venue.venue_id,venue.establishment_id]);
-  marker=q.rows[0]||null;
- }
+async function botOrderContext(markerId){
+ if(!DB||!/^[0-9]+$/.test(String(markerId||'')))return null;
+ const q=await DB.query(`
+   SELECT
+     v.establishment_id,v.venue_id,v.slug,v.name AS venue_name,v.is_active,v.config,v.menu,v.created_at,v.updated_at,
+     m.id AS marker_id,m.name AS marker_name,m.address AS marker_address,m.establishment_id AS marker_establishment_id
+   FROM shaurmeg_markers m
+   JOIN shaurma_venues v ON v.venue_id=m.venue_id AND v.establishment_id=m.establishment_id
+   WHERE m.id=$1 AND m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
+   LIMIT 1
+ `,[String(markerId)]);
+ const row=q.rows[0];if(!row)return null;
+ const venue={
+   establishment_id:row.establishment_id,venue_id:row.venue_id,slug:row.slug,name:row.venue_name,
+   is_active:row.is_active,config:row.config||{},menu:Array.isArray(row.menu)?row.menu:[],
+   created_at:row.created_at,updated_at:row.updated_at
+ };
+ const marker={id:row.marker_id,establishment_id:row.marker_establishment_id,venue_id:row.venue_id,name:row.marker_name,address:row.marker_address};
  const revision=venue.updated_at?new Date(venue.updated_at).getTime():Date.now();
  return {venue,marker,url:clientMiniAppUrl({
-  venue_id:venue.venue_id,
-  establishment_id:marker?.establishment_id||venue.establishment_id,
-  marker_id:marker?.id||null,
-  source:'telegram-bot',
-  revision
+   venue_id:venue.venue_id,establishment_id:venue.establishment_id,marker_id:marker.id,source:'telegram-order-bot',revision
  })};
 }
 function parseClientStart(text){
@@ -645,13 +678,26 @@ function parseClientStart(text){
  const m=raw.match(/^\/(?:start|menu)(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
  if(!m)return null;
  const param=String(m[1]||'').trim();
- if(/^venue_[a-z0-9_-]{1,80}$/i.test(param))return {venue_id:normalizeVenueId(param.slice(6))};
- if(/^[a-z0-9_-]{1,80}$/i.test(param))return {venue_id:normalizeVenueId(param)};
- return {venue_id:DEFAULT_VENUE_ID};
+ const order=param.match(/^order_([0-9]{1,20})$/i);
+ if(order)return {marker_id:order[1]};
+ return {choose_point:true};
 }
-async function sendClientBotMenu(chatId,venueId){
- const ctx=await botVenueContext(venueId||DEFAULT_VENUE_ID);
- if(!ctx)return clientTelegramApi('sendMessage',{chat_id:chatId,text:'Заведение не найдено или временно недоступно.'});
+async function sendClientBotChoosePoint(chatId){
+ let username='Shaurmeggbot';
+ try{username=(await getAggregatorBotInfo())?.username||username}catch{}
+ return clientTelegramApi('sendMessage',{
+   chat_id:chatId,
+   text:'🥙 Этот бот отвечает только за меню и заказ в уже выбранной точке.\n\nСначала выберите заведение на карте в @'+username+'.',
+   reply_markup:{inline_keyboard:[[{text:'Открыть карту Шаурмега',url:'https://t.me/'+username}]]}
+ });
+}
+async function sendClientBotMenu(chatId,markerId){
+ const ctx=await botOrderContext(markerId);
+ if(!ctx)return clientTelegramApi('sendMessage',{
+   chat_id:chatId,
+   text:'Эта точка больше недоступна или ссылка устарела. Выберите заведение заново на карте.',
+   reply_markup:{inline_keyboard:[[{text:'Выбрать точку',url:'https://t.me/Shaurmeggbot'}]]}
+ });
  const title=String(ctx.marker?.name||ctx.venue.name||'Заведение');
  const where=ctx.marker?.address?('\n'+ctx.marker.address):'';
  const sections=(Array.isArray(ctx.venue.config?.menu_sections)?ctx.venue.config.menu_sections:[]).filter(x=>x?.active!==false).map(x=>String(x.emoji||'')+' '+String(x.name||'')).map(x=>x.trim()).filter(Boolean);
@@ -660,72 +706,58 @@ async function sendClientBotMenu(chatId,venueId){
  return clientTelegramApi('sendMessage',{
   chat_id:chatId,
   text:'🥙 '+title+where+'\n\n'+
-       'Сейчас в базе: '+items+' позиций'+(sections.length?' · '+sections.length+' разделов':'')+'\n'+
+       'Меню: '+items+' позиций'+(sections.length?' · '+sections.length+' разделов':'')+'\n'+
        (sections.length?'Разделы: '+sections.join(' · ')+'\n':'')+
        'Обновлено: '+updated+' МСК\n\n'+
-       'Кнопка ниже открывает свежую версию меню напрямую из текущей базы.',
-  reply_markup:{inline_keyboard:[[{text:'Открыть актуальное меню',web_app:{url:ctx.url}}]]}
+       'Это меню именно выбранной на карте точки.',
+  reply_markup:{inline_keyboard:[[{text:'Открыть меню и заказать',web_app:{url:ctx.url}}],[{text:'← Выбрать другую точку',url:'https://t.me/Shaurmeggbot'}]]}
  });
 }
-async function refreshClientBotMenuButton(venueId=DEFAULT_VENUE_ID){
- const ctx=await botVenueContext(venueId);
- if(!ctx)return;
- await clientTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Меню',web_app:{url:ctx.url}}});
- return ctx;
+async function resetClientBotMenuButton(){
+ await clientTelegramApi('setChatMenuButton',{menu_button:{type:'default'}});
 }
 async function sendClientBotVersion(chatId){
- const ctx=await botVenueContext(DEFAULT_VENUE_ID);
- if(!ctx)return clientTelegramApi('sendMessage',{chat_id:chatId,text:'Диагностика недоступна.'});
- const sections=Array.isArray(ctx.venue.config?.menu_sections)?ctx.venue.config.menu_sections.length:0;
- const items=Array.isArray(ctx.venue.menu)?ctx.venue.menu.length:0;
  return clientTelegramApi('sendMessage',{
-  chat_id:chatId,
-  text:'SHAURMEG CLIENT BUILD 91\n'+
-       'Заведение: '+ctx.venue.name+'\n'+
-       'ID: '+ctx.venue.establishment_id+'\n'+
-       'Меню: '+items+' позиций · '+sections+' разделов\n'+
-       'Обновлено: '+String(ctx.venue.updated_at||'—')
+   chat_id:chatId,
+   text:'SHAURMEG ORDER BOT BUILD '+ORDER_BUILD+'\nРоль: только меню и заказ выбранной точки.\nИсточник точки: @Shaurmeggbot.'
  });
 }
-
 async function syncTelegramMiniApp(){
  const token=clientBotToken();
- if(!token){console.log('Telegram client bot token not configured');return}
+ if(!token){console.log('Telegram order bot token not configured');return}
  try{
   const info=await getClientBotInfo();
-  const defaultCtx=await refreshClientBotMenuButton(DEFAULT_VENUE_ID);
-  const menuUrl=defaultCtx?.url||String(process.env.CLIENT_MINI_APP_URL||clientMiniAppUrl({venue_id:DEFAULT_VENUE_ID})).trim();
+  await resetClientBotMenuButton();
   await clientTelegramApi('setMyCommands',{commands:[
-   {command:'start',description:'Открыть меню'},
-   {command:'menu',description:'Меню заведения'},
-   {command:'version',description:'Проверить версию и синхронизацию'}
+   {command:'start',description:'Заказать в выбранной точке'},
+   {command:'menu',description:'Открыть заказ по ссылке с карты'},
+   {command:'version',description:'Проверить версию'}
   ]});
   if(CLIENT_BOT_WEBHOOK_SECRET){
    await clientTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/client-bot/webhook/'+CLIENT_BOT_WEBHOOK_SECRET,
-    allowed_updates:['message'],
-    drop_pending_updates:false
+    allowed_updates:['message'],drop_pending_updates:false
    });
-  }else{
-   console.warn('CLIENT_TELEGRAM_WEBHOOK_SECRET is not configured; client bot commands are disabled');
-  }
-  console.log('Telegram client bot fully synced @'+String(info.username||''));
- }catch(e){console.error('Telegram Mini App sync:',e.message)}
+  }else console.warn('CLIENT_TELEGRAM_WEBHOOK_SECRET is not configured; order bot commands are disabled');
+  console.log('Telegram order bot synced @'+String(info.username||'')+' · order-only');
+ }catch(e){console.error('Telegram order bot sync:',e.message)}
 }
-
-async function syncAdminTelegramMiniApp(){
- const token=process.env.ADMIN_TELEGRAM_BOT_TOKEN;
- if(!token){console.log('Telegram admin bot token not configured');return}
+async function syncAggregatorTelegramMiniApp(){
+ const token=aggregatorBotToken();
+ if(!token){console.log('Telegram aggregator bot token not configured');return}
  try{
-  const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
-   method:'POST',
-   headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:'https://shaurma-city-api.onrender.com/shaurma-owner?v=4'}}})
+  const info=await getAggregatorBotInfo(),mapUrl=aggregatorMapUrl();
+  await aggregatorTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}});
+  await aggregatorTelegramApi('setMyCommands',{commands:[
+    {command:'start',description:'Открыть карту Шаурмега'},
+    {command:'map',description:'Карта заведений'}
+  ]});
+  if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
+    url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
+    allowed_updates:['message'],drop_pending_updates:false
   });
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
-  console.log('Telegram admin Mini App menu synced to Shaurma City');
- }catch(e){console.error('Telegram admin Mini App sync:',e.message)}
+  console.log('Telegram aggregator bot synced @'+String(info?.username||'')+' · map-only');
+ }catch(e){console.error('Telegram aggregator bot sync:',e.message)}
 }
 
 
@@ -761,8 +793,8 @@ app.get('/api/shaurma/client-config',async(req,res)=>{
   const botUsername=botInfo?.username||'';
   if(!botUsername)return res.status(503).json({error:'telegram_not_configured'});
   const shortName=String(process.env.CLIENT_MINI_APP_SHORT_NAME||'').trim();
-  const base=`https://t.me/${botUsername}?start=venue_{venue_id}`;
-  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:DEFAULT_VENUE_ID,launch_url_template:base,launch_mode:'bot_message_web_app'});
+  const base=`https://t.me/${botUsername}?start=order_{marker_id}`;
+  res.json({bot_username:botUsername,mini_app_short_name:shortName||null,has_main_mini_app:Boolean(botInfo.has_main_web_app),default_venue_id:null,launch_url_template:base,launch_mode:'map_to_order_bot',role:'order-only'});
  }catch(e){console.error('client config:',e.message);res.status(502).json({error:'telegram_lookup_failed'})}
 });
 
@@ -773,7 +805,7 @@ function publishVenue(venue){
   for(const client of clients){try{client.write(payload)}catch{clients.delete(client)}}
   if(!clients.size)venueClients.delete(venue.venue_id);
  }
- if(venue?.venue_id===DEFAULT_VENUE_ID)refreshClientBotMenuButton(DEFAULT_VENUE_ID).catch(e=>console.error('client bot menu refresh:',e.message));
+
 }
 
 function normalizeRealCityReferences(value){
@@ -1130,7 +1162,7 @@ app.get('/api/shaurma/stream',(req,res)=>{
 
 app.post('/api/shaurma/admin-telegram-auth',(req,res)=>{
  try{
-  const user=verifyTelegramInitDataWithToken((req.body||{}).initData||'',process.env.ADMIN_TELEGRAM_BOT_TOKEN);
+  const user=verifyTelegramInitDataWithToken((req.body||{}).initData||'',adminTelegramBotToken());
   if(!adminTelegramAllowed(user.id))return res.status(403).json({error:'admin_not_allowed',user_id:String(user.id)});
   const session=newAdminTelegramSession(user);
   res.json({ok:true,session,user:{id:String(user.id),username:user.username||'',first_name:user.first_name||'',last_name:user.last_name||''}});
@@ -1313,6 +1345,21 @@ app.get('/api/shaurma/stats',async(req,res)=>{
  }catch(e){res.status(500).json({error:e.message})}
 });
 
+app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
+ if(!AGGREGATOR_BOT_WEBHOOK_SECRET||req.params.secret!==AGGREGATOR_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
+ res.sendStatus(200);
+ try{
+   const msg=req.body?.message;if(!msg?.chat?.id)return;
+   const raw=String(msg.text||'').trim();
+   if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return;
+   await aggregatorTelegramApi('sendMessage',{
+     chat_id:msg.chat.id,
+     text:'🗺 Шаурмег — карта заведений.\n\nВыберите точку на карте, затем нажмите «Меню и заказ». Заказ откроется отдельно в @LepeshkaJulbot.',
+     reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:aggregatorMapUrl()}}]]}
+   });
+ }catch(e){console.error('aggregator bot webhook:',e.message)}
+});
+
 app.post('/api/client-bot/webhook/:secret',async(req,res)=>{
  if(!CLIENT_BOT_WEBHOOK_SECRET||req.params.secret!==CLIENT_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
  res.sendStatus(200);
@@ -1321,32 +1368,42 @@ app.post('/api/client-bot/webhook/:secret',async(req,res)=>{
   const rawText=String(msg.text||'').trim();
   if(/^\/version(?:@[A-Za-z0-9_]+)?$/i.test(rawText)){await sendClientBotVersion(msg.chat.id);return}
   const start=parseClientStart(rawText);
-  if(start){await sendClientBotMenu(msg.chat.id,start.venue_id||DEFAULT_VENUE_ID);return}
-  if(rawText.toLowerCase()==='меню'){await sendClientBotMenu(msg.chat.id,DEFAULT_VENUE_ID)}
- }catch(e){console.error('client bot webhook:',e.message)}
+  if(start?.marker_id){await sendClientBotMenu(msg.chat.id,start.marker_id);return}
+  if(start?.choose_point||rawText.toLowerCase()==='меню'){await sendClientBotChoosePoint(msg.chat.id);return}
+ }catch(e){console.error('order bot webhook:',e.message)}
 });
 
 app.get('/api/shaurma/client-bot-status',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
-  const [info,menu,webhook]=await Promise.all([
-   getClientBotInfo(),
-   clientTelegramApi('getChatMenuButton',{}),
-   clientTelegramApi('getWebhookInfo',{})
+  const [info,menu,webhook,aggregator]=await Promise.all([
+   getClientBotInfo(),clientTelegramApi('getChatMenuButton',{}),clientTelegramApi('getWebhookInfo',{}),getAggregatorBotInfo().catch(()=>null)
   ]);
-  const expected=await botVenueContext(DEFAULT_VENUE_ID);
   res.json({
-   username:info?.username||'',
+   username:info?.username||'',role:'order-only',build:ORDER_BUILD,
    has_main_mini_app:Boolean(info?.has_main_web_app),
-   chat_menu_type:menu?.type||null,
-   chat_menu_url:menu?.web_app?.url||null,
-   expected_menu_url:expected?.url||null,
+   chat_menu_type:menu?.type||null,chat_menu_url:menu?.web_app?.url||null,
    webhook_owned:Boolean(webhook?.url&&webhook.url.startsWith(PUBLIC_API_URL+'/api/client-bot/webhook/')),
-   webhook_pending:Number(webhook?.pending_update_count||0),
-   webhook_last_error:webhook?.last_error_message||null,
-   launch_mode:'bot_message_web_app'
+   webhook_pending:Number(webhook?.pending_update_count||0),webhook_last_error:webhook?.last_error_message||null,
+   aggregator_username:aggregator?.username||'',launch_mode:'selected-marker-only'
   });
  }catch(e){res.status(502).json({error:'client_bot_status_failed',message:e.message})}
+});
+
+app.get('/api/shaurmeg/bot-status',async(req,res)=>{
+ try{
+  res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
+  const [info,menu,webhook]=await Promise.all([
+    getAggregatorBotInfo(),aggregatorTelegramApi('getChatMenuButton',{}),aggregatorTelegramApi('getWebhookInfo',{})
+  ]);
+  res.json({
+    username:info?.username||'',role:'map-only',build:MAP_BUILD,
+    chat_menu_type:menu?.type||null,chat_menu_url:menu?.web_app?.url||null,
+    expected_map_url:aggregatorMapUrl(),
+    webhook_owned:Boolean(webhook?.url&&webhook.url.startsWith(PUBLIC_API_URL+'/api/aggregator-bot/webhook/')),
+    webhook_pending:Number(webhook?.pending_update_count||0),webhook_last_error:webhook?.last_error_message||null
+  });
+ }catch(e){res.status(502).json({error:'aggregator_bot_status_failed',message:e.message})}
 });
 
 const venueOwnerSystem=installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner});
@@ -1360,4 +1417,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncTelegramMiniApp();await syncAdminTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

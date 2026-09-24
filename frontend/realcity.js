@@ -3,7 +3,7 @@
 
 const API='https://shaurma-city-api.onrender.com';
 const STYLE='https://tiles.openfreemap.org/styles/liberty';
-const BUILD='91';
+const BUILD='100';
 const GOLD='#777970';
 const EARTH={bg:'#1a211c',land:'#4d5649',land2:'#5b6056',residential:'#62665b',commercial:'#6d695c',industrial:'#5a5d58',grass:'#536d4c',forest:'#2f4d37',scrub:'#59634c',water:'#13242a',building:'#89877d',buildingTop:'#a09d91',road:'#f6f4ed',roadSoft:'#e5e7e1',path:'#cfd4cb',border:'#717a70',label:'#f7f6ef',labelMuted:'#d4d6cf',halo:'#2b332d'};
 const EMPTY={type:'FeatureCollection',features:[]};
@@ -54,6 +54,25 @@ function ensureDeps(){
  return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js';s.async=true;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)});
 }
 
+let orderBotConfigPromise=null;
+async function getOrderBotConfig(){
+ if(orderBotConfigPromise)return orderBotConfigPromise;
+ orderBotConfigPromise=fetch(API+'/api/shaurma/client-config?t='+Date.now(),{cache:'no-store'})
+  .then(r=>{if(!r.ok)throw new Error('order_bot_config_'+r.status);return r.json()})
+  .catch(e=>{orderBotConfigPromise=null;throw e});
+ return orderBotConfigPromise;
+}
+async function openOrderForMarker(m){
+ const markerId=String(m?.marker_id||m?.id||'');
+ if(!/^[0-9]+$/.test(markerId))throw new Error('marker_context_missing');
+ const cfg=await getOrderBotConfig();
+ const username=String(cfg?.bot_username||'').replace(/^@/,'');
+ if(!username)throw new Error('order_bot_missing');
+ const link='https://t.me/'+username+'?start=order_'+markerId;
+ if(window.Telegram?.WebApp?.openTelegramLink){window.Telegram.WebApp.openTelegramLink(link);return}
+ location.href=link;
+}
+
 function inject(){
  if($('#realCityScreen'))return;
  document.body.insertAdjacentHTML('beforeend',`
@@ -72,7 +91,7 @@ function inject(){
    <div class="rcStatus" id="rcStatus">Собираем реальный квартал…</div>
    <div class="rcVenueCard" id="rcVenueCard">
      <div class="rcVenueHead"><div class="rcPinIcon">🥙</div><div><b id="rcVenueName"></b><small id="rcVenueAddress"></small></div><span class="rcLive" id="rcLive">REAL CITY</span></div>
-     <div class="rcVenueActions"><button class="rcMenu" id="rcMenu" type="button">Открыть меню</button><button class="rcRepaint" id="rcRepaint" type="button">↻ Ещё раз</button></div>
+     <div class="rcVenueActions"><button class="rcMenu" id="rcMenu" type="button">Меню и заказ</button><button class="rcRepaint" id="rcRepaint" type="button">↻ Ещё раз</button></div>
    </div>
  </section>`);
  $('#realCityOpen').onclick=open;
@@ -82,7 +101,7 @@ function inject(){
  $('#rcSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search(true)}});
  $('#rcNearby').onclick=locate;
  $('#rcRepaint').onclick=()=>selected&&focusVenue(selected,true);
- $('#rcMenu').onclick=()=>{if(!selected)return;const u=new URL(location.href);u.searchParams.set('source','map-marker');u.searchParams.set('venue',selected.venue_id);u.searchParams.set('establishment',selected.establishment_id||'');u.searchParams.set('marker',selected.marker_id||selected.id);u.searchParams.set('context','marker');u.searchParams.set('view','menu');u.searchParams.set('b',BUILD);if(selected.updated_at)u.searchParams.set('rev',String(Date.parse(selected.updated_at)||Date.now()));u.searchParams.delete('tgWebAppStartParam');u.searchParams.delete('startapp');location.href=u.toString()};
+ $('#rcMenu').onclick=async()=>{if(!selected)return;const btn=$('#rcMenu'),label=btn.textContent;btn.disabled=true;btn.textContent='Открываем…';try{await openOrderForMarker(selected)}catch(e){status('Не удалось открыть заказной бот');setTimeout(()=>status('',false),1800)}finally{btn.disabled=false;btn.textContent=label}};
 }
 
 function status(msg,on=true){const el=$('#rcStatus');if(!el)return;el.textContent=msg;el.classList.toggle('show',!!on)}
@@ -775,7 +794,7 @@ async function focusVenue(m,replay=false){
  if(!m||!map)return;selected=m;sceneToken++;const token=sceneToken;
  setSelectedMarkerVisual(m.id);updateVenueCardMarker(m);
  $('#rcVenueName').textContent=m.name||'Точка';$('#rcVenueAddress').textContent=m.address||'Москва';$('#rcVenueCard').classList.add('show');$('#rcResults').classList.remove('show');$('#rcLive').textContent='REAL CITY';
- $('#rcMenu').textContent='Открыть меню';
+ $('#rcMenu').textContent='Меню и заказ';
  clearScene();
  setFocusPoint(m);
  status('Анализируем фото и собираем фасады…');

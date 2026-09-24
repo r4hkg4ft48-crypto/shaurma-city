@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">\n<meta name="shaurma-build" content="91">
+<meta charset="utf-8">\n<meta name="shaurma-build" content="100">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -1920,21 +1920,19 @@ body{
 </div></div><div class="toast" id="toast"></div>
 <script>
 const API="https://shaurma-city-api.onrender.com";
-const DEFAULT_VENUE_ID="lepyoshka";
+const DEFAULT_VENUE_ID="";
 function cleanVenueId(value){const id=String(value||"").trim().toLowerCase().replace(/^venue_/,"");return /^[a-z0-9_-]{1,64}$/.test(id)?id:""}
 const LAUNCH_URL=new URL(location.href);
 const LAUNCH_TG=window.Telegram&&window.Telegram.WebApp;
-const LAUNCH_START_VENUE=cleanVenueId(LAUNCH_URL.searchParams.get("tgWebAppStartParam")||LAUNCH_TG?.initDataUnsafe?.start_param);
 const LAUNCH_URL_VENUE=cleanVenueId(LAUNCH_URL.searchParams.get("venue"));
 const RAW_ESTABLISHMENT=/^SC-MSK-[A-F0-9]{10}$/.test(String(LAUNCH_URL.searchParams.get("establishment")||"").trim().toUpperCase())?String(LAUNCH_URL.searchParams.get("establishment")).trim().toUpperCase():"";
 const RAW_MARKER=/^\d+$/.test(String(LAUNCH_URL.searchParams.get("marker")||"").trim())?String(LAUNCH_URL.searchParams.get("marker")).trim():"";
-const URL_MARKER_CONTEXT=LAUNCH_URL.searchParams.get("context")==="marker"&&!!LAUNCH_URL_VENUE&&!!RAW_ESTABLISHMENT&&!!RAW_MARKER;
-const TELEGRAM_LEPESH_DEFAULT=!!LAUNCH_TG?.initData&&!LAUNCH_URL_VENUE&&!LAUNCH_START_VENUE;
-const ACTIVE_VENUE_ID=LAUNCH_URL_VENUE||LAUNCH_START_VENUE||DEFAULT_VENUE_ID;
-const ACTIVE_ESTABLISHMENT_ID=URL_MARKER_CONTEXT?RAW_ESTABLISHMENT:(TELEGRAM_LEPESH_DEFAULT?"SC-MSK-B7441AB59F":"");
-const ACTIVE_MARKER_ID=URL_MARKER_CONTEXT?RAW_MARKER:(TELEGRAM_LEPESH_DEFAULT?"1":"");
-const IS_MARKER_CONTEXT=URL_MARKER_CONTEXT||TELEGRAM_LEPESH_DEFAULT;
-const SHOULD_OPEN_VENUE_MENU=IS_MARKER_CONTEXT||LAUNCH_URL.searchParams.get("view")==="menu"||LAUNCH_URL.searchParams.get("open")==="menu";
+const ORDER_CONTEXT_READY=!!LAUNCH_URL_VENUE&&!!RAW_ESTABLISHMENT&&!!RAW_MARKER;
+const ACTIVE_VENUE_ID=ORDER_CONTEXT_READY?LAUNCH_URL_VENUE:"";
+const ACTIVE_ESTABLISHMENT_ID=ORDER_CONTEXT_READY?RAW_ESTABLISHMENT:"";
+const ACTIVE_MARKER_ID=ORDER_CONTEXT_READY?RAW_MARKER:"";
+const IS_MARKER_CONTEXT=ORDER_CONTEXT_READY;
+const SHOULD_OPEN_VENUE_MENU=true;
 let activeVenue={venue_id:ACTIVE_VENUE_ID,slug:ACTIVE_VENUE_ID,name:"Загружаем…",config:{},menu:[]};
 let venueLoaded=false,venueLoadFailed=false,venueMenuOpened=false,venueStream=null,availableVenues=[],venueSyncTimer=null,lastVenueUpdatedAt="",venueHeroImage="";
 let tgSession=localStorage.getItem("sc_tg_session")||sessionStorage.getItem("sc_tg_session")||"";
@@ -2054,6 +2052,7 @@ function applyVenue(venue){
   if(SHOULD_OPEN_VENUE_MENU&&!venueMenuOpened){venueMenuOpened=true;requestAnimationFrame(()=>setTimeout(()=>$("#menu")?.scrollIntoView({block:"start"}),80))}
 }
 async function loadVenue({quiet=false}={}){
+  if(!ORDER_CONTEXT_READY){if(!quiet){venueLoadFailed=true;render()}return null}
   try{
     const endpoint=IS_MARKER_CONTEXT
       ?API+"/api/shaurma/menu-context?marker_id="+encodeURIComponent(ACTIVE_MARKER_ID)+"&establishment_id="+encodeURIComponent(ACTIVE_ESTABLISHMENT_ID)+"&t="+Date.now()
@@ -2075,9 +2074,10 @@ async function loadVenue({quiet=false}={}){
   }
 }
 function connectVenueUpdates(){
+  if(!ORDER_CONTEXT_READY)return;
   venueStream?.close();
   const streamVenue=cleanVenueId(activeVenue?.venue_id)||ACTIVE_VENUE_ID;
-  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=91&t="+Date.now());
+  venueStream=new EventSource(API+"/api/shaurma/venues/"+encodeURIComponent(streamVenue)+"/stream?b=100&t="+Date.now());
   venueStream.addEventListener("venue",event=>{try{applyVenue(JSON.parse(event.data))}catch{}});
   venueStream.onerror=()=>{if(!document.hidden)loadVenue({quiet:true})};
   clearInterval(venueSyncTimer);
@@ -2101,13 +2101,9 @@ async function loadVenueChoices(){
     host.innerHTML='<div class="tgUnavailable">Не удалось загрузить список заведений</div>';
   }
 }
-async function openVenueChooser(){if(IS_MARKER_CONTEXT)return;$("#venueChooser").classList.add("open");document.body.style.overflow="hidden";await loadVenueChoices()}
+async function openVenueChooser(){return}
 function closeVenueChooser(){$("#venueChooser").classList.remove("open");document.body.style.overflow=""}
-function switchVenue(venueId){
-  if(IS_MARKER_CONTEXT)return;
-  const id=cleanVenueId(venueId);if(!id||id===activeVenue.venue_id){closeVenueChooser();return}
-  const u=new URL(location.href);u.searchParams.set("venue",id);u.searchParams.set("view","map");u.searchParams.set("b","91");u.searchParams.delete("open");u.searchParams.delete("v");u.searchParams.delete("tgWebAppStartParam");location.href=u.toString();
-}
+function switchVenue(){return}
 function syncMiniAppViewport(){
   const tg=window.Telegram&&window.Telegram.WebApp;
   const setH=()=>{
@@ -2219,7 +2215,7 @@ function preloadHeroImages(){
   });
 }
 function heroFor(cat){$("#heroMedia").classList.add("swap");setTimeout(()=>{$("#heroImg").src=(venueHeroImage&&cat==="shawarma")?venueHeroImage:(CATIMG[cat]||IMG1);$("#heroLabel").textContent=TIT[cat]||"Шаурма";$("#heroSub").textContent=cat==="extras"?"Фри · халапеньо · лук · сыр":cat==="drinks"?"Кола · компот · морс · сок":cat==="flatbread"?"Фирменная лепёшка":"Сочная классика · сырная";$("#heroMedia").classList.remove("swap")},120)}
-function render(){const grid=$("#grid");if(!venueLoaded){grid.innerHTML='<div class="card" style="padding:18px;grid-column:1/-1"><b>'+(venueLoadFailed?'Не удалось загрузить меню':'Загружаем меню заведения…')+'</b><p style="color:var(--muted);margin:7px 0 0">'+(venueLoadFailed?'Проверьте соединение и откройте приложение ещё раз.':'Позиции и цены появятся через несколько секунд.')+'</p></div>';return}const arr=P.filter(x=>!filter||x.c===filter);grid.innerHTML=arr.length?arr.map(x=>`<article class="card"><div class="pic">${x.i?'<img src="'+x.i+'">':''}</div><div class="body"><h3>${x.n}</h3><p>${x.d}</p><div class="row">${x.p===null?'<span class="pending">Уточнить цену</span>':'<span class="price">'+money(x.p)+'</span>'}<button class="add" data-add="${x.id}">+</button></div></div></article>`).join(""):'<div class="card" style="padding:18px;grid-column:1/-1"><b>В этой категории пока нет позиций</b><p style="color:var(--muted);margin:7px 0 0">Откройте «Всё меню» или выберите другую категорию.</p></div>'}
+function render(){const grid=$("#grid");if(!venueLoaded){const missing=!ORDER_CONTEXT_READY;grid.innerHTML='<div class="card" style="padding:18px;grid-column:1/-1"><b>'+(missing?'Сначала выберите точку в @Shaurmeggbot':(venueLoadFailed?'Не удалось загрузить меню':'Загружаем меню заведения…'))+'</b><p style="color:var(--muted);margin:7px 0 0">'+(missing?'@LepeshkaJulbot открывает только меню конкретного заведения, выбранного на карте.':(venueLoadFailed?'Проверьте соединение и откройте меню заново с карты.':'Позиции и цены появятся через несколько секунд.'))+'</p></div>';return}const arr=P.filter(x=>!filter||x.c===filter);grid.innerHTML=arr.length?arr.map(x=>`<article class="card"><div class="pic">${x.i?'<img src="'+x.i+'">':''}</div><div class="body"><h3>${x.n}</h3><p>${x.d}</p><div class="row">${x.p===null?'<span class="pending">Уточнить цену</span>':'<span class="price">'+money(x.p)+'</span>'}<button class="add" data-add="${x.id}">+</button></div></div></article>`).join(""):'<div class="card" style="padding:18px;grid-column:1/-1"><b>В этой категории пока нет позиций</b><p style="color:var(--muted);margin:7px 0 0">Откройте «Всё меню» или выберите другую категорию.</p></div>'}
 function setFilter(c){filter=c;$("#menuTitle").textContent=TIT[c]||menuSections.find(s=>s.id===c)?.name||"Всё меню";$("[data-menu-filter]").forEach(x=>x.classList.toggle("active",x.dataset.menuFilter===c));render()}
 function setHeroFilter(c){
   $$("[data-hero-filter]").forEach(x=>x.classList.toggle("active",x.dataset.heroFilter===c));
@@ -2417,9 +2413,8 @@ document.addEventListener("click",e=>{const sb=e.target.closest("[data-safe-buil
 })();
 
 $("#venueSwitch").onclick=openVenueChooser;$("#venueChooserClose").onclick=closeVenueChooser;$("#venueChooser").addEventListener("click",e=>{if(e.target===$("#venueChooser"))closeVenueChooser();const choice=e.target.closest("[data-venue-choice]");if(choice)switchVenue(choice.dataset.venueChoice)});$("#typeSh").onclick=()=>chooseType("Шаурма");$("#typeFl").onclick=()=>chooseType("Лепёшка");$("#openBuilder").onclick=openBuilder;$("#heroBuilder").onclick=openBuilder;$("#navBuilder").onclick=openBuilder;$("#bclose").onclick=closeBuilder;$("#next").onclick=next;$("#prev").onclick=prev;$("#cartBtn").onclick=openCart;$("#cartClose").onclick=closeCart;$("#cartBack").onclick=closeCart;$("#myOrdersBtn").onclick=openMyOrders;$("#myOrdersClose").onclick=closeMyOrders;$("#checkout").onclick=openCheckout;$("#checkoutCancel").onclick=closeCheckout;$(".fulfillmentOption").forEach(x=>x.onclick=()=>{checkoutFulfillment=x.dataset.fulfillment;syncFulfillmentUI()});$("#fulfillmentContinue").onclick=goToPayment;$("#paymentBack").onclick=backToFulfillment;$("#paymentMethodCard").onclick=openPaymentMethod;$("#paymentContinue").onclick=submitOrder;$("#orderDone").onclick=closeCheckout;$("#checkoutModal").addEventListener("click",e=>{if(e.target===$("#checkoutModal"))closeCheckout()});$("#showAll").onclick=()=>{filter="";$("#menuTitle").textContent="Всё меню";$$("[data-menu-filter]").forEach(x=>x.classList.remove("active"));render()};
-try{const u=new URL(location.href);if(u.searchParams.get("b")!=="91"){u.searchParams.set("b","91");history.replaceState(null,"",u.toString())}}catch{}
-if(TELEGRAM_LEPESH_DEFAULT){try{const u=new URL(location.href);u.searchParams.set("venue","lepyoshka");u.searchParams.set("establishment","SC-MSK-B7441AB59F");u.searchParams.set("marker","1");u.searchParams.set("context","marker");u.searchParams.set("view","menu");history.replaceState(null,"",u.toString())}catch{}}
-if(IS_MARKER_CONTEXT){const sw=$("#venueSwitch");if(sw){sw.disabled=true;sw.classList.add("locked");const s=sw.querySelector("small");if(s)s.textContent="выбрано на карте · "+String(ACTIVE_ESTABLISHMENT_ID||"")}}
+try{const u=new URL(location.href);if(u.searchParams.get("b")!=="91"){u.searchParams.set("b","100");history.replaceState(null,"",u.toString())}}catch{}
+const sw=$("#venueSwitch");if(sw){sw.disabled=true;sw.classList.add("locked");const s=sw.querySelector("small");if(s)s.textContent=ORDER_CONTEXT_READY?("выбрано на карте · "+String(ACTIVE_ESTABLISHMENT_ID||"")):"выберите точку в @Shaurmeggbot"}
 
 const venueBoot=loadVenue();
 venueBoot.then(()=>connectVenueUpdates()).catch(()=>{});
@@ -2753,5 +2748,5 @@ scene=function(id){
 };
 
 </script>
-<script src="space-intro.js?v=91"></script>\n<script src="realcity.js?v=91"></script>
+
 </body></html>

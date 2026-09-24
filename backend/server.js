@@ -609,10 +609,10 @@ const ORDER_BUILD='100';
 const MAP_BUILD='100';
 
 function adminTelegramBotToken(){
- return String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
+ return String(process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
 }
 function aggregatorBotToken(){
- return String(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN||process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
+ return String(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN||'').trim();
 }
 const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/map.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
@@ -758,6 +758,21 @@ async function syncAggregatorTelegramMiniApp(){
   });
   console.log('Telegram aggregator bot synced @'+String(info?.username||'')+' · map-only');
  }catch(e){console.error('Telegram aggregator bot sync:',e.message)}
+}
+
+async function syncAdminTelegramMiniApp(){
+ const token=adminTelegramBotToken();
+ if(!token){console.log('Telegram admin bot token not configured');return}
+ try{
+  const r=await fetch('https://api.telegram.org/bot'+token+'/setChatMenuButton',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:PUBLIC_API_URL+'/shaurma-owner?v=4'}}})
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));
+  console.log('Telegram admin bot restored · owner-only');
+ }catch(e){console.error('Telegram admin Mini App sync:',e.message)}
 }
 
 
@@ -1417,4 +1432,4 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f12"><title>Шаурмег · владелец</title><link rel="stylesheet" href="app.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body class="adminShell">
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f12"><title>Шаурмег · владелец</title><script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script><script src="https://telegram.org/js/telegram-web-app.js"></script></head><body class="adminShell">
 <header class="adminTop"><div class="brandMark">Ш</div><div><h1>Моё заведение</h1><small id="ownerName">OWNER CONTROL</small></div><div class="grow"></div><select id="venueSelect" class="plainBtn"></select></header>
 <main style="max-width:980px;margin:auto;padding:14px 14px calc(var(--safe-b) + 30px)">
 <div class="tabs"><button class="tab active" data-tab="profile">Профиль</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="orders">Заказы</button></div>
@@ -11,5 +11,5 @@
 <section id="orders" class="panel hidden"><div class="sectionHead"><h2>Заказы</h2><small id="ordersLive">LIVE</small></div><div class="list" id="ordersList"></div></section>
 </main>
 <div class="loginGate" id="gate"><div class="loginCard"><span class="eyebrow">Shaurmeg partner</span><h1>Кабинет владельца</h1><p>Откройте эту админку через подключённого Telegram-бота владельца. Доступ выдаётся отдельно для каждого заведения.</p><div class="notice" id="gateText">Проверяем Telegram-доступ…</div><div id="claimBox" class="formGrid" style="margin-top:10px"><div class="field"><label>Код подключения заведения</label><input id="claimCode" placeholder="OWN-XXXXXXXXXX" autocomplete="off"></div><button class="primaryBtn" id="claimBtn">Подключить заведение</button></div></div></div>
-<div class="toast" id="toast"></div><script src="config.js"></script><script src="admin-venue.js"></script>
+<div class="toast" id="toast"></div><script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load(entry));})(window.__SHAURMEG_ASSET_VERSION__,'admin-venue.js');</script>
 </body></html>

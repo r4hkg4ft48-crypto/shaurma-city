@@ -55,6 +55,6 @@
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
   $('#placeOrder').onclick=place;$('#back').onclick=()=>history.length>1?history.back():location.assign('index.html');
   try{tg?.ready();tg?.expand();tg?.BackButton?.show();tg?.BackButton?.onClick(()=>history.back())}catch{}
-  Promise.allSettled([authTelegram(),load()]).then(()=>{}).catch(()=>{});
-  load().catch(e=>{toast(e.message);$('#venueName').textContent='Меню недоступно'});authTelegram();
+  authTelegram();
+  load().catch(e=>{toast(e.message);$('#venueName').textContent='Меню недоступно'});
 })();

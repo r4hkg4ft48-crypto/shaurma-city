@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b0f12"><title>Шаурмег · карта</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+</head>
+<body>
+<div class="mapRoot"><div id="map"></div><div class="mapShade"></div></div>
+<header class="topbar glass">
+  <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>КАРТА ШАУРМЫ</small></div></div>
+  <div class="grow"></div><button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
+</header>
+<div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
+<div class="searchResults glass hidden" id="results"></div>
+<div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>
+<article class="venueCard glass" id="venueCard">
+  <div class="venueHero"><div class="venueAvatar" id="venueAvatar">🥙</div><div><h2 id="venueName">Заведение</h2><p id="venueAddress"></p></div><span class="badge" id="realBadge">REAL CITY</span></div>
+  <div class="venueActions"><button class="primaryBtn" id="openMenu">Меню и заказ</button><button class="iconBtn" id="closeCard">×</button></div>
+</article>
+<div class="boot" id="boot"><div class="bootLogo"><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small><div class="pulse"></div></div></div>
+<div class="toast" id="toast"></div>
+<script src="config.js"></script><script src="map.js"></script>
+</body></html>

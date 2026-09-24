@@ -1540,8 +1540,10 @@ app.get('/shaurmeg-owner',sendShaurmegOwner);
 const {router:v2Router}=require('../v2/backend/src/routes');
 const v2Schema=require('../v2/backend/src/schema');
 const v2RealCity=require('../v2/backend/src/realcity-service');
+const v2Telegram=require('../v2/backend/src/telegram');
+const v2Config=require('../v2/backend/src/config');
 app.use('/api/v2',v2Router);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

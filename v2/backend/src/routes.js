@@ -398,6 +398,25 @@ router.put('/venue-owner/establishments/:establishmentId/menu',async(req,res)=>{
   try{const menu=D.normalizeMenu(req.body?.menu);const cur=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);const cfg={...(cur.rows[0]?.config||{}),menu_sections:Array.isArray(req.body?.sections)?req.body.sections:cur.rows[0]?.config?.menu_sections};const q=await db.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(menu),JSON.stringify(cfg)]);await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'menu_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({items:menu.length})]);rt.pushVenue(a.est,'venue',q.rows[0]);res.json(q.rows[0])}
   catch(e){fail(res,e,'venue_owner_menu_failed')}
 });
+router.put('/venue-owner/establishments/:establishmentId/builder',async(req,res)=>{
+  const a=await venueAccess(req,res,'menu');if(!a)return;
+  try{
+    const enabled=req.body?.enabled===true,builder=D.normalizeBuilderConfig(req.body?.builder||{});
+    const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);
+    if(!current.rows[0])return res.sendStatus(404);
+    const cfg={...(current.rows[0].config||{}),builder_enabled:enabled,builder};
+    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(cfg)]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'builder_updated',$3::jsonb)",[
+      a.est,String(a.s.sub),JSON.stringify({
+        enabled,types:builder.types.length,breads:builder.breads.length,meats:builder.meats.length,
+        sauces:builder.sauces.length,extras:builder.extras.length
+      })
+    ]);
+    rt.pushVenue(a.est,'venue',q.rows[0]);
+    res.json({ok:true,builder_enabled:enabled,builder});
+  }catch(e){fail(res,e,'venue_owner_builder_failed')}
+});
+
 router.patch('/venue-owner/establishments/:establishmentId/profile',async(req,res)=>{
   const a=await venueAccess(req,res,'profile');if(!a)return;
   try{

@@ -69,7 +69,7 @@ router.get('/health',(req,res)=>res.json({ok:true,version:config.BUILD,database:
 router.get('/map/points',async(req,res)=>{
   try{
     const q=await db.query(`
-      SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.lat,m.lon,m.category,m.marker_style,
+      SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.description,m.hours,m.price_label,m.lat,m.lon,m.category,m.marker_style,
         (m.marker_avatar<>'') has_avatar,m.realcity_profile,m.realcity_quality,m.updated_at,
         (jsonb_array_length(v.menu)>0) has_menu
       FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
@@ -148,10 +148,14 @@ router.post('/orders',async(req,res)=>{
     if(fulfillment==='delivery'&&!String(req.body?.address||'').trim())return res.status(400).json({error:'address_required'});
     const total=normalized.reduce((s,x)=>s+x.p*x.q,0),num=D.orderNumber();
     const q=await db.query(`
-      INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,status,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name,establishment_id)
-      VALUES($1,$2::jsonb,$3,$4,$5,$6,$7,'new',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-      [num,JSON.stringify(normalized),total,String(req.body?.customer_name||tg?.first_name||'Гость').slice(0,120),fulfillment==='delivery'?String(req.body.phone):null,fulfillment==='delivery'?String(req.body.address):null,String(req.body?.comment||'').slice(0,500),tg?'telegram':'web',tg?String(tg.id):null,tg?.username||null,tg?.first_name||null,fulfillment,'pending',req.body?.payment_method||null,ctx.venue.venue_id,ctx.venue.name,ctx.venue.establishment_id]);
-    const order=q.rows[0];rt.pushOwner('order',order);rt.pushVenue(order.establishment_id,'order',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'order',order);
+      INSERT INTO shaurma_orders(order_number,items,total,customer_name,phone,address,comment,status,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name,establishment_id,marker_id)
+      VALUES($1,$2::jsonb,$3,$4,$5,$6,$7,'new',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+      [num,JSON.stringify(normalized),total,String(req.body?.customer_name||tg?.first_name||'Гость').slice(0,120),fulfillment==='delivery'?String(req.body.phone):null,fulfillment==='delivery'?String(req.body.address):null,String(req.body?.comment||'').slice(0,500),tg?'telegram':'web',tg?String(tg.id):null,tg?.username||null,tg?.first_name||null,fulfillment,'pending',req.body?.payment_method||null,ctx.venue.venue_id,ctx.venue.name,ctx.venue.establishment_id,ctx.marker.id]);
+    const order=q.rows[0];
+    db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'order_created',$3::jsonb)",[
+      order.establishment_id,String(order.telegram_user_id||''),JSON.stringify({order_id:order.id,order_number:order.order_number,marker_id:order.marker_id,total:order.total})
+    ]).catch(e=>console.error('order_audit',e.message));
+    rt.pushOwner('order',order);rt.pushVenue(order.establishment_id,'order',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'order',order);
     notifyCustomer(order,'🥙 Заказ '+order.order_number+' принят\n'+order.venue_name+' · '+order.total+' ₽',ctx);
     res.status(201).json(order);
   }catch(e){fail(res,e,'order_create_failed')}
@@ -222,7 +226,7 @@ router.post('/admin/markers',auth.requireOwner,async(req,res)=>{
     const b=req.body||{},name=String(b.name||'').trim(),lat=Number(b.lat),lon=Number(b.lon);if(!name||!Number.isFinite(lat)||!Number.isFinite(lon))return res.status(400).json({error:'invalid_marker'});
     const vId=D.venueId(b.venue_id)||crypto.randomBytes(8).toString('hex'),est=D.establishmentIdForVenue(vId);
     const row=await db.tx(async c=>{
-      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false}),est]);
+      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:D.venueThemeKey(est)}),est]);
       const q=await c.query(`INSERT INTO shaurmeg_markers(venue_id,establishment_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,marker_avatar,marker_style,category,is_active,position_locked,metadata_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,TRUE,TRUE,TRUE) RETURNING *`,[vId,est,name,String(b.address||''),String(b.description||''),lat,lon,String(b.hero_image||''),JSON.stringify(Array.isArray(b.gallery)?b.gallery:[]),String(b.hours||''),String(b.price_label||''),String(b.marker_avatar||''),JSON.stringify(D.markerStyle(b.marker_style)),String(b.category||'shawarma')]);
       return q.rows[0];
     });res.status(201).json(row);

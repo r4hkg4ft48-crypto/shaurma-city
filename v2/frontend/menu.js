@@ -45,6 +45,7 @@
   }
 
   function builderConfig(config={}){
+    if(config.builder_enabled===false)return null;
     if(config.builder_enabled!==true&&!config.builder)return null;
     const fallback={
       title:'Собери свою шаурму',subtitle:'Выбери основу, лаваш, мясо, соусы и добавки',

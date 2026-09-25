@@ -258,7 +258,7 @@
  }
  async function loadOrders(){try{const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');renderOrders(rows)}catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы</div>'}}
  function renderOrders(rows){
-   const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
+   const labels={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
    $('#ordersList').innerHTML=rows.length?rows.map(o=>'<article class="orderCard">'+
      '<header><b>'+esc(o.order_number)+'</b><span class="status status-'+esc(o.status)+'">'+esc(labels[o.status]||o.status)+'</span></header>'+
      '<div class="adminOrderMeta"><span>'+new Date(o.created_at).toLocaleString('ru-RU')+'</span><span>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</span><span>Метка #'+esc(o.marker_id||'—')+'</span></div>'+
@@ -266,7 +266,7 @@
      '<div class="adminOrderItems">'+(o.items||[]).map(x=>'<div>'+esc(x.n||x.name)+' × '+esc(x.q||1)+(x.detail?'<small> · '+esc(x.detail)+'</small>':'')+'</div>').join('')+'</div>'+
      (o.comment?'<div class="notice" style="margin-top:10px">Комментарий: '+esc(o.comment)+'</div>':'')+
      '<div class="adminOrderTotal"><small>Итого</small><b>'+money(o.total)+'</b></div>'+
-     '<div class="rowBtns" style="margin-top:10px">'+(o.status==='new'?'<button class="plainBtn" data-order="'+o.id+'" data-status="cooking">Принять</button>':'')+(o.status==='cooking'?'<button class="plainBtn" data-order="'+o.id+'" data-status="ready">Готов</button>':'')+(o.status==='ready'?'<button class="primaryBtn" data-order="'+o.id+'" data-status="done">Выдан</button>':'')+(!['done','cancelled'].includes(o.status)?'<button class="dangerBtn" data-order="'+o.id+'" data-status="cancelled">Отменить</button>':'')+'</div></article>').join(''):'<div class="empty">Заказов пока нет</div>';
+     '<div class="rowBtns" style="margin-top:10px">'+(o.status==='new'?'<button class="plainBtn" data-order="'+o.id+'" data-status="cooking">Принять</button>':'')+(o.status==='cooking'?'<button class="plainBtn" data-order="'+o.id+'" data-status="ready">Готов</button>':'')+(o.status==='ready'?'<button class="primaryBtn" data-order="'+o.id+'" data-status="done">Выполнен</button>':'')+(!['done','cancelled'].includes(o.status)?'<button class="dangerBtn" data-order="'+o.id+'" data-status="cancelled">Отменить</button>':'')+'</div></article>').join(''):'<div class="empty">Заказов пока нет</div>';
  }
  function connect(){stream?.close();stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));stream.addEventListener('order',()=>loadOrders());stream.addEventListener('update',()=>loadOrders());stream.onerror=()=>$('#ordersLive').textContent='RECONNECT'}
 

@@ -163,7 +163,35 @@ async function ensureSchema(){
     last_used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE shaurma_venue_invites ADD COLUMN IF NOT EXISTS kitchen_enabled BOOLEAN NOT NULL DEFAULT TRUE;
   CREATE INDEX IF NOT EXISTS idx_v2_venue_invites_establishment ON shaurma_venue_invites(establishment_id,is_active);
+
+  CREATE TABLE IF NOT EXISTS shaurma_kitchen_access(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL,
+    telegram_user_id TEXT NOT NULL,
+    telegram_username TEXT NOT NULL DEFAULT '',
+    telegram_first_name TEXT NOT NULL DEFAULT '',
+    chat_id TEXT NOT NULL,
+    source_invite_id BIGINT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(establishment_id,chat_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_kitchen_access_est ON shaurma_kitchen_access(establishment_id,is_active);
+  CREATE INDEX IF NOT EXISTS idx_v2_kitchen_access_user ON shaurma_kitchen_access(telegram_user_id,is_active);
+
+  CREATE TABLE IF NOT EXISTS shaurma_kitchen_order_messages(
+    order_id BIGINT NOT NULL,
+    establishment_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    message_id BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(order_id,chat_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_kitchen_messages_est ON shaurma_kitchen_order_messages(establishment_id,order_id);
 
   CREATE TABLE IF NOT EXISTS shaurma_venue_audit(
     id BIGSERIAL PRIMARY KEY,

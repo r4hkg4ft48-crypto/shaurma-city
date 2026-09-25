@@ -3346,7 +3346,7 @@ body.venuePage .foodPic img{
 .venuePage[data-site-mode="glass"] .foodCardRef,
 .venuePage[data-site-mode="glass"] .builderEntry{
   backdrop-filter:blur(22px) saturate(1.15);
-  background-color:color-mix(in srgb,var(--venue-panel) calc(var(--site-panel-opacity) * 100%),transparent)
+  background-color:color-mix(in srgb,var(--venue-panel) 88%,transparent)
 }
 .venuePage[data-site-mode="minimal"] .menuFeatureCard,
 .venuePage[data-site-mode="minimal"] .foodCardRef{

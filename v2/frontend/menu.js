@@ -53,7 +53,8 @@
       bg=mixHex(secondary,'#090C13',.66);panel=mixHex(bg,'#FFFFFF',.06);panel2=mixHex(bg,'#FFFFFF',.11);
       hero=mixHex(mixHex(secondary,primary,.22),'#090D14',.3);
     }
-    return {accent:primary,accent2:mixHex(primary,'#FFFFFF',.82),bg,panel,panel2,hero,glow:rgba(primary,.27),ink:contrastText(primary),primary,secondary};
+    const ink=contrastText(primary),accent2=ink==='#FFFFFF'?mixHex(primary,'#000000',.12):mixHex(primary,'#FFFFFF',.15);
+    return {accent:primary,accent2,bg,panel,panel2,hero,glow:rgba(primary,.27),ink,primary,secondary};
   }
   function applyTheme(config={}){
     const theme=customTheme(config),t=derivedPalette(theme),root=document.documentElement;

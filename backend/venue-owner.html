@@ -9,6 +9,17 @@
 <style>
 :root{--bg:#071018;--panel:#0d1823;--panel2:#111f2c;--line:rgba(255,255,255,.09);--ink:#f7fbff;--muted:#8fa3b6;--accent:#7ab8ff;--good:#69d49a;--bad:#ff8994}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 50% -10%,#17314a 0,transparent 35%),var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Inter",sans-serif}.wrap{width:min(920px,100%);margin:auto;padding:18px 14px calc(28px + env(safe-area-inset-bottom))}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}.topLeft{display:flex;align-items:center;gap:9px}.masterBackVenue{display:none;width:38px;height:38px;min-height:38px;padding:0;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.05);color:#eaf4ff;font-size:20px}.masterBackVenue.show{display:grid;place-items:center}.brand b{font-size:18px}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:.15em}.id{padding:7px 9px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.03);font:700 10px/1.1 ui-monospace,SFMono-Regular,monospace;color:#cfe4fa}.card{border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,rgba(17,31,44,.96),rgba(10,20,29,.96));box-shadow:0 18px 55px rgba(0,0,0,.28);padding:16px}.hero{display:flex;justify-content:space-between;gap:12px;align-items:end}.hero h1{margin:0;font-size:28px;line-height:1}.hero p{margin:6px 0 0;color:var(--muted)}.venueTools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:min(460px,100%)}.venueTools select{min-width:0}.venueCount{grid-column:1/-1;color:var(--muted);font-size:10px;text-align:right}.addVenueModal{position:fixed;inset:0;z-index:25;display:grid;place-items:center;background:rgba(4,9,14,.82);backdrop-filter:blur(12px);padding:18px}.addVenueModal[hidden]{display:none}.modalActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}.venueAccessList{display:grid;gap:7px;margin-top:10px}.venueAccessItem{padding:10px 11px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.025);display:flex;justify-content:space-between;gap:10px;align-items:center}.venueAccessItem b{display:block}.venueAccessItem small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.venueAccessItem button{min-height:34px;padding:0 10px}select,input,textarea,button{font:inherit;color:inherit}select,input,textarea{width:100%;border:1px solid var(--line);background:#0a1520;border-radius:13px;padding:11px;outline:none}textarea{min-height:92px;resize:vertical}button{border:0;border-radius:13px;background:#f5f8fb;color:#0a141f;font-weight:850;min-height:42px;padding:0 14px}.secondary{background:rgba(255,255,255,.055);color:#dbe8f5;border:1px solid var(--line)}.danger{background:rgba(255,137,148,.1);color:#ffb2ba;border:1px solid rgba(255,137,148,.18)}.tabs{display:flex;gap:7px;margin:12px 0}.tab{flex:1;background:rgba(255,255,255,.035);color:var(--muted);border:1px solid var(--line)}.tab.active{background:#eaf4ff;color:#102033}.pane{display:none}.pane.active{display:block}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.full{grid-column:1/-1}.field{display:grid;gap:5px}.field label{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.mediaGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.drop{position:relative;display:grid;place-items:center;min-height:130px;border:1px dashed rgba(255,255,255,.16);border-radius:16px;background:rgba(255,255,255,.025);overflow:hidden}.drop img{width:100%;height:130px;object-fit:cover}.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:8px}.gallery div{position:relative}.gallery img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px}.gallery button{position:absolute;top:4px;right:4px;width:28px;height:28px;min-height:0;padding:0;border-radius:50%;background:rgba(4,8,12,.8);color:#fff}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.menuRows{display:grid;gap:8px}.menuRow{display:grid;grid-template-columns:minmax(130px,1.1fr) minmax(110px,.7fr) minmax(150px,1.3fr) 84px 106px 100px 72px 36px;gap:7px;padding:8px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.018);align-items:center}.menuRow button{min-height:40px;padding:0;background:rgba(255,137,148,.1);color:#ffb2ba}.sectionManager{margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.02)}.sectionManagerHead{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:9px}.sectionManagerHead b{font-size:15px}.sectionManagerHead small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.sectionRows{display:grid;gap:7px}.sectionRow{display:grid;grid-template-columns:54px 1fr 92px 34px 34px 36px;gap:6px;align-items:center}.sectionRow input{min-height:38px;padding:7px 8px}.sectionRow button{min-height:38px;padding:0;background:rgba(255,255,255,.05);color:#dce9f6;border:1px solid var(--line)}.sectionRow .del{color:#ffadb5;background:rgba(255,137,148,.08)}.sectionId{font:700 9px/1 ui-monospace,SFMono-Regular,monospace;color:#8ea4ba;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sectionAdd{display:flex;gap:7px;margin-top:8px}.sectionAdd input:first-child{max-width:72px}.sectionAdd button{white-space:nowrap}.orders{display:grid;gap:9px}.order{padding:12px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.025)}.orderHead{display:flex;justify-content:space-between;gap:8px}.order small{color:var(--muted)}.orderItems{margin-top:8px;color:#dce7ef}.status{padding:4px 8px;border-radius:999px;background:rgba(122,184,255,.12);font-size:10px}.claim{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:radial-gradient(circle at 50% 10%,rgba(69,135,201,.18),transparent 35%),#071018;padding:18px}.claimBox{width:min(430px,100%);padding:20px;border:1px solid var(--line);border-radius:24px;background:#0c1823}.claimBox h2{margin:0 0 8px;font-size:28px}.claimBox p{color:var(--muted)}.claimBox input{text-transform:uppercase;letter-spacing:.12em;text-align:center;font-weight:900}.err{color:#ff9ca6;font-size:12px;margin-top:8px;min-height:18px}.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,15px);opacity:0;transition:.2s;z-index:40;padding:10px 12px;border-radius:12px;background:#101d29;border:1px solid var(--line)}.toast.show{opacity:1;transform:translate(-50%,0)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.stat{padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025)}.stat small{display:block;color:var(--muted);font-size:9px}.stat b{font-size:20px}.markerStyle{display:grid;grid-template-columns:100px 1fr;gap:12px;align-items:center}.markerPreview{margin:auto;width:52px;height:52px;border:3px solid #fff;border-radius:16px 16px 16px 5px;display:grid;place-items:center;font-size:24px;overflow:hidden;box-shadow:0 8px 22px rgba(0,0,0,.35)}.markerPreview img{width:100%;height:100%;object-fit:cover}.styleGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.muted{color:var(--muted)}#siteSelectorHint{font:800 10px/1.2 ui-monospace,SFMono-Regular,monospace;color:#bcd8f2}.pane#sitePane .drop{min-height:170px}.pane#sitePane .drop img{height:170px}@media(max-width:900px){.menuRow{grid-template-columns:1fr 1fr 1fr}.menuRow [data-f="d"]{grid-column:1/-1}.menuRow button{grid-column:auto}}@media(max-width:680px){.grid,.mediaGrid{grid-template-columns:1fr}.venueTools{grid-template-columns:1fr}.venueTools button{width:100%}.venueCount{grid-column:1;text-align:left}.menuRow{grid-template-columns:1fr 1fr}.menuRow [data-f="d"]{grid-column:1/-1}.stats{grid-template-columns:1fr 1fr}.hero{align-items:stretch;flex-direction:column}.markerStyle{grid-template-columns:1fr}.gallery{grid-template-columns:repeat(2,1fr)}}
+<style>
+.builderVisualEditor{display:grid;gap:10px;margin-top:8px}
+.builderVisualTop{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.builderVisualLimits{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.builderVisualGroup{border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.02);overflow:hidden}
+.builderVisualGroupHead{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px;border-bottom:1px solid var(--line)}
+.builderVisualGroupHead b{display:block}.builderVisualGroupHead small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.builderVisualGroupHead button{min-height:34px;padding:0 9px}
+.builderVisualRows{display:grid;gap:6px;padding:9px}.builderVisualRow{display:grid;grid-template-columns:minmax(0,1fr) 98px auto;gap:6px;align-items:center;padding:7px;border:1px solid var(--line);border-radius:12px;background:#09131d}.builderVisualRow input{min-width:0;padding:8px 9px}.builderVisualActions{display:flex;gap:4px}.builderVisualActions button{width:31px;height:31px;min-height:31px;padding:0;background:rgba(255,255,255,.05);color:#dbe9f6;border:1px solid var(--line)}.builderVisualActions .del{color:#ffb0b9;background:rgba(255,137,148,.08)}
+.builderVisualEmpty{padding:12px;text-align:center;color:var(--muted);font-size:10px}
+@media(max-width:680px){.builderVisualTop,.builderVisualLimits{grid-template-columns:1fr}.builderVisualRow{grid-template-columns:minmax(0,1fr) 88px}.builderVisualActions{grid-column:1/-1;justify-content:flex-end}}
+</style>
 </style>
 </head>
 <body>
@@ -71,7 +82,21 @@
       <div class="sectionManagerHead"><div><b>«Собери свою шаурму»</b><small>Состав конструктора и кинематографичный финал настраиваются отдельно для этого заведения.</small></div></div>
       <div class="grid">
         <div class="field full"><label><input id="builderStudioEnabled" type="checkbox" style="width:auto"> Конструктор включён</label></div>
-        <div class="field full"><label>Конфигурация ингредиентов (JSON)</label><textarea id="builderJson" style="min-height:220px;font:11px/1.4 ui-monospace,SFMono-Regular,monospace" spellcheck="false"></textarea></div>
+        <div class="field full">
+          <label>Ингредиенты конструктора</label>
+          <div class="builderVisualEditor">
+            <div class="builderVisualTop">
+              <div class="field"><label>Заголовок</label><input id="ownerBuilderTitle" maxlength="100" placeholder="Собери свою шаурму"></div>
+              <div class="field"><label>Подпись</label><input id="ownerBuilderSubtitle" maxlength="180" placeholder="Выбери основу, мясо, соусы и добавки"></div>
+            </div>
+            <div class="builderVisualLimits">
+              <div class="field"><label>Мин. соусов</label><input id="ownerBuilderMinSauces" type="number" min="0" step="1"></div>
+              <div class="field"><label>Макс. соусов</label><input id="ownerBuilderMaxSauces" type="number" min="0" step="1"></div>
+              <div class="field"><label>Макс. добавок</label><input id="ownerBuilderMaxExtras" type="number" min="0" step="1"></div>
+            </div>
+            <div id="ownerBuilderGroups"></div>
+          </div>
+        </div>
         <div class="field"><label><input id="builderResultEnabled" type="checkbox" style="width:auto"> Показывать итоговую сцену</label></div>
         <div class="field"><label><input id="builderSingularity" type="checkbox" style="width:auto"> Сингулярность ингредиентов</label></div>
         <div class="field"><label>Длительность анимации, мс</label><input id="builderDuration" type="number" min="650" max="1800" step="50"></div>
@@ -110,7 +135,7 @@ const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_L
 const SESSION_KEY=MASTER_MODE?'venue_owner_master_session':'venue_owner_session';
 function backToMaster(){location.href='/master-admin?tab=sites&v=1'}
 function setupMasterBack(){if(!MASTER_MODE)return;$('#masterBackVenue')?.classList.add('show');try{const tg=window.Telegram?.WebApp;tg?.BackButton?.show();tg?.BackButton?.onClick(backToMaster)}catch{}}
-let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
+let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],builderConfigDraft=null,hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1500)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -184,6 +209,7 @@ async function openVenue(id){
  siteCustomization=venue.config?.site_customization&&typeof venue.config.site_customization==='object'?JSON.parse(JSON.stringify(venue.config.site_customization)):{};
  siteBackground=siteCustomization?.design?.background_image||'';
  builderResultImage=siteCustomization?.builder_result?.image||'';
+ builderConfigDraft=normalizeOwnerBuilder(venue.config?.builder);
  $('#topId').textContent=id;$('#venueName').textContent=venue.name;$('#venueAddress').textContent=venue.address||'Адрес не указан';
  $('#establishmentId').value=id;$('#markerId').value=venue.marker_id||'';$('#name').value=venue.name||'';$('#address').value=venue.address||'';$('#description').value=venue.description||'';$('#hours').value=venue.hours||'';$('#priceLabel').value=venue.price_label||'';
  $('#phone').value=venue.config?.phone||'';$('#website').value=venue.config?.website||'';$('#subtitle').value=venue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#accent').value=/^#[0-9a-f]{6}$/i.test(venue.config?.accent||'')?venue.config.accent:'#2f6df6';$('#builder').checked=venue.config?.builder_enabled===true;
@@ -212,13 +238,57 @@ async function saveProfile(){const b=$('#saveProfile');b.disabled=true;try{await
 async function saveAppearance(){const b=$('#saveAppearance');b.disabled=true;try{readStyle();await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/appearance',{method:'PATCH',body:JSON.stringify({marker_avatar:avatar,marker_style:markerStyle})});toast('Метка обновлена')}catch{toast('Не удалось сохранить метку')}finally{b.disabled=false}}
 async function saveMenu(){const b=$('#saveMenu');b.disabled=true;try{await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/menu',{method:'PUT',body:JSON.stringify({menu,sections:menuSections})});toast('Меню и разделы сохранены');await openVenue(currentId)}catch{toast('Не удалось сохранить меню')}finally{b.disabled=false}}
 
+const OWNER_BUILDER_GROUPS=[
+ {key:'types',title:'Тип продукта',hint:'Базовая цена готовой сборки',add:'Тип',prefix:'type',base:true},
+ {key:'breads',title:'Лаваш / основа',hint:'Можно удалить все варианты, если этот шаг не нужен',add:'Основу',prefix:'bread'},
+ {key:'meats',title:'Мясо / начинка',hint:'Варианты основной начинки',add:'Начинку',prefix:'meat'},
+ {key:'sauces',title:'Соусы',hint:'Можно выбирать несколько',add:'Соус',prefix:'sauce'},
+ {key:'extras',title:'Добавки',hint:'Овощи, сыр, фри и другие ингредиенты',add:'Ингредиент',prefix:'extra'}
+];
+function ownerBuilderFallback(){return {title:'Собери свою шаурму',subtitle:'Выбери основу, лаваш, мясо, соусы и добавки',types:[{id:'shawarma',name:'Шаурма',price:330}],breads:[{id:'classic_lavash',name:'Классический лаваш',price:0}],meats:[{id:'chicken',name:'Курица',price:0}],sauces:[{id:'garlic',name:'Чесночный',price:0}],extras:[{id:'cheese',name:'Сыр',price:0}],min_sauces:1,max_sauces:1,max_extras:1}}
+function normalizeOwnerBuilder(raw){
+ const src=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:null,base=ownerBuilderFallback(),out={title:String(src?.title||base.title),subtitle:String(src?.subtitle||base.subtitle)};
+ for(const g of OWNER_BUILDER_GROUPS){const arr=src&&Array.isArray(src[g.key])?src[g.key]:base[g.key];out[g.key]=(arr||[]).map((x,i)=>({id:String(x?.id||g.prefix+'_'+i),name:String(x?.name||x?.n||'Опция'),price:Math.max(0,Number(x?.price??x?.price_delta??x?.p)||0)}))}
+ if(!out.types.length)out.types=base.types.map(x=>({...x}));
+ out.min_sauces=Math.max(0,Number(src?.min_sauces??base.min_sauces)||0);out.max_sauces=Math.max(0,Number(src?.max_sauces??out.sauces.length)||0);out.max_extras=Math.max(0,Number(src?.max_extras??out.extras.length)||0);
+ return out;
+}
+function ownerBuilderId(name,prefix,index){
+ const stem=String(name||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я_-]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,30)||prefix;
+ return stem+'_'+Date.now().toString(36)+'_'+index;
+}
+function syncOwnerBuilderMeta(){
+ if(!builderConfigDraft)return;
+ builderConfigDraft.title=$('#ownerBuilderTitle').value.trim()||'Собери свою шаурму';builderConfigDraft.subtitle=$('#ownerBuilderSubtitle').value.trim();
+ const sc=builderConfigDraft.sauces.length,ec=builderConfigDraft.extras.length;
+ builderConfigDraft.max_sauces=Math.max(0,Math.min(sc,Number($('#ownerBuilderMaxSauces').value)||0));
+ builderConfigDraft.min_sauces=Math.max(0,Math.min(builderConfigDraft.max_sauces,Number($('#ownerBuilderMinSauces').value)||0));
+ builderConfigDraft.max_extras=Math.max(0,Math.min(ec,Number($('#ownerBuilderMaxExtras').value)||0));
+}
+function renderOwnerBuilder(){
+ if(!builderConfigDraft)builderConfigDraft=normalizeOwnerBuilder(null);
+ $('#ownerBuilderTitle').value=builderConfigDraft.title||'';$('#ownerBuilderSubtitle').value=builderConfigDraft.subtitle||'';
+ $('#ownerBuilderMinSauces').max=builderConfigDraft.sauces.length;$('#ownerBuilderMaxSauces').max=builderConfigDraft.sauces.length;$('#ownerBuilderMaxExtras').max=builderConfigDraft.extras.length;
+ $('#ownerBuilderMinSauces').value=Math.min(builderConfigDraft.sauces.length,Number(builderConfigDraft.min_sauces)||0);
+ $('#ownerBuilderMaxSauces').value=Math.min(builderConfigDraft.sauces.length,Number(builderConfigDraft.max_sauces)||0);
+ $('#ownerBuilderMaxExtras').value=Math.min(builderConfigDraft.extras.length,Number(builderConfigDraft.max_extras)||0);
+ $('#ownerBuilderGroups').innerHTML=OWNER_BUILDER_GROUPS.map(g=>{
+  const list=builderConfigDraft[g.key]||[];
+  const rows=list.length?list.map((x,i)=>'<div class="builderVisualRow" data-owner-builder-group="'+g.key+'" data-owner-builder-i="'+i+'"><input data-owner-builder-field="name" value="'+esc(x.name||'')+'" placeholder="Название"><input data-owner-builder-field="price" type="number" min="0" value="'+Number(x.price||0)+'" placeholder="'+(g.base?'Цена':'Доплата')+'"><div class="builderVisualActions"><button type="button" data-owner-builder-up="'+g.key+':'+i+'" '+(i===0?'disabled':'')+'>↑</button><button type="button" data-owner-builder-down="'+g.key+':'+i+'" '+(i===list.length-1?'disabled':'')+'>↓</button><button class="del" type="button" data-owner-builder-rm="'+g.key+':'+i+'" '+(g.key==='types'&&list.length===1?'disabled':'')+'>×</button></div></div>').join(''):'<div class="builderVisualEmpty">Нет вариантов — этот шаг будет скрыт в конструкторе.</div>';
+  return '<div class="builderVisualGroup"><div class="builderVisualGroupHead"><div><b>'+g.title+'</b><small>'+g.hint+'</small></div><button class="secondary" type="button" data-owner-builder-add="'+g.key+'">＋ '+g.add+'</button></div><div class="builderVisualRows">'+rows+'</div></div>';
+ }).join('');
+}
+function ownerBuilderAction(v){const [key,index]=String(v||'').split(':');return {key,index:Number(index)}}
+function ownerAddBuilder(key){const g=OWNER_BUILDER_GROUPS.find(x=>x.key===key),list=builderConfigDraft?.[key];if(!g||!Array.isArray(list))return;const name=g.base?'Новый тип':'Новый ингредиент';list.push({id:ownerBuilderId(name,g.prefix,list.length),name,price:0});if(key==='sauces')builderConfigDraft.max_sauces=list.length;if(key==='extras')builderConfigDraft.max_extras=list.length;renderOwnerBuilder()}
+function ownerRemoveBuilder(key,index){const list=builderConfigDraft?.[key];if(!Array.isArray(list)||!list[index])return;if(key==='types'&&list.length<=1)return toast('Нужен хотя бы один тип продукта');list.splice(index,1);if(key==='sauces'){builderConfigDraft.max_sauces=Math.min(builderConfigDraft.max_sauces,list.length);builderConfigDraft.min_sauces=Math.min(builderConfigDraft.min_sauces,builderConfigDraft.max_sauces)}if(key==='extras')builderConfigDraft.max_extras=Math.min(builderConfigDraft.max_extras,list.length);renderOwnerBuilder()}
+function ownerMoveBuilder(key,index,delta){const list=builderConfigDraft?.[key],to=index+delta;if(!Array.isArray(list)||to<0||to>=list.length)return;[list[index],list[to]]=[list[to],list[index]];renderOwnerBuilder()}
 function renderSiteStudio(){
  const s=siteCustomization||{},d=s.design||{},m=s.menu||{},r=s.builder_result||{};
  $('#siteSelectorHint').textContent='site:'+currentId;
  $('#siteMode').value=d.mode||'cinematic';$('#siteMenuLayout').value=m.layout||'hero-2-3';$('#siteCardStyle').value=m.card_style||'photo';$('#siteImageFit').value=m.image_fit||'cover';
  $('#siteRadius').value=Number(d.radius)||20;$('#siteAmbient').value=Number.isFinite(Number(d.ambient_strength))?Number(d.ambient_strength):.16;$('#siteOpacity').value=Number.isFinite(Number(d.panel_opacity))?Number(d.panel_opacity):.9;$('#siteContrast').value=Number.isFinite(Number(d.contrast))?Number(d.contrast):1;
  $('#siteHeroLabel').value=m.hero_label||'НАША ГОРДОСТЬ';$('#siteDescriptions').checked=m.show_descriptions!==false;$('#siteFavorites').checked=s.features?.favorites!==false;$('#siteBadges').checked=s.features?.menu_badges!==false;
- $('#builderStudioEnabled').checked=venue?.config?.builder_enabled===true;$('#builderJson').value=JSON.stringify(venue?.config?.builder||{},null,2);
+ $('#builderStudioEnabled').checked=venue?.config?.builder_enabled===true;renderOwnerBuilder();
  $('#builderResultEnabled').checked=r.enabled!==false;$('#builderSingularity').checked=r.singularity!==false;$('#builderDuration').value=Number(r.duration_ms)||1050;$('#builderResultTitle').value=r.title||'Твоя шаурма готова';$('#builderResultSubtitle').value=r.subtitle||'Сборка завершена. Осталось добавить её в корзину.';
  if(siteBackground){$('#siteBgPreview').src=siteBackground;$('#siteBgPreview').hidden=false;$('#siteBgHint').hidden=true}else{$('#siteBgPreview').hidden=true;$('#siteBgHint').hidden=false}
  if(builderResultImage){$('#builderResultPreview').src=builderResultImage;$('#builderResultPreview').hidden=false;$('#builderResultHint').hidden=true}else{$('#builderResultPreview').hidden=true;$('#builderResultHint').hidden=false}
@@ -239,10 +309,10 @@ async function saveSiteStudio(){
 async function saveBuilderStudio(){
  const b=$('#saveBuilderStudio');b.disabled=true;
  try{
-   let cfg={};try{cfg=JSON.parse($('#builderJson').value||'{}')}catch{throw new Error('bad_json')}
-   const j=await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#builderStudioEnabled').checked,builder:cfg})});
-   venue.config={...(venue.config||{}),builder_enabled:j.builder_enabled,builder:j.builder};$('#builderJson').value=JSON.stringify(j.builder||{},null,2);$('#builder').checked=j.builder_enabled===true;toast('Конструктор сохранён');
- }catch(e){toast(e.message==='bad_json'?'Ошибка JSON конструктора':'Не удалось сохранить конструктор')}finally{b.disabled=false}
+   syncOwnerBuilderMeta();
+   const j=await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#builderStudioEnabled').checked,builder:builderConfigDraft})});
+   venue.config={...(venue.config||{}),builder_enabled:j.builder_enabled,builder:j.builder};builderConfigDraft=normalizeOwnerBuilder(j.builder);$('#builder').checked=j.builder_enabled===true;renderOwnerBuilder();toast('Конструктор и ингредиенты сохранены');
+ }catch(e){toast('Не удалось сохранить конструктор')}finally{b.disabled=false}
 }
 function connectOrderStream(){
  orderStream?.close();if(!session||!currentId)return;
@@ -272,6 +342,9 @@ $('#avatarFile').onchange=async e=>{const f=e.target.files[0];if(f){avatar=await
 $('#gallery').onclick=e=>{const b=e.target.closest('[data-rm-gallery]');if(!b)return;gallery.splice(Number(b.dataset.rmGallery),1);renderMedia()};
 ['icon','shape','bg','border','textColor','glow','size','pulse'].forEach(id=>$('#'+id).addEventListener(id==='pulse'?'change':'input',()=>readStyle()));
 $('#saveProfile').onclick=saveProfile;$('#saveAppearance').onclick=saveAppearance;$('#saveMenu').onclick=saveMenu;$('#saveSite').onclick=saveSiteStudio;$('#saveBuilderStudio').onclick=saveBuilderStudio;
+$('#ownerBuilderGroups').addEventListener('input',e=>{const row=e.target.closest('[data-owner-builder-group]');if(!row||!e.target.dataset.ownerBuilderField)return;const x=builderConfigDraft?.[row.dataset.ownerBuilderGroup]?.[Number(row.dataset.ownerBuilderI)];if(!x)return;const f=e.target.dataset.ownerBuilderField;x[f]=f==='price'?Math.max(0,Number(e.target.value)||0):e.target.value});
+$('#ownerBuilderGroups').addEventListener('click',e=>{const add=e.target.closest('[data-owner-builder-add]');if(add){ownerAddBuilder(add.dataset.ownerBuilderAdd);return}const up=e.target.closest('[data-owner-builder-up]');if(up){const a=ownerBuilderAction(up.dataset.ownerBuilderUp);ownerMoveBuilder(a.key,a.index,-1);return}const down=e.target.closest('[data-owner-builder-down]');if(down){const a=ownerBuilderAction(down.dataset.ownerBuilderDown);ownerMoveBuilder(a.key,a.index,1);return}const rm=e.target.closest('[data-owner-builder-rm]');if(rm){const a=ownerBuilderAction(rm.dataset.ownerBuilderRm);ownerRemoveBuilder(a.key,a.index);return}});
+['ownerBuilderTitle','ownerBuilderSubtitle','ownerBuilderMinSauces','ownerBuilderMaxSauces','ownerBuilderMaxExtras'].forEach(id=>$('#'+id).addEventListener('input',syncOwnerBuilderMeta));
 $('#siteBgFile').onchange=async e=>{const f=e.target.files[0];if(f){siteBackground=await compress(f,1100,800,.72);renderSiteStudio()}e.target.value=''};
 $('#builderResultFile').onchange=async e=>{const f=e.target.files[0];if(f){builderResultImage=await compress(f,1000,1000,.76);renderSiteStudio()}e.target.value=''};
 $('#addMenu').onclick=()=>{const section=menuSections.find(s=>s.active!==false)||menuSections[0];if(!section)return toast('Сначала добавьте раздел');menu.push({id:currentId+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0,active:true});renderMenu()};$('#addSection').onclick=()=>{const name=$('#newSectionName').value.trim(),emoji=$('#newSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugSection(name),n=2;while(menuSections.some(s=>s.id===id))id=slugSection(name)+'_'+n++;menuSections.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newSectionName').value='';$('#newSectionEmoji').value='';renderSections();renderMenu()};

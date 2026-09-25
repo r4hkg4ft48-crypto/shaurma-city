@@ -290,9 +290,8 @@
         '</div>'+
       '</article>';
     }).join('')
-      :'<div class="menuEmptyState"><span>⌕</span><b>Ничего не нашли</b><p>Попробуй другое название или переключи категорию.</p><button type="button" id="resetMenuSearch">Показать всё</button></div>';
+      :'<div class="menuEmptyState"><span>⌕</span><b>Ничего не нашли</b><p>Попробуй другое название или переключи категорию.</p><button type="button" data-reset-menu-search>Показать всё</button></div>';
     observeReveals();
-    $('#resetMenuSearch')?.addEventListener('click',()=>{menuQuery='';category='all';$('#menuSearch').value='';document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x.dataset.cat==='all'));renderMenu()});
   }
 
   function renderCart(){
@@ -362,6 +361,7 @@
   $('#menuSearchClear').onclick=()=>{menuQuery='';$('#menuSearch').value='';renderMenu();$('#menuSearch').focus()};
   $('#heroMenuJump').onclick=()=>{$('#menuPrelude')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});tg?.HapticFeedback?.impactOccurred?.('light')};
   $('#menuGrid').onclick=e=>{
+    const reset=e.target.closest('[data-reset-menu-search]');if(reset){menuQuery='';category='all';$('#menuSearch').value='';document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x.dataset.cat==='all'));renderMenu();return}
     const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
     const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
   };

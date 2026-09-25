@@ -103,6 +103,36 @@ jobs:
                   print(result.stderr)
                   sys.exit(result.returncode)
           PY
+      - name: Builder domain behavior
+        run: |
+          node - <<'NODE'
+          const D=require('./v2/backend/src/domain');
+          const cfg=D.normalizeBuilderConfig({
+            title:'Test',
+            types:[{id:'base',name:'Base',price:100}],
+            breads:[],
+            meats:[],
+            sauces:[],
+            extras:[],
+            min_sauces:0,
+            max_sauces:0,
+            max_extras:0
+          });
+          if(cfg.breads.length||cfg.meats.length||cfg.sauces.length||cfg.extras.length)throw new Error('explicit empty groups were repopulated');
+          if(cfg.types.length!==1||cfg.types[0].id!=='base')throw new Error('product type normalization failed');
+          const built=D.priceBuilder({builder_enabled:true,builder:cfg},{type:'base',bread:'',meat:'',sauces:[],extras:[]});
+          if(!built||built.p!==100)throw new Error('builder price validation failed');
+          const custom=D.normalizeBuilderConfig({
+            types:[{id:'wrap',name:'Wrap',price:250}],
+            sauces:[{id:'hot',name:'Hot',price:25}],
+            extras:[{id:'cheese',name:'Cheese',price:40}],
+            min_sauces:1,max_sauces:1,max_extras:1,
+            breads:[],meats:[]
+          });
+          const priced=D.priceBuilder({builder_enabled:true,builder:custom},{type:'wrap',sauces:['hot'],extras:['cheese']});
+          if(!priced||priced.p!==315)throw new Error('custom ingredient pricing failed');
+          console.log('builder domain behavior ok');
+          NODE
       - name: Install API dependencies
         working-directory: v2/backend
         run: npm install --ignore-scripts

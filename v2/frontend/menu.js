@@ -166,15 +166,15 @@
       min_sauces:1,max_sauces:6,max_extras:4
     };
     const raw=config.builder&&typeof config.builder==='object'?config.builder:{};
-    const normalize=(key,base)=>Array.isArray(raw[key])&&raw[key].length?raw[key].map((x,i)=>({id:String(x.id||key+'_'+i),name:String(x.name||x.n||'Опция'),price:Number(x.price??x.price_delta??x.p)||0})):base.map(x=>({...x}));
-    const sauces=normalize('sauces',fallback.sauces),extras=normalize('extras',fallback.extras);
+    const normalize=(key,base)=>Array.isArray(raw[key])?raw[key].map((x,i)=>({id:String(x.id||key+'_'+i),name:String(x.name||x.n||'Опция'),price:Number(x.price??x.price_delta??x.p)||0})):base.map(x=>({...x}));
+    const rawTypes=normalize('types',fallback.types),types=rawTypes.length?rawTypes:fallback.types.map(x=>({...x})),breads=normalize('breads',fallback.breads),meats=normalize('meats',fallback.meats),sauces=normalize('sauces',fallback.sauces),extras=normalize('extras',fallback.extras);
+    const maxSauces=sauces.length?(Number.isFinite(Number(raw.max_sauces))?Math.max(0,Math.min(sauces.length,Number(raw.max_sauces))):sauces.length):0;
     return {
       title:String(raw.title||fallback.title),subtitle:String(raw.subtitle||fallback.subtitle),
-      types:normalize('types',fallback.types),breads:normalize('breads',fallback.breads),meats:normalize('meats',fallback.meats),
-      sauces,extras,
-      min_sauces:Number.isFinite(Number(raw.min_sauces))?Math.max(0,Number(raw.min_sauces)):fallback.min_sauces,
-      max_sauces:Number.isFinite(Number(raw.max_sauces))?Math.max(1,Number(raw.max_sauces)):sauces.length,
-      max_extras:Number.isFinite(Number(raw.max_extras))?Math.max(0,Number(raw.max_extras)):extras.length
+      types,breads,meats,sauces,extras,
+      min_sauces:Number.isFinite(Number(raw.min_sauces))?Math.max(0,Math.min(maxSauces,Number(raw.min_sauces))):(sauces.length?fallback.min_sauces:0),
+      max_sauces:maxSauces,
+      max_extras:extras.length?(Number.isFinite(Number(raw.max_extras))?Math.max(0,Math.min(extras.length,Number(raw.max_extras))):extras.length):0
     };
   }
   function option(list,id){return (list||[]).find(x=>String(x.id)===String(id))||null}
@@ -203,6 +203,8 @@
     $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>'<button class="builderChoice '+(builderState.extras.includes(String(x.id))?'active':'')+'" data-bextra="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
     $('#builderBreadBlock').classList.toggle('hidden',!(builder.breads||[]).length);
     $('#builderMeatBlock').classList.toggle('hidden',!(builder.meats||[]).length);
+    $('#builderSauces').closest('.builderBlock')?.classList.toggle('hidden',!(builder.sauces||[]).length);
+    $('#builderIngredientsBlock').classList.toggle('hidden',!(builder.extras||[]).length);
     $('#builderPrice').textContent=money(builderTotal());
     const bread=optionName(builder.breads,builderState.bread),meat=optionName(builder.meats,builderState.meat);
     $('#builderSummary').textContent=[type?.name,bread,meat].filter(Boolean).join(' · ');

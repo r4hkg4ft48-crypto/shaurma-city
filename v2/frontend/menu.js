@@ -290,7 +290,7 @@
     const min=Math.max(0,Number(builder.min_sauces)||0);
     $('#sauceHint').textContent=builderState.sauces.length?'Соусы: '+builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):(min?'Выбери минимум '+min+' соус'+(min===1?'':'а'):'Соус можно не добавлять');
   }
-  function openBuilder(){
+  function openBuilder(startMode='custom'){
     if(!builder)return;
     builderState={type:String(builder.types?.[0]?.id||''),bread:String(builder.breads?.[0]?.id||''),meat:String(builder.meats?.[0]?.id||''),sauces:[],extras:[]};
     pendingBuilt=null;builderResultOrigin='custom';signatureIndex=0;signatureItems=signatureCollection();
@@ -298,7 +298,7 @@
     if(signatureLabel)signatureLabel.textContent=signatureItems.length===10?'10 фирменных':(signatureItems.length?signatureItems.length+' фирменных':'Фирменные');
     const signatureButton=document.querySelector('#builderModeSwitch [data-builder-mode="signature"]');if(signatureButton)signatureButton.disabled=!signatureItems.length;
     $('#builderStage').hidden=false;$('#builderStage').classList.remove('builderCollapsing');$('#builderResult').hidden=true;
-    renderBuilder();setBuilderMode('custom');openSheet('builderSheet');
+    renderBuilder();openSheet('builderSheet');setBuilderMode(startMode==='signature'&&signatureItems.length?'signature':'custom');
   }
   function toggleBuilder(list,id,max){id=String(id);const i=list.indexOf(id);if(i>=0)list.splice(i,1);else if(list.length<max)list.push(id);else toast('Достигнут максимум');renderBuilder()}
   function builtPayload(){
@@ -365,7 +365,11 @@
     if(ctx.marker.hero_image){$('#heroImg').src=ctx.marker.hero_image;$('#heroImg').classList.remove('hidden')}
     else $('#hero').classList.add('heroNoImage');
     builder=builderConfig(ctx.venue.config||{});signatureItems=signatureCollection();$('#builderEntry').classList.toggle('hidden',!builder);
-    if(builder){$('#builderEntryTitle').textContent=builder.title||'Собери свою шаурму';$('#builderEntrySubtitle').textContent=builder.subtitle||'Основа → лаваш → мясо → соусы → добавки'}
+    $('#openSignatureBuilder').classList.toggle('hidden',!builder||!signatureItems.length);
+    if(builder){
+      $('#builderEntryTitle').textContent=builder.title||'Собери свою шаурму';$('#builderEntrySubtitle').textContent=builder.subtitle||'Основа → лаваш → мясо → соусы → добавки';
+      $('#signatureEntryTitle').textContent=signatureItems.length===10?'10 фирменных':signatureItems.length+' фирменных';
+    }
     const menu=(ctx.venue.menu||[]).filter(x=>x.active!==false),sections=Array.isArray(ctx.venue.sections)?ctx.venue.sections:[];
     const usedCats=new Set(menu.map(x=>String(x.c||x.category||'')).filter(Boolean));
     const visibleSections=sections.filter(x=>usedCats.has(String(x.id)));
@@ -550,7 +554,8 @@
     let b=e.target.closest('[data-plus]');if(b){const x=cart.find(x=>x.id===b.dataset.plus);if(x){x.q++;save()}return}
     b=e.target.closest('[data-minus]');if(b){const x=cart.find(x=>x.id===b.dataset.minus);if(x&&--x.q<=0)cart=cart.filter(v=>v!==x);save()}
   };
-  $('#openBuilder').onclick=openBuilder;
+  $('#openBuilder').onclick=()=>openBuilder('custom');
+  $('#openSignatureBuilder').onclick=()=>openBuilder('signature');
   $('#builderModeSwitch').onclick=e=>{const b=e.target.closest('[data-builder-mode]');if(b)setBuilderMode(b.dataset.builderMode)};
   $('#signaturePrev').onclick=()=>shiftSignature(-1);
   $('#signatureNext').onclick=()=>shiftSignature(1);

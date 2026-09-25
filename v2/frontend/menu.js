@@ -133,11 +133,6 @@
         :'<div class="empty">Заказов пока нет</div>';
     }catch{$('#myOrders').innerHTML='<div class="empty">Не удалось загрузить историю</div>'}
   }
-
-  async function place(){
-    const btn=$('#placeOrder']; 
-  }
-
   async function submitOrder(){
     const btn=$('#placeOrder');btn.disabled=true;
     const {total}=cartStats();

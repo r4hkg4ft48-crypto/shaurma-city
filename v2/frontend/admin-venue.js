@@ -274,7 +274,7 @@
  function addMenuItem(){
    readMenu();const id='item_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
    menu.push({id,n:'Новая позиция',d:'',p:0,c:'shawarma',image:'',active:true});renderMenu();
-   setTimeout(()=>document.querySelector('.menuEditCard[data-item-id="'+CSS.escape(id)+'"] [data-k="n"]')?.focus(),40);
+   setTimeout(()=>[...document.querySelectorAll('.menuEditCard')].find(x=>String(x.dataset.itemId)===id)?.querySelector('[data-k="n"]')?.focus(),40);
  }
  $('#addItem').onclick=addMenuItem;
  $('#menuEditor').onclick=e=>{
@@ -299,7 +299,8 @@
      if(est!==venueAtPick)return;
      const target=menu.find(x=>String(x.id)===itemId);if(!target)return;
      target.image=encoded;renderMenu();toast('Фото готово · сохраните меню ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
-   }catch(err){card?.classList.remove('photoLoading');toast(err.message||'Не удалось обработать фото')}
+   }catch(err){toast(err.message||'Не удалось обработать фото')}
+   finally{card?.classList.remove('photoLoading');try{input.value=''}catch{}}
  };
  $('#builderAdmin').onclick=e=>{
    const add=e.target.closest('[data-builder-add]');if(add)return addBuilderOption(add.dataset.builderAdd);

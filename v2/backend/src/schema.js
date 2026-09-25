@@ -148,6 +148,19 @@ async function ensureSchema(){
     applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     details JSONB NOT NULL DEFAULT '{}'::jsonb
   );
+
+  WITH missing_theme AS (
+    SELECT venue_id,row_number() OVER(ORDER BY created_at,venue_id) AS rn
+    FROM shaurma_venues
+    WHERE COALESCE(config->>'theme_key','')=''
+  ), assigned AS (
+    SELECT venue_id,(ARRAY['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'])[((rn-1)%8)+1] AS theme_key
+    FROM missing_theme
+  )
+  UPDATE shaurma_venues v
+  SET config=jsonb_set(COALESCE(v.config,'{}'::jsonb),'{theme_key}',to_jsonb(a.theme_key),TRUE),updated_at=NOW()
+  FROM assigned a
+  WHERE v.venue_id=a.venue_id;
   `);
 }
 module.exports={ensureSchema};

@@ -11,6 +11,16 @@
 @media(max-width:650px){.stats{grid-template-columns:1fr 1fr}.customer{grid-template-columns:1fr}h1{font-size:34px}.menuHead{align-items:stretch;flex-direction:column}.menuControls{display:grid;grid-template-columns:1fr auto}.menuRow{grid-template-columns:1fr 1fr}.menuRow [data-field="d"]{grid-column:1/-1}.menuRow .removeItem{grid-column:2}}
  .topActions{display:flex;align-items:center;gap:8px}.masterBackLink{display:none;align-items:center;gap:6px;padding:8px 11px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.04);color:#eef3ff;font-size:11px;font-weight:850}.masterBackLink.show{display:inline-flex}.mapAdminLink{padding:8px 11px;border:1px solid rgba(47,109,246,.25);border-radius:12px;color:#b7c8ff;text-decoration:none;font-size:11px;font-weight:850;background:rgba(47,109,246,.08)}.venueSettings{display:grid;grid-template-columns:1fr 130px auto;gap:9px;align-items:end;margin-bottom:12px;padding:12px;border:1px solid var(--l);border-radius:16px;background:rgba(255,255,255,.02)}.venueSettings label{display:grid;gap:5px;color:var(--m);font-size:11px;font-weight:800}.venueSettings input[type="color"]{padding:5px}.builderToggle{display:flex!important;align-items:center;gap:8px;min-height:44px}.builderToggle input{width:20px;height:20px}@media(max-width:650px){.venueSettings{grid-template-columns:1fr 110px}.builderToggle{grid-column:1/-1}}
 </style>
+<style>
+.orderControlPanel{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:8px;margin:0 0 12px;padding:12px;border:1px solid var(--l);border-radius:18px;background:rgba(255,255,255,.025)}
+.orderControlPanel label{display:grid;gap:5px;color:var(--m);font-size:10px;font-weight:800}.orderControlPanel select,.orderControlPanel input{width:100%;min-height:43px;border:1px solid var(--l);border-radius:12px;background:#0d151f;padding:8px 10px;outline:none}
+.customDates{display:none;grid-column:1/-1;grid-template-columns:1fr 1fr;gap:8px}.customDates.show{display:grid}
+.lifeStats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 12px}.lifeStat{padding:12px;border:1px solid var(--l);border-radius:16px;background:linear-gradient(180deg,#111a25,#0c131c)}.lifeStat small{display:block;color:var(--m);font-size:9px;text-transform:uppercase;letter-spacing:.05em}.lifeStat b{display:block;margin-top:5px;font-size:20px}.lifeStat em{display:block;margin-top:3px;color:var(--m);font-size:9px;font-style:normal}
+.analyticsGrid{display:grid;grid-template-columns:1.15fr .85fr;gap:9px;margin-bottom:14px}.analyticsPanel{padding:13px;border:1px solid var(--l);border-radius:18px;background:linear-gradient(180deg,#111a25,#0b121b)}.analyticsPanel h3{margin:0 0 3px;font-size:17px}.analyticsPanel>small{color:var(--m);font-size:9px}.analyticsList{display:grid;gap:6px;margin-top:10px}.analyticsRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.055)}.analyticsRow:first-child{border-top:0}.analyticsRow b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.analyticsRow span,.analyticsRow em{font-size:10px;color:var(--m);font-style:normal;white-space:nowrap}.timelineRow{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:7px 0;border-top:1px solid rgba(255,255,255,.055);font-size:10px}.timelineRow:first-child{border-top:0}.timelineRow span{color:var(--m)}
+.loadMore{display:none;width:100%;min-height:44px;margin-top:10px;border:1px solid var(--l);border-radius:14px;background:rgba(255,255,255,.04);font-weight:850}.loadMore.show{display:block}
+.orderScopeLabel{display:inline-flex;margin-top:7px;padding:6px 8px;border:1px solid rgba(121,156,255,.22);border-radius:10px;color:#b7c8ff;font:800 10px/1 ui-monospace,SFMono-Regular,monospace}
+@media(max-width:650px){.orderControlPanel{grid-template-columns:1fr}.customDates{grid-template-columns:1fr 1fr}.lifeStats{grid-template-columns:1fr 1fr}.analyticsGrid{grid-template-columns:1fr}.analyticsRow{grid-template-columns:minmax(0,1fr) auto}.analyticsRow em{grid-column:2}}
+</style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -19,12 +29,39 @@
 <div class="adminTabs"><button class="adminTab active" data-admin-tab="orders">Активные заказы</button><button class="adminTab" data-admin-tab="menu">Настройка меню</button></div>
 
 <section class="adminPane active" id="ordersPane">
-<h1>Заказы<br>в реальном времени</h1>
-<p class="sub">Новые заказы появляются здесь автоматически. Настройка меню больше не влияет на рабочую ленту.</p>
-<section class="stats"><div class="stat"><small>Сегодня</small><b id="stToday">0</b></div><div class="stat"><small>Новые</small><b id="stNew">0</b></div><div class="stat"><small>Готовятся</small><b id="stCook">0</b></div><div class="stat"><small>Выручка</small><b id="stRev">0 ₽</b></div></section>
-<div class="ordersTitle"><div><small style="color:#799cff;font-weight:900;letter-spacing:.12em">РАБОЧАЯ ЛЕНТА</small><h2>Заказы</h2></div><div class="activeBadge" id="activeCount">0 активных</div></div>
-<div class="toolbar" id="filters"><button class="filter active" data-f="active">Активные</button><button class="filter" data-f="new">Новые</button><button class="filter" data-f="cooking">Готовятся</button><button class="filter" data-f="ready">Готовы</button><button class="filter" data-f="done">Выданы</button><button class="filter" data-f="all">Все</button></div>
+<h1>Заказы<br>и аналитика</h1>
+<p class="sub">Выберите конкретную точку, период и порядок сортировки. Аналитика считается по всей истории заказов выбранного заведения.</p>
+
+<div class="orderControlPanel">
+  <label>Точка / заведение<select id="orderVenueSelect"><option value="">Все заведения</option></select></label>
+  <label>Период<select id="orderPeriod"><option value="all">За всё время</option><option value="today">Сегодня</option><option value="7d">7 дней</option><option value="30d">30 дней</option><option value="90d">90 дней</option><option value="custom">Свой период</option></select></label>
+  <label>Сортировка<select id="orderSort"><option value="newest">Сначала новые</option><option value="oldest">Сначала старые</option><option value="total_desc">Сначала дорогие</option><option value="total_asc">Сначала дешёвые</option></select></label>
+  <div class="customDates" id="customDates"><label>С<input id="orderFrom" type="date"></label><label>По<input id="orderTo" type="date"></label></div>
+</div>
+
+<section class="stats">
+  <div class="stat"><small>Заказов в периоде</small><b id="stToday">0</b></div>
+  <div class="stat"><small>Новые</small><b id="stNew">0</b></div>
+  <div class="stat"><small>Готовятся</small><b id="stCook">0</b></div>
+  <div class="stat"><small>Выручка периода</small><b id="stRev">0 ₽</b></div>
+</section>
+
+<section class="lifeStats">
+  <div class="lifeStat"><small>Выручка за всё время</small><b id="lifeRevenue">0 ₽</b><em id="lifeRevenueHint">по выбранной точке</em></div>
+  <div class="lifeStat"><small>Заказов за всё время</small><b id="lifeOrders">0</b><em id="lifeSales">0 продаж</em></div>
+  <div class="lifeStat"><small>Средний чек</small><b id="lifeAvg">0 ₽</b><em>без отменённых</em></div>
+  <div class="lifeStat"><small>История с</small><b id="lifeSince">—</b><em id="lifeUntil">—</em></div>
+</section>
+
+<div class="analyticsGrid">
+  <section class="analyticsPanel"><h3>Что покупают</h3><small>Количество и выручка по позициям за выбранный период</small><div class="analyticsList" id="productAnalytics"><div class="empty">Нет данных</div></div></section>
+  <section class="analyticsPanel"><h3>Динамика</h3><small id="timelineHint">По дням / месяцам</small><div class="analyticsList" id="timelineAnalytics"><div class="empty">Нет данных</div></div></section>
+</div>
+
+<div class="ordersTitle"><div><small style="color:#799cff;font-weight:900;letter-spacing:.12em">ИСТОРИЯ ЗАКАЗОВ</small><h2>Заказы</h2><div class="orderScopeLabel" id="orderScopeLabel">Все заведения · всё время</div></div><div class="activeBadge" id="activeCount">0 заказов</div></div>
+<div class="toolbar" id="filters"><button class="filter active" data-f="active">Активные</button><button class="filter" data-f="new">Новые</button><button class="filter" data-f="cooking">Готовятся</button><button class="filter" data-f="ready">Готовы</button><button class="filter" data-f="done">Выданы</button><button class="filter" data-f="cancelled">Отменены</button><button class="filter" data-f="all">Все</button></div>
 <div class="orders" id="orders"></div>
+<button class="loadMore" id="loadMoreOrders" type="button">Показать ещё</button>
 </section>
 
 <section class="adminPane" id="menuPane">
@@ -37,7 +74,7 @@
 const API=location.origin;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const OWNER_LAUNCH=new URL(location.href),REQUESTED_SECTION=String(OWNER_LAUNCH.searchParams.get('section')||''),FROM_MASTER=OWNER_LAUNCH.searchParams.get('from')==='master';
-let token=sessionStorage.getItem('sc_owner_token')||'',adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',orders=[],filter='active',stream=null,venues=[],editingVenue=null,menuDraft=[],menuSectionsDraft=[];
+let token=sessionStorage.getItem('sc_owner_token')||'',adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',orders=[],filter='active',stream=null,venues=[],editingVenue=null,menuDraft=[],menuSectionsDraft=[],orderOffset=0,orderTotal=0,orderHasMore=false,orderLimit=100,orderAnalytics=null;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1300)}
 function backToMaster(){location.href='/master-admin?tab=overview&v=1'}
@@ -45,9 +82,35 @@ function setupMasterBack(){if(!FROM_MASTER)return;$('#masterBackLink')?.classLis
 async function api(path,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};if(adminSession)opt.headers.Authorization='Bearer '+adminSession;else opt.headers['X-Owner-Token']=token;if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}const r=await fetch(API+path,opt);if(r.status===401){logout();throw new Error('unauthorized')}if(!r.ok)throw new Error(await r.text());return r.json()}
 async function login(){const password=$('#password').value.trim();$('#err').textContent='';try{const r=await fetch(API+'/api/shaurma/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});if(!r.ok)throw new Error();const j=await r.json();token=j.token;sessionStorage.setItem('sc_owner_token',token);start()}catch{$('#err').textContent='Неверный пароль'}}
 function logout(){sessionStorage.removeItem('sc_owner_token');sessionStorage.removeItem('sc_admin_tg_session');token='';adminSession='';$('#app').hidden=true;$('#login').style.display='grid';stream?.close()}
-async function start(){try{await load();$('#login').style.display='none';$('#app').hidden=false;connect();loadVenues().catch(()=>{const m=$('#menuRows');if(m)m.innerHTML='<div class="empty">Настройки меню временно недоступны. Заказы продолжают работать.</div>'});if(['orders','menu'].includes(REQUESTED_SECTION)){setTimeout(()=>document.querySelector('[data-admin-tab="'+REQUESTED_SECTION+'"]')?.click(),0)}}catch(e){if(token||adminSession)$('#err').textContent='Не удалось загрузить заказы'}}
-async function load(){orders=await api('/api/shaurma/orders');render();stats()}
-async function loadVenues(){venues=await api('/api/shaurma/admin/venues');$('#venueSelect').innerHTML=venues.map(v=>`<option value="${v.venue_id}">${escapeHtml(v.name)} · ${escapeHtml(v.establishment_id||'без ID')}${v.marker_count?' · с карты':''}</option>`).join('');if(venues.length)await openVenue($('#venueSelect').value||venues[0].venue_id);else{$('#menuRows').innerHTML='<div class="empty">Сначала добавьте заведение меткой в редакторе карты</div>';$('#saveMenu').disabled=true}}
+async function start(){try{
+ await load();$('#login').style.display='none';$('#app').hidden=false;connect();
+ const venuesPromise=loadVenues().catch(()=>{const m=$('#menuRows');if(m)m.innerHTML='<div class="empty">Настройки меню временно недоступны. Заказы продолжают работать.</div>'});
+ await venuesPromise;await stats().catch(()=>{});
+ if(['orders','menu'].includes(REQUESTED_SECTION)){setTimeout(()=>document.querySelector('[data-admin-tab="'+REQUESTED_SECTION+'"]')?.click(),0)}
+}catch(e){if(token||adminSession)$('#err').textContent='Не удалось загрузить заказы'}}
+function orderQuery(offset=0){
+ const q=new URLSearchParams({status:filter,period:$('#orderPeriod')?.value||'all',sort:$('#orderSort')?.value||'newest',limit:String(orderLimit),offset:String(offset)});
+ const est=$('#orderVenueSelect')?.value||'';if(est)q.set('establishment_id',est);
+ if(q.get('period')==='custom'){if($('#orderFrom').value)q.set('from',$('#orderFrom').value);if($('#orderTo').value)q.set('to',$('#orderTo').value)}
+ return q;
+}
+async function load(reset=true){
+ if(reset){orderOffset=0;orders=[]}
+ const j=await api('/api/shaurma/admin/orders?'+orderQuery(orderOffset));
+ const chunk=Array.isArray(j.orders)?j.orders:[];
+ orders=reset?chunk:[...orders,...chunk.filter(o=>!orders.some(x=>String(x.id)===String(o.id)))];
+ orderTotal=Number(j.total||0);orderHasMore=!!j.has_more;orderOffset=Number(j.offset||0)+chunk.length;
+ render();
+ $('#loadMoreOrders').classList.toggle('show',orderHasMore);
+ $('#activeCount').textContent=orderTotal+' заказ'+(orderTotal===1?'':orderTotal<5?'а':'ов');
+}
+async function loadVenues(){
+ venues=await api('/api/shaurma/admin/venues');
+ $('#venueSelect').innerHTML=venues.map(v=>`<option value="${v.venue_id}">${escapeHtml(v.name)} · ${escapeHtml(v.establishment_id||'без ID')}${v.marker_count?' · с карты':''}</option>`).join('');
+ $('#orderVenueSelect').innerHTML='<option value="">Все заведения</option>'+venues.filter(v=>v.establishment_id).map(v=>`<option value="${escapeHtml(v.establishment_id)}">${escapeHtml(v.name)} · ${escapeHtml(v.establishment_id)}</option>`).join('');
+ if(venues.length)await openVenue($('#venueSelect').value||venues[0].venue_id);else{$('#menuRows').innerHTML='<div class="empty">Сначала добавьте заведение меткой в редакторе карты</div>';$('#saveMenu').disabled=true}
+ updateOrderScope();
+}
 async function openVenue(id){editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);$('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');$('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';$('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;$('#saveMenu').disabled=false;renderMenuSections();renderMenuEditor()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function slugMenuSection(v){let s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');return (s||('section_'+Date.now().toString(36))).slice(0,48)}
@@ -55,11 +118,30 @@ function normalizeMenuSections(input,items=[]){const legacy={shawarma:['Шаур
 function renderMenuSections(){$('#menuSectionRows').innerHTML=menuSectionsDraft.map((s,i)=>`<div class="menuSectionRow" data-menu-section-i="${i}"><input class="menuField" data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🍔"><input class="menuField" data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}"><span class="menuSectionId">${escapeHtml(s.id)}</span><button data-section-up="${i}" ${i===0?'disabled':''}>↑</button><button data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''}>↓</button><button class="del" data-section-remove="${i}">×</button></div>`).join('')}
 function renderMenuEditor(){const sections=menuSectionsDraft.filter(s=>s.active!==false);$('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>`<div class="menuRow" data-index="${i}"><input class="menuField" data-field="n" value="${escapeHtml(x.n||x.name||'')}" placeholder="Название"><select class="menuField" data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select><input class="menuField" data-field="d" value="${escapeHtml(x.d||x.description||'')}" placeholder="Описание"><input class="menuField" data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="Цена"><button class="removeItem" data-remove-item="${i}" aria-label="Удалить">×</button></div>`).join(''):'<div class="empty">В меню пока нет позиций</div>'}
 async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,menu_sections:menuSectionsDraft};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await openVenue(venueId);toast('Сохранено для '+establishmentId)}catch(e){toast('Не удалось сохранить меню')}finally{button.disabled=false}}
-async function stats(){const s=await api('/api/shaurma/stats');$('#stToday').textContent=s.today;$('#stNew').textContent=s.new;$('#stCook').textContent=s.cooking;$('#stRev').textContent=s.revenue+' ₽'}
-function connect(){stream?.close();const q=adminSession?'admin_session='+encodeURIComponent(adminSession):'token='+encodeURIComponent(token);stream=new EventSource(API+'/api/shaurma/stream?'+q);stream.addEventListener('ready',()=>{$('#liveText').textContent='Онлайн'});stream.addEventListener('order',e=>{const o=JSON.parse(e.data);orders=[o,...orders.filter(x=>String(x.id)!==String(o.id))];render();stats();toast('Новый заказ '+o.order_number)});stream.addEventListener('update',e=>{const o=JSON.parse(e.data);orders=orders.map(x=>String(x.id)===String(o.id)?o:x);render();stats()});stream.onerror=()=>{$('#liveText').textContent='Переподключение…'}}
+function fmtMoney(v){return Math.round(Number(v)||0).toLocaleString('ru-RU')+' ₽'}
+function fmtDate(v,short=false){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('ru-RU',short?{day:'2-digit',month:'2-digit',year:'2-digit'}:{day:'2-digit',month:'2-digit',year:'numeric'})}
+function updateOrderScope(){
+ const est=$('#orderVenueSelect')?.value||'',v=venues.find(x=>x.establishment_id===est),period=$('#orderPeriod')?.selectedOptions?.[0]?.textContent||'За всё время';
+ $('#orderScopeLabel').textContent=(v?v.name+' · '+v.establishment_id:'Все заведения')+' · '+period.toLowerCase();
+ $('#lifeRevenueHint').textContent=v?'по '+v.establishment_id:'по всей сети';
+}
+async function stats(){
+ const q=orderQuery(0);q.delete('status');q.delete('sort');q.delete('limit');q.delete('offset');
+ const s=await api('/api/shaurma/admin/order-analytics?'+q);orderAnalytics=s;
+ const p=s.period||{},l=s.lifetime||{};
+ $('#stToday').textContent=Number(p.orders||0).toLocaleString('ru-RU');$('#stNew').textContent=Number(p.new||0).toLocaleString('ru-RU');$('#stCook').textContent=Number(p.cooking||0).toLocaleString('ru-RU');$('#stRev').textContent=fmtMoney(p.revenue);
+ $('#lifeRevenue').textContent=fmtMoney(l.revenue);$('#lifeOrders').textContent=Number(l.orders||0).toLocaleString('ru-RU');$('#lifeSales').textContent=Number(l.sales||0).toLocaleString('ru-RU')+' продаж';$('#lifeAvg').textContent=fmtMoney(l.avg_check);$('#lifeSince').textContent=fmtDate(l.first_order_at,true);$('#lifeUntil').textContent=l.last_order_at?'последний: '+fmtDate(l.last_order_at,true):'заказов ещё нет';
+ const products=Array.isArray(s.products)?s.products:[];
+ $('#productAnalytics').innerHTML=products.length?products.map((x,i)=>'<div class="analyticsRow"><b>'+(i+1)+'. '+escapeHtml(x.name)+'</b><span>'+Number(x.qty||0).toLocaleString('ru-RU')+' шт.</span><em>'+fmtMoney(x.revenue)+'</em></div>').join(''):'<div class="empty">В этом периоде покупок нет</div>';
+ const timeline=Array.isArray(s.timeline)?s.timeline:[];
+ $('#timelineHint').textContent=($('#orderPeriod').value==='all'?'По месяцам':'По дням')+' · без отменённых';
+ $('#timelineAnalytics').innerHTML=timeline.length?timeline.slice(-36).reverse().map(x=>'<div class="timelineRow"><b>'+fmtDate(x.bucket,true)+'</b><span>'+Number(x.orders||0)+' заказов</span><em>'+fmtMoney(x.revenue)+'</em></div>').join(''):'<div class="empty">Нет данных</div>';
+ updateOrderScope();
+}
+function connect(){stream?.close();const q=adminSession?'admin_session='+encodeURIComponent(adminSession):'token='+encodeURIComponent(token);stream=new EventSource(API+'/api/shaurma/stream?'+q);stream.addEventListener('ready',()=>{$('#liveText').textContent='Онлайн'});stream.addEventListener('order',e=>{const o=JSON.parse(e.data);load(true).catch(()=>{});stats().catch(()=>{});toast('Новый заказ '+o.order_number)});stream.addEventListener('update',()=>{load(true).catch(()=>{});stats().catch(()=>{})});stream.onerror=()=>{$('#liveText').textContent='Переподключение…'}}
 function itemName(x){return x.n||x.name||'Позиция'}
-function render(){const active=orders.filter(x=>['new','cooking','ready'].includes(x.status));const ac=$('#activeCount');if(ac)ac.textContent=active.length+' активных';const list=filter==='all'?orders:filter==='active'?active:orders.filter(x=>x.status===filter);$('#orders').innerHTML=list.length?list.map(o=>{const d=new Date(o.created_at);const items=Array.isArray(o.items)?o.items:[];return `<article class="order"><div class="oh"><div><div class="num">${o.order_number}</div><div class="time">${escapeHtml(o.venue_name||'Заведение')} · ${d.toLocaleString('ru-RU')}</div></div><span class="status s-${o.status}">${labels[o.status]||o.status}</span></div><div class="body"><div class="customer"><div class="box"><small>Клиент</small><b>${escapeHtml(o.customer_name||'Гость')}</b><br><span>${escapeHtml(o.phone||'—')}</span></div><div class="box"><small>Адрес</small><b>${escapeHtml(o.address||'Самовывоз / не указан')}</b>${o.comment?'<br><span>'+escapeHtml(o.comment)+'</span>':''}</div></div><div class="items">${items.map(x=>'<div class="item"><span>'+escapeHtml(itemName(x))+' × '+(x.q||1)+'<small>'+escapeHtml(x.detail||'')+'</small></span><b>'+((Number(x.p)||0)*(x.q||1))+' ₽</b></div>').join('')}</div><div class="total"><span>Итого</span><b>${Number(o.total)||0} ₽</b></div><div class="actions">${o.status==='new'?'<button class="act primary" data-id="'+o.id+'" data-status="cooking">Принять → готовится</button>':''}${o.status==='cooking'?'<button class="act good" data-id="'+o.id+'" data-status="ready">Готов</button>':''}${o.status==='ready'?'<button class="act primary" data-id="'+o.id+'" data-status="done">Выдан</button>':''}${!['done','cancelled'].includes(o.status)?'<button class="act danger" data-id="'+o.id+'" data-status="cancelled">Отменить</button>':''}</div></div></article>`}).join(''):'<div class="empty">Заказов в этом разделе пока нет</div>'}
-document.addEventListener('click',async e=>{const tab=e.target.closest('[data-admin-tab]');if(tab){$('[data-admin-tab]').forEach(x=>x.classList.toggle('active',x===tab));$('#ordersPane').classList.toggle('active',tab.dataset.adminTab==='orders');$('#menuPane').classList.toggle('active',tab.dataset.adminTab==='menu');if(tab.dataset.adminTab==='orders')load().catch(()=>toast('Не удалось обновить заказы'));if(tab.dataset.adminTab==='menu'&&!editingVenue)loadVenues().catch(()=>toast('Не удалось загрузить меню'));return}const b=e.target.closest('[data-status]');if(b){b.disabled=true;try{await api('/api/shaurma/orders/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await load()}catch{toast('Не удалось изменить статус')}finally{b.disabled=false}}const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;$$('.filter').forEach(x=>x.classList.toggle('active',x===f));render()}});
+function render(){const list=orders;$('#orders').innerHTML=list.length?list.map(o=>{const d=new Date(o.created_at);const items=Array.isArray(o.items)?o.items:[];return `<article class="order"><div class="oh"><div><div class="num">${o.order_number}</div><div class="time">${escapeHtml(o.venue_name||'Заведение')} · ${d.toLocaleString('ru-RU')}</div></div><span class="status s-${o.status}">${labels[o.status]||o.status}</span></div><div class="body"><div class="customer"><div class="box"><small>Клиент</small><b>${escapeHtml(o.customer_name||'Гость')}</b><br><span>${escapeHtml(o.phone||'—')}</span></div><div class="box"><small>Адрес</small><b>${escapeHtml(o.address||'Самовывоз / не указан')}</b>${o.comment?'<br><span>'+escapeHtml(o.comment)+'</span>':''}</div></div><div class="items">${items.map(x=>'<div class="item"><span>'+escapeHtml(itemName(x))+' × '+(x.q||1)+'<small>'+escapeHtml(x.detail||'')+'</small></span><b>'+((Number(x.p)||0)*(x.q||1))+' ₽</b></div>').join('')}</div><div class="total"><span>Итого</span><b>${Number(o.total)||0} ₽</b></div><div class="actions">${o.status==='new'?'<button class="act primary" data-id="'+o.id+'" data-status="cooking">Принять → готовится</button>':''}${o.status==='cooking'?'<button class="act good" data-id="'+o.id+'" data-status="ready">Готов</button>':''}${o.status==='ready'?'<button class="act primary" data-id="'+o.id+'" data-status="done">Выдан</button>':''}${!['done','cancelled'].includes(o.status)?'<button class="act danger" data-id="'+o.id+'" data-status="cancelled">Отменить</button>':''}</div></div></article>`}).join(''):'<div class="empty">Заказов в этом разделе пока нет</div>'}
+document.addEventListener('click',async e=>{const tab=e.target.closest('[data-admin-tab]');if(tab){$('[data-admin-tab]').forEach(x=>x.classList.toggle('active',x===tab));$('#ordersPane').classList.toggle('active',tab.dataset.adminTab==='orders');$('#menuPane').classList.toggle('active',tab.dataset.adminTab==='menu');if(tab.dataset.adminTab==='orders'){load(true).catch(()=>toast('Не удалось обновить заказы'));stats().catch(()=>toast('Не удалось загрузить аналитику'))};if(tab.dataset.adminTab==='menu'&&!editingVenue)loadVenues().catch(()=>toast('Не удалось загрузить меню'));return}const b=e.target.closest('[data-status]');if(b){b.disabled=true;try{await api('/api/shaurma/orders/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await load()}catch{toast('Не удалось изменить статус')}finally{b.disabled=false}}const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;$('.filter').forEach(x=>x.classList.toggle('active',x===f));load(true).catch(()=>toast('Не удалось загрузить заказы'))}});
 $('#venueSelect').addEventListener('change',e=>openVenue(e.target.value));
 $('#reloadVenue').onclick=()=>openVenue($('#venueSelect').value);
 $('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0});renderMenuEditor()};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
@@ -81,6 +163,11 @@ async function telegramAdminLogin(){
   await start();return true;
  }catch(e){$('#err').textContent='Не удалось войти через Telegram';return false}
 }
+$('#orderVenueSelect').onchange=()=>{updateOrderScope();load(true).catch(()=>toast('Не удалось загрузить заказы'));stats().catch(()=>toast('Не удалось загрузить аналитику'))};
+$('#orderPeriod').onchange=()=>{const custom=$('#orderPeriod').value==='custom';$('#customDates').classList.toggle('show',custom);updateOrderScope();if(!custom){load(true).catch(()=>{});stats().catch(()=>{})}};
+$('#orderSort').onchange=()=>load(true).catch(()=>toast('Не удалось отсортировать заказы'));
+$('#orderFrom').onchange=$('#orderTo').onchange=()=>{if($('#orderPeriod').value==='custom'&&$('#orderFrom').value&&$('#orderTo').value){load(true).catch(()=>{});stats().catch(()=>{})}};
+$('#loadMoreOrders').onclick=()=>load(false).catch(()=>toast('Не удалось загрузить ещё'));
 $('#loginBtn').onclick=login;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
 setupMasterBack();(async()=>{if(adminSession||token){await start();return}const ok=await telegramAdminLogin();if(!ok)$('#login').style.display='grid'})();
 $('#masterBackLink')?.addEventListener('click',backToMaster);

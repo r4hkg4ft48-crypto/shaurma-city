@@ -1,42 +1,22 @@
 <!doctype html>
 <html lang="ru"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#09111D">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#120f18">
 <title>Шаурмег · меню</title>
 <script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head><body class="venuePage">
-<div class="venueAtmosphere" aria-hidden="true">
-  <div class="venueAurora venueAuroraA"></div>
-  <div class="venueAurora venueAuroraB"></div>
-  <div class="venueGrid"></div>
-  <div class="venueGrain"></div>
-</div>
-<div class="venueScrollProgress" aria-hidden="true"><i id="scrollProgress"></i></div>
-
 <header class="topbar glass venueTopbar">
-  <button class="iconBtn venueBackBtn" id="back" aria-label="Назад">‹</button>
-  <div class="brand venueBrand">
-    <span class="venueThemeDot"></span>
-    <div><b id="topName">Меню</b><small id="topAddress">ЗАГРУЗКА</small></div>
-  </div>
-  <div class="grow"></div>
-  <div class="venueLiveBadge"><i></i><span>LIVE</span></div>
-  <button class="iconBtn venueProfileBtn" id="profileBtn" aria-label="Мои заказы">◉</button>
+  <button class="iconBtn" id="back" aria-label="Назад">‹</button>
+  <div class="brand venueBrand"><span class="venueThemeDot"></span><div><b id="topName">Меню</b><small id="topAddress">ЗАГРУЗКА</small></div></div>
+  <div class="grow"></div><button class="iconBtn" id="profileBtn" aria-label="Мои заказы">◉</button>
 </header>
 
 <main class="page venuePageInner">
   <section class="heroPanel venueHeroPanel" id="hero">
-    <div class="heroVisual">
-      <img id="heroImg" class="hidden" alt="">
-      <div class="heroPhotoWash"></div>
-      <div class="heroOrb heroOrbA"></div>
-      <div class="heroOrb heroOrbB"></div>
-      <div class="heroLines"></div>
-    </div>
+    <img id="heroImg" class="hidden" alt="">
     <div class="heroAura"></div>
-    <div class="heroIndex" aria-hidden="true"><span>SHAURMEG</span><b>01</b></div>
     <div class="heroCopy">
-      <div class="heroSignal"><i></i><span id="venueKicker">выбранная точка</span></div>
+      <span class="eyebrow" id="venueKicker">выбранная точка</span>
       <h1 id="venueName">Загрузка…</h1>
       <p id="venueMeta"></p>
       <div class="venueFacts">
@@ -44,90 +24,45 @@
         <span id="venuePrice" class="venueFact hidden"></span>
         <span class="venueFact">Заказ внутри Shaurmeg</span>
       </div>
-      <button class="heroMenuJump" id="heroMenuJump" type="button">
-        <span><small>ПЕРЕЙТИ К МЕНЮ</small><b>Смотреть блюда</b></span><i>↓</i>
-      </button>
     </div>
-    <div class="heroBottomLine"><span>FOOD · PLACE · EXPERIENCE</span><i></i><span>2026</span></div>
   </section>
 
-  <section class="menuExperience" aria-label="Преимущества">
+  <section class="menuExperience" aria-hidden="true">
     <div class="experienceTrack">
-      <span><i>01</i><b>Готовим после заказа</b><em>без витринного ожидания</em></span>
-      <span><i>02</i><b>Статус в реальном времени</b><em>от кухни до выдачи</em></span>
-      <span><i>03</i><b>Корзина сохраняется</b><em>можно вернуться позже</em></span>
+      <span><i>✦</i><b>Готовим после заказа</b></span>
+      <span><i>◌</i><b>Статус в реальном времени</b></span>
+      <span><i>↗</i><b>Корзина сохраняется</b></span>
     </div>
   </section>
 
-  <section class="menuPrelude revealBlock" id="menuPrelude">
-    <div class="menuPreludeNumber">02</div>
-    <div class="menuPreludeCopy">
-      <small>МЕНЮ · СЕЙЧАС</small>
-      <h2>Выбери то,<br><em>за чем вернёшься.</em></h2>
-      <p>Актуальные блюда этой точки. Цена и состав проверяются сервером в момент заказа.</p>
-    </div>
-    <div class="menuPreludeStat"><b id="menuCount">0 позиций</b><span>в текущем меню</span></div>
-  </section>
-
-  <section class="section hidden revealBlock" id="builderEntry">
+  <section class="section hidden" id="builderEntry">
     <button class="builderEntry" id="openBuilder">
-      <span class="builderNumber">CUSTOM</span>
-      <span class="builderEntryCopy"><small>СОБЕРИ СВОЮ</small><b id="builderEntryTitle">Шаурма под твой вкус</b><em id="builderEntrySubtitle">Основа → лаваш → мясо → соусы → добавки</em></span>
-      <strong><span>Открыть</span>↗</strong>
+      <span><small>СОБЕРИ СВОЮ</small><b id="builderEntryTitle">Шаурма под твой вкус</b><em id="builderEntrySubtitle">Основа → лаваш → мясо → соусы → добавки</em></span><strong>✦</strong>
     </button>
   </section>
 
-  <section class="section menuSection" id="menuSection">
-    <div class="menuCommandBar">
-      <div class="menuCommandTop">
-        <div><small>КАТАЛОГ</small><h2>Меню</h2></div>
-        <div class="menuVisibleMeta"><b id="visibleMenuCount">0</b><span>показано</span></div>
-      </div>
-      <label class="menuSearch">
-        <span>⌕</span>
-        <input id="menuSearch" type="search" placeholder="Найти блюдо или ингредиент" autocomplete="off">
-        <button id="menuSearchClear" type="button" aria-label="Очистить поиск">×</button>
-      </label>
-      <div class="chips" id="chips"></div>
-    </div>
+  <section class="section menuSection">
+    <div class="sectionHead"><div><small>МЕНЮ ЗАВЕДЕНИЯ</small><h2>Выбери своё</h2></div><small id="menuCount"></small></div>
+    <div class="chips" id="chips"></div>
     <div class="menuGrid" id="menuGrid"></div>
-  </section>
-
-  <section class="venueOutro revealBlock" aria-hidden="true">
-    <div class="venueOutroLine"></div>
-    <small>SHAURMEG / LOCAL FOOD NETWORK</small>
-    <h2>Еда — это место,<br>к которому хочется вернуться.</h2>
-    <div class="venueOutroMeta"><span>точка выбрана на карте</span><span>заказ защищён контекстом заведения</span></div>
   </section>
 </main>
 
-<button class="floatCart hidden" id="cartBtn">
-  <span class="floatCartPulse"></span>
-  <span class="floatCartCopy"><small>ТВОЙ ЗАКАЗ</small><b><span id="cartCount">0</span> позиций</b></span>
-  <span class="floatCartTotal"><b id="cartTotal">0 ₽</b><i>→</i></span>
-</button>
+<button class="floatCart hidden" id="cartBtn"><span><span id="cartCount">0</span> · Корзина</span><b id="cartTotal">0 ₽</b></button>
 <div class="sheetBackdrop" id="backdrop"></div>
 
-<section class="sheet orderSheet premiumSheet" id="cartSheet">
+<section class="sheet orderSheet" id="cartSheet">
   <div class="sheetHandle"></div>
-  <div class="sheetHead">
-    <div><small class="sheetEyebrow">01 · СОСТАВ</small><h2>Твой заказ</h2><p>Проверь позиции перед оформлением</p></div>
-    <button class="iconBtn" data-close>×</button>
-  </div>
-  <div class="sheetStepRail"><span class="active">Состав</span><i></i><span>Получение</span></div>
+  <div class="sheetHead"><div><small class="sheetEyebrow">ВАШ ЗАКАЗ</small><h2>Корзина</h2></div><button class="iconBtn" data-close>×</button></div>
   <div class="cartItems" id="cartItems"></div>
   <div class="orderSummaryLine"><span>Позиций</span><b id="cartItemsCount">0</b></div>
   <div class="totalRow"><span>Итого</span><b id="sheetTotal">0 ₽</b></div>
-  <button class="primaryBtn orderCta" id="checkoutBtn"><span>Продолжить</span><b>Получение →</b></button>
+  <button class="primaryBtn orderCta" id="checkoutBtn">Продолжить оформление <span>→</span></button>
 </section>
 
-<section class="sheet orderSheet premiumSheet" id="checkoutSheet">
+<section class="sheet orderSheet" id="checkoutSheet">
   <div class="sheetHandle"></div>
-  <div class="sheetHead">
-    <div><small class="sheetEyebrow">02 · ПОЛУЧЕНИЕ</small><h2>Финальный шаг</h2><p>Выбери способ и оставь необходимые данные</p></div>
-    <button class="iconBtn" data-close>×</button>
-  </div>
-  <div class="sheetStepRail"><span>Состав</span><i></i><span class="active">Получение</span></div>
+  <div class="sheetHead"><div><small class="sheetEyebrow">ШАГ 2 ИЗ 2</small><h2>Получение</h2></div><button class="iconBtn" data-close>×</button></div>
   <div class="checkoutVenueCard">
     <div><small>ЗАКАЗ ИЗ</small><b id="checkoutVenue">Заведение</b><span id="checkoutAddress"></span></div>
     <strong id="checkoutTotal">0 ₽</strong>
@@ -147,9 +82,9 @@
   <button class="primaryBtn orderCta" id="placeOrder"><span>Оформить заказ</span><b id="placeOrderTotal">0 ₽</b></button>
 </section>
 
-<section class="sheet orderSheet premiumSheet" id="builderSheet">
+<section class="sheet orderSheet" id="builderSheet">
   <div class="sheetHandle"></div>
-  <div class="sheetHead"><div><small class="sheetEyebrow">CUSTOM · 5 ШАГОВ</small><h2>Собери свою</h2><p>Точный состав под твой вкус</p></div><button class="iconBtn" data-close>×</button></div>
+  <div class="sheetHead"><div><small class="sheetEyebrow">КОНСТРУКТОР</small><h2>Собери свою</h2></div><button class="iconBtn" data-close>×</button></div>
   <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
   <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
   <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
@@ -159,13 +94,12 @@
   <button class="primaryBtn orderCta" id="addBuilder">Добавить в корзину</button>
 </section>
 
-<section class="sheet orderSheet premiumSheet" id="profileSheet">
-  <div class="sheetHandle"></div>
-  <div class="sheetHead"><div><small class="sheetEyebrow">ПРОФИЛЬ</small><h2>Мои заказы</h2><p>История и текущие статусы</p></div><button class="iconBtn" data-close>×</button></div>
+<section class="sheet orderSheet" id="profileSheet">
+  <div class="sheetHandle"></div><div class="sheetHead"><div><small class="sheetEyebrow">ПРОФИЛЬ</small><h2>Мои заказы</h2></div><button class="iconBtn" data-close>×</button></div>
   <div id="myOrders" class="list orderHistory"></div>
 </section>
 
-<section class="sheet successSheet premiumSheet" id="successSheet">
+<section class="sheet successSheet" id="successSheet">
   <div class="successMark">✓</div>
   <small class="sheetEyebrow">ЗАКАЗ ПРИНЯТ</small>
   <h2 id="successNumber">Заказ</h2>

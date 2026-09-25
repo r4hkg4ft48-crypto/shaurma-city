@@ -29,6 +29,26 @@ function hex(v,fallback){
   const s=String(v||'').trim().toLowerCase();
   return /^#[0-9a-f]{6}$/.test(s)?s:fallback;
 }
+const DEFAULT_VENUE_THEME={primary:'#D94343',secondary:'#13233B',tone:'balanced'};
+function hexRgb(v){
+  const s=hex(v,'#000000').slice(1);
+  return [parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)];
+}
+function colorDistance(a,b){
+  const A=hexRgb(a),B=hexRgb(b);
+  return Math.sqrt((A[0]-B[0])**2+(A[1]-B[1])**2+(A[2]-B[2])**2);
+}
+function normalizeVenueTheme(value={}){
+  const v=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+  let primary=hex(v.primary,DEFAULT_VENUE_THEME.primary).toUpperCase();
+  let secondary=hex(v.secondary,DEFAULT_VENUE_THEME.secondary).toUpperCase();
+  const tone=['dark','light','balanced'].includes(String(v.tone||'').toLowerCase())?String(v.tone).toLowerCase():DEFAULT_VENUE_THEME.tone;
+  if(colorDistance(primary,secondary)<58){
+    const navy=DEFAULT_VENUE_THEME.secondary,red=DEFAULT_VENUE_THEME.primary;
+    secondary=colorDistance(primary,navy)>=58?navy:red;
+  }
+  return {primary,secondary,tone};
+}
 function markerStyle(value={}){
   const v=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
   return {
@@ -154,4 +174,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

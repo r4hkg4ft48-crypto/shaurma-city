@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "v2/**"
+      - "backend/**"
+      - ".github/workflows/v2-validate.yml"
 
 jobs:
   validate:
@@ -20,6 +22,26 @@ jobs:
         run: |
           find v2 -name '*.js' -print0 | xargs -0 -n1 node --check
           node --check backend/server.js
+          node --check backend/venue-owner.js
+      - name: Inline admin scripts syntax
+        run: |
+          python3 - <<'PY'
+          import pathlib,re,subprocess,tempfile,sys
+          for filename in ['backend/master-admin.html','backend/venue-owner.html','backend/shaurma-owner.html','backend/shaurmeg-owner.html']:
+              text=pathlib.Path(filename).read_text(encoding='utf-8')
+              for i,script in enumerate(re.findall(r'<script(?:\\s[^>]*)?>(.*?)</script>',text,re.S|re.I)):
+                  if not script.strip():
+                      continue
+                  with tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8') as tmp:
+                      tmp.write(script)
+                      path=tmp.name
+                  result=subprocess.run(['node','--check',path],capture_output=True,text=True)
+                  if result.returncode:
+                      print(filename,'script',i)
+                      print(result.stderr)
+                      sys.exit(result.returncode)
+                  pathlib.Path(path).unlink(missing_ok=True)
+          PY
       - name: Install API dependencies
         working-directory: v2/backend
         run: npm install --ignore-scripts

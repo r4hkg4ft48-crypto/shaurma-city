@@ -125,5 +125,5 @@
   $('#home').onclick=()=>{closeCard();fitAll()};$('#closeCard').onclick=closeCard;
   $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();tg?.setHeaderColor?.('#0b0f12');tg?.setBackgroundColor?.('#0b0f12')}catch{}
-  bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Повторяем…');setTimeout(()=>location.reload(),3500)});
+  bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

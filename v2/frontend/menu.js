@@ -79,8 +79,15 @@
   $('#openBuilder').onclick=openBuilder;$('#builderTypes').onclick=e=>{const b=e.target.closest('[data-btype]');if(b){builderState.type=b.dataset.btype;renderBuilder()}};$('#builderSauces').onclick=e=>{const b=e.target.closest('[data-bsauce]');if(b)toggleBuilder(builderState.sauces,b.dataset.bsauce,Math.max(1,Number(builder.max_sauces)||builder.sauces.length))};$('#builderExtras').onclick=e=>{const b=e.target.closest('[data-bextra]');if(b)toggleBuilder(builderState.extras,b.dataset.bextra,Math.max(0,Number(builder.max_extras)||builder.extras.length))};$('#addBuilder').onclick=addBuilt;
   $('#cartBtn').onclick=()=>openSheet('cartSheet');$('#checkoutBtn').onclick=()=>openSheet('checkoutSheet');$('#profileBtn').onclick=()=>{openSheet('profileSheet');myOrders()};$('#backdrop').onclick=closeSheets;document.querySelectorAll('[data-close]').forEach(x=>x.onclick=closeSheets);
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
-  $('#placeOrder').onclick=place;$('#back').onclick=()=>history.length>1?history.back():location.assign('index.html');
-  try{tg?.ready();tg?.expand();tg?.BackButton?.show();tg?.BackButton?.onClick(()=>history.back())}catch{}
+  function goMap(){
+    try{tg?.BackButton?.hide?.()}catch{}
+    const fallback=new URL('index.html',location.href);
+    if(marker)fallback.searchParams.set('marker',marker);
+    if(qs.get('from')==='map'&&history.length>1)history.back();
+    else location.assign(fallback.toString());
+  }
+  $('#placeOrder').onclick=place;$('#back').onclick=goMap;
+  try{tg?.ready();tg?.expand();tg?.BackButton?.show();tg?.BackButton?.onClick(goMap)}catch{}
   authTelegram();
   load().catch(e=>{toast(e.message);$('#venueName').textContent='Меню недоступно'});
 })();

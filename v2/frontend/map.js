@@ -181,7 +181,7 @@
       'fill-extrusion-color':['coalesce',['get','wall'],'#b9b7ad'],
       'fill-extrusion-height':['coalesce',['get','height'],1],
       'fill-extrusion-base':0,
-      'fill-extrusion-opacity':['case',['==',['get','role'],'nearby'],.9,.64]
+      'fill-extrusion-opacity':.78
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
       'line-color':['coalesce',['get','accent'],'#d7d5cf'],

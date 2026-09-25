@@ -12,13 +12,15 @@
 <div class="mapRoot"><div id="map"></div><div class="mapShade"></div></div>
 <header class="topbar glass">
   <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>КАРТА ШАУРМЫ</small></div></div>
-  <div class="grow"></div><button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
+  <div class="grow"></div><div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div><button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 <div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
 <div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>
 <article class="venueCard glass" id="venueCard">
   <div class="venueHero"><div class="venueAvatar" id="venueAvatar">🥙</div><div><h2 id="venueName">Заведение</h2><p id="venueAddress"></p></div><span class="badge" id="realBadge">REAL CITY</span></div>
+  <p class="venueCardDescription" id="venueDescription"></p>
+  <div class="venueQuick"><span id="venueHoursQuick" class="hidden"></span><span id="venuePriceQuick" class="hidden"></span><span>Меню внутри Shaurmeg</span></div>
   <div class="venueActions"><button class="primaryBtn" id="openMenu">Меню и заказ</button><button class="iconBtn" id="closeCard">×</button></div>
 </article>
 <div class="boot" id="boot"><div class="bootLogo"><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small><div class="pulse"></div></div></div>

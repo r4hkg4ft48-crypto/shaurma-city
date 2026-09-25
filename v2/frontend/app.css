@@ -1089,3 +1089,47 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
   .experienceTrack,.venuePage .builderEntry:before,.venuePage .foodCard,.venuePage .floatCart:after,.venuePage .successMark{animation:none!important}
   .venuePage .venueHeroPanel img{transition:none!important}
 }
+
+
+/* ===== Aurora RealCity harmonization ===== */
+.mapApp{--city-live:#9b5cff}
+.mapApp[data-daypart="morning"]{--city-live:#ad6de9}
+.mapApp[data-daypart="day"]{--city-live:#935bff}
+.mapApp[data-daypart="evening"]{--city-live:#c065dc}
+.mapApp[data-daypart="night"]{--city-live:#718cff}
+.mapApp .mapFocusFlash{
+  background:radial-gradient(circle,rgba(169,92,255,.14) 0,rgba(95,124,255,.055) 29%,transparent 67%);
+  border-color:rgba(170,109,255,.11)
+}
+.mapApp .focusHud small{color:#8f52d8}
+.realCityActive .bottomDock{
+  background:linear-gradient(135deg,rgba(255,251,247,.88),rgba(239,231,249,.88));
+  border-color:rgba(111,67,151,.12)
+}
+.mapApp[data-daypart="night"].realCityActive .bottomDock{
+  background:linear-gradient(135deg,rgba(35,25,50,.91),rgba(25,19,41,.93))
+}
+.realCityActive .venueCard{
+  border-color:rgba(151,89,224,.16);
+  box-shadow:0 30px 90px rgba(55,32,80,.32),0 0 42px rgba(95,124,255,.045)
+}
+.realCitySettled .venueCard{box-shadow:0 28px 90px rgba(55,32,80,.34),0 0 48px rgba(154,91,255,.06)}
+.realCitySettled .badge{
+  color:#7644c3;
+  background:linear-gradient(135deg,rgba(169,95,255,.1),rgba(95,124,255,.08));
+  border-color:rgba(138,82,211,.18)
+}
+.realCitySettled .badge:before{
+  color:#9658f2;text-shadow:0 0 12px rgba(112,124,255,.65)
+}
+.realCityActive .focusHud{
+  background:linear-gradient(135deg,rgba(255,250,246,.94),rgba(239,231,249,.93));
+  color:#2d203a;
+  border-color:rgba(153,87,226,.18);
+  box-shadow:0 18px 52px rgba(58,34,84,.2),0 0 38px rgba(95,124,255,.045)
+}
+.realCityActive .focusHud small{color:#8e50d8}
+.realCityActive:before{
+  border-color:rgba(167,100,239,.1);
+  box-shadow:inset 0 0 90px rgba(158,93,229,.045),0 0 72px rgba(95,124,255,.035)
+}

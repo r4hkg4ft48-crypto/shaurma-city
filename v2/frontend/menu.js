@@ -261,13 +261,7 @@
         (src?'<img src="'+esc(src)+'" alt="" loading="'+(large?'eager':'lazy')+'" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
         '<i></i></div>';
     };
-    const badgeFor=(x,i)=>{
-      const raw=String(x.badge||x.tag||'').trim();
-      if(raw)return raw;
-      if(category==='all'&&i===0)return 'Популярное';
-      if(category==='all'&&i===1)return 'Новинка';
-      return '';
-    };
+    const badgeFor=x=>String(x.badge||x.tag||'').trim();
     const card=(x,i)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
       const badge=badgeFor(x,i);
@@ -376,6 +370,7 @@
   }
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
+  $('#menuFeature').onclick=e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
     const section=e.target.closest('[data-section-cat]');
     if(section){

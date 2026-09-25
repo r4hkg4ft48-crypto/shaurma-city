@@ -14,6 +14,8 @@ module.exports={
   AGGREGATOR_BOT_TOKEN:clean(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN),
   AGGREGATOR_BOT_USERNAME:clean(process.env.AGGREGATOR_TELEGRAM_BOT_USERNAME||'Shaurmeggbot').replace(/^@/,'')||'Shaurmeggbot',
   ADMIN_BOT_TOKEN:clean(process.env.ADMIN_TELEGRAM_BOT_TOKEN),
+  ACCESS_ADMIN_BOT_TOKEN:clean(process.env.ACCESS_ADMIN_TELEGRAM_BOT_TOKEN||process.env.ADMIN_ACCESS_TELEGRAM_BOT_TOKEN),
+  ACCESS_ADMIN_BOT_USERNAME:clean(process.env.ACCESS_ADMIN_TELEGRAM_BOT_USERNAME||'Shauermenadmenbot').replace(/^@/,'')||'Shauermenadmenbot',
   VENUE_OWNER_BOT_TOKEN:clean(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN),
   KITCHEN_BOT_TOKEN:clean(process.env.KITCHEN_TELEGRAM_BOT_TOKEN),
   KITCHEN_BOT_USERNAME:clean(process.env.KITCHEN_TELEGRAM_BOT_USERNAME||'').replace(/^@/,''),

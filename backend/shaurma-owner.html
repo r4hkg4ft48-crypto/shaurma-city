@@ -206,11 +206,78 @@ async function loadVenues(){
 }
 async function openVenue(id){editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);$('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');$('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';$('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;$('#saveMenu').disabled=false;renderMenuSections();renderMenuEditor()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function compressMenuPhoto(file,maxW=560,maxH=560,q=.68){
+ return new Promise((resolve,reject)=>{
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{
+   let w=img.width,h=img.height,k=Math.min(1,maxW/w,maxH/h);w=Math.max(1,Math.round(w*k));h=Math.max(1,Math.round(h*k));
+   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+   const ctx=canvas.getContext('2d');ctx.fillStyle='#101820';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+   URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',q));
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image_read_failed'))};img.src=url;
+ });
+}
 function slugMenuSection(v){let s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');return (s||('section_'+Date.now().toString(36))).slice(0,48)}
 function normalizeMenuSections(input,items=[]){const legacy={shawarma:['Шаурма','🥙'],flatbread:['Лепёшка / тарелка','🫓'],sauces:['Соусы','🥫'],extras:['Допы','🍟'],drinks:['Напитки','🥤'],bakery:['Выпечка','🥐']},raw=Array.isArray(input)?input:[],out=[],seen=new Set();raw.forEach((x,i)=>{if(!x||typeof x!=='object')return;const id=slugMenuSection(x.id||x.name||('section_'+i));if(seen.has(id))return;seen.add(id);out.push({id,name:String(x.name||x.title||id).trim().slice(0,80),emoji:String(x.emoji||'').trim().slice(0,8),active:x.active!==false})});[...new Set(items.map(x=>String(x.c||x.category||'').trim()).filter(Boolean))].forEach(rawId=>{const id=slugMenuSection(rawId);if(seen.has(id))return;seen.add(id);const v=legacy[id]||[rawId,''];out.push({id,name:v[0],emoji:v[1],active:true})});if(!out.length)Object.entries(legacy).forEach(([id,v])=>out.push({id,name:v[0],emoji:v[1],active:true}));return out}
-function renderMenuSections(){$('#menuSectionRows').innerHTML=menuSectionsDraft.map((s,i)=>`<div class="menuSectionRow" data-menu-section-i="${i}"><input class="menuField" data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🍔"><input class="menuField" data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}"><span class="menuSectionId">${escapeHtml(s.id)}</span><button data-section-up="${i}" ${i===0?'disabled':''}>↑</button><button data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''}>↓</button><button class="del" data-section-remove="${i}">×</button></div>`).join('')}
-function renderMenuEditor(){const sections=menuSectionsDraft.filter(s=>s.active!==false);$('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>`<div class="menuRow" data-index="${i}"><input class="menuField" data-field="n" value="${escapeHtml(x.n||x.name||'')}" placeholder="Название"><select class="menuField" data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select><input class="menuField" data-field="d" value="${escapeHtml(x.d||x.description||'')}" placeholder="Описание"><input class="menuField" data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="Цена"><button class="removeItem" data-remove-item="${i}" aria-label="Удалить">×</button></div>`).join(''):'<div class="empty">В меню пока нет позиций</div>'}
-async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,menu_sections:menuSectionsDraft};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await openVenue(venueId);toast('Сохранено для '+establishmentId)}catch(e){toast('Не удалось сохранить меню')}finally{button.disabled=false}}
+function renderMenuSections(){
+ const host=$('#menuSectionRows');
+ host.innerHTML=menuSectionsDraft.length?menuSectionsDraft.map((s,i)=>`
+  <article class="sectionCard" data-menu-section-i="${i}">
+   <div class="sectionCardTop">
+    <div class="sectionMeta"><b>Раздел ${i+1}</b><code>${escapeHtml(s.id)}</code></div>
+    <div class="sectionActions">
+     <button type="button" data-section-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
+     <button type="button" data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
+     <button class="del" type="button" data-section-remove="${i}" aria-label="Удалить">×</button>
+    </div>
+   </div>
+   <div class="sectionFields">
+    <input data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🥙" aria-label="Emoji">
+    <input data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}" placeholder="Название раздела" aria-label="Название раздела">
+   </div>
+  </article>`).join(''):'<div class="menuEmpty">Разделов пока нет. Добавьте первый раздел ниже.</div>';
+}
+function renderMenuEditor(){
+ const sections=menuSectionsDraft.filter(s=>s.active!==false);
+ $('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>{
+  const name=x.n||x.name||'Новая позиция',image=String(x.image||x.i||''),active=x.active!==false;
+  return `
+  <article class="menuItemCard" data-index="${i}">
+   <div class="menuItemTop">
+    <div class="menuItemIndex"><span>${i+1}</span><b>${escapeHtml(name)}</b></div>
+    <div class="menuItemActions">
+     <button type="button" data-item-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
+     <button type="button" data-item-down="${i}" ${i===menuDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
+     <button class="delete" type="button" data-remove-item="${i}" aria-label="Удалить">×</button>
+    </div>
+   </div>
+   <div class="menuItemBody">
+    <div class="menuItemPhoto">
+     ${image?'<img src="'+escapeHtml(image)+'" alt="">':'<div class="menuPhotoPlaceholder"><div><b>＋</b><small>ФОТО БЛЮДА</small></div></div>'}
+     <input type="file" accept="image/*" data-menu-photo="${i}" aria-label="Выбрать фото блюда">
+     <div class="menuPhotoTools"><button type="button" data-choose-photo="${i}">${image?'Заменить фото':'Выбрать фото'}</button>${image?'<button class="removePhoto" type="button" data-remove-photo="'+i+'" aria-label="Удалить фото">×</button>':''}</div>
+    </div>
+    <div class="menuItemFields">
+     <label class="menuLabel"><span>Название</span><input data-field="n" value="${escapeHtml(name)}" placeholder="Название блюда"></label>
+     <label class="menuLabel"><span>Цена, ₽</span><input data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="0"></label>
+     <label class="menuLabel wide"><span>Раздел</span><select data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select></label>
+     <label class="menuLabel wide"><span>Описание</span><textarea data-field="d" placeholder="Состав, особенности, вес…">${escapeHtml(x.d||x.description||'')}</textarea></label>
+     <div class="menuItemOptions">
+      <label class="menuLabel"><span>Вид карточки</span><select data-field="display"><option value="auto" ${(x.display||'auto')==='auto'?'selected':''}>Авто</option><option value="main" ${x.display==='main'?'selected':''}>Крупная</option><option value="compact" ${x.display==='compact'?'selected':''}>Компактная</option></select></label>
+      <label class="menuLabel"><span>Фото</span><select data-field="image_fit"><option value="cover" ${(x.image_fit||'cover')==='cover'?'selected':''}>Заполнять</option><option value="contain" ${x.image_fit==='contain'?'selected':''}>Показывать целиком</option></select></label>
+     </div>
+     <label class="menuLabel wide"><span>Бейдж</span><input data-field="badge" maxlength="40" value="${escapeHtml(x.badge||x.tag||'')}" placeholder="Например: Популярное"></label>
+     <div class="menuChecks">
+      <label class="menuCheck"><input type="checkbox" data-field="active" ${active?'checked':''}> Показывать</label>
+      <label class="menuCheck"><input type="checkbox" data-field="featured" ${x.featured===true?'checked':''}> Главная / Hero</label>
+     </div>
+    </div>
+   </div>
+  </article>`;
+ }).join(''):'<div class="menuEmpty">В меню пока нет позиций. Нажмите «Добавить позицию».</div>';
+}
+async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Сохраняю изменения…';try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,menu_sections:menuSectionsDraft};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await openVenue(venueId);$('#menuSaveHint').textContent='Сохранено для '+establishmentId;toast('Меню сохранено ✓')}catch(e){$('#menuSaveHint').textContent='Не удалось сохранить. Проверьте данные и фото.';toast('Не удалось сохранить меню')}finally{button.disabled=false}}
 function fmtMoney(v){return Math.round(Number(v)||0).toLocaleString('ru-RU')+' ₽'}
 function fmtDate(v,short=false){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('ru-RU',short?{day:'2-digit',month:'2-digit',year:'2-digit'}:{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateOrderScope(){
@@ -237,10 +304,29 @@ function render(){const list=orders;$('#orders').innerHTML=list.length?list.map(
 document.addEventListener('click',async e=>{const tab=e.target.closest('[data-admin-tab]');if(tab){qa('[data-admin-tab]').forEach(x=>x.classList.toggle('active',x===tab));$('#ordersPane').classList.toggle('active',tab.dataset.adminTab==='orders');$('#menuPane').classList.toggle('active',tab.dataset.adminTab==='menu');if(tab.dataset.adminTab==='orders'){load(true).catch(()=>toast('Не удалось обновить заказы'));stats().catch(()=>toast('Не удалось загрузить аналитику'))};if(tab.dataset.adminTab==='menu'&&!editingVenue)loadVenues().catch(()=>toast('Не удалось загрузить меню'));return}const b=e.target.closest('[data-status]');if(b){b.disabled=true;try{await api('/api/shaurma/orders/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await load()}catch{toast('Не удалось изменить статус')}finally{b.disabled=false}}const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;qa('.filter').forEach(x=>x.classList.toggle('active',x===f));load(true).catch(()=>toast('Не удалось загрузить заказы'))}});
 $('#venueSelect').addEventListener('change',e=>openVenue(e.target.value));
 $('#reloadVenue').onclick=()=>openVenue($('#venueSelect').value);
-$('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0});renderMenuEditor()};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
+$('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft.find(s=>s.active!==false)||menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0,image:'',active:true,display:'auto',image_fit:'cover',badge:'',featured:false});renderMenuEditor();setTimeout(()=>$('#menuRows .menuItemCard:last-child')?.scrollIntoView({behavior:'smooth',block:'center'}),30)};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
 $('#saveMenu').onclick=saveVenueMenu;
-$('#menuRows').addEventListener('input',e=>{const row=e.target.closest('[data-index]');if(!row||!e.target.dataset.field)return;const item=menuDraft[Number(row.dataset.index)];if(!item)return;const field=e.target.dataset.field;item[field]=field==='p'?Math.max(0,Number(e.target.value)||0):e.target.value});
-$('#menuRows').addEventListener('click',e=>{const button=e.target.closest('[data-remove-item]');if(!button)return;menuDraft.splice(Number(button.dataset.removeItem),1);renderMenuEditor()});$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const s=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!s)return;s[field]=e.target.value.slice(0,field==='emoji'?8:80);renderMenuEditor()});
+$('#openBuilderAdvanced').onclick=()=>{const est=editingVenue?.establishment_id;if(!est)return toast('Сначала выберите заведение');if(!FROM_MASTER)return toast('Расширенный редактор откройте через Master Admin');location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab=site&from=master&v=5'};
+function updateMenuField(target){
+ const row=target.closest('[data-index]');if(!row||!target.dataset.field)return;
+ const item=menuDraft[Number(row.dataset.index)],field=target.dataset.field;if(!item)return;
+ item[field]=field==='p'?Math.max(0,Number(target.value)||0):(['active','featured'].includes(field)?target.checked:target.value);
+ if(field==='n')row.querySelector('.menuItemIndex b').textContent=target.value||'Новая позиция';
+}
+$('#menuRows').addEventListener('input',e=>updateMenuField(e.target));
+$('#menuRows').addEventListener('change',async e=>{
+ updateMenuField(e.target);
+ const fileInput=e.target.closest('[data-menu-photo]');if(!fileInput)return;
+ const i=Number(fileInput.dataset.menuPhoto),file=fileInput.files?.[0];if(!file||!menuDraft[i])return;
+ try{toast('Обрабатываю фото…');menuDraft[i].image=await compressMenuPhoto(file);renderMenuEditor();toast('Фото добавлено')}catch{toast('Не удалось обработать фото')}
+});
+$('#menuRows').addEventListener('click',e=>{
+ const choose=e.target.closest('[data-choose-photo]');if(choose){const input=$('#menuRows [data-menu-photo="'+choose.dataset.choosePhoto+'"]');input?.click();return}
+ const removePhoto=e.target.closest('[data-remove-photo]');if(removePhoto){const i=Number(removePhoto.dataset.removePhoto);if(menuDraft[i])menuDraft[i].image='';renderMenuEditor();return}
+ const up=e.target.closest('[data-item-up]');if(up){const i=Number(up.dataset.itemUp);if(i>0)[menuDraft[i-1],menuDraft[i]]=[menuDraft[i],menuDraft[i-1]];renderMenuEditor();return}
+ const down=e.target.closest('[data-item-down]');if(down){const i=Number(down.dataset.itemDown);if(i<menuDraft.length-1)[menuDraft[i+1],menuDraft[i]]=[menuDraft[i],menuDraft[i+1]];renderMenuEditor();return}
+ const button=e.target.closest('[data-remove-item]');if(button){const i=Number(button.dataset.removeItem);if(confirm('Удалить позицию «'+String(menuDraft[i]?.n||menuDraft[i]?.name||'')+'»?')){menuDraft.splice(i,1);renderMenuEditor()}return}
+});$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const s=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!s)return;s[field]=e.target.value.slice(0,field==='emoji'?8:80);renderMenuEditor()});
 $('#menuSectionRows').addEventListener('click',e=>{const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-remove]');if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSectionsDraft[i-1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i-1]];renderMenuSections();renderMenuEditor();return}if(down){const i=Number(down.dataset.sectionDown);if(i<menuSectionsDraft.length-1)[menuSectionsDraft[i+1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i+1]];renderMenuSections();renderMenuEditor();return}if(rm){const i=Number(rm.dataset.sectionRemove),s=menuSectionsDraft[i];if(!s)return;if(menuDraft.some(x=>String(x.c||x.category)===s.id))return toast('Сначала перенесите блюда из раздела');menuSectionsDraft.splice(i,1);renderMenuSections();renderMenuEditor()}});
 
 async function telegramAdminLogin(){

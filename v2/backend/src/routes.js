@@ -488,6 +488,18 @@ router.put('/admin/venues/:establishmentId/menu',auth.requireOwner,async(req,res
     rt.pushVenue(est,'venue',q.rows[0]);res.json(q.rows[0]);
   }catch(e){fail(res,e,'menu_update_failed')}
 });
+router.put('/admin/venues/:establishmentId/site',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
+    const site=D.normalizeSiteCustomization(req.body?.site_customization||req.body||{});
+    const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[est]);if(!current.rows[0])return res.sendStatus(404);
+    const cfg={...(current.rows[0].config||{}),site_customization:site};
+    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[est,JSON.stringify(cfg)]);
+    rt.pushVenue(est,'venue',q.rows[0]);
+    res.json({ok:true,establishment_id:est,site_customization:site});
+  }catch(e){fail(res,e,'site_customization_update_failed')}
+});
+
 router.get('/admin/orders',auth.requireOwner,async(req,res)=>{
   try{const est=D.establishmentId(req.query.establishment_id);const q=est?await db.query('SELECT * FROM shaurma_orders WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 300',[est]):await db.query('SELECT * FROM shaurma_orders ORDER BY created_at DESC LIMIT 300');res.json(q.rows)}
   catch(e){fail(res,e,'admin_orders_failed')}
@@ -583,6 +595,20 @@ router.put('/venue-owner/establishments/:establishmentId/theme',async(req,res)=>
     rt.pushVenue(a.est,'venue',q.rows[0]);
     res.json({ok:true,theme});
   }catch(e){fail(res,e,'venue_owner_theme_failed')}
+});
+
+router.put('/venue-owner/establishments/:establishmentId/site',async(req,res)=>{
+  const a=await venueAccess(req,res,'profile');if(!a)return;
+  try{
+    const site=D.normalizeSiteCustomization(req.body?.site_customization||req.body||{});
+    const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);
+    if(!current.rows[0])return res.sendStatus(404);
+    const cfg={...(current.rows[0].config||{}),site_customization:site};
+    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(cfg)]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'site_customization_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({version:site.version,layout:site.menu.layout,design:site.design.mode})]);
+    rt.pushVenue(a.est,'venue',q.rows[0]);
+    res.json({ok:true,site_customization:site});
+  }catch(e){fail(res,e,'venue_owner_site_customization_failed')}
 });
 
 router.patch('/venue-owner/establishments/:establishmentId/profile',async(req,res)=>{

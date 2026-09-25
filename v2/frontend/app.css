@@ -3771,9 +3771,9 @@ body.venuePage .foodPic img{
 @keyframes builderProductIn{from{opacity:0;transform:scale(.82);filter:blur(8px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
 
 @media(prefers-reduced-motion:reduce){
-  .venuePage .builderStage.builderCollapsing .builderBlock,
-  .venuePage .builderStage.builderCollapsing .totalRow,
-  .venuePage .builderStage.builderCollapsing>#addBuilder,
+  .venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock,
+  .venuePage .builderStage.builderCollapsing #builderCustomMode .totalRow,
+  .venuePage .builderStage.builderCollapsing #addBuilder,
   .venuePage .builderStage.builderCollapsing .builderSingularity,
   .venuePage .builderStage.builderCollapsing .builderSingularity i,
   .venuePage .builderResult,.venuePage .builderResultVisual img{animation-duration:.01ms!important;animation-iteration-count:1!important}

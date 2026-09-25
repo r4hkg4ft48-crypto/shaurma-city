@@ -592,7 +592,7 @@ function publicUserProfile(row){
  };
 }
 function adminSessionSecret(){
- const token=adminTelegramBotToken()||process.env.OWNER_API_TOKEN||'';
+ const token=adminTelegramBotToken()||masterAdminBotToken()||process.env.OWNER_API_TOKEN||'';
  if(!token)throw new Error('admin_not_configured');
  return crypto.createHmac('sha256','ShaurmaCityAdminSessionV1').update(token).digest();
 }
@@ -622,6 +622,15 @@ function adminTelegramSession(req){
 function adminTelegramAllowed(userId){
  const raw=[process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(',');
  return raw.split(',').map(x=>x.trim()).filter(Boolean).includes(String(userId));
+}
+function verifyAdminTelegramInitData(initData){
+ const tokens=[masterAdminBotToken(),adminTelegramBotToken()].filter(Boolean);
+ if(!tokens.length)throw new Error('admin_not_configured');
+ let last=null;
+ for(const token of tokens){
+  try{return verifyTelegramInitDataWithToken(initData,token)}catch(e){last=e}
+ }
+ throw last||new Error('bad_init_data');
 }
 function pushTelegram(userId,event,payload){
  const set=telegramClients.get(String(userId)); if(!set)return;
@@ -1580,14 +1589,41 @@ app.get('/api/shaurma/stream',(req,res)=>{
 
 app.post('/api/shaurma/admin-telegram-auth',(req,res)=>{
  try{
-  const user=verifyTelegramInitDataWithToken((req.body||{}).initData||'',adminTelegramBotToken());
+  const user=verifyAdminTelegramInitData((req.body||{}).initData||'');
   if(!adminTelegramAllowed(user.id))return res.status(403).json({error:'admin_not_allowed',user_id:String(user.id)});
   const session=newAdminTelegramSession(user);
   res.json({ok:true,session,user:{id:String(user.id),username:user.username||'',first_name:user.first_name||'',last_name:user.last_name||''}});
  }catch(e){
-  if(e.message==='telegram_not_configured')return res.status(503).json({error:e.message});
+  if(['telegram_not_configured','admin_not_configured'].includes(e.message))return res.status(503).json({error:e.message});
   res.status(401).json({error:e.message||'admin_telegram_auth_failed'});
  }
+});
+
+app.get('/api/shaurma/admin/bot-health',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ const defs=[
+  ['master_admin',masterAdminBotToken()],
+  ['legacy_admin',adminTelegramBotToken()],
+  ['access_keys',accessAdminBotToken()],
+  ['venue_owner',String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim()],
+  ['kitchen',String(process.env.KITCHEN_TELEGRAM_BOT_TOKEN||'').trim()],
+  ['aggregator',aggregatorBotToken()],
+  ['order_bot',clientBotToken()]
+ ];
+ const result=[];
+ for(const [id,token] of defs){
+  if(!token){result.push({id,enabled:false});continue}
+  try{
+   const [meR,whR]=await Promise.all([
+    fetch('https://api.telegram.org/bot'+token+'/getMe'),
+    fetch('https://api.telegram.org/bot'+token+'/getWebhookInfo')
+   ]);
+   const meJ=await meR.json().catch(()=>({})),whJ=await whR.json().catch(()=>({}));
+   const me=meJ.result||{},w=whJ.result||{};
+   result.push({id,enabled:true,ok:!!meJ.ok&&!!whJ.ok,username:String(me.username||''),name:String(me.first_name||''),webhook:String(w.url||''),pending:Number(w.pending_update_count||0),last_error:String(w.last_error_message||'')});
+  }catch(e){result.push({id,enabled:true,ok:false,error:String(e.message||'health_failed')})}
+ }
+ res.json({ok:true,bots:result});
 });
 
 app.post('/api/shaurma/telegram-auth',async(req,res)=>{
@@ -1826,8 +1862,11 @@ app.get('/api/shaurmeg/bot-status',async(req,res)=>{
 
 const venueOwnerSystem=installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner});
 
+const sendMasterAdmin=(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.sendFile(path.join(__dirname,'master-admin.html'))};
 const sendOwner=(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.sendFile(path.join(__dirname,'shaurma-owner.html'))};
 const sendShaurmegOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurmeg-owner.html'));
+app.get('/master-admin',sendMasterAdmin);
+app.get('/master',sendMasterAdmin);
 app.get('/shaurma-owner',sendOwner);
 app.get('/admin',sendOwner);
 app.get('/owner',sendOwner);
@@ -1843,4 +1882,4 @@ v2Telegram.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

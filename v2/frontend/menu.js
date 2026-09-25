@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,builderState={type:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
@@ -46,29 +46,79 @@
 
   function builderConfig(config={}){
     if(config.builder_enabled!==true&&!config.builder)return null;
-    if(config.builder&&Array.isArray(config.builder.types)&&Array.isArray(config.builder.sauces))return config.builder;
-    return {types:[{id:'shawarma',name:'Шаурма',price:330},{id:'flatbread',name:'Лепёшка',price:320}],sauces:[{id:'standard',name:'Стандартные соусы'},{id:'big_tasty',name:'Биг Тейсти'},{id:'bbq',name:'Барбекю'},{id:'pomegranate',name:'Гранатовый'},{id:'cheese',name:'Сырный'},{id:'garlic',name:'Чесночный'}],extras:[{id:'fries',name:'Картошка фри'},{id:'jalapeno',name:'Халапеньо'},{id:'onion',name:'Лук'},{id:'cheese',name:'Сыр'}],min_sauces:1,max_sauces:6,max_extras:4};
+    const fallback={
+      title:'Собери свою шаурму',subtitle:'Выбери основу, лаваш, мясо, соусы и добавки',
+      types:[{id:'shawarma',name:'Шаурма',price:330},{id:'flatbread',name:'Лепёшка',price:320}],
+      breads:[{id:'classic_lavash',name:'Классический лаваш',price:0}],
+      meats:[{id:'chicken',name:'Курица',price:0}],
+      sauces:[{id:'standard',name:'Стандартные соусы',price:0},{id:'big_tasty',name:'Биг Тейсти',price:0},{id:'bbq',name:'Барбекю',price:0},{id:'pomegranate',name:'Гранатовый',price:0},{id:'cheese',name:'Сырный',price:0},{id:'garlic',name:'Чесночный',price:0}],
+      extras:[{id:'fries',name:'Картошка фри',price:0},{id:'jalapeno',name:'Халапеньо',price:0},{id:'onion',name:'Лук',price:0},{id:'cheese',name:'Сыр',price:0}],
+      min_sauces:1,max_sauces:6,max_extras:4
+    };
+    const raw=config.builder&&typeof config.builder==='object'?config.builder:{};
+    const normalize=(key,base)=>Array.isArray(raw[key])&&raw[key].length?raw[key].map((x,i)=>({id:String(x.id||key+'_'+i),name:String(x.name||x.n||'Опция'),price:Number(x.price??x.price_delta??x.p)||0})):base.map(x=>({...x}));
+    const sauces=normalize('sauces',fallback.sauces),extras=normalize('extras',fallback.extras);
+    return {
+      title:String(raw.title||fallback.title),subtitle:String(raw.subtitle||fallback.subtitle),
+      types:normalize('types',fallback.types),breads:normalize('breads',fallback.breads),meats:normalize('meats',fallback.meats),
+      sauces,extras,
+      min_sauces:Number.isFinite(Number(raw.min_sauces))?Math.max(0,Number(raw.min_sauces)):fallback.min_sauces,
+      max_sauces:Number.isFinite(Number(raw.max_sauces))?Math.max(1,Number(raw.max_sauces)):sauces.length,
+      max_extras:Number.isFinite(Number(raw.max_extras))?Math.max(0,Number(raw.max_extras)):extras.length
+    };
   }
-  function optionName(list,id){return (list.find(x=>String(x.id)===String(id))||{}).name||id}
+  function option(list,id){return (list||[]).find(x=>String(x.id)===String(id))||null}
+  function optionName(list,id){return option(list,id)?.name||id}
+  function optionPrice(list,id){return Number(option(list,id)?.price)||0}
+  function optionPriceText(x,base=false){
+    const p=Number(x?.price)||0;
+    return base?money(p):(p>0?'+ '+money(p):'Без доплаты');
+  }
+  function builderTotal(){
+    if(!builder)return 0;
+    const type=option(builder.types,builderState.type);
+    return (Number(type?.price)||0)+optionPrice(builder.breads,builderState.bread)+optionPrice(builder.meats,builderState.meat)+
+      builderState.sauces.reduce((s,id)=>s+optionPrice(builder.sauces,id),0)+builderState.extras.reduce((s,id)=>s+optionPrice(builder.extras,id),0);
+  }
   function renderBuilder(){
     if(!builder)return;
-    const type=builder.types.find(x=>String(x.id)===String(builderState.type))||builder.types[0];
-    if(!builderState.type)builderState.type=String(type.id);
-    $('#builderTypes').innerHTML=builder.types.map(x=>'<button class="builderChoice '+(String(x.id)===builderState.type?'active':'')+'" data-btype="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+money(x.price||0)+'</small></button>').join('');
-    $('#builderSauces').innerHTML=builder.sauces.map(x=>'<button class="builderChoice '+(builderState.sauces.includes(String(x.id))?'active':'')+'" data-bsauce="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+(x.id==='standard'?'Фирменная пара':'Добавить')+'</small></button>').join('');
-    $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>'<button class="builderChoice '+(builderState.extras.includes(String(x.id))?'active':'')+'" data-bextra="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+(x.id==='onion'?'Бесплатно':'Добавить')+'</small></button>').join('');
-    $('#builderPrice').textContent=money(type.price||0);
-    $('#builderSummary').textContent=(type.name||'Сборка')+' · '+builderState.sauces.length+' соус'+(builderState.sauces.length===1?'':'а');
-    $('#sauceHint').textContent=builderState.sauces.length?'Соусы: '+builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):'Выбери минимум один соус';
+    const type=option(builder.types,builderState.type)||builder.types[0];
+    if(!builderState.type)builderState.type=String(type?.id||'');
+    if(!builderState.bread)builderState.bread=String(builder.breads?.[0]?.id||'');
+    if(!builderState.meat)builderState.meat=String(builder.meats?.[0]?.id||'');
+    $('#builderTypes').innerHTML=(builder.types||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.type?'active':'')+'" data-btype="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x,true)+'</small></button>').join('');
+    $('#builderBreads').innerHTML=(builder.breads||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.bread?'active':'')+'" data-bbread="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
+    $('#builderMeats').innerHTML=(builder.meats||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.meat?'active':'')+'" data-bmeat="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
+    $('#builderSauces').innerHTML=(builder.sauces||[]).map(x=>'<button class="builderChoice '+(builderState.sauces.includes(String(x.id))?'active':'')+'" data-bsauce="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
+    $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>'<button class="builderChoice '+(builderState.extras.includes(String(x.id))?'active':'')+'" data-bextra="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
+    $('#builderBreadBlock').classList.toggle('hidden',!(builder.breads||[]).length);
+    $('#builderMeatBlock').classList.toggle('hidden',!(builder.meats||[]).length);
+    $('#builderPrice').textContent=money(builderTotal());
+    const bread=optionName(builder.breads,builderState.bread),meat=optionName(builder.meats,builderState.meat);
+    $('#builderSummary').textContent=[type?.name,bread,meat].filter(Boolean).join(' · ');
+    const min=Math.max(0,Number(builder.min_sauces)||0);
+    $('#sauceHint').textContent=builderState.sauces.length?'Соусы: '+builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):(min?'Выбери минимум '+min+' соус'+(min===1?'':'а'):'Соус можно не добавлять');
   }
-  function openBuilder(){if(!builder)return;builderState={type:String(builder.types[0]?.id||''),sauces:[],extras:[]};renderBuilder();openSheet('builderSheet')}
+  function openBuilder(){
+    if(!builder)return;
+    builderState={type:String(builder.types?.[0]?.id||''),bread:String(builder.breads?.[0]?.id||''),meat:String(builder.meats?.[0]?.id||''),sauces:[],extras:[]};
+    renderBuilder();openSheet('builderSheet');
+  }
   function toggleBuilder(list,id,max){id=String(id);const i=list.indexOf(id);if(i>=0)list.splice(i,1);else if(list.length<max)list.push(id);else toast('Достигнут максимум');renderBuilder()}
   function addBuilt(){
     if(!builder)return;
-    const min=Math.max(1,Number(builder.min_sauces)||1);if(builderState.sauces.length<min)return toast('Добавь хотя бы один соус');
-    const type=builder.types.find(x=>String(x.id)===builderState.type);if(!type)return;
-    const detail='Соусы: '+builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', ')+' · Добавки: '+(builderState.extras.length?builderState.extras.map(id=>optionName(builder.extras||[],id)).join(', '):'без добавок');
-    cart.push({id:'custom_'+Date.now(),n:type.name+' · своя сборка',p:Number(type.price)||0,q:1,detail,builderData:{type:builderState.type,sauces:[...builderState.sauces],extras:[...builderState.extras]}});
+    const min=Math.max(0,Number(builder.min_sauces)||0);if(builderState.sauces.length<min)return toast('Нужно выбрать соусов: минимум '+min);
+    const type=option(builder.types,builderState.type);if(!type)return;
+    const bread=option(builder.breads,builderState.bread),meat=option(builder.meats,builderState.meat);
+    const parts=[];
+    if(bread)parts.push('Лаваш: '+bread.name);
+    if(meat)parts.push('Мясо: '+meat.name);
+    parts.push('Соусы: '+(builderState.sauces.length?builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):'без соусов'));
+    parts.push('Добавки: '+(builderState.extras.length?builderState.extras.map(id=>optionName(builder.extras,id)).join(', '):'без добавок'));
+    cart.push({
+      id:'custom_'+Date.now(),n:type.name+' · своя сборка',p:builderTotal(),q:1,detail:parts.join(' · '),
+      builderData:{type:builderState.type,bread:builderState.bread,meat:builderState.meat,sauces:[...builderState.sauces],extras:[...builderState.extras]}
+    });
     save();closeSheets();toast('Сборка добавлена ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
   }
 
@@ -88,6 +138,7 @@
     if(ctx.marker.hero_image){$('#heroImg').src=ctx.marker.hero_image;$('#heroImg').classList.remove('hidden')}
     else $('#hero').classList.add('heroNoImage');
     builder=builderConfig(ctx.venue.config||{});$('#builderEntry').classList.toggle('hidden',!builder);
+    if(builder){$('#builderEntryTitle').textContent=builder.title||'Собери свою шаурму';$('#builderEntrySubtitle').textContent=builder.subtitle||'Основа → лаваш → мясо → соусы → добавки'}
     const menu=(ctx.venue.menu||[]).filter(x=>x.active!==false),sections=ctx.venue.sections||[];
     $('#menuCount').textContent=menu.length+' позиций';
     $('#chips').innerHTML='<button class="chip active" data-cat="all">Все</button>'+sections.map(x=>'<button class="chip" data-cat="'+esc(x.id)+'">'+esc((x.emoji?x.emoji+' ':'')+x.name)+'</button>').join('');
@@ -157,6 +208,8 @@
   };
   $('#openBuilder').onclick=openBuilder;
   $('#builderTypes').onclick=e=>{const b=e.target.closest('[data-btype]');if(b){builderState.type=b.dataset.btype;renderBuilder()}};
+  $('#builderBreads').onclick=e=>{const b=e.target.closest('[data-bbread]');if(b){builderState.bread=b.dataset.bbread;renderBuilder()}};
+  $('#builderMeats').onclick=e=>{const b=e.target.closest('[data-bmeat]');if(b){builderState.meat=b.dataset.bmeat;renderBuilder()}};
   $('#builderSauces').onclick=e=>{const b=e.target.closest('[data-bsauce]');if(b)toggleBuilder(builderState.sauces,b.dataset.bsauce,Math.max(1,Number(builder.max_sauces)||builder.sauces.length))};
   $('#builderExtras').onclick=e=>{const b=e.target.closest('[data-bextra]');if(b)toggleBuilder(builderState.extras,b.dataset.bextra,Math.max(0,Number(builder.max_extras)||builder.extras.length))};
   $('#addBuilder').onclick=addBuilt;

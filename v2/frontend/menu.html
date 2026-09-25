@@ -93,14 +93,35 @@
   <div class="sheetHandle"></div>
   <div class="sheetHead"><div><small class="sheetEyebrow">КОНСТРУКТОР</small><h2>Собери свою</h2></div><button class="iconBtn" data-close>×</button></div>
   <div class="builderStage" id="builderStage">
-    <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
-    <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
-    <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
-    <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
-    <div class="builderBlock" id="builderIngredientsBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
-    <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
-    <button class="primaryBtn orderCta" id="addBuilder">Собрать шаурму</button>
-    <div class="builderSingularity" id="builderSingularity" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+    <div class="builderModeSwitch" id="builderModeSwitch">
+      <button class="active" type="button" data-builder-mode="custom"><b>Собрать самому</b><small>ингредиенты по вкусу</small></button>
+      <button type="button" data-builder-mode="signature"><b>10 фирменных</b><small>готовые сочетания</small></button>
+    </div>
+
+    <div id="builderCustomMode">
+      <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
+      <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
+      <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
+      <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
+      <div class="builderBlock" id="builderIngredientsBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
+      <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
+      <button class="primaryBtn orderCta" id="addBuilder">Собрать шаурму</button>
+      <div class="builderSingularity" id="builderSingularity" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+    </div>
+
+    <div class="signatureMode" id="builderSignatureMode" hidden>
+      <div class="signatureTopline"><small>ФИРМЕННАЯ КОЛЛЕКЦИЯ</small><b id="signatureCounter">01 / 10</b></div>
+      <div class="signatureCarousel" id="signatureCarousel">
+        <button class="signatureArrow signatureArrowPrev" id="signaturePrev" type="button" aria-label="Предыдущая фирменная">‹</button>
+        <div class="signatureViewport" id="signatureViewport">
+          <article class="signatureCard" id="signatureCard"></article>
+        </div>
+        <button class="signatureArrow signatureArrowNext" id="signatureNext" type="button" aria-label="Следующая фирменная">›</button>
+      </div>
+      <div class="signatureDots" id="signatureDots"></div>
+      <button class="primaryBtn orderCta signatureChoose" id="chooseSignature" type="button">Выбрать эту шаурму</button>
+      <button class="plainBtn orderCta signatureBack" id="signatureBack" type="button">Вернуться к своей сборке</button>
+    </div>
   </div>
   <div class="builderResult" id="builderResult" hidden>
     <div class="builderResultVisual"><img id="builderResultImg" alt="Готовая шаурма"><div class="builderResultGlow"></div></div>

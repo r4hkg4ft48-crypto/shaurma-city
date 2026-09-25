@@ -25,7 +25,6 @@ function notifyCustomer(order,text,menuCtx=null){
     const u=new URL(config.PUBLIC_APP_URL+'/menu.html');
     u.searchParams.set('marker',String(menuCtx.marker.id));
     u.searchParams.set('establishment',String(menuCtx.venue.establishment_id));
-    u.searchParams.set('from','map');
     row.push({text:'Открыть меню',web_app:{url:u.toString()}});
   }else{
     row.push({text:'Открыть карту',web_app:{url:config.PUBLIC_APP_URL+'/index.html'}});

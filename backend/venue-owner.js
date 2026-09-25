@@ -2,6 +2,7 @@
 
 const crypto=require('crypto');
 const path=require('path');
+const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
 
 function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner}){
   const BOT_TOKEN=String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim();
@@ -379,6 +380,22 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
       publishVenue(q.rows[0]);await audit(req.params.establishmentId,auth.session.sub,'menu_updated',{items:normalized.length,sections:sections.length});
       res.json({ok:true,menu:normalized,sections});
     }catch(e){res.status(500).json({error:'menu_update_failed'})}
+  });
+
+  app.put('/api/venue-owner/establishments/:establishmentId/builder',async(req,res)=>{
+    const auth=await requireAccess(req,res,req.params.establishmentId,'menu');if(!auth)return;
+    const est=req.params.establishmentId;
+    try{
+      const current=await DB.query("SELECT config FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[est]);
+      if(!current.rows[0])return res.sendStatus(404);
+      const enabled=req.body?.enabled===true;
+      const builder=normalizeBuilderConfig(req.body?.builder||{});
+      const config={...(current.rows[0].config||{}),builder_enabled:enabled,builder};
+      const q=await DB.query("UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[est,JSON.stringify(config)]);
+      if(q.rows[0])publishVenue(q.rows[0]);
+      await audit(est,auth.session.sub,'builder_updated',{enabled,types:builder.types.length,breads:builder.breads.length,meats:builder.meats.length,sauces:builder.sauces.length,extras:builder.extras.length});
+      res.json({ok:true,builder_enabled:enabled,builder});
+    }catch(e){res.status(500).json({error:'builder_update_failed'})}
   });
 
   app.put('/api/venue-owner/establishments/:establishmentId/site',async(req,res)=>{

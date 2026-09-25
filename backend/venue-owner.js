@@ -2,6 +2,7 @@
 
 const crypto=require('crypto');
 const path=require('path');
+const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
 
 function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner}){
   const BOT_TOKEN=String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim();
@@ -43,6 +44,52 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     if(!out.length)return LEGACY_SECTIONS.map((x,i)=>({...x,order:i}));
     return out.map((x,i)=>({...x,order:i}));
   }
+  function clampNumber(v,min,max,fallback){const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback}
+  function safeSiteImage(v,limit=900000){
+    const s=String(v||'').trim();
+    if(!s)return '';
+    if(!(s.startsWith('data:image/')||s.startsWith('https://')))return '';
+    return s.slice(0,limit);
+  }
+  function normalizeSiteCustomization(raw={}){
+    const src=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+    const design=src.design&&typeof src.design==='object'&&!Array.isArray(src.design)?src.design:{};
+    const menu=src.menu&&typeof src.menu==='object'&&!Array.isArray(src.menu)?src.menu:{};
+    const result=src.builder_result&&typeof src.builder_result==='object'&&!Array.isArray(src.builder_result)?src.builder_result:{};
+    const features=src.features&&typeof src.features==='object'&&!Array.isArray(src.features)?src.features:{};
+    return {
+      version:1,
+      design:{
+        mode:['cinematic','minimal','editorial','glass'].includes(String(design.mode||''))?String(design.mode):'cinematic',
+        background_image:safeSiteImage(design.background_image),
+        ambient_strength:clampNumber(design.ambient_strength,0,.5,.16),
+        radius:clampNumber(design.radius,10,34,20),
+        panel_opacity:clampNumber(design.panel_opacity,.45,.99,.9),
+        contrast:clampNumber(design.contrast,.8,1.3,1)
+      },
+      menu:{
+        layout:['hero-2-3','hero-2','uniform-2','uniform-3'].includes(String(menu.layout||''))?String(menu.layout):'hero-2-3',
+        card_style:['photo','glass','solid'].includes(String(menu.card_style||''))?String(menu.card_style):'photo',
+        image_fit:['cover','contain'].includes(String(menu.image_fit||''))?String(menu.image_fit):'cover',
+        show_descriptions:menu.show_descriptions!==false,
+        hero_label:String(menu.hero_label||'НАША ГОРДОСТЬ').trim().slice(0,40)
+      },
+      builder_result:{
+        enabled:result.enabled!==false,
+        image:safeSiteImage(result.image),
+        title:String(result.title||'Твоя шаурма готова').trim().slice(0,100),
+        subtitle:String(result.subtitle||'Сборка завершена. Осталось добавить её в корзину.').trim().slice(0,180),
+        singularity:result.singularity!==false,
+        duration_ms:clampNumber(result.duration_ms,650,1800,1050)
+      },
+      features:{
+        favorites:features.favorites!==false,
+        menu_badges:features.menu_badges!==false,
+        builder_result:features.builder_result!==false
+      }
+    };
+  }
+
   const normalizeCode=v=>{
     const raw=String(v||'').normalize('NFKC').toUpperCase()
       .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
@@ -317,6 +364,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
       d:String(x.d||x.description||'').trim().slice(0,700),
       p:Math.max(0,Math.min(100000,Number(x.p??x.price)||0)),
       image:String(x.image||x.i||'').trim().slice(0,700000),
+      badge:String(x.badge||x.tag||'').trim().slice(0,40),
+      featured:x.featured===true,
+      display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
+      image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
       active:x.active!==false
     })).filter(x=>x.id&&x.n);
     if(JSON.stringify(normalized).length>700000)return res.status(413).json({error:'menu_too_large'});
@@ -329,6 +380,37 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
       publishVenue(q.rows[0]);await audit(req.params.establishmentId,auth.session.sub,'menu_updated',{items:normalized.length,sections:sections.length});
       res.json({ok:true,menu:normalized,sections});
     }catch(e){res.status(500).json({error:'menu_update_failed'})}
+  });
+
+  app.put('/api/venue-owner/establishments/:establishmentId/builder',async(req,res)=>{
+    const auth=await requireAccess(req,res,req.params.establishmentId,'menu');if(!auth)return;
+    const est=req.params.establishmentId;
+    try{
+      const current=await DB.query("SELECT config FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[est]);
+      if(!current.rows[0])return res.sendStatus(404);
+      const enabled=req.body?.enabled===true;
+      const builder=normalizeBuilderConfig(req.body?.builder||{});
+      const config={...(current.rows[0].config||{}),builder_enabled:enabled,builder};
+      const q=await DB.query("UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[est,JSON.stringify(config)]);
+      if(q.rows[0])publishVenue(q.rows[0]);
+      await audit(est,auth.session.sub,'builder_updated',{enabled,types:builder.types.length,breads:builder.breads.length,meats:builder.meats.length,sauces:builder.sauces.length,extras:builder.extras.length});
+      res.json({ok:true,builder_enabled:enabled,builder});
+    }catch(e){res.status(500).json({error:'builder_update_failed'})}
+  });
+
+  app.put('/api/venue-owner/establishments/:establishmentId/site',async(req,res)=>{
+    const auth=await requireAccess(req,res,req.params.establishmentId,'profile');if(!auth)return;
+    const est=req.params.establishmentId;
+    try{
+      const current=await DB.query("SELECT config FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[est]);
+      if(!current.rows[0])return res.sendStatus(404);
+      const site=normalizeSiteCustomization(req.body?.site_customization||req.body||{});
+      const config={...(current.rows[0].config||{}),site_customization:site};
+      const q=await DB.query("UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[est,JSON.stringify(config)]);
+      if(q.rows[0])publishVenue(q.rows[0]);
+      await audit(est,auth.session.sub,'site_customization_updated',{version:site.version,design:site.design.mode,layout:site.menu.layout});
+      res.json({ok:true,site_customization:site});
+    }catch(e){res.status(500).json({error:'site_customization_update_failed'})}
   });
 
   app.get('/api/venue-owner/establishments/:establishmentId/orders',async(req,res)=>{

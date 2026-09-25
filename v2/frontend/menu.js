@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
@@ -66,6 +66,32 @@
     const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=t.bg;
     try{tg?.setHeaderColor?.(t.bg);tg?.setBackgroundColor?.(t.bg)}catch{}
   }
+  function siteConfig(config={}){
+    const src=config.site_customization&&typeof config.site_customization==='object'?config.site_customization:{};
+    const d=src.design&&typeof src.design==='object'?src.design:{},m=src.menu&&typeof src.menu==='object'?src.menu:{},r=src.builder_result&&typeof src.builder_result==='object'?src.builder_result:{};
+    return {
+      design:{mode:['cinematic','minimal','editorial','glass'].includes(d.mode)?d.mode:'cinematic',background_image:String(d.background_image||''),ambient_strength:Number.isFinite(Number(d.ambient_strength))?Number(d.ambient_strength):.16,radius:Number(d.radius)||20,panel_opacity:Number.isFinite(Number(d.panel_opacity))?Number(d.panel_opacity):.9,contrast:Number.isFinite(Number(d.contrast))?Number(d.contrast):1},
+      menu:{layout:['hero-2-3','hero-2','uniform-2','uniform-3'].includes(m.layout)?m.layout:'hero-2-3',card_style:['photo','glass','solid'].includes(m.card_style)?m.card_style:'photo',image_fit:['cover','contain'].includes(m.image_fit)?m.image_fit:'cover',show_descriptions:m.show_descriptions!==false,hero_label:String(m.hero_label||'НАША ГОРДОСТЬ')},
+      builder_result:{enabled:r.enabled!==false,image:String(r.image||''),title:String(r.title||'Твоя шаурма готова'),subtitle:String(r.subtitle||'Сборка завершена. Осталось добавить её в корзину.'),singularity:r.singularity!==false,duration_ms:Math.max(650,Math.min(1800,Number(r.duration_ms)||1050))},
+      features:src.features&&typeof src.features==='object'?src.features:{}
+    };
+  }
+  function cssImage(v){
+    const s=String(v||'').trim();
+    if(!(s.startsWith('data:image/')||s.startsWith('https://')))return '';
+    return 'url("'+s.replace(/["\\]/g,'')+'")';
+  }
+  function applySiteCustomization(config={}){
+    siteCustomization=siteConfig(config);
+    const d=siteCustomization.design,m=siteCustomization.menu,root=document.documentElement,body=document.body;
+    body.dataset.siteMode=d.mode;body.dataset.menuLayout=m.layout;body.dataset.cardStyle=m.card_style;body.dataset.menuDescriptions=m.show_descriptions?'show':'hide';
+    root.style.setProperty('--site-radius',Math.max(10,Math.min(34,d.radius))+'px');
+    root.style.setProperty('--site-ambient',String(Math.max(0,Math.min(.5,d.ambient_strength))));
+    root.style.setProperty('--site-panel-opacity',String(Math.max(.45,Math.min(.99,d.panel_opacity))));
+    root.style.setProperty('--site-contrast',String(Math.max(.8,Math.min(1.3,d.contrast))));
+    const bg=cssImage(d.background_image);if(bg)root.style.setProperty('--site-background-image',bg);else root.style.removeProperty('--site-background-image');
+  }
+
   function cartStats(){return {count:cart.reduce((s,x)=>s+(Number(x.q)||0),0),total:cart.reduce((s,x)=>s+(Number(x.p)||0)*(Number(x.q)||0),0)}}
   function save(){localStorage.setItem(cartKey,JSON.stringify(cart));renderCart()}
   let sheetScrollY=0,sheetLocked=false;
@@ -186,31 +212,61 @@
   function openBuilder(){
     if(!builder)return;
     builderState={type:String(builder.types?.[0]?.id||''),bread:String(builder.breads?.[0]?.id||''),meat:String(builder.meats?.[0]?.id||''),sauces:[],extras:[]};
+    pendingBuilt=null;
+    $('#builderStage').hidden=false;$('#builderStage').classList.remove('builderCollapsing');$('#builderResult').hidden=true;
     renderBuilder();openSheet('builderSheet');
   }
   function toggleBuilder(list,id,max){id=String(id);const i=list.indexOf(id);if(i>=0)list.splice(i,1);else if(list.length<max)list.push(id);else toast('Достигнут максимум');renderBuilder()}
-  function addBuilt(){
-    if(!builder)return;
-    const min=Math.max(0,Number(builder.min_sauces)||0);if(builderState.sauces.length<min)return toast('Нужно выбрать соусов: минимум '+min);
-    const type=option(builder.types,builderState.type);if(!type)return;
+  function builtPayload(){
+    if(!builder)return null;
+    const min=Math.max(0,Number(builder.min_sauces)||0);if(builderState.sauces.length<min){toast('Нужно выбрать соусов: минимум '+min);return null}
+    const type=option(builder.types,builderState.type);if(!type)return null;
     const bread=option(builder.breads,builderState.bread),meat=option(builder.meats,builderState.meat);
     const parts=[];
     if(bread)parts.push('Лаваш: '+bread.name);
     if(meat)parts.push('Мясо: '+meat.name);
     parts.push('Соусы: '+(builderState.sauces.length?builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):'без соусов'));
     parts.push('Добавки: '+(builderState.extras.length?builderState.extras.map(id=>optionName(builder.extras,id)).join(', '):'без добавок'));
-    cart.push({
-      id:'custom_'+Date.now(),n:type.name+' · своя сборка',p:builderTotal(),q:1,detail:parts.join(' · '),
-      builderData:{type:builderState.type,bread:builderState.bread,meat:builderState.meat,sauces:[...builderState.sauces],extras:[...builderState.extras]}
-    });
-    save();closeSheets();toast('Сборка добавлена ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
+    return {id:'custom_'+Date.now(),n:type.name+' · своя сборка',p:builderTotal(),q:1,detail:parts.join(' · '),builderData:{type:builderState.type,bread:builderState.bread,meat:builderState.meat,sauces:[...builderState.sauces],extras:[...builderState.extras]}};
+  }
+  function showBuilderResult(payload){
+    const r=siteCustomization?.builder_result||{};
+    pendingBuilt=payload;
+    const img=String(r.image||ctx?.marker?.hero_image||'assets/menu-shawarma.webp');
+    $('#builderResultImg').src=img;$('#builderResultTitle').textContent=r.title||'Твоя шаурма готова';$('#builderResultSubtitle').textContent=r.subtitle||'Сборка завершена. Осталось добавить её в корзину.';
+    $('#builderResultSummary').textContent=payload.n;$('#builderResultPrice').textContent=money(payload.p);
+    $('#builderStage').hidden=true;$('#builderStage').classList.remove('builderCollapsing');$('#builderResult').hidden=false;
+    try{$('#builderSheet').scrollTo({top:0,behavior:'smooth'})}catch{}
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+  }
+  function previewBuilt(){
+    const payload=builtPayload();if(!payload)return;
+    const r=siteCustomization?.builder_result||{};
+    if(r.enabled===false||siteCustomization?.features?.builder_result===false){pendingBuilt=payload;return confirmBuilt()}
+    const stage=$('#builderStage'),sheet=$('#builderSheet'),ingredients=$('#builderIngredientsBlock');
+    try{sheet.scrollTo({top:Math.max(0,(ingredients?.offsetTop||0)-120),behavior:'smooth'})}catch{}
+    if(r.singularity===false){setTimeout(()=>showBuilderResult(payload),220);return}
+    stage.style.setProperty('--singularity-duration',(Number(r.duration_ms)||1050)+'ms');
+    setTimeout(()=>{
+      stage.classList.add('builderCollapsing');
+      tg?.HapticFeedback?.impactOccurred?.('medium');
+      setTimeout(()=>showBuilderResult(payload),Number(r.duration_ms)||1050);
+    },260);
+  }
+  function confirmBuilt(){
+    if(!pendingBuilt)return;
+    cart.push(pendingBuilt);pendingBuilt=null;save();closeSheets();toast('Сборка добавлена ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
+  }
+  function editBuilt(){
+    pendingBuilt=null;$('#builderResult').hidden=true;$('#builderStage').hidden=false;$('#builderStage').classList.remove('builderCollapsing');renderBuilder();
+    try{$('#builderSheet').scrollTo({top:0,behavior:'smooth'})}catch{}
   }
 
   async function load(){
     if(!marker||!est)throw new Error('Не выбрана точка');
     const r=await fetch(api+'/menu-context?marker_id='+encodeURIComponent(marker)+'&establishment_id='+encodeURIComponent(est),{cache:'no-store'});
     if(!r.ok)throw new Error('Меню этой точки недоступно');
-    ctx=await r.json();applyTheme(ctx.venue.config||{});
+    ctx=await r.json();applyTheme(ctx.venue.config||{});applySiteCustomization(ctx.venue.config||{});
     $('#topName').textContent=ctx.venue.name;
     $('#topAddress').textContent=ctx.marker.address||'МЕНЮ';
     $('#venueName').textContent=ctx.venue.name;
@@ -252,6 +308,8 @@
       return 'shawarma';
     };
     const isMain=x=>{
+      if(x.display==='main')return true;
+      if(x.display==='compact')return false;
       const section=sectionById.get(String(x.c||x.category||''))||{};
       const hay=(String(section.name||'')+' '+String(x.n||x.name||'')).toLowerCase();
       if(/доп|напит|выпеч|соус|десерт|самс|чебур|беляш|карто|фри/.test(hay))return false;
@@ -266,19 +324,19 @@
     };
     const imageFor=x=>String(x.image||fallbackFor(x)||ctx?.marker?.hero_image||'');
     const photo=x=>{
-      const src=imageFor(x),kind=kindFor(x);
-      return '<div class="foodPic '+(!x.image?'foodPicFallback ':'')+'kind-'+kind+'">'+
+      const src=imageFor(x),kind=kindFor(x),fit=x.image_fit||siteCustomization?.menu?.image_fit||'cover';
+      return '<div class="foodPic '+(!x.image?'foodPicFallback ':'')+'kind-'+kind+' fit-'+fit+'">'+
         (src?'<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
         '<i></i></div>';
     };
-    const badgeFor=x=>String(x.badge||x.tag||'').trim();
+    const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
       const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
       return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
         '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
         '<div class="foodBody">'+
-          '<div class="foodTitle"><h3>'+esc(name)+'</h3><button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div>'+
+          '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
           '<p>'+esc(description)+'</p>'+
           '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
         '</div></article>';
@@ -290,7 +348,7 @@
       return;
     }
 
-    const feature=visible.find(x=>x.featured===true||String(x.badge||x.tag||'').trim())||visible[0];
+    const feature=visible.find(x=>x.featured===true)||visible[0];
     const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=String(feature.d||feature.description||'');
     const featureImage=imageFor(feature);
     const featureKind=kindFor(feature);
@@ -301,7 +359,7 @@
           '<span class="menuFeatureShade"></span>'+
         '</div>'+
         '<div class="menuFeatureCopy">'+
-          '<small>НАША ГОРДОСТЬ</small>'+
+          '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
           '<h3>'+esc(featureName)+'</h3>'+
           '<p>'+esc(featureDesc)+'</p>'+
           '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
@@ -317,9 +375,12 @@
       const meta=sectionById.get(String(category));
       title=meta?'<div class="menuCategoryLabel"><span>'+esc(meta.emoji||'✦')+'</span><b>'+esc(meta.name||'Раздел')+'</b></div>':'';
     }
+    const layout=siteCustomization?.menu?.layout||'hero-2-3';
+    const firstClass=layout==='uniform-3'?'otherDishGrid':'mainDishGrid';
+    const secondClass=layout==='hero-2'||layout==='uniform-2'?'mainDishGrid':'otherDishGrid';
     $('#menuGrid').innerHTML=title+
-      (mainItems.length?'<div class="mainDishGrid">'+mainItems.map(x=>card(x,'main')).join('')+'</div>':'')+
-      (otherItems.length?'<div class="otherDishGrid">'+otherItems.map(x=>card(x,'other')).join('')+'</div>':'');
+      (mainItems.length?'<div class="'+firstClass+'">'+mainItems.map(x=>card(x,firstClass==='mainDishGrid'?'main':'other')).join('')+'</div>':'')+
+      (otherItems.length?'<div class="'+secondClass+'">'+otherItems.map(x=>card(x,secondClass==='mainDishGrid'?'main':'other')).join('')+'</div>':'');
   }
   function renderCart(){
     const {count,total}=cartStats();
@@ -408,7 +469,9 @@
   $('#builderMeats').onclick=e=>{const b=e.target.closest('[data-bmeat]');if(b){builderState.meat=b.dataset.bmeat;renderBuilder()}};
   $('#builderSauces').onclick=e=>{const b=e.target.closest('[data-bsauce]');if(b)toggleBuilder(builderState.sauces,b.dataset.bsauce,Math.max(1,Number(builder.max_sauces)||builder.sauces.length))};
   $('#builderExtras').onclick=e=>{const b=e.target.closest('[data-bextra]');if(!b)return;const max=Number.isFinite(Number(builder.max_extras))?Math.max(0,Number(builder.max_extras)):builder.extras.length;toggleBuilder(builderState.extras,b.dataset.bextra,max)};
-  $('#addBuilder').onclick=addBuilt;
+  $('#addBuilder').onclick=previewBuilt;
+  $('#confirmBuilderCart').onclick=confirmBuilt;
+  $('#editBuilder').onclick=editBuilt;
   $('#cartBtn').onclick=()=>openSheet('cartSheet');
   $('#checkoutBtn').onclick=()=>openSheet('checkoutSheet');
   $('#profileBtn').onclick=()=>{openSheet('profileSheet');myOrders()};

@@ -89,16 +89,28 @@
   <button class="primaryBtn orderCta" id="placeOrder"><span>Оформить заказ</span><b id="placeOrderTotal">0 ₽</b></button>
 </section>
 
-<section class="sheet orderSheet" id="builderSheet">
+<section class="sheet orderSheet builderSheet" id="builderSheet">
   <div class="sheetHandle"></div>
   <div class="sheetHead"><div><small class="sheetEyebrow">КОНСТРУКТОР</small><h2>Собери свою</h2></div><button class="iconBtn" data-close>×</button></div>
-  <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
-  <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
-  <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
-  <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
-  <div class="builderBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
-  <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
-  <button class="primaryBtn orderCta" id="addBuilder">Добавить в корзину</button>
+  <div class="builderStage" id="builderStage">
+    <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
+    <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
+    <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
+    <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
+    <div class="builderBlock" id="builderIngredientsBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
+    <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
+    <button class="primaryBtn orderCta" id="addBuilder">Собрать шаурму</button>
+    <div class="builderSingularity" id="builderSingularity" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+  </div>
+  <div class="builderResult" id="builderResult" hidden>
+    <div class="builderResultVisual"><img id="builderResultImg" alt="Готовая шаурма"><div class="builderResultGlow"></div></div>
+    <small class="sheetEyebrow">ТВОЯ СБОРКА</small>
+    <h2 id="builderResultTitle">Твоя шаурма готова</h2>
+    <p id="builderResultSubtitle">Сборка завершена. Осталось добавить её в корзину.</p>
+    <div class="totalRow"><span id="builderResultSummary">Твоя сборка</span><b id="builderResultPrice">0 ₽</b></div>
+    <button class="primaryBtn orderCta" id="confirmBuilderCart">Добавить в корзину</button>
+    <button class="plainBtn orderCta" id="editBuilder">Изменить состав</button>
+  </div>
 </section>
 
 <section class="sheet orderSheet" id="profileSheet">

@@ -80,6 +80,10 @@ function normalizeMenu(input){
     d:String(x.d||x.description||'').trim().slice(0,700),
     p:clamp(Number(x.p??x.price)||0,0,100000),
     image:String(x.image||x.i||'').trim().slice(0,700000),
+    badge:String(x.badge||x.tag||'').trim().slice(0,40),
+    featured:x.featured===true,
+    display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
+    image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
     active:x.active!==false
   })).filter(x=>x.id&&x.n);
 }
@@ -134,6 +138,51 @@ function normalizeBuilderConfig(raw={}){
     max_extras:clamp(Number.isFinite(Number(src.max_extras))?Number(src.max_extras):safeExtras.length,0,safeExtras.length)
   };
 }
+function safeImage(v,limit=900000){
+  const s=String(v||'').trim();
+  if(!s)return '';
+  if(!(s.startsWith('data:image/')||s.startsWith('https://')))return '';
+  return s.slice(0,limit);
+}
+function normalizeSiteCustomization(raw={}){
+  const src=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+  const design=src.design&&typeof src.design==='object'&&!Array.isArray(src.design)?src.design:{};
+  const menu=src.menu&&typeof src.menu==='object'&&!Array.isArray(src.menu)?src.menu:{};
+  const result=src.builder_result&&typeof src.builder_result==='object'&&!Array.isArray(src.builder_result)?src.builder_result:{};
+  const features=src.features&&typeof src.features==='object'&&!Array.isArray(src.features)?src.features:{};
+  return {
+    version:1,
+    design:{
+      mode:['cinematic','minimal','editorial','glass'].includes(String(design.mode||''))?String(design.mode):'cinematic',
+      background_image:safeImage(design.background_image,900000),
+      ambient_strength:clamp(Number.isFinite(Number(design.ambient_strength))?Number(design.ambient_strength):.16,0,.5),
+      radius:clamp(Number(design.radius)||20,10,34),
+      panel_opacity:clamp(Number.isFinite(Number(design.panel_opacity))?Number(design.panel_opacity):.9,.45,.99),
+      contrast:clamp(Number.isFinite(Number(design.contrast))?Number(design.contrast):1,.8,1.3)
+    },
+    menu:{
+      layout:['hero-2-3','hero-2','uniform-2','uniform-3'].includes(String(menu.layout||''))?String(menu.layout):'hero-2-3',
+      card_style:['photo','glass','solid'].includes(String(menu.card_style||''))?String(menu.card_style):'photo',
+      image_fit:['cover','contain'].includes(String(menu.image_fit||''))?String(menu.image_fit):'cover',
+      show_descriptions:menu.show_descriptions!==false,
+      hero_label:String(menu.hero_label||'НАША ГОРДОСТЬ').trim().slice(0,40)
+    },
+    builder_result:{
+      enabled:result.enabled!==false,
+      image:safeImage(result.image,900000),
+      title:String(result.title||'Твоя шаурма готова').trim().slice(0,100),
+      subtitle:String(result.subtitle||'Сборка завершена. Осталось добавить её в корзину.').trim().slice(0,180),
+      singularity:result.singularity!==false,
+      duration_ms:clamp(Number(result.duration_ms)||1050,650,1800)
+    },
+    features:{
+      favorites:features.favorites!==false,
+      menu_badges:features.menu_badges!==false,
+      builder_result:features.builder_result!==false
+    }
+  };
+}
+
 function builderConfig(config={}){
   if(config.builder_enabled===false)return null;
   if(config.builder_enabled!==true&&!config.builder)return null;
@@ -174,4 +223,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

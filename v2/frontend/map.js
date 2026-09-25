@@ -433,10 +433,10 @@
         'circle-opacity':.94
       }
     });
-    map.addLayer({
+    if(!fallback)map.addLayer({
       id:'venue-cluster-count',type:'symbol',source:'venue-points',
       filter:['has','point_count'],maxzoom:13,
-      layout:{'text-field':['get','point_count_abbreviated'],'text-size':11,'text-font':['Noto Sans Bold']},
+      layout:{'text-field':['get','point_count_abbreviated'],'text-size':11},
       paint:{'text-color':'#FFFFFF'}
     });
     map.addLayer({
@@ -463,7 +463,8 @@
       const id=String(e.features?.[0]?.properties?.marker_id||'');
       const p=points.find(x=>String(x.id)===id);if(p)selectPoint(p);
     });
-    for(const layer of ['venue-clusters','venue-cluster-count','venue-single-dot']){
+    const interactiveLayers=['venue-clusters','venue-single-dot'];if(!fallback)interactiveLayers.push('venue-cluster-count');
+    for(const layer of interactiveLayers){
       map.on('mouseenter',layer,()=>{map.getCanvas().style.cursor='pointer'});
       map.on('mouseleave',layer,()=>{map.getCanvas().style.cursor=''});
     }

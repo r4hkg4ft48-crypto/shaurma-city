@@ -1573,3 +1573,214 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 .venuePage[data-tone="dark"] .status-ready{color:#76D7A4!important}
 .venuePage[data-tone="dark"] .status-done{color:#A4AFBA!important}
 .venuePage[data-tone="dark"] .status-cancelled{color:#EF8098!important}
+
+
+/* ===== Owner menu studio — photos + precise per-venue editing ===== */
+.ownerMenuPanel{
+  --oms-red:#D94343;
+  --oms-red2:#E86565;
+  --oms-navy:#0E1A2B;
+  --oms-navy2:#13233B;
+  --oms-white:#F7F9FC;
+  --oms-muted:#8E9BAD;
+  padding:0!important;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 92% 2%,rgba(217,67,67,.075),transparent 27%),
+    linear-gradient(180deg,#121D2B,#10191F 42%,#111A1F);
+  border-color:rgba(241,245,249,.09)!important
+}
+.ownerMenuHero{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:20px 18px 16px;
+  border-bottom:1px solid rgba(241,245,249,.07)
+}
+.ownerMenuHero small{display:block;color:#E97A7A;font-size:8px;letter-spacing:.16em;font-weight:950}
+.ownerMenuHero h2{margin:4px 0 5px!important;font-size:28px;letter-spacing:-.045em;color:#F8FAFC}
+.ownerMenuHero p{margin:0;max-width:520px;color:#8F9DAE;font-size:11px;line-height:1.45}
+.ownerAddItem{
+  flex:0 0 auto;min-height:44px!important;padding:0 14px!important;
+  background:linear-gradient(135deg,#E65D5D,#D94343)!important;color:#fff!important;
+  box-shadow:0 11px 28px rgba(217,67,67,.2)!important
+}
+.ownerMenuScope{
+  margin:12px 14px 4px;padding:11px 12px;
+  display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;
+  border:1px solid rgba(239,244,249,.075);border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,255,255,.035),rgba(255,255,255,.018));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)
+}
+.ownerMenuScopeIcon{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;
+  background:linear-gradient(145deg,#F8FAFC,#DFE5EB);color:#13233B;font-size:21px;
+  box-shadow:0 8px 22px rgba(0,0,0,.18)
+}
+.ownerMenuScope small,.ownerMenuScope b,.ownerMenuScope span{display:block}
+.ownerMenuScope small{font-size:7px;letter-spacing:.14em;color:#77879A;font-weight:900}
+.ownerMenuScope b{margin-top:2px;color:#F7F9FC;font-size:13px}
+.ownerMenuScope span{margin-top:1px;color:#647589;font:700 8px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}
+.ownerMenuScope>strong{
+  min-width:58px;padding:7px 9px;border-radius:11px;
+  background:rgba(217,67,67,.08);border:1px solid rgba(232,101,101,.13);
+  color:#F1AAAA;text-align:center;font-size:9px;font-weight:800
+}
+.ownerMenuScope>strong span{display:inline;color:inherit;font:950 14px/1 system-ui,-apple-system,sans-serif;margin:0}
+
+.menuEditorCards{display:grid;gap:11px;padding:10px 14px 4px}
+.menuEditCard{
+  display:grid;grid-template-columns:190px minmax(0,1fr);min-width:0;
+  border:1px solid rgba(240,245,250,.085);border-radius:21px;overflow:hidden;
+  background:
+    radial-gradient(circle at 100% 0,rgba(66,101,148,.055),transparent 29%),
+    linear-gradient(145deg,#182532,#121D27);
+  box-shadow:0 15px 38px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);
+  transition:border-color .2s,box-shadow .2s,transform .2s
+}
+.menuEditCard:focus-within{
+  border-color:rgba(217,67,67,.2);
+  box-shadow:0 17px 45px rgba(0,0,0,.2),0 0 0 3px rgba(217,67,67,.035)
+}
+.menuEditPhoto{
+  min-width:0;padding:10px;
+  border-right:1px solid rgba(240,245,250,.07);
+  background:rgba(5,12,20,.2)
+}
+.menuPhotoPreview{
+  position:relative;display:block;width:100%;aspect-ratio:1.15/1;padding:0;overflow:hidden;
+  border-radius:15px;border:1px dashed rgba(218,228,238,.14);
+  background:
+    radial-gradient(circle at 65% 25%,rgba(217,67,67,.08),transparent 32%),
+    linear-gradient(145deg,#16263A,#0C1725);
+  color:#F7F9FC
+}
+.menuPhotoPreview img{
+  width:100%;height:100%;display:block;object-fit:cover;
+  transform:scale(1.01);transition:transform .35s ease,filter .25s
+}
+.menuPhotoPreview:active img{transform:scale(1.045)}
+.menuPhotoPreview>span{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:3px;padding:12px}
+.menuPhotoPreview>span i{
+  width:38px;height:38px;margin:0 auto 3px;border-radius:12px;display:grid;place-items:center;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.08);
+  color:#E96D6D;font-style:normal;font-size:22px
+}
+.menuPhotoPreview>span b{font-size:12px}
+.menuPhotoPreview>span small{color:#7F8FA3;font-size:9px}
+.menuEditPhoto.hasPhoto .menuPhotoPreview{border-style:solid;border-color:rgba(255,255,255,.08)}
+.menuEditPhoto.hasPhoto .menuPhotoPreview:after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 64%,rgba(4,9,15,.16));
+  pointer-events:none
+}
+.menuPhotoActions{display:flex;gap:5px;margin-top:7px}
+.menuPhotoActions .plainBtn{
+  flex:1;min-width:0;min-height:34px!important;padding:0 7px!important;
+  font-size:9px;background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.075);color:#D7DFE8
+}
+.menuPhotoRemove{
+  min-height:34px;border:0;background:transparent;color:#B9858C;font-size:9px;padding:0 5px
+}
+.menuPhotoRemove:active{color:#FF8B99}
+.menuEditCard.photoLoading .menuPhotoPreview:before{
+  content:"";position:absolute;z-index:4;inset:0;background:rgba(8,16,27,.7);backdrop-filter:blur(4px)
+}
+.menuEditCard.photoLoading .menuPhotoPreview:after{
+  content:"Обрабатываем…";position:absolute;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);
+  color:#fff;font-size:10px;font-weight:850;letter-spacing:.04em
+}
+
+.menuEditContent{min-width:0;padding:13px 13px 14px}
+.menuEditCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:11px}
+.menuEditCardHead small,.menuEditCardHead b{display:block}
+.menuEditCardHead small{color:#738499;font-size:7px;letter-spacing:.13em;font-weight:900}
+.menuEditCardHead b{margin-top:2px;color:#F7F9FC;font-size:15px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42ch}
+.menuDeleteItem{
+  flex:0 0 auto!important;min-height:30px!important;padding:0 9px!important;
+  border-radius:9px!important;font-size:9px!important;background:rgba(208,75,91,.06)!important;
+  border-color:rgba(232,108,119,.12)!important;color:#CB8C94!important
+}
+.menuEditForm{display:grid;grid-template-columns:minmax(0,1fr) 122px;gap:8px}
+.menuEditField{display:grid;gap:5px;min-width:0}
+.menuEditField>span{color:#8291A4;font-size:8px;font-weight:800;letter-spacing:.035em}
+.menuEditField input,.menuEditField textarea,.menuEditField select{
+  width:100%;min-width:0;border:1px solid rgba(237,243,249,.08);border-radius:11px;
+  background:rgba(255,255,255,.035);color:#F7F9FC;outline:0;
+  transition:border-color .18s,background .18s,box-shadow .18s
+}
+.menuEditField input,.menuEditField select{height:42px;padding:0 10px}
+.menuEditField textarea{min-height:76px;resize:vertical;padding:10px;line-height:1.4}
+.menuEditField input:focus,.menuEditField textarea:focus,.menuEditField select:focus{
+  border-color:rgba(232,101,101,.28);background:rgba(255,255,255,.045);
+  box-shadow:0 0 0 3px rgba(217,67,67,.04)
+}
+.menuEditField input::placeholder,.menuEditField textarea::placeholder{color:#58697E}
+.menuEditDescription{grid-column:1/-1}
+.menuEditCategory{grid-column:1/2}
+.menuEditPrice{grid-column:2/3;grid-row:1/2}
+.menuPriceInput{position:relative}
+.menuPriceInput input{padding-right:31px!important;font-size:14px;font-weight:900}
+.menuPriceInput i{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  color:#8998AA;font-style:normal;font-size:11px;font-weight:900
+}
+
+.ownerMenuSaveBar{
+  position:sticky;bottom:calc(var(--safe-b) + 6px);z-index:14;
+  margin:11px 14px 6px;padding:10px 10px 10px 12px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  border-radius:17px;border:1px solid rgba(240,245,250,.09);
+  background:linear-gradient(135deg,rgba(18,35,57,.94),rgba(8,19,33,.96));
+  box-shadow:0 14px 40px rgba(0,0,0,.3);backdrop-filter:blur(18px)
+}
+.ownerMenuSaveBar b,.ownerMenuSaveBar small{display:block}
+.ownerMenuSaveBar b{font-size:11px;color:#F7F9FC}.ownerMenuSaveBar small{margin-top:2px;font-size:8.5px;color:#78889B;max-width:42ch}
+.ownerMenuSaveBar .primaryBtn{
+  flex:0 0 auto;min-height:42px!important;padding:0 14px!important;
+  background:linear-gradient(135deg,#E55B5B,#D94343)!important;color:#fff!important;
+  box-shadow:0 8px 24px rgba(217,67,67,.21)!important
+}
+.ownerMenuSaveBar .primaryBtn:disabled{opacity:.58;box-shadow:none!important}
+
+.ownerMenuEmpty{
+  min-height:240px;display:grid;place-items:center;align-content:center;text-align:center;gap:5px;
+  border:1px dashed rgba(239,244,249,.12);border-radius:19px;
+  background:rgba(255,255,255,.018);padding:20px;color:#8493A5
+}
+.ownerMenuEmpty>div{
+  width:48px;height:48px;border-radius:15px;display:grid;place-items:center;margin-bottom:3px;
+  background:rgba(217,67,67,.08);border:1px solid rgba(232,101,101,.13);color:#E66B6B;font-size:26px
+}
+.ownerMenuEmpty b{color:#F7F9FC;font-size:15px}.ownerMenuEmpty span{max-width:34ch;font-size:10px;line-height:1.4}
+.ownerMenuEmpty button{margin-top:7px}
+
+.ownerMenuPanel .builderAdmin{
+  margin:22px 14px 14px;padding-top:20px
+}
+
+@media(max-width:700px){
+  .ownerMenuHero{padding:16px 13px 13px}.ownerMenuHero h2{font-size:24px}
+  .ownerMenuHero{display:grid;grid-template-columns:minmax(0,1fr) auto}.ownerAddItem{align-self:start;font-size:0;width:43px;padding:0!important}.ownerAddItem:after{content:"＋";font-size:19px}
+  .ownerMenuScope{margin-left:10px;margin-right:10px}
+  .menuEditorCards{padding-left:10px;padding-right:10px}
+  .menuEditCard{grid-template-columns:128px minmax(0,1fr)}
+  .menuEditPhoto{padding:8px}.menuPhotoPreview{aspect-ratio:1/1}
+  .menuPhotoActions{display:grid}.menuPhotoRemove{min-height:28px}
+  .menuEditForm{grid-template-columns:minmax(0,1fr) 94px}
+  .ownerMenuSaveBar{margin-left:10px;margin-right:10px}
+}
+@media(max-width:510px){
+  .ownerMenuHero p{max-width:32ch}
+  .ownerMenuScope{grid-template-columns:40px minmax(0,1fr) auto}
+  .menuEditCard{grid-template-columns:1fr}
+  .menuEditPhoto{border-right:0;border-bottom:1px solid rgba(240,245,250,.07);display:grid;grid-template-columns:124px minmax(0,1fr);gap:9px}
+  .menuPhotoPreview{aspect-ratio:1/1}
+  .menuPhotoActions{align-content:center;margin:0}
+  .menuEditContent{padding:12px}
+  .menuEditForm{grid-template-columns:minmax(0,1fr) 88px}
+  .menuEditCategory{grid-column:1/2}.menuEditDescription{grid-column:1/-1}
+  .ownerMenuSaveBar{align-items:center}.ownerMenuSaveBar>div{min-width:0}.ownerMenuSaveBar small{display:none}
+}
+@media(max-width:360px){
+  .ownerMenuScope>strong{display:none}
+  .menuEditPhoto{grid-template-columns:108px minmax(0,1fr)}
+}

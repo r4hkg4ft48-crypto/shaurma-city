@@ -130,15 +130,96 @@
    builder[group].splice(index,1);renderBuilderGroup(group);
  }
 
+ function ensureMenuId(x,i=0){
+   if(!x.id)x.id='item_'+Date.now().toString(36)+'_'+i+'_'+Math.random().toString(36).slice(2,6);
+   return String(x.id);
+ }
+ function menuCategoryOptions(current){
+   const known=[...(Array.isArray(data?.sections)?data.sections:[]),{id:'shawarma',name:'Шаурма'},{id:'drinks',name:'Напитки'},{id:'bakery',name:'Выпечка'},{id:'extras',name:'Допы'}];
+   const map=new Map();for(const x of known){const id=String(x?.id||'').trim();if(id&&!map.has(id))map.set(id,String(x?.name||id))}
+   if(current&&!map.has(String(current)))map.set(String(current),String(current));
+   return [...map.entries()].map(([id,name])=>'<option value="'+esc(id)+'" '+(String(current)===id?'selected':'')+'>'+esc(name)+'</option>').join('');
+ }
+ function photoDataUrl(blob){
+   return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(new Error('Не удалось прочитать фото'));r.readAsDataURL(blob)});
+ }
+ function canvasBlob(canvas,quality){
+   return new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+ }
+ function loadPhotoImage(file){
+   return new Promise((resolve,reject)=>{
+     const url=URL.createObjectURL(file),img=new Image();
+     img.onload=()=>resolve({img,url});
+     img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Формат фото не поддерживается'))};
+     img.src=url;
+   });
+ }
+ async function compressMenuPhoto(file){
+   if(!file||!String(file.type||'').startsWith('image/'))throw new Error('Выберите изображение');
+   if(file.size>25*1024*1024)throw new Error('Фото слишком большое');
+   const loaded=await loadPhotoImage(file),img=loaded.img;
+   try{
+     const nw=Number(img.naturalWidth||img.width),nh=Number(img.naturalHeight||img.height);
+     if(!nw||!nh)throw new Error('Не удалось определить размер фото');
+     const firstScale=Math.min(1,1200/Math.max(nw,nh));
+     let w=Math.max(320,Math.round(nw*firstScale)),h=Math.max(240,Math.round(nh*firstScale));
+     const qualities=[.86,.78,.70,.62,.55,.48];
+     for(let i=0;i<qualities.length;i++){
+       const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+       const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw new Error('Не удалось обработать фото');
+       ctx.fillStyle='#F7F9FC';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+       const blob=await canvasBlob(canvas,qualities[i]);if(!blob)throw new Error('Не удалось сжать фото');
+       const encoded=await photoDataUrl(blob);
+       if(encoded.length<=620000)return encoded;
+       w=Math.max(360,Math.round(w*.84));h=Math.max(270,Math.round(h*.84));
+     }
+     throw new Error('Фото не удалось подготовить — выберите другое');
+   }finally{URL.revokeObjectURL(loaded.url)}
+ }
+ function renderMenu(){
+   const root=$('#menuEditor');
+   $('#menuItemCount').textContent=String(menu.length);
+   root.innerHTML=menu.length?menu.map((x,i)=>{
+     const id=ensureMenuId(x,i),name=String(x.n||x.name||''),desc=String(x.d||x.description||''),price=Number(x.p??x.price)||0,cat=String(x.c||x.category||'shawarma'),image=String(x.image||'');
+     return '<article class="menuEditCard" data-item-id="'+esc(id)+'">'+
+       '<div class="menuEditPhoto '+(image?'hasPhoto':'')+'">'+
+         '<button class="menuPhotoPreview" type="button" data-photo-pick="'+esc(id)+'" aria-label="Выбрать фото">'+
+           (image?'<img src="'+esc(image)+'" alt="">':'<span><i>＋</i><b>Фото блюда</b><small>Выбрать из галереи</small></span>')+
+         '</button>'+
+         '<input type="file" accept="image/*" data-photo-input="'+esc(id)+'" hidden>'+
+         '<div class="menuPhotoActions">'+
+           '<button class="plainBtn" type="button" data-photo-pick="'+esc(id)+'">'+(image?'Заменить':'Выбрать фото')+'</button>'+
+           (image?'<button class="menuPhotoRemove" type="button" data-photo-remove="'+esc(id)+'">Удалить</button>':'')+
+         '</div>'+
+       '</div>'+
+       '<div class="menuEditContent">'+
+         '<div class="menuEditCardHead"><div><small>ПОЗИЦИЯ '+(i+1)+'</small><b>'+esc(name||'Новая позиция')+'</b></div><button class="dangerBtn menuDeleteItem" data-del-id="'+esc(id)+'" type="button">Удалить</button></div>'+
+         '<div class="menuEditForm">'+
+           '<label class="menuEditField menuEditName"><span>Название</span><input data-k="n" value="'+esc(name)+'" placeholder="Например, Шаурма классическая"></label>'+
+           '<label class="menuEditField menuEditPrice"><span>Цена</span><div class="menuPriceInput"><input data-k="p" type="number" min="0" inputmode="decimal" value="'+esc(price)+'"><i>₽</i></div></label>'+
+           '<label class="menuEditField menuEditCategory"><span>Раздел</span><select data-k="c">'+menuCategoryOptions(cat)+'</select></label>'+
+           '<label class="menuEditField menuEditDescription"><span>Описание</span><textarea data-k="d" rows="3" placeholder="Состав, особенности, вес...">'+esc(desc)+'</textarea></label>'+
+         '</div>'+
+       '</div>'+
+     '</article>';
+   }).join(''):'<div class="ownerMenuEmpty"><div>＋</div><b>Меню пока пустое</b><span>Добавьте первую позицию и выберите для неё аппетитное фото.</span><button class="primaryBtn" type="button" data-add-empty>Добавить позицию</button></div>';
+ }
+ function readMenu(){
+   document.querySelectorAll('.menuEditCard').forEach(row=>{
+     const id=String(row.dataset.itemId||''),x=menu.find(item=>String(item.id)===id);if(!x)return;
+     row.querySelectorAll('[data-k]').forEach(inp=>{const k=inp.dataset.k;x[k]=k==='p'?Math.max(0,Number(inp.value)||0):inp.value});
+     x.id=id;x.c=x.c||'shawarma';x.active=true;
+   });
+ }
+
  async function load(){
    data=await call('/venue-owner/establishments/'+encodeURIComponent(est));menu=(data.menu||[]).map(x=>({...x}));builder=builderForEdit(data.config||{});
    $('#vName').value=data.name||'';$('#vAddress').value=data.address||'';$('#vDescription').value=data.description||'';$('#vHours').value=data.hours||'';$('#vPrice').value=data.price_label||'';
    $('#vMarkerIcon').value=data.marker_style?.icon||'🥙';$('#vMarkerBg').value=data.marker_style?.background||'#D94343';$('#vBuilderEnabled').checked=data.config?.builder_enabled===true;
    syncThemeInputs(themeForConfig(data.config||{}));
+   $('#menuVenueLabel').textContent=data.name||'Заведение';$('#menuEstLabel').textContent=est;
    renderMenu();renderBuilderEditor();await loadOrders();connect();
  }
- function renderMenu(){$('#menuEditor').innerHTML=menu.length?menu.map((x,i)=>'<div class="menuEditRow" data-i="'+i+'"><input data-k="n" value="'+esc(x.n||x.name||'')+'" placeholder="Название"><input class="desc" data-k="d" value="'+esc(x.d||x.description||'')+'" placeholder="Описание"><input data-k="p" inputmode="decimal" value="'+esc(x.p??x.price??0)+'" placeholder="₽"><button class="dangerBtn" data-del="'+i+'" type="button">×</button></div>').join(''):'<div class="empty">Добавьте первую позицию</div>'}
- function readMenu(){document.querySelectorAll('.menuEditRow').forEach(row=>{const i=+row.dataset.i,x=menu[i];row.querySelectorAll('[data-k]').forEach(inp=>x[inp.dataset.k]=inp.dataset.k==='p'?+inp.value:inp.value);x.id=x.id||'item_'+Date.now()+'_'+i;x.c=x.c||'shawarma';x.active=true})}
  async function saveProfile(){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/profile',{method:'PATCH',body:{name:$('#vName').value,address:$('#vAddress').value,description:$('#vDescription').value,hours:$('#vHours').value,price_label:$('#vPrice').value}});toast('Профиль сохранён ✓');await load()}catch(e){toast(e.message)}}
  async function saveTheme(){
    const btn=$('#saveTheme');btn.disabled=true;
@@ -148,7 +229,13 @@
    }catch(e){toast(e.message)}finally{btn.disabled=false}
  }
  async function saveAppearance(){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/appearance',{method:'PATCH',body:{marker_style:{...(data.marker_style||{}),icon:$('#vMarkerIcon').value||'🥙',background:$('#vMarkerBg').value||'#D94343'}}});toast('Метка обновлена ✓');await load()}catch(e){toast(e.message)}}
- async function saveMenu(){readMenu();try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/menu',{method:'PUT',body:{menu,sections:data.sections||[]}});toast('Меню обновлено ✓');await load()}catch(e){toast(e.message)}}
+ async function saveMenu(){
+   readMenu();const btn=$('#saveMenu'),venueAtSave=est;btn.disabled=true;const oldText=btn.textContent;btn.textContent='Сохраняем…';
+   try{
+     await call('/venue-owner/establishments/'+encodeURIComponent(venueAtSave)+'/menu',{method:'PUT',body:{menu,sections:data.sections||[]}});
+     if(est===venueAtSave){toast('Меню и фотографии сохранены ✓');await load()}
+   }catch(e){toast(e.message)}finally{btn.disabled=false;btn.textContent=oldText}
+ }
  async function saveBuilder(){
    readBuilder();
    if(!builder.types.length||!builder.breads.length||!builder.meats.length||!builder.sauces.length)return toast('Заполните обязательные группы');
@@ -184,8 +271,36 @@
  $('#themeSecondaryHex').onchange=()=>syncThemeColor('#themeSecondary','#themeSecondaryHex',true);
  $('#themeTone').onchange=()=>renderThemePreview();
  $('#vName').oninput=()=>renderThemePreview();
- $('#addItem').onclick=()=>{readMenu();menu.push({id:'item_'+Date.now(),n:'Новая позиция',d:'',p:0,c:'shawarma',active:true});renderMenu()};
- $('#menuEditor').onclick=e=>{const b=e.target.closest('[data-del]');if(!b)return;readMenu();menu.splice(+b.dataset.del,1);renderMenu()};
+ function addMenuItem(){
+   readMenu();const id='item_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+   menu.push({id,n:'Новая позиция',d:'',p:0,c:'shawarma',image:'',active:true});renderMenu();
+   setTimeout(()=>document.querySelector('.menuEditCard[data-item-id="'+CSS.escape(id)+'"] [data-k="n"]')?.focus(),40);
+ }
+ $('#addItem').onclick=addMenuItem;
+ $('#menuEditor').onclick=e=>{
+   const emptyAdd=e.target.closest('[data-add-empty]');if(emptyAdd)return addMenuItem();
+   const pick=e.target.closest('[data-photo-pick]');if(pick){const id=String(pick.dataset.photoPick||''),row=[...document.querySelectorAll('.menuEditCard')].find(x=>String(x.dataset.itemId)===id);row?.querySelector('[data-photo-input]')?.click();return}
+   const remove=e.target.closest('[data-photo-remove]');if(remove){readMenu();const item=menu.find(x=>String(x.id)===String(remove.dataset.photoRemove));if(item){item.image='';renderMenu();toast('Фото удалено · сохраните меню')}return}
+   const del=e.target.closest('[data-del-id]');if(del){
+     readMenu();const id=String(del.dataset.delId||''),item=menu.find(x=>String(x.id)===id);
+     if(item&&!confirm('Удалить «'+String(item.n||'позицию')+'» из меню?'))return;
+     menu=menu.filter(x=>String(x.id)!==id);renderMenu();return;
+   }
+ };
+ $('#menuEditor').onchange=async e=>{
+   const input=e.target.closest('[data-photo-input]');if(!input)return;
+   const file=input.files?.[0];if(!file)return;
+   readMenu();
+   const itemId=String(input.dataset.photoInput||''),venueAtPick=est,item=menu.find(x=>String(x.id)===itemId);
+   if(!item)return;
+   const card=input.closest('.menuEditCard');card?.classList.add('photoLoading');toast('Готовим фото…');
+   try{
+     const encoded=await compressMenuPhoto(file);
+     if(est!==venueAtPick)return;
+     const target=menu.find(x=>String(x.id)===itemId);if(!target)return;
+     target.image=encoded;renderMenu();toast('Фото готово · сохраните меню ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
+   }catch(err){card?.classList.remove('photoLoading');toast(err.message||'Не удалось обработать фото')}
+ };
  $('#builderAdmin').onclick=e=>{
    const add=e.target.closest('[data-builder-add]');if(add)return addBuilderOption(add.dataset.builderAdd);
    const del=e.target.closest('[data-builder-del]');if(del)return deleteBuilderOption(del.dataset.builderDel,+del.dataset.builderIndex);

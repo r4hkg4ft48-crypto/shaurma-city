@@ -223,27 +223,50 @@
     else $('#hero').classList.add('heroNoImage');
     builder=builderConfig(ctx.venue.config||{});$('#builderEntry').classList.toggle('hidden',!builder);
     if(builder){$('#builderEntryTitle').textContent=builder.title||'Собери свою шаурму';$('#builderEntrySubtitle').textContent=builder.subtitle||'Основа → лаваш → мясо → соусы → добавки'}
-    const menu=(ctx.venue.menu||[]).filter(x=>x.active!==false),sections=ctx.venue.sections||[];
+    const menu=(ctx.venue.menu||[]).filter(x=>x.active!==false),sections=Array.isArray(ctx.venue.sections)?ctx.venue.sections:[];
+    const usedCats=new Set(menu.map(x=>String(x.c||x.category||'')).filter(Boolean));
+    const visibleSections=sections.filter(x=>usedCats.has(String(x.id)));
     $('#menuCount').textContent=menu.length+' позиций';
-    $('#chips').innerHTML='<button class="chip active" data-cat="all">Все</button>'+sections.map(x=>'<button class="chip" data-cat="'+esc(x.id)+'">'+esc((x.emoji?x.emoji+' ':'')+x.name)+'</button>').join('');
+    $('#chips').innerHTML='<button class="chip active" data-cat="all"><i>✦</i><span>Все</span></button>'+visibleSections.map(x=>'<button class="chip" data-cat="'+esc(x.id)+'"><i>'+esc(x.emoji||'•')+'</i><span>'+esc(x.name)+'</span></button>').join('');
+    if(ctx.marker.hero_image){
+      $('#menuSection')?.style.setProperty('--menu-atmosphere','url("'+String(ctx.marker.hero_image).replace(/["\\]/g,'')+'")');
+    }
     renderMenu();renderCart();
   }
 
   function renderMenu(){
     const all=(ctx?.venue?.menu||[]).filter(x=>x.active!==false);
-    const sections=Array.isArray(ctx?.venue?.sections)?ctx.venue.sections:[];
     const visible=all.filter(x=>category==='all'||String(x.c||x.category)===category);
+    const sections=Array.isArray(ctx?.venue?.sections)?ctx.venue.sections:[];
     const sectionById=new Map(sections.map(x=>[String(x.id),x]));
 
-    const card=(x,mode='standard')=>{
+    const kindFor=x=>{
+      const name=String(x.n||x.name||'').toLowerCase(),cat=String(x.c||x.category||'').toLowerCase();
+      if(/напит|cola|кола|компот|морс|сок|вода/.test(name+' '+cat))return 'drink';
+      if(/соус/.test(name+' '+cat))return 'sauce';
+      if(/леп|тарел|хлеб|лаваш/.test(name+' '+cat))return 'flatbread';
+      if(/самс|чебур|беляш|выпеч|бурек/.test(name+' '+cat))return 'pastry';
+      return 'shawarma';
+    };
+    const fallbackFor=x=>{
+      const kind=kindFor(x);
+      if(kind==='flatbread'||kind==='pastry')return 'assets/menu-flatbread.webp';
+      if(kind==='shawarma')return 'assets/menu-shawarma.webp';
+      return '';
+    };
+    const imageFor=x=>String(x.image||fallbackFor(x)||ctx?.marker?.hero_image||'');
+    const photo=(x,large=false)=>{
+      const src=imageFor(x),kind=kindFor(x);
+      return '<div class="foodPic '+(!x.image?'foodPicFallback ':'')+'kind-'+kind+'">'+
+        (src?'<img src="'+esc(src)+'" alt="" loading="'+(large?'eager':'lazy')+'" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
+        '<i></i></div>';
+    };
+    const badgeFor=x=>String(x.badge||x.tag||'').trim();
+    const card=(x,i)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
-      const badge=String(x.badge||x.tag||'').trim();
-      const modeClass=mode==='lead'?' foodCardLead':mode==='compact'?' foodCardCompact':'';
-      return '<article class="foodCard'+modeClass+'">'+
-        '<div class="foodPic">'+
-          (x.image?'<img src="'+esc(x.image)+'" alt="'+esc(name)+'" loading="lazy" onerror="this.remove()">':'<span>🥙</span>')+
-          (badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+
-          '<i></i></div>'+
+      const badge=badgeFor(x,i);
+      return '<article class="foodCard foodCardRef '+(i<2?'foodCardWide ':'')+'kind-'+kindFor(x)+'">'+
+        '<div class="foodVisual">'+photo(x,i<2)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3><button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div>'+
           '<p>'+esc(description)+'</p>'+
@@ -252,52 +275,41 @@
     };
 
     if(!visible.length){
+      $('#menuFeature').innerHTML='';
       $('#menuGrid').innerHTML='<div class="empty menuEmpty">В разделе пока нет позиций</div>';
       return;
     }
 
-    if(category!=='all'){
-      const meta=sectionById.get(String(category))||{};
-      const title=String(meta.name||'Выбранное');
-      const icon=String(meta.emoji||'✦');
-      $('#menuGrid').innerHTML=
-        '<section class="menuGroup menuGroupSingle">'+
-          '<div class="menuGroupHead"><div class="menuGroupTitle"><span>'+esc(icon)+'</span><div><h3>'+esc(title)+'</h3><small>'+visible.length+' позиций</small></div></div></div>'+
-          '<div class="menuGroupGrid">'+visible.map((x,i)=>card(x,i<2?'lead':'standard')).join('')+'</div>'+
-        '</section>';
-      return;
-    }
-
-    const grouped=[];
-    const used=new Set();
-    sections.forEach((s,index)=>{
-      const sid=String(s.id);
-      const items=visible.filter(x=>String(x.c||x.category)===sid);
-      if(!items.length)return;
-      items.forEach(x=>used.add(String(x.id)));
-      grouped.push({id:sid,name:String(s.name||'Раздел'),emoji:String(s.emoji||'✦'),items,index});
-    });
-    const extra=visible.filter(x=>!used.has(String(x.id)));
-    if(extra.length)grouped.push({id:'__other',name:sections.length?'Другое':'Меню',emoji:'✦',items:extra,index:grouped.length});
-
-    $('#menuGrid').innerHTML=grouped.map((g,gi)=>{
-      const lead=gi===0;
-      const layoutClass=lead?' menuGroupLead':' menuGroupCompact';
-      const action=g.id==='__other'?'':'<button class="menuSeeAll" data-section-cat="'+esc(g.id)+'">Смотреть все <span>→</span></button>';
-      const cards=g.items.map((x,i)=>card(x,lead&&i<4?'lead':'compact')).join('');
-      return '<section class="menuGroup'+layoutClass+'">'+
-        '<div class="menuGroupHead">'+
-          '<div class="menuGroupTitle"><span>'+esc(g.emoji)+'</span><div><h3>'+esc(g.name)+'</h3><small>'+g.items.length+' позиций</small></div></div>'+
-          action+
+    const feature=visible.find(x=>x.featured===true||String(x.badge||x.tag||'').trim())||visible[0];
+    const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=String(feature.d||feature.description||'');
+    const featureImage=imageFor(feature);
+    const featureKind=kindFor(feature);
+    $('#menuFeature').innerHTML=
+      '<article class="menuFeatureCard kind-'+featureKind+'">'+
+        '<div class="menuFeaturePhoto '+(!feature.image?'foodPicFallback':'')+'">'+
+          (featureImage?'<img src="'+esc(featureImage)+'" alt="" loading="eager" onerror="this.remove()">':'<div class="menuFeatureFallback"><b>SHAURMEG</b></div>')+
+          '<span class="menuFeatureShade"></span>'+
         '</div>'+
-        '<div class="menuGroupGrid">'+cards+'</div>'+
-      '</section>';
-    }).join('');
-  }
+        '<div class="menuFeatureCopy">'+
+          '<small>НАША ГОРДОСТЬ</small>'+
+          '<h3>'+esc(featureName)+'</h3>'+
+          '<p>'+esc(featureDesc)+'</p>'+
+          '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
+        '</div>'+
+        '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
+      '</article>';
 
+    let title='';
+    if(category!=='all'){
+      const meta=sectionById.get(String(category));
+      title=meta?'<div class="menuCategoryLabel"><span>'+esc(meta.emoji||'✦')+'</span><b>'+esc(meta.name||'Раздел')+'</b></div>':'';
+    }
+    $('#menuGrid').innerHTML=title+'<div class="referenceFoodGrid">'+visible.map(card).join('')+'</div>';
+  }
   function renderCart(){
     const {count,total}=cartStats();
     $('#cartCount').textContent=count;$('#cartTotal').textContent=money(total);$('#sheetTotal').textContent=money(total);
+    const summary=$('#cartSummary');if(summary)summary.textContent=count?(cart.slice(0,2).map(x=>x.n).join(', ')+(cart.length>2?'…':'')):'Ваш заказ';
     $('#cartItemsCount').textContent=count;$('#checkoutTotal').textContent=money(total);$('#placeOrderTotal').textContent=money(total);
     $('#cartBtn').classList.toggle('hidden',!count);
     $('#checkoutBtn').disabled=!count;$('#placeOrder').disabled=!count;
@@ -358,6 +370,7 @@
   }
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
+  $('#menuFeature').onclick=e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
     const section=e.target.closest('[data-section-cat]');
     if(section){

@@ -41,14 +41,21 @@
     </button>
   </section>
 
-  <section class="section menuSection">
+  <section class="section menuSection" id="menuSection">
     <div class="sectionHead"><div><small>МЕНЮ ЗАВЕДЕНИЯ</small><h2>Выбери своё</h2></div><small id="menuCount"></small></div>
+    <div class="menuFeature" id="menuFeature"></div>
     <div class="chips" id="chips"></div>
     <div class="menuGrid" id="menuGrid"></div>
   </section>
 </main>
 
-<button class="floatCart hidden" id="cartBtn"><span><span id="cartCount">0</span> · Корзина</span><b id="cartTotal">0 ₽</b></button>
+<button class="floatCart hidden" id="cartBtn">
+  <span class="cartLead">
+    <i class="cartIcon">⌑</i>
+    <span><strong><em id="cartCount">0</em> · Корзина</strong><small id="cartSummary">Ваш заказ</small></span>
+  </span>
+  <span class="cartCheckout"><b id="cartTotal">0 ₽</b><small>Оформить →</small></span>
+</button>
 <div class="sheetBackdrop" id="backdrop"></div>
 
 <section class="sheet orderSheet" id="cartSheet">

@@ -167,7 +167,7 @@
     };
     const raw=config.builder&&typeof config.builder==='object'?config.builder:{};
     const normalize=(key,base)=>Array.isArray(raw[key])?raw[key].map((x,i)=>({id:String(x.id||key+'_'+i),name:String(x.name||x.n||'Опция'),price:Number(x.price??x.price_delta??x.p)||0})):base.map(x=>({...x}));
-    const types=normalize('types',fallback.types),breads=normalize('breads',fallback.breads),meats=normalize('meats',fallback.meats),sauces=normalize('sauces',fallback.sauces),extras=normalize('extras',fallback.extras);
+    const rawTypes=normalize('types',fallback.types),types=rawTypes.length?rawTypes:fallback.types.map(x=>({...x})),breads=normalize('breads',fallback.breads),meats=normalize('meats',fallback.meats),sauces=normalize('sauces',fallback.sauces),extras=normalize('extras',fallback.extras);
     const maxSauces=sauces.length?(Number.isFinite(Number(raw.max_sauces))?Math.max(0,Math.min(sauces.length,Number(raw.max_sauces))):sauces.length):0;
     return {
       title:String(raw.title||fallback.title),subtitle:String(raw.subtitle||fallback.subtitle),

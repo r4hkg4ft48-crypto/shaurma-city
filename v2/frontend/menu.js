@@ -20,11 +20,47 @@
 
   function toast(v){const el=$('#toast');if(!el)return;el.textContent=v;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1800)}
   function themeKey(seed){let h=2166136261;for(const ch of String(seed||'shaurmeg')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return THEME_KEYS[Math.abs(h)%THEME_KEYS.length]}
+  function cleanHex(v,fallback='#D94343'){const s=String(v||'').trim().toUpperCase();return /^#[0-9A-F]{6}$/.test(s)?s:fallback}
+  function rgb(hex){const s=cleanHex(hex,'#000000').slice(1);return [parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)]}
+  function mixHex(a,b,t=.5){
+    const A=rgb(a),B=rgb(b),p=Math.max(0,Math.min(1,Number(t)||0));
+    return '#'+A.map((v,i)=>Math.round(v+(B[i]-v)*p).toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+  function rgba(hex,a=.25){const c=rgb(hex);return 'rgba('+c[0]+','+c[1]+','+c[2]+','+Math.max(0,Math.min(1,a))+')'}
+  function colorDistance(a,b){const A=rgb(a),B=rgb(b);return Math.sqrt((A[0]-B[0])**2+(A[1]-B[1])**2+(A[2]-B[2])**2)}
+  function luminance(hex){
+    const c=rgb(hex).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});
+    return .2126*c[0]+.7152*c[1]+.0722*c[2];
+  }
+  function contrastText(hex){return luminance(hex)>.46?'#142033':'#FFFFFF'}
+  function customTheme(config={}){
+    const key=THEMES[config.theme_key]?config.theme_key:themeKey(est),legacy=THEMES[key]||THEMES.cobalt;
+    if(!(config.theme&&typeof config.theme==='object'))return {primary:legacy.accent,secondary:legacy.hero,tone:'balanced',legacyKey:key};
+    let primary=cleanHex(config.theme.primary,legacy.accent),secondary=cleanHex(config.theme.secondary,legacy.hero);
+    if(colorDistance(primary,secondary)<58)secondary=colorDistance(primary,'#13233B')>=58?'#13233B':'#D94343';
+    return {primary,secondary,tone:['dark','light','balanced'].includes(config.theme.tone)?config.theme.tone:'balanced',legacyKey:key};
+  }
+  function derivedPalette(theme){
+    const primary=theme.primary,secondary=theme.secondary,tone=theme.tone;
+    let bg,panel,panel2,hero;
+    if(tone==='light'){
+      bg=mixHex(secondary,'#FFFFFF',.91);panel=mixHex(secondary,'#FFFFFF',.96);panel2=mixHex(secondary,'#FFFFFF',.86);
+      hero=mixHex(mixHex(secondary,primary,.26),'#101721',.58);
+    }else if(tone==='dark'){
+      bg=mixHex(secondary,'#070A10',.72);panel=mixHex(bg,'#FFFFFF',.055);panel2=mixHex(bg,'#FFFFFF',.105);
+      hero=mixHex(mixHex(secondary,primary,.18),'#080B11',.42);
+    }else{
+      bg=mixHex(secondary,'#090C13',.66);panel=mixHex(bg,'#FFFFFF',.06);panel2=mixHex(bg,'#FFFFFF',.11);
+      hero=mixHex(mixHex(secondary,primary,.22),'#090D14',.3);
+    }
+    return {accent:primary,accent2:mixHex(primary,'#FFFFFF',.82),bg,panel,panel2,hero,glow:rgba(primary,.27),ink:contrastText(primary),primary,secondary};
+  }
   function applyTheme(config={}){
-    const key=THEMES[config.theme_key]?config.theme_key:themeKey(est);
-    const t=THEMES[key],root=document.documentElement;
-    document.body.dataset.theme=key;
+    const theme=customTheme(config),t=derivedPalette(theme),root=document.documentElement;
+    document.body.dataset.theme=theme.legacyKey||'custom';document.body.dataset.tone=theme.tone;
     for(const [k,v] of Object.entries(t))root.style.setProperty('--venue-'+k,v);
+    root.style.setProperty('--venue-secondary',theme.secondary);
+    root.style.setProperty('--venue-primary',theme.primary);
     root.style.setProperty('--accent',t.accent);root.style.setProperty('--accent2',t.accent2);
     const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=t.bg;
     try{tg?.setHeaderColor?.(t.bg);tg?.setBackgroundColor?.(t.bg)}catch{}

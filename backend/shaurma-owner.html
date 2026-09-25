@@ -21,6 +21,41 @@
 .orderScopeLabel{display:inline-flex;margin-top:7px;padding:6px 8px;border:1px solid rgba(121,156,255,.22);border-radius:10px;color:#b7c8ff;font:800 10px/1 ui-monospace,SFMono-Regular,monospace}
 @media(max-width:650px){.orderControlPanel{grid-template-columns:1fr}.customDates{grid-template-columns:1fr 1fr}.lifeStats{grid-template-columns:1fr 1fr}.analyticsGrid{grid-template-columns:1fr}.analyticsRow{grid-template-columns:minmax(0,1fr) auto}.analyticsRow em{grid-column:2}}
 </style>
+<style>
+/* ===== Structured superadmin menu editor ===== */
+.menuEditorShell{display:grid;gap:12px}
+.menuEditorHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;padding:18px;border:1px solid var(--l);border-radius:24px;background:linear-gradient(150deg,#131d2a,#0c131d)}
+.menuEditorHeader h1{margin:4px 0 7px;font-size:34px;line-height:.96}.menuEditorHeader p{margin:0;color:var(--m);max-width:58ch}
+.menuVenueChooser{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;min-width:min(100%,420px)}.menuVenueChooser select{min-width:0}
+.menuBlock{padding:15px;border:1px solid var(--l);border-radius:22px;background:linear-gradient(180deg,rgba(18,27,39,.96),rgba(10,17,25,.98));overflow:hidden}
+.menuBlockHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:13px}.menuBlockHeadText{min-width:0}.menuStep{display:block;color:#789bff;font-size:9px;font-weight:950;letter-spacing:.16em;margin-bottom:3px}.menuBlockHead h3{margin:0;font-size:21px;letter-spacing:-.025em}.menuBlockHead p{margin:4px 0 0;color:var(--m);font-size:11px;max-width:64ch}
+.menuBlockActions{display:flex;gap:7px;flex-wrap:wrap}.menuPrimary,.menuSecondary,.menuDanger{min-height:42px;border-radius:12px;padding:0 13px;font-weight:850;border:1px solid var(--l)}.menuPrimary{border:0;background:linear-gradient(135deg,#477fff,#2456c8)}.menuSecondary{background:rgba(255,255,255,.045)}.menuDanger{background:rgba(255,107,120,.07);border-color:rgba(255,107,120,.16);color:#ffabb4}
+.menuGeneralGrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(130px,.7fr);gap:10px}.menuLabel{display:grid;gap:6px;min-width:0;color:var(--m);font-size:10px;font-weight:850}.menuLabel span{letter-spacing:.05em}.menuLabel input,.menuLabel select,.menuLabel textarea{width:100%;min-width:0;min-height:45px;border:1px solid var(--l);border-radius:13px;background:#0b141e;padding:10px 11px;outline:none}.menuLabel textarea{min-height:88px;resize:vertical}
+.sectionGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.sectionCard{min-width:0;padding:11px;border:1px solid var(--l);border-radius:17px;background:rgba(255,255,255,.022)}.sectionCardTop{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px}.sectionMeta{min-width:0}.sectionMeta b{display:block;font-size:12px}.sectionMeta code{display:block;margin-top:2px;color:#8398ad;font:750 9px/1.2 ui-monospace,SFMono-Regular,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sectionActions{display:flex;gap:5px;flex:0 0 auto}.sectionActions button{width:32px;height:32px;min-height:32px;padding:0;border-radius:9px;border:1px solid var(--l);background:rgba(255,255,255,.045)}.sectionActions button:disabled{opacity:.3}.sectionActions .del{color:#ffabb4;background:rgba(255,107,120,.07)}
+.sectionFields{display:grid;grid-template-columns:66px minmax(0,1fr);gap:7px}.sectionFields input{min-width:0;min-height:41px;border:1px solid var(--l);border-radius:11px;background:#0b141e;padding:8px 9px}
+.sectionAddCard{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:7px;margin-top:9px;padding:9px;border:1px dashed rgba(121,156,255,.22);border-radius:15px}.sectionAddCard input{min-width:0;min-height:42px;border:1px solid var(--l);border-radius:11px;background:#0b141e;padding:8px 9px}.sectionAddCard button{white-space:nowrap}
+.menuItemsGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.menuItemCard{min-width:0;border:1px solid var(--l);border-radius:20px;background:linear-gradient(155deg,#121d29,#0c151f);overflow:hidden}.menuItemTop{display:flex;align-items:center;justify-content:space-between;gap:9px;padding:10px 11px;border-bottom:1px solid var(--l)}.menuItemIndex{display:flex;align-items:center;gap:8px;min-width:0}.menuItemIndex span{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:rgba(121,156,255,.1);color:#a8bdff;font-size:10px;font-weight:900}.menuItemIndex b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.menuItemActions{display:flex;gap:5px}.menuItemActions button{width:32px;height:32px;min-height:32px;padding:0;border:1px solid var(--l);border-radius:9px;background:rgba(255,255,255,.045)}.menuItemActions button:disabled{opacity:.3}.menuItemActions .delete{color:#ffabb4;background:rgba(255,107,120,.07)}
+.menuItemBody{display:grid;grid-template-columns:145px minmax(0,1fr);gap:11px;padding:11px}.menuItemPhoto{position:relative;min-height:172px;border:1px dashed rgba(255,255,255,.14);border-radius:16px;background:radial-gradient(circle at 50% 35%,rgba(121,156,255,.12),transparent 55%),#0a131c;overflow:hidden}.menuItemPhoto img{width:100%;height:100%;min-height:172px;object-fit:cover;display:block}.menuPhotoPlaceholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:12px;color:var(--m)}.menuPhotoPlaceholder b{display:block;color:#dce8f7;font-size:24px}.menuPhotoPlaceholder small{display:block;margin-top:4px;font-size:9px}.menuItemPhoto input{position:absolute;inset:0;opacity:0;cursor:pointer}.menuPhotoTools{position:absolute;left:7px;right:7px;bottom:7px;z-index:2;display:flex;gap:5px}.menuPhotoTools button{flex:1;min-height:34px;padding:0 7px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(5,10,16,.82);backdrop-filter:blur(8px);font-size:9px}.menuPhotoTools .removePhoto{flex:0 0 34px;color:#ffadb5}
+.menuItemFields{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:8px}.menuItemFields .wide{grid-column:1/-1}.menuItemFields textarea{min-height:76px}.menuItemOptions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:7px}.menuChecks{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}.menuCheck{display:flex;align-items:center;gap:7px;min-height:38px;padding:7px 9px;border:1px solid var(--l);border-radius:11px;background:rgba(255,255,255,.025);color:#b7c3d1;font-size:10px}.menuCheck input{width:18px;height:18px;margin:0}
+.menuEmpty{grid-column:1/-1;padding:28px 15px;text-align:center;border:1px dashed var(--l);border-radius:18px;color:var(--m)}
+.builderAdminBox{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--l);border-radius:16px;background:rgba(255,255,255,.022)}.builderAdminText b{display:block}.builderAdminText small{display:block;color:var(--m);margin-top:3px}.builderControl{display:flex;align-items:center;gap:9px}.builderControl label{display:flex;align-items:center;gap:7px;color:#d7e2ef;font-size:11px}.builderControl input{width:19px;height:19px}
+.menuSaveBar{position:sticky;bottom:calc(env(safe-area-inset-bottom) + 8px);z-index:8;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 11px;border:1px solid rgba(121,156,255,.18);border-radius:17px;background:rgba(10,16,24,.9);backdrop-filter:blur(18px);box-shadow:0 16px 40px rgba(0,0,0,.35)}.menuSaveBar small{color:var(--m);font-size:9px}.menuSaveBar button{min-width:160px}
+@media(max-width:760px){
+ .menuEditorHeader{align-items:stretch;flex-direction:column}.menuVenueChooser{min-width:0;width:100%;grid-template-columns:minmax(0,1fr) auto}
+ .menuGeneralGrid,.sectionGrid,.menuItemsGrid{grid-template-columns:1fr}
+ .menuItemBody{grid-template-columns:118px minmax(0,1fr)}.menuItemPhoto,.menuItemPhoto img{min-height:154px}
+ .builderAdminBox{grid-template-columns:1fr}.builderControl{justify-content:space-between}
+}
+@media(max-width:480px){
+ .menuEditorHeader{padding:14px}.menuEditorHeader h1{font-size:30px}.menuBlock{padding:12px;border-radius:19px}.menuBlockHead{flex-direction:column}.menuBlockActions{width:100%}.menuBlockActions button{flex:1}
+ .menuVenueChooser{grid-template-columns:1fr}.menuVenueChooser button{width:100%}
+ .menuGeneralGrid{grid-template-columns:1fr}
+ .sectionAddCard{grid-template-columns:62px minmax(0,1fr)}.sectionAddCard button{grid-column:1/-1;width:100%}
+ .menuItemBody{grid-template-columns:1fr}.menuItemPhoto,.menuItemPhoto img{height:190px;min-height:190px}
+ .menuItemFields{grid-template-columns:minmax(0,1fr) 92px}.menuItemOptions{grid-template-columns:1fr}
+ .menuSaveBar{align-items:stretch;flex-direction:column}.menuSaveBar button{width:100%}
+}
+</style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -65,7 +100,65 @@
 </section>
 
 <section class="adminPane" id="menuPane">
-<section class="menuAdmin"><div class="menuHead"><div><small style="color:#799cff;font-weight:900;letter-spacing:.12em">ОТДЕЛЬНЫЙ РАЗДЕЛ</small><h2>Настройка меню</h2><p class="sub" style="margin:5px 0 0">Каждое заведение связано со своим постоянным ID. Все изменения применяются только к выбранному ID.</p><div id="editingEstablishmentId" style="margin-top:8px;display:inline-flex;padding:6px 8px;border:1px solid rgba(121,156,255,.22);border-radius:10px;color:#b7c8ff;font:800 10px/1 ui-monospace,SFMono-Regular,monospace">ID: —</div></div><div class="menuControls"><select id="venueSelect" aria-label="Выбрать заведение"></select><button id="reloadVenue">Обновить</button></div></div><div class="venueSettings"><label>Подпись Mini App<input class="menuField" id="venueSubtitle" maxlength="60" placeholder="МЕНЮ И ЗАКАЗ"></label><label>Акцентный цвет<input class="menuField" id="venueAccent" type="color" value="#2f6df6"></label><label class="builderToggle"><input id="venueBuilder" type="checkbox"> Показывать конструктор</label></div><div class="menuSectionBox"><div class="menuSectionHead"><div><b>Разделы / виды блюд</b><small>Свои категории для каждого заведения: шаурма, комбо, завтраки, десерты и т.д.</small></div></div><div class="menuSectionRows" id="menuSectionRows"></div><div class="menuSectionAdd"><input class="menuField" id="newMenuSectionEmoji" maxlength="8" placeholder="🍔"><input class="menuField" id="newMenuSectionName" maxlength="80" placeholder="Название раздела"><button id="addMenuSection">+ Раздел</button></div></div><div class="menuRows" id="menuRows"></div><div class="menuFoot"><button id="addMenuItem">+ Добавить позицию</button><button class="saveMenu" id="saveMenu">Сохранить меню и вид</button></div></section>
+  <div class="menuEditorShell">
+    <section class="menuEditorHeader">
+      <div>
+        <small class="menuStep">SUPERADMIN · КОНКРЕТНОЕ ЗАВЕДЕНИЕ</small>
+        <h1>Настройка меню</h1>
+        <p>Все изменения ниже применяются только к выбранному заведению. Фото, позиции, разделы и конструктор не затрагивают другие точки.</p>
+        <div id="editingEstablishmentId" class="orderScopeLabel">ID: —</div>
+      </div>
+      <div class="menuVenueChooser">
+        <select class="menuField" id="venueSelect" aria-label="Выбрать заведение"></select>
+        <button class="menuSecondary" id="reloadVenue" type="button">Обновить</button>
+      </div>
+    </section>
+
+    <section class="menuBlock">
+      <div class="menuBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">01 · ОБЩИЕ НАСТРОЙКИ</small><h3>Вид меню этой точки</h3><p>Основная подпись и акцентный цвет Mini App выбранного заведения.</p></div>
+      </div>
+      <div class="menuGeneralGrid">
+        <label class="menuLabel"><span>Подпись Mini App</span><input id="venueSubtitle" maxlength="60" placeholder="МЕНЮ И ЗАКАЗ"></label>
+        <label class="menuLabel"><span>Акцентный цвет</span><input id="venueAccent" type="color" value="#2f6df6"></label>
+      </div>
+    </section>
+
+    <section class="menuBlock">
+      <div class="menuBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">02 · РАЗДЕЛЫ</small><h3>Категории меню</h3><p>Каждая категория — отдельная карточка. Порядок сверху вниз соответствует порядку категорий в Mini App.</p></div>
+      </div>
+      <div class="sectionGrid" id="menuSectionRows"></div>
+      <div class="sectionAddCard">
+        <input id="newMenuSectionEmoji" maxlength="8" placeholder="🥙" aria-label="Emoji раздела">
+        <input id="newMenuSectionName" maxlength="80" placeholder="Название нового раздела" aria-label="Название раздела">
+        <button class="menuSecondary" id="addMenuSection" type="button">+ Добавить раздел</button>
+      </div>
+    </section>
+
+    <section class="menuBlock">
+      <div class="menuBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">03 · ПОЗИЦИИ И ФОТОГРАФИИ</small><h3>Блюда выбранного заведения</h3><p>Фото, название, цена, раздел и описание сохраняются только для текущего ID. Каждая позиция визуально отделена от остальных.</p></div>
+        <div class="menuBlockActions"><button class="menuPrimary" id="addMenuItem" type="button">＋ Добавить позицию</button></div>
+      </div>
+      <div class="menuItemsGrid" id="menuRows"></div>
+    </section>
+
+    <section class="menuBlock">
+      <div class="menuBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">04 · КОНСТРУКТОР</small><h3>«Собери свою шаурму»</h3><p>Быстро включить или выключить конструктор. Детальный состав и финальную фотографию можно открыть в расширенном редакторе конкретного заведения.</p></div>
+      </div>
+      <div class="builderAdminBox">
+        <div class="builderAdminText"><b>Конструктор для этой точки</b><small id="builderAdminHint">Состояние сохраняется вместе с меню.</small></div>
+        <div class="builderControl"><label><input id="venueBuilder" type="checkbox"> Показывать</label><button class="menuSecondary" id="openBuilderAdvanced" type="button">Расширенные настройки</button></div>
+      </div>
+    </section>
+
+    <div class="menuSaveBar">
+      <div><b>Изменения только для выбранной точки</b><small id="menuSaveHint">Проверьте фото, цены и разделы перед сохранением.</small></div>
+      <button class="menuPrimary" id="saveMenu" type="button">Сохранить меню и вид</button>
+    </div>
+  </div>
 </section>
 </div>
 <div class="login" id="login"><div class="loginCard"><div style="color:#799cff;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:900">Shaurma City</div><h2>Кабинет владельца</h2><p>Введите пароль владельца, чтобы открыть живую ленту заказов.</p><input id="password" type="password" placeholder="Пароль" autocomplete="current-password"><button id="loginBtn">Войти</button><div class="err" id="err"></div></div></div>
@@ -113,11 +206,78 @@ async function loadVenues(){
 }
 async function openVenue(id){editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);$('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');$('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';$('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;$('#saveMenu').disabled=false;renderMenuSections();renderMenuEditor()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function compressMenuPhoto(file,maxW=560,maxH=560,q=.68){
+ return new Promise((resolve,reject)=>{
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{
+   let w=img.width,h=img.height,k=Math.min(1,maxW/w,maxH/h);w=Math.max(1,Math.round(w*k));h=Math.max(1,Math.round(h*k));
+   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+   const ctx=canvas.getContext('2d');ctx.fillStyle='#101820';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+   URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',q));
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image_read_failed'))};img.src=url;
+ });
+}
 function slugMenuSection(v){let s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');return (s||('section_'+Date.now().toString(36))).slice(0,48)}
 function normalizeMenuSections(input,items=[]){const legacy={shawarma:['Шаурма','🥙'],flatbread:['Лепёшка / тарелка','🫓'],sauces:['Соусы','🥫'],extras:['Допы','🍟'],drinks:['Напитки','🥤'],bakery:['Выпечка','🥐']},raw=Array.isArray(input)?input:[],out=[],seen=new Set();raw.forEach((x,i)=>{if(!x||typeof x!=='object')return;const id=slugMenuSection(x.id||x.name||('section_'+i));if(seen.has(id))return;seen.add(id);out.push({id,name:String(x.name||x.title||id).trim().slice(0,80),emoji:String(x.emoji||'').trim().slice(0,8),active:x.active!==false})});[...new Set(items.map(x=>String(x.c||x.category||'').trim()).filter(Boolean))].forEach(rawId=>{const id=slugMenuSection(rawId);if(seen.has(id))return;seen.add(id);const v=legacy[id]||[rawId,''];out.push({id,name:v[0],emoji:v[1],active:true})});if(!out.length)Object.entries(legacy).forEach(([id,v])=>out.push({id,name:v[0],emoji:v[1],active:true}));return out}
-function renderMenuSections(){$('#menuSectionRows').innerHTML=menuSectionsDraft.map((s,i)=>`<div class="menuSectionRow" data-menu-section-i="${i}"><input class="menuField" data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🍔"><input class="menuField" data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}"><span class="menuSectionId">${escapeHtml(s.id)}</span><button data-section-up="${i}" ${i===0?'disabled':''}>↑</button><button data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''}>↓</button><button class="del" data-section-remove="${i}">×</button></div>`).join('')}
-function renderMenuEditor(){const sections=menuSectionsDraft.filter(s=>s.active!==false);$('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>`<div class="menuRow" data-index="${i}"><input class="menuField" data-field="n" value="${escapeHtml(x.n||x.name||'')}" placeholder="Название"><select class="menuField" data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select><input class="menuField" data-field="d" value="${escapeHtml(x.d||x.description||'')}" placeholder="Описание"><input class="menuField" data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="Цена"><button class="removeItem" data-remove-item="${i}" aria-label="Удалить">×</button></div>`).join(''):'<div class="empty">В меню пока нет позиций</div>'}
-async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,menu_sections:menuSectionsDraft};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await openVenue(venueId);toast('Сохранено для '+establishmentId)}catch(e){toast('Не удалось сохранить меню')}finally{button.disabled=false}}
+function renderMenuSections(){
+ const host=$('#menuSectionRows');
+ host.innerHTML=menuSectionsDraft.length?menuSectionsDraft.map((s,i)=>`
+  <article class="sectionCard" data-menu-section-i="${i}">
+   <div class="sectionCardTop">
+    <div class="sectionMeta"><b>Раздел ${i+1}</b><code>${escapeHtml(s.id)}</code></div>
+    <div class="sectionActions">
+     <button type="button" data-section-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
+     <button type="button" data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
+     <button class="del" type="button" data-section-remove="${i}" aria-label="Удалить">×</button>
+    </div>
+   </div>
+   <div class="sectionFields">
+    <input data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🥙" aria-label="Emoji">
+    <input data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}" placeholder="Название раздела" aria-label="Название раздела">
+   </div>
+  </article>`).join(''):'<div class="menuEmpty">Разделов пока нет. Добавьте первый раздел ниже.</div>';
+}
+function renderMenuEditor(){
+ const sections=menuSectionsDraft.filter(s=>s.active!==false);
+ $('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>{
+  const name=x.n||x.name||'Новая позиция',image=String(x.image||x.i||''),active=x.active!==false;
+  return `
+  <article class="menuItemCard" data-index="${i}">
+   <div class="menuItemTop">
+    <div class="menuItemIndex"><span>${i+1}</span><b>${escapeHtml(name)}</b></div>
+    <div class="menuItemActions">
+     <button type="button" data-item-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
+     <button type="button" data-item-down="${i}" ${i===menuDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
+     <button class="delete" type="button" data-remove-item="${i}" aria-label="Удалить">×</button>
+    </div>
+   </div>
+   <div class="menuItemBody">
+    <div class="menuItemPhoto">
+     ${image?'<img src="'+escapeHtml(image)+'" alt="">':'<div class="menuPhotoPlaceholder"><div><b>＋</b><small>ФОТО БЛЮДА</small></div></div>'}
+     <input type="file" accept="image/*" data-menu-photo="${i}" aria-label="Выбрать фото блюда">
+     <div class="menuPhotoTools"><button type="button" data-choose-photo="${i}">${image?'Заменить фото':'Выбрать фото'}</button>${image?'<button class="removePhoto" type="button" data-remove-photo="'+i+'" aria-label="Удалить фото">×</button>':''}</div>
+    </div>
+    <div class="menuItemFields">
+     <label class="menuLabel"><span>Название</span><input data-field="n" value="${escapeHtml(name)}" placeholder="Название блюда"></label>
+     <label class="menuLabel"><span>Цена, ₽</span><input data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="0"></label>
+     <label class="menuLabel wide"><span>Раздел</span><select data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select></label>
+     <label class="menuLabel wide"><span>Описание</span><textarea data-field="d" placeholder="Состав, особенности, вес…">${escapeHtml(x.d||x.description||'')}</textarea></label>
+     <div class="menuItemOptions">
+      <label class="menuLabel"><span>Вид карточки</span><select data-field="display"><option value="auto" ${(x.display||'auto')==='auto'?'selected':''}>Авто</option><option value="main" ${x.display==='main'?'selected':''}>Крупная</option><option value="compact" ${x.display==='compact'?'selected':''}>Компактная</option></select></label>
+      <label class="menuLabel"><span>Фото</span><select data-field="image_fit"><option value="cover" ${(x.image_fit||'cover')==='cover'?'selected':''}>Заполнять</option><option value="contain" ${x.image_fit==='contain'?'selected':''}>Показывать целиком</option></select></label>
+     </div>
+     <label class="menuLabel wide"><span>Бейдж</span><input data-field="badge" maxlength="40" value="${escapeHtml(x.badge||x.tag||'')}" placeholder="Например: Популярное"></label>
+     <div class="menuChecks">
+      <label class="menuCheck"><input type="checkbox" data-field="active" ${active?'checked':''}> Показывать</label>
+      <label class="menuCheck"><input type="checkbox" data-field="featured" ${x.featured===true?'checked':''}> Главная / Hero</label>
+     </div>
+    </div>
+   </div>
+  </article>`;
+ }).join(''):'<div class="menuEmpty">В меню пока нет позиций. Нажмите «Добавить позицию».</div>';
+}
+async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Сохраняю изменения…';try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,menu_sections:menuSectionsDraft};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await openVenue(venueId);$('#menuSaveHint').textContent='Сохранено для '+establishmentId;toast('Меню сохранено ✓')}catch(e){$('#menuSaveHint').textContent='Не удалось сохранить. Проверьте данные и фото.';toast('Не удалось сохранить меню')}finally{button.disabled=false}}
 function fmtMoney(v){return Math.round(Number(v)||0).toLocaleString('ru-RU')+' ₽'}
 function fmtDate(v,short=false){if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('ru-RU',short?{day:'2-digit',month:'2-digit',year:'2-digit'}:{day:'2-digit',month:'2-digit',year:'numeric'})}
 function updateOrderScope(){
@@ -144,10 +304,29 @@ function render(){const list=orders;$('#orders').innerHTML=list.length?list.map(
 document.addEventListener('click',async e=>{const tab=e.target.closest('[data-admin-tab]');if(tab){qa('[data-admin-tab]').forEach(x=>x.classList.toggle('active',x===tab));$('#ordersPane').classList.toggle('active',tab.dataset.adminTab==='orders');$('#menuPane').classList.toggle('active',tab.dataset.adminTab==='menu');if(tab.dataset.adminTab==='orders'){load(true).catch(()=>toast('Не удалось обновить заказы'));stats().catch(()=>toast('Не удалось загрузить аналитику'))};if(tab.dataset.adminTab==='menu'&&!editingVenue)loadVenues().catch(()=>toast('Не удалось загрузить меню'));return}const b=e.target.closest('[data-status]');if(b){b.disabled=true;try{await api('/api/shaurma/orders/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await load()}catch{toast('Не удалось изменить статус')}finally{b.disabled=false}}const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;qa('.filter').forEach(x=>x.classList.toggle('active',x===f));load(true).catch(()=>toast('Не удалось загрузить заказы'))}});
 $('#venueSelect').addEventListener('change',e=>openVenue(e.target.value));
 $('#reloadVenue').onclick=()=>openVenue($('#venueSelect').value);
-$('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0});renderMenuEditor()};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
+$('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft.find(s=>s.active!==false)||menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0,image:'',active:true,display:'auto',image_fit:'cover',badge:'',featured:false});renderMenuEditor();setTimeout(()=>$('#menuRows .menuItemCard:last-child')?.scrollIntoView({behavior:'smooth',block:'center'}),30)};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
 $('#saveMenu').onclick=saveVenueMenu;
-$('#menuRows').addEventListener('input',e=>{const row=e.target.closest('[data-index]');if(!row||!e.target.dataset.field)return;const item=menuDraft[Number(row.dataset.index)];if(!item)return;const field=e.target.dataset.field;item[field]=field==='p'?Math.max(0,Number(e.target.value)||0):e.target.value});
-$('#menuRows').addEventListener('click',e=>{const button=e.target.closest('[data-remove-item]');if(!button)return;menuDraft.splice(Number(button.dataset.removeItem),1);renderMenuEditor()});$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const s=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!s)return;s[field]=e.target.value.slice(0,field==='emoji'?8:80);renderMenuEditor()});
+$('#openBuilderAdvanced').onclick=()=>{const est=editingVenue?.establishment_id;if(!est)return toast('Сначала выберите заведение');if(!FROM_MASTER)return toast('Расширенный редактор откройте через Master Admin');location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab=site&from=master&v=5'};
+function updateMenuField(target){
+ const row=target.closest('[data-index]');if(!row||!target.dataset.field)return;
+ const item=menuDraft[Number(row.dataset.index)],field=target.dataset.field;if(!item)return;
+ item[field]=field==='p'?Math.max(0,Number(target.value)||0):(['active','featured'].includes(field)?target.checked:target.value);
+ if(field==='n')row.querySelector('.menuItemIndex b').textContent=target.value||'Новая позиция';
+}
+$('#menuRows').addEventListener('input',e=>updateMenuField(e.target));
+$('#menuRows').addEventListener('change',async e=>{
+ updateMenuField(e.target);
+ const fileInput=e.target.closest('[data-menu-photo]');if(!fileInput)return;
+ const i=Number(fileInput.dataset.menuPhoto),file=fileInput.files?.[0];if(!file||!menuDraft[i])return;
+ try{toast('Обрабатываю фото…');menuDraft[i].image=await compressMenuPhoto(file);renderMenuEditor();toast('Фото добавлено')}catch{toast('Не удалось обработать фото')}
+});
+$('#menuRows').addEventListener('click',e=>{
+ const choose=e.target.closest('[data-choose-photo]');if(choose){const input=$('#menuRows [data-menu-photo="'+choose.dataset.choosePhoto+'"]');input?.click();return}
+ const removePhoto=e.target.closest('[data-remove-photo]');if(removePhoto){const i=Number(removePhoto.dataset.removePhoto);if(menuDraft[i])menuDraft[i].image='';renderMenuEditor();return}
+ const up=e.target.closest('[data-item-up]');if(up){const i=Number(up.dataset.itemUp);if(i>0)[menuDraft[i-1],menuDraft[i]]=[menuDraft[i],menuDraft[i-1]];renderMenuEditor();return}
+ const down=e.target.closest('[data-item-down]');if(down){const i=Number(down.dataset.itemDown);if(i<menuDraft.length-1)[menuDraft[i+1],menuDraft[i]]=[menuDraft[i],menuDraft[i+1]];renderMenuEditor();return}
+ const button=e.target.closest('[data-remove-item]');if(button){const i=Number(button.dataset.removeItem);if(confirm('Удалить позицию «'+String(menuDraft[i]?.n||menuDraft[i]?.name||'')+'»?')){menuDraft.splice(i,1);renderMenuEditor()}return}
+});$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const s=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!s)return;s[field]=e.target.value.slice(0,field==='emoji'?8:80);renderMenuEditor()});
 $('#menuSectionRows').addEventListener('click',e=>{const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-remove]');if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSectionsDraft[i-1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i-1]];renderMenuSections();renderMenuEditor();return}if(down){const i=Number(down.dataset.sectionDown);if(i<menuSectionsDraft.length-1)[menuSectionsDraft[i+1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i+1]];renderMenuSections();renderMenuEditor();return}if(rm){const i=Number(rm.dataset.sectionRemove),s=menuSectionsDraft[i];if(!s)return;if(menuDraft.some(x=>String(x.c||x.category)===s.id))return toast('Сначала перенесите блюда из раздела');menuSectionsDraft.splice(i,1);renderMenuSections();renderMenuEditor()}});
 
 async function telegramAdminLogin(){

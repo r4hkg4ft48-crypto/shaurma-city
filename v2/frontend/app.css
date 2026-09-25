@@ -2008,3 +2008,437 @@ body.sheetOpen .sheetBackdrop.show{
   overscroll-behavior-y:contain;
   -webkit-overflow-scrolling:touch;
 }
+
+
+/* ===== Venue menu editorial mosaic — lower section only ===== */
+body.venuePage .menuSection{
+  position:relative;
+  isolation:isolate;
+  margin-top:30px;
+  padding:18px 0 6px;
+  scroll-margin-top:calc(var(--safe-t) + 72px)
+}
+body.venuePage .menuSection:before{
+  content:"";
+  position:absolute;
+  z-index:-2;
+  inset:-28px -14px -70px;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 9% 8%,color-mix(in srgb,var(--venue-accent) 13%,transparent),transparent 25%),
+    radial-gradient(ellipse at 94% 18%,color-mix(in srgb,var(--venue-secondary) 28%,transparent),transparent 23%),
+    radial-gradient(ellipse at 52% 52%,rgba(255,255,255,.026),transparent 31%),
+    linear-gradient(115deg,transparent 0 12%,rgba(255,255,255,.018) 12.5% 13%,transparent 13.5% 42%,rgba(255,255,255,.012) 42.5% 43%,transparent 43.5%),
+    linear-gradient(180deg,color-mix(in srgb,var(--venue-panel) 15%,transparent),transparent 28%,color-mix(in srgb,var(--venue-panel2) 22%,transparent) 78%,transparent);
+  opacity:.96
+}
+body.venuePage .menuSection:after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  left:4%;
+  right:4%;
+  top:72px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--venue-accent) 30%,transparent),transparent);
+  box-shadow:0 90px 80px color-mix(in srgb,var(--venue-glow) 28%,transparent)
+}
+body.venuePage .menuSection .sectionHead{
+  align-items:flex-end;
+  margin:0 2px 15px
+}
+body.venuePage .menuSection .sectionHead h2{
+  font-size:30px;
+  line-height:.96;
+  letter-spacing:-.052em
+}
+body.venuePage .menuSection .sectionHead>div>small{
+  display:block;
+  margin-bottom:5px;
+  font-size:8.5px;
+  letter-spacing:.18em;
+  opacity:.86
+}
+body.venuePage .menuSection #menuCount{
+  padding:7px 9px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--venue-panel2) 68%,transparent);
+  border:1px solid rgba(255,255,255,.07);
+  color:rgba(255,255,255,.5);
+  font-size:9px;
+  font-weight:800;
+  backdrop-filter:blur(12px)
+}
+body.venuePage .menuSection .chips{
+  position:relative;
+  z-index:3;
+  gap:7px;
+  margin:0 -2px 12px;
+  padding:2px 2px 10px;
+  scroll-snap-type:x proximity
+}
+body.venuePage .menuSection .chip{
+  flex:0 0 auto;
+  min-height:42px;
+  padding:0 14px;
+  border-radius:15px;
+  scroll-snap-align:start;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.046),rgba(255,255,255,.018)),
+    color-mix(in srgb,var(--venue-panel2) 78%,transparent);
+  border-color:color-mix(in srgb,var(--venue-accent) 10%,rgba(255,255,255,.075));
+  color:rgba(255,255,255,.66);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 7px 20px rgba(0,0,0,.09);
+  backdrop-filter:blur(14px)
+}
+body.venuePage .menuSection .chip.active{
+  color:var(--venue-ink);
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  border-color:color-mix(in srgb,var(--venue-accent) 72%,#fff 12%);
+  box-shadow:0 9px 26px color-mix(in srgb,var(--venue-glow) 82%,transparent),inset 0 1px 0 rgba(255,255,255,.35)
+}
+
+body.venuePage .menuGrid{
+  display:block;
+  min-width:0
+}
+body.venuePage .menuGroup{
+  position:relative;
+  margin:0 0 22px;
+  padding:14px;
+  overflow:hidden;
+  border-radius:25px;
+  border:1px solid color-mix(in srgb,var(--venue-accent) 9%,rgba(255,255,255,.065));
+  background:
+    radial-gradient(circle at 100% 0,color-mix(in srgb,var(--venue-accent) 7%,transparent),transparent 28%),
+    linear-gradient(150deg,color-mix(in srgb,var(--venue-panel2) 87%,transparent),color-mix(in srgb,var(--venue-panel) 91%,transparent));
+  box-shadow:0 20px 52px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);
+  backdrop-filter:blur(16px)
+}
+body.venuePage .menuGroup:after{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+  width:150px;
+  height:150px;
+  border-radius:50%;
+  right:-84px;
+  bottom:-92px;
+  border:1px solid color-mix(in srgb,var(--venue-accent) 9%,transparent);
+  box-shadow:0 0 0 24px color-mix(in srgb,var(--venue-accent) 2.5%,transparent),0 0 0 50px color-mix(in srgb,var(--venue-accent) 1.5%,transparent)
+}
+body.venuePage .menuGroupLead{
+  background:
+    radial-gradient(circle at 88% 2%,color-mix(in srgb,var(--venue-accent) 11%,transparent),transparent 27%),
+    radial-gradient(circle at 6% 96%,color-mix(in srgb,var(--venue-secondary) 18%,transparent),transparent 26%),
+    linear-gradient(145deg,color-mix(in srgb,var(--venue-panel2) 91%,transparent),color-mix(in srgb,var(--venue-panel) 94%,transparent))
+}
+body.venuePage .menuGroupHead{
+  position:relative;
+  z-index:2;
+  min-height:44px;
+  margin:0 1px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px
+}
+body.venuePage .menuGroupTitle{
+  display:flex;
+  min-width:0;
+  align-items:center;
+  gap:10px
+}
+body.venuePage .menuGroupTitle>span{
+  flex:0 0 auto;
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:13px;
+  color:var(--venue-ink);
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  box-shadow:0 8px 23px color-mix(in srgb,var(--venue-glow) 66%,transparent);
+  font-size:17px
+}
+body.venuePage .menuGroupTitle h3{
+  margin:0;
+  color:#F7F9FC;
+  font-size:19px;
+  line-height:1;
+  letter-spacing:-.035em
+}
+body.venuePage .menuGroupTitle small{
+  display:block;
+  margin-top:4px;
+  color:rgba(255,255,255,.42);
+  font-size:8.5px;
+  font-weight:700
+}
+body.venuePage .menuSeeAll{
+  flex:0 0 auto;
+  min-height:34px;
+  padding:0 10px 0 11px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.075);
+  background:rgba(255,255,255,.028);
+  color:rgba(255,255,255,.66);
+  font-size:9px;
+  font-weight:850;
+  backdrop-filter:blur(10px)
+}
+body.venuePage .menuSeeAll span{
+  margin-left:4px;
+  color:var(--venue-accent)
+}
+body.venuePage .menuGroupGrid{
+  position:relative;
+  z-index:2;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px
+}
+
+body.venuePage .menuGroup .foodCard{
+  position:relative;
+  min-height:0;
+  overflow:hidden;
+  border-radius:19px;
+  border:1px solid color-mix(in srgb,var(--venue-accent) 8%,rgba(255,255,255,.075));
+  background:
+    radial-gradient(circle at 92% 0,color-mix(in srgb,var(--venue-accent) 4%,transparent),transparent 28%),
+    linear-gradient(180deg,color-mix(in srgb,var(--venue-panel2) 97%,#fff 1%),color-mix(in srgb,var(--venue-panel) 97%,#000 1%));
+  box-shadow:0 12px 30px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.024)
+}
+body.venuePage .menuGroup .foodCard:before{
+  content:"";
+  position:absolute;
+  z-index:4;
+  left:12px;
+  top:0;
+  width:35px;
+  height:2px;
+  border-radius:0 0 4px 4px;
+  background:var(--venue-accent);
+  opacity:.82;
+  box-shadow:0 3px 15px var(--venue-glow)
+}
+body.venuePage .menuGroup .foodPic{
+  height:132px;
+  position:relative;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 60% 28%,color-mix(in srgb,var(--venue-accent) 13%,transparent),transparent 33%),
+    linear-gradient(145deg,var(--venue-hero),var(--venue-panel2))
+}
+body.venuePage .menuGroup .foodPic img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  transform:scale(1.015);
+  filter:saturate(1.04) contrast(1.02);
+  transition:transform .34s ease,filter .24s ease
+}
+body.venuePage .menuGroup .foodCard:active .foodPic img{transform:scale(1.055)}
+body.venuePage .menuGroup .foodPic i{
+  position:absolute;
+  inset:auto 0 0;
+  height:48%;
+  background:linear-gradient(transparent,color-mix(in srgb,var(--venue-panel2) 72%,transparent))
+}
+body.venuePage .foodBadge{
+  position:absolute;
+  z-index:3;
+  left:9px;
+  top:9px;
+  max-width:calc(100% - 18px);
+  padding:5px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--venue-panel) 76%,transparent);
+  border:1px solid rgba(255,255,255,.1);
+  color:#fff;
+  font-size:8px;
+  line-height:1;
+  font-weight:900;
+  backdrop-filter:blur(12px);
+  box-shadow:0 6px 18px rgba(0,0,0,.16)
+}
+body.venuePage .menuGroup .foodBody{
+  min-width:0;
+  padding:11px;
+  gap:6px
+}
+body.venuePage .menuGroup .foodTitle{
+  min-height:31px;
+  align-items:flex-start
+}
+body.venuePage .menuGroup .foodBody h3{
+  font-size:14.5px;
+  line-height:1.08;
+  letter-spacing:-.027em
+}
+body.venuePage .menuGroup .foodBody p{
+  min-height:30px;
+  margin:0;
+  color:rgba(255,255,255,.46);
+  font-size:10px;
+  line-height:1.34
+}
+body.venuePage .menuGroup .foodRow{
+  padding-top:3px;
+  align-items:center
+}
+body.venuePage .menuGroup .foodRow b{
+  color:#F8FAFC;
+  font-size:17px;
+  letter-spacing:-.035em
+}
+body.venuePage .menuGroup .addBtn{
+  width:37px;
+  height:37px;
+  border-radius:12px;
+  font-size:21px;
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  box-shadow:0 8px 21px color-mix(in srgb,var(--venue-glow) 62%,transparent)
+}
+body.venuePage .menuGroup .foodFavorite{
+  width:30px;
+  height:30px;
+  margin-top:-5px;
+  margin-right:-5px;
+  border-radius:10px;
+  background:color-mix(in srgb,var(--venue-panel2) 72%,transparent);
+  backdrop-filter:blur(8px)
+}
+
+body.venuePage .menuGroupLead .foodCardLead{
+  border-radius:21px;
+  background:
+    radial-gradient(circle at 100% 0,color-mix(in srgb,var(--venue-accent) 7%,transparent),transparent 32%),
+    linear-gradient(180deg,color-mix(in srgb,var(--venue-panel2) 98%,#fff 1%),var(--venue-panel))
+}
+body.venuePage .menuGroupLead .foodCardLead .foodPic{height:150px}
+body.venuePage .menuGroupLead .foodCardLead .foodBody{padding:12px}
+body.venuePage .menuGroupLead .foodCardLead .foodBody h3{font-size:15.5px}
+body.venuePage .menuGroupLead .foodCardLead .foodRow b{font-size:18px}
+
+body.venuePage .menuGroupCompact .menuGroupGrid{
+  grid-template-columns:1fr;
+  gap:8px
+}
+body.venuePage .menuGroupCompact .foodCardCompact{
+  display:grid;
+  grid-template-columns:112px minmax(0,1fr);
+  min-height:118px
+}
+body.venuePage .menuGroupCompact .foodCardCompact .foodPic{
+  height:100%;
+  min-height:118px;
+  border-radius:0
+}
+body.venuePage .menuGroupCompact .foodCardCompact .foodBody{
+  padding:11px 11px 10px
+}
+body.venuePage .menuGroupCompact .foodCardCompact .foodTitle{min-height:27px}
+body.venuePage .menuGroupCompact .foodCardCompact .foodBody p{
+  min-height:27px;
+  -webkit-line-clamp:2
+}
+body.venuePage .menuGroupCompact .foodCardCompact .foodRow{margin-top:auto}
+
+body.venuePage .menuGroupSingle .menuGroupGrid{
+  grid-template-columns:repeat(2,minmax(0,1fr))
+}
+body.venuePage .menuEmpty{
+  min-height:180px;
+  display:grid;
+  place-items:center;
+  margin-top:8px;
+  background:color-mix(in srgb,var(--venue-panel2) 54%,transparent)
+}
+
+body.venuePage .floatCart{
+  height:64px;
+  left:10px;
+  right:10px;
+  padding:0 10px 0 15px;
+  border-radius:21px;
+  color:#F7F9FC;
+  background:
+    radial-gradient(circle at 90% 0,color-mix(in srgb,var(--venue-accent) 10%,transparent),transparent 32%),
+    linear-gradient(135deg,color-mix(in srgb,var(--venue-panel2) 96%,#fff 1%),color-mix(in srgb,var(--venue-panel) 97%,#000 1%));
+  border:1px solid color-mix(in srgb,var(--venue-accent) 18%,rgba(255,255,255,.08));
+  box-shadow:0 18px 54px rgba(0,0,0,.36),0 0 28px color-mix(in srgb,var(--venue-glow) 24%,transparent);
+  backdrop-filter:blur(20px) saturate(1.15)
+}
+body.venuePage .floatCart>span{
+  min-width:0;
+  padding-right:10px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:13px
+}
+body.venuePage .floatCart>b{
+  flex:0 0 auto;
+  min-width:92px;
+  height:44px;
+  display:grid;
+  place-items:center;
+  padding:0 12px;
+  border-radius:14px;
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--venue-glow) 62%,transparent);
+  font-size:16px
+}
+body.venuePage .floatCart.cartBump>b{animation:venueCartPulse .28s ease}
+@keyframes venueCartPulse{50%{transform:scale(1.055)}}
+
+body.venuePage[data-tone="light"] .menuGroupTitle h3,
+body.venuePage[data-tone="light"] .menuGroup .foodRow b{color:#172235}
+body.venuePage[data-tone="light"] .menuGroupTitle small,
+body.venuePage[data-tone="light"] .menuGroup .foodBody p{color:rgba(20,33,49,.54)}
+body.venuePage[data-tone="light"] .menuGroup,
+body.venuePage[data-tone="light"] .menuGroup .foodCard{
+  border-color:rgba(18,34,54,.075);
+  box-shadow:0 15px 38px rgba(32,48,62,.09),inset 0 1px 0 rgba(255,255,255,.42)
+}
+body.venuePage[data-tone="light"] .menuSeeAll{
+  color:#536173;
+  border-color:rgba(18,34,54,.08);
+  background:rgba(255,255,255,.42)
+}
+body.venuePage[data-tone="light"] .menuSection #menuCount{color:#687688;border-color:rgba(18,34,54,.07)}
+
+@media(min-width:560px){
+  body.venuePage .menuGroupCompact .menuGroupGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:390px){
+  body.venuePage .menuSection{padding-top:14px;margin-top:26px}
+  body.venuePage .menuSection .sectionHead h2{font-size:27px}
+  body.venuePage .menuGroup{padding:11px;border-radius:21px;margin-bottom:16px}
+  body.venuePage .menuGroupHead{margin-bottom:9px}
+  body.venuePage .menuGroupTitle{gap:8px}
+  body.venuePage .menuGroupTitle>span{width:34px;height:34px;border-radius:11px;font-size:15px}
+  body.venuePage .menuGroupTitle h3{font-size:17px}
+  body.venuePage .menuSeeAll{padding:0 8px;font-size:8px}
+  body.venuePage .menuGroupGrid,
+  body.venuePage .menuGroupSingle .menuGroupGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  body.venuePage .menuGroupLead .foodCardLead .foodPic{height:126px}
+  body.venuePage .menuGroup .foodBody{padding:9px}
+  body.venuePage .menuGroup .foodBody h3{font-size:13.5px}
+  body.venuePage .menuGroup .foodBody p{font-size:9px;min-height:25px}
+  body.venuePage .menuGroup .foodRow b{font-size:15.5px}
+  body.venuePage .menuGroup .addBtn{width:34px;height:34px;border-radius:11px}
+  body.venuePage .menuGroupCompact .menuGroupGrid{grid-template-columns:1fr}
+  body.venuePage .menuGroupCompact .foodCardCompact{grid-template-columns:102px minmax(0,1fr);min-height:108px}
+  body.venuePage .menuGroupCompact .foodCardCompact .foodPic{min-height:108px}
+  body.venuePage .floatCart{height:60px}
+  body.venuePage .floatCart>b{height:40px;min-width:84px}
+}
+@media(max-width:340px){
+  body.venuePage .menuGroupGrid,
+  body.venuePage .menuGroupSingle .menuGroupGrid{grid-template-columns:1fr}
+  body.venuePage .menuGroupLead .foodCardLead .foodPic{height:158px}
+}

@@ -6,6 +6,7 @@ const crypto=require('crypto');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const {discoverMoscowVenues,appearanceFor}=require('./venue-discovery');
 const {installVenueOwner}=require('./venue-owner');
+const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
 
 const app=express();
 app.use(express.json({limit:'24mb'}));
@@ -1572,6 +1573,23 @@ app.put('/api/shaurma/admin/establishments/:establishmentId/venue',async(req,res
   if(!q.rows[0])return res.sendStatus(404);
   publishVenue(q.rows[0]);res.json(q.rows[0]);
  }catch(e){console.error('establishment venue update:',e.message);res.status(500).json({error:'venue_update_failed'})}
+});
+
+app.put('/api/shaurma/admin/establishments/:establishmentId/builder',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const establishmentId=String(req.params.establishmentId||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return res.status(400).json({error:'bad_establishment_id'});
+ try{
+  const current=await DB.query("SELECT config FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[establishmentId]);
+  if(!current.rows[0])return res.sendStatus(404);
+  const enabled=req.body?.enabled===true;
+  const builder=normalizeBuilderConfig(req.body?.builder||{});
+  const config={...(current.rows[0].config||{}),builder_enabled:enabled,builder};
+  const q=await DB.query("UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[establishmentId,JSON.stringify(config)]);
+  if(q.rows[0])publishVenue(q.rows[0]);
+  res.json({ok:true,establishment_id:establishmentId,builder_enabled:enabled,builder});
+ }catch(e){console.error('admin builder update:',e.message);res.status(500).json({error:'builder_update_failed'})}
 });
 
 app.get('/api/shaurma/stream',(req,res)=>{

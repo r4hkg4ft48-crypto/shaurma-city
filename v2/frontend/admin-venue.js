@@ -132,7 +132,7 @@
  async function load(){
    data=await call('/venue-owner/establishments/'+encodeURIComponent(est));menu=(data.menu||[]).map(x=>({...x}));builder=builderForEdit(data.config||{});
    $('#vName').value=data.name||'';$('#vAddress').value=data.address||'';$('#vDescription').value=data.description||'';$('#vHours').value=data.hours||'';$('#vPrice').value=data.price_label||'';
-   $('#vMarkerIcon').value=data.marker_style?.icon||'🥙';$('#vMarkerBg').value=data.marker_style?.background||'#10221b';$('#vBuilderEnabled').checked=data.config?.builder_enabled===true;
+   $('#vMarkerIcon').value=data.marker_style?.icon||'🥙';$('#vMarkerBg').value=data.marker_style?.background||'#D94343';$('#vBuilderEnabled').checked=data.config?.builder_enabled===true;
    syncThemeInputs(themeForConfig(data.config||{}));
    renderMenu();renderBuilderEditor();await loadOrders();connect();
  }
@@ -146,7 +146,7 @@
      data.config={...(data.config||{}),theme:j.theme};syncThemeInputs(j.theme);toast('Дизайн сохранён ✓');
    }catch(e){toast(e.message)}finally{btn.disabled=false}
  }
- async function saveAppearance(){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/appearance',{method:'PATCH',body:{marker_style:{...(data.marker_style||{}),icon:$('#vMarkerIcon').value||'🥙',background:$('#vMarkerBg').value||'#10221b'}}});toast('Метка обновлена ✓');await load()}catch(e){toast(e.message)}}
+ async function saveAppearance(){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/appearance',{method:'PATCH',body:{marker_style:{...(data.marker_style||{}),icon:$('#vMarkerIcon').value||'🥙',background:$('#vMarkerBg').value||'#D94343'}}});toast('Метка обновлена ✓');await load()}catch(e){toast(e.message)}}
  async function saveMenu(){readMenu();try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/menu',{method:'PUT',body:{menu,sections:data.sections||[]}});toast('Меню обновлено ✓');await load()}catch(e){toast(e.message)}}
  async function saveBuilder(){
    readBuilder();

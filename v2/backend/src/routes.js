@@ -33,7 +33,15 @@ function notifyCustomer(order,text,menuCtx=null){
     .catch(e=>console.error('telegram_customer_notify',e.message));
 }
 const DEFAULT_VENUE_PERMISSIONS=['menu','profile','media','appearance','orders'];
-function normalizeInviteCode(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
+function normalizeInviteCode(v){
+  const raw=String(v||'').normalize('NFKC').toUpperCase()
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+    .replace(/\u00A0/g,' ');
+  const compact=raw.replace(/\s+/g,'');
+  const match=compact.match(/OWN-?([A-F0-9]{10})/);
+  return match?'OWN-'+match[1]:compact;
+}
 function inviteCodeHash(v){return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeInviteCode(v)).digest('hex')}
 function referralCodeFor(userId){return 'SR'+crypto.createHash('sha256').update('shaurmeg-referral:'+String(userId)).digest('hex').slice(0,10).toUpperCase()}
 function normalizeReferralCode(v){return String(v||'').trim().toUpperCase().replace(/^REF[_-]?/,'').replace(/[^A-Z0-9]/g,'').slice(0,24)}

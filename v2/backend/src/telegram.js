@@ -345,10 +345,37 @@ function install(app){
     }catch(e){console.error('client webhook',e.message)}
   });
 
+  app.get('/api/v2/telegram/kitchen-health',async(req,res)=>{
+    if(!config.KITCHEN_BOT_TOKEN)return res.json({ok:false,enabled:false});
+    try{
+      const [me,webhook]=await Promise.all([
+        call(config.KITCHEN_BOT_TOKEN,'getMe',{}),
+        call(config.KITCHEN_BOT_TOKEN,'getWebhookInfo',{})
+      ]);
+      res.json({
+        ok:true,
+        enabled:true,
+        bot:{id:String(me?.id||''),username:String(me?.username||''),first_name:String(me?.first_name||'')},
+        configured_username:config.KITCHEN_BOT_USERNAME||'',
+        webhook:{
+          url:String(webhook?.url||''),
+          pending_update_count:Number(webhook?.pending_update_count||0),
+          last_error_date:webhook?.last_error_date||null,
+          last_error_message:String(webhook?.last_error_message||''),
+          max_connections:webhook?.max_connections||null,
+          allowed_updates:webhook?.allowed_updates||[]
+        }
+      });
+    }catch(e){res.status(503).json({ok:false,enabled:true,error:String(e.message||'telegram_health_failed')})}
+  });
+
   app.post('/api/v2/telegram/kitchen',async(req,res)=>{
     res.sendStatus(200);
     if(!config.KITCHEN_BOT_TOKEN)return;
     try{
+      const kind=req.body?.callback_query?'callback_query':req.body?.message?'message':'other';
+      const chatId=req.body?.message?.chat?.id||req.body?.callback_query?.message?.chat?.id||'';
+      console.log('Kitchen webhook update · '+kind+(chatId?' · chat '+chatId:''));
       if(req.body?.callback_query)return handleKitchenCallback(req.body.callback_query);
       if(req.body?.message)return handleKitchenMessage(req.body.message);
     }catch(e){console.error('kitchen webhook',e.message)}

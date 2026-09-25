@@ -101,9 +101,28 @@ router.get('/map/markers/:id/avatar',async(req,res)=>{
     if(!m)return res.sendStatus(404);res.type(m[1]).setHeader('Cache-Control','public,max-age=86400').send(Buffer.from(m[2],'base64'));
   }catch(e){res.sendStatus(404)}
 });
+router.get('/menu-image/:establishmentId/:itemId',async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId),itemId=String(req.params.itemId||'').slice(0,100);
+    if(!est||!itemId)return res.sendStatus(404);
+    const q=await db.query('SELECT menu,updated_at FROM shaurma_venues WHERE establishment_id=$1 AND is_active=TRUE LIMIT 1',[est]);
+    const menu=Array.isArray(q.rows[0]?.menu)?q.rows[0].menu:[],item=menu.find(x=>String(x?.id||'')===itemId);
+    const raw=String(item?.image||item?.i||''),m=raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
+    if(!m)return res.sendStatus(404);
+    res.type(m[1]).setHeader('Cache-Control','public,max-age=86400,immutable').send(Buffer.from(m[2],'base64'));
+  }catch(e){res.sendStatus(404)}
+});
 router.get('/menu-context',async(req,res)=>{
-  try{const ctx=await menuContext(req.query.marker_id,req.query.establishment_id);if(!ctx)return res.status(404).json({error:'menu_context_not_found'});res.setHeader('Cache-Control','no-store');res.json(ctx)}
-  catch(e){fail(res,e,'menu_context_failed')}
+  try{
+    const ctx=await menuContext(req.query.marker_id,req.query.establishment_id);if(!ctx)return res.status(404).json({error:'menu_context_not_found'});
+    const stamp=new Date(ctx.venue.updated_at||Date.now()).getTime();
+    const publicMenu=(ctx.venue.menu||[]).map(x=>{
+      const raw=String(x.image||x.i||'');
+      if(!/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw))return x;
+      return {...x,image:config.PUBLIC_API_URL+'/api/v2/menu-image/'+encodeURIComponent(ctx.venue.establishment_id)+'/'+encodeURIComponent(String(x.id))+'?v='+stamp};
+    });
+    res.setHeader('Cache-Control','no-store');res.json({...ctx,venue:{...ctx.venue,menu:publicMenu}});
+  }catch(e){fail(res,e,'menu_context_failed')}
 });
 
 router.post('/auth/telegram',async(req,res)=>{

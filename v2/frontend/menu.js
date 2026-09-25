@@ -241,12 +241,22 @@
     const sectionById=new Map(sections.map(x=>[String(x.id),x]));
 
     const kindFor=x=>{
-      const name=String(x.n||x.name||'').toLowerCase(),cat=String(x.c||x.category||'').toLowerCase();
-      if(/напит|cola|кола|компот|морс|сок|вода/.test(name+' '+cat))return 'drink';
-      if(/соус/.test(name+' '+cat))return 'sauce';
-      if(/леп|тарел|хлеб|лаваш/.test(name+' '+cat))return 'flatbread';
-      if(/самс|чебур|беляш|выпеч|бурек/.test(name+' '+cat))return 'pastry';
+      const name=String(x.n||x.name||'').toLowerCase();
+      const section=sectionById.get(String(x.c||x.category||''))||{};
+      const cat=(String(section.name||'')+' '+String(x.c||x.category||'')).toLowerCase();
+      const hay=name+' '+cat;
+      if(/напит|cola|кола|компот|морс|сок|вода|чай|кофе/.test(hay))return 'drink';
+      if(/соус/.test(hay))return 'sauce';
+      if(/самс|чебур|беляш|выпеч|бурек|пирож|десерт/.test(hay))return 'pastry';
+      if(/леп|тарел|хлеб|лаваш/.test(hay))return 'flatbread';
       return 'shawarma';
+    };
+    const isMain=x=>{
+      const section=sectionById.get(String(x.c||x.category||''))||{};
+      const hay=(String(section.name||'')+' '+String(x.n||x.name||'')).toLowerCase();
+      if(/доп|напит|выпеч|соус|десерт|самс|чебур|беляш|карто|фри/.test(hay))return false;
+      const kind=kindFor(x);
+      return kind==='shawarma'||kind==='flatbread';
     };
     const fallbackFor=x=>{
       const kind=kindFor(x);
@@ -255,18 +265,18 @@
       return '';
     };
     const imageFor=x=>String(x.image||fallbackFor(x)||ctx?.marker?.hero_image||'');
-    const photo=(x,large=false)=>{
+    const photo=x=>{
       const src=imageFor(x),kind=kindFor(x);
       return '<div class="foodPic '+(!x.image?'foodPicFallback ':'')+'kind-'+kind+'">'+
-        (src?'<img src="'+esc(src)+'" alt="" loading="'+(large?'eager':'lazy')+'" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
+        (src?'<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
         '<i></i></div>';
     };
     const badgeFor=x=>String(x.badge||x.tag||'').trim();
-    const card=(x,i)=>{
+    const card=(x,mode)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
-      const badge=badgeFor(x,i);
-      return '<article class="foodCard foodCardRef '+(i<2?'foodCardWide ':'')+'kind-'+kindFor(x)+'">'+
-        '<div class="foodVisual">'+photo(x,i<2)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
+      const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
+      return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
+        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3><button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div>'+
           '<p>'+esc(description)+'</p>'+
@@ -299,12 +309,17 @@
         '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
       '</article>';
 
+    const rest=visible.filter(x=>String(x.id)!==featureId);
+    const mainItems=rest.filter(isMain);
+    const otherItems=rest.filter(x=>!isMain(x));
     let title='';
     if(category!=='all'){
       const meta=sectionById.get(String(category));
       title=meta?'<div class="menuCategoryLabel"><span>'+esc(meta.emoji||'✦')+'</span><b>'+esc(meta.name||'Раздел')+'</b></div>':'';
     }
-    $('#menuGrid').innerHTML=title+'<div class="referenceFoodGrid">'+visible.map(card).join('')+'</div>';
+    $('#menuGrid').innerHTML=title+
+      (mainItems.length?'<div class="mainDishGrid">'+mainItems.map(x=>card(x,'main')).join('')+'</div>':'')+
+      (otherItems.length?'<div class="otherDishGrid">'+otherItems.map(x=>card(x,'other')).join('')+'</div>':'');
   }
   function renderCart(){
     const {count,total}=cartStats();

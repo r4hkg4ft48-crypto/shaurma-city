@@ -3092,3 +3092,223 @@ body.venuePage[data-tone="light"] .menuSection .chip.active{color:#fff}
   body.venuePage .foodCardRef:nth-child(n+5){min-height:185px}
   body.venuePage .menuFeatureCopy{width:58%}
 }
+
+
+/* ===== Stable menu hierarchy v4: hero / 2-up mains / 3-up others ===== */
+body.venuePage .menuFeature,
+body.venuePage .menuSection .chips,
+body.venuePage .menuGrid{
+  position:relative!important;
+  inset:auto!important;
+  transform:none!important;
+  width:100%;
+  max-width:100%
+}
+body.venuePage .menuFeature{z-index:2;margin:0 0 10px!important}
+body.venuePage .menuSection .chips{
+  z-index:2;
+  margin:0 0 10px!important;
+  padding:2px 0 4px!important;
+  scroll-snap-type:none!important;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch
+}
+body.venuePage .menuGrid{z-index:1;display:block!important}
+body.venuePage .menuFeatureCard{
+  width:100%;
+  height:auto!important;
+  min-height:0!important;
+  aspect-ratio:1.82/1;
+  margin:0!important;
+  transform:none!important;
+  transition:none!important;
+  contain:layout paint
+}
+body.venuePage .menuFeaturePhoto img{
+  transform:none!important;
+  transition:none!important
+}
+body.venuePage .menuFeatureCard:active{transform:none!important}
+
+/* Main dishes: always two per row. */
+body.venuePage .mainDishGrid{
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+  align-items:stretch;
+  margin:0 0 7px
+}
+/* Everything else: always three per row. */
+body.venuePage .otherDishGrid{
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;
+  align-items:stretch;
+  margin:0
+}
+
+/* Kill the old nth-child mosaic rules: geometry now comes only from the explicit grids. */
+body.venuePage .mainDishGrid .foodCardRef:nth-child(n),
+body.venuePage .otherDishGrid .foodCardRef:nth-child(n){
+  grid-column:auto!important;
+  min-height:0!important;
+  width:100%;
+  margin:0!important;
+  transform:none!important;
+  transition:none!important;
+  contain:layout paint;
+  touch-action:manipulation
+}
+body.venuePage .mainDishGrid .foodCardRef:nth-child(n){
+  aspect-ratio:.76/1;
+  border-color:color-mix(in srgb,var(--venue-accent) 18%,rgba(255,255,255,.1))
+}
+body.venuePage .otherDishGrid .foodCardRef:nth-child(n){
+  aspect-ratio:.64/1;
+  border-color:rgba(255,255,255,.085)
+}
+body.venuePage .mainDishGrid .foodCardRef:active,
+body.venuePage .otherDishGrid .foodCardRef:active{
+  transform:none!important;
+  filter:brightness(.97)
+}
+body.venuePage .mainDishGrid .foodPic img,
+body.venuePage .otherDishGrid .foodPic img{
+  transform:none!important;
+  transition:none!important
+}
+body.venuePage .mainDishGrid .foodCardRef:active .foodPic img,
+body.venuePage .otherDishGrid .foodCardRef:active .foodPic img{
+  transform:none!important
+}
+
+/* Stable text zones: image loading cannot change card height. */
+body.venuePage .mainDishGrid .foodBody{
+  min-height:47%!important;
+  padding:11px 10px 10px!important
+}
+body.venuePage .mainDishGrid .foodTitle h3{
+  font-size:15.5px!important;
+  line-height:1.04!important;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
+body.venuePage .mainDishGrid .foodBody p{
+  display:-webkit-box!important;
+  min-height:0!important;
+  margin:5px 38px 0 0!important;
+  font-size:9px!important;
+  line-height:1.25!important;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
+body.venuePage .mainDishGrid .foodRow b{
+  font-size:18px!important
+}
+body.venuePage .mainDishGrid .addBtn{
+  width:38px!important;
+  height:38px!important;
+  border-radius:12px!important;
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent))!important;
+  color:var(--venue-ink)!important;
+  box-shadow:0 8px 22px color-mix(in srgb,var(--venue-glow) 58%,transparent)!important
+}
+
+/* Compact support cards: 3-up, shorter typography, no accidental word explosions. */
+body.venuePage .otherDishGrid .foodBody{
+  min-height:53%!important;
+  padding:9px 8px 8px!important
+}
+body.venuePage .otherDishGrid .foodTitle{
+  padding-right:27px!important
+}
+body.venuePage .otherDishGrid .foodTitle h3{
+  font-size:11.5px!important;
+  line-height:1.04!important;
+  letter-spacing:-.018em!important;
+  word-break:normal!important;
+  overflow-wrap:normal!important;
+  hyphens:none!important;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
+body.venuePage .otherDishGrid .foodBody p{
+  display:-webkit-box!important;
+  min-height:0!important;
+  margin:3px 30px 0 0!important;
+  font-size:7.5px!important;
+  line-height:1.18!important;
+  -webkit-line-clamp:1;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
+body.venuePage .otherDishGrid .foodRow{
+  min-height:27px!important;
+  margin-top:5px!important
+}
+body.venuePage .otherDishGrid .foodRow b{
+  font-size:14px!important
+}
+body.venuePage .otherDishGrid .addBtn{
+  right:7px!important;
+  bottom:7px!important;
+  width:31px!important;
+  height:31px!important;
+  border-radius:10px!important;
+  font-size:18px!important
+}
+body.venuePage .otherDishGrid .foodFavorite{
+  right:7px!important;
+  top:-28px!important;
+  width:27px!important;
+  height:27px!important;
+  border-radius:9px!important
+}
+
+/* The selected-section caption stays in normal flow and never overlaps the grid. */
+body.venuePage .menuCategoryLabel{
+  position:relative!important;
+  inset:auto!important;
+  margin:2px 0 8px!important;
+  transform:none!important
+}
+
+/* No geometry animation on re-render/category switching. */
+body.venuePage .menuSection *,
+body.venuePage .menuSection *:before,
+body.venuePage .menuSection *:after{
+  animation-duration:0s
+}
+body.venuePage .menuFeatureCard,
+body.venuePage .foodCardRef,
+body.venuePage .foodPic img{
+  will-change:auto!important
+}
+
+@media(max-width:390px){
+  body.venuePage .menuFeatureCard{aspect-ratio:1.72/1}
+  body.venuePage .mainDishGrid,
+  body.venuePage .otherDishGrid{gap:6px}
+  body.venuePage .mainDishGrid .foodCardRef:nth-child(n){aspect-ratio:.74/1}
+  body.venuePage .otherDishGrid .foodCardRef:nth-child(n){aspect-ratio:.61/1}
+  body.venuePage .mainDishGrid .foodTitle h3{font-size:14px!important}
+  body.venuePage .mainDishGrid .foodRow b{font-size:16px!important}
+  body.venuePage .otherDishGrid .foodTitle h3{font-size:10.5px!important}
+  body.venuePage .otherDishGrid .foodRow b{font-size:13px!important}
+}
+@media(max-width:340px){
+  body.venuePage .mainDishGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  body.venuePage .otherDishGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  body.venuePage .mainDishGrid .foodCardRef:nth-child(n),
+  body.venuePage .otherDishGrid .foodCardRef:nth-child(n){grid-column:auto!important}
+  body.venuePage .otherDishGrid .foodTitle h3{font-size:9.5px!important}
+  body.venuePage .otherDishGrid .foodBody p{display:none!important}
+  body.venuePage .otherDishGrid .foodRow b{font-size:12px!important}
+}

@@ -688,14 +688,19 @@ const MAP_BUILD=String(MAP_CONFIG.version||104);
 function adminTelegramBotToken(){
  return String(process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
 }
+function accessAdminBotToken(){
+ return String(process.env.ACCESS_ADMIN_TELEGRAM_BOT_TOKEN||process.env.ADMIN_ACCESS_TELEGRAM_BOT_TOKEN||'').trim();
+}
 function aggregatorBotToken(){
  return String(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN||'').trim();
 }
 const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/map.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
 const ADMIN_BOT_WEBHOOK_SECRET=adminTelegramBotToken()?crypto.createHash('sha256').update('shaurmeg-admin:'+adminTelegramBotToken()).digest('hex').slice(0,32):'';
+const ACCESS_ADMIN_BOT_WEBHOOK_SECRET=accessAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-access-admin:'+accessAdminBotToken()).digest('hex').slice(0,32):'';
 let aggregatorBotInfo=null;
 let adminBotInfo=null;
+let accessAdminBotInfo=null;
 
 async function adminTelegramApi(method,body={}){
  const token=adminTelegramBotToken();if(!token)throw new Error('admin_telegram_not_configured');
@@ -709,6 +714,19 @@ async function getAdminBotInfo(){
  const j=await r.json().catch(()=>({}));
  if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
  adminBotInfo=j.result;return adminBotInfo;
+}
+async function accessAdminTelegramApi(method,body={}){
+ const token=accessAdminBotToken();if(!token)throw new Error('access_admin_telegram_not_configured');
+ const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));return j.result;
+}
+async function getAccessAdminBotInfo(){
+ if(accessAdminBotInfo)return accessAdminBotInfo;
+ const token=accessAdminBotToken();if(!token)return null;
+ const r=await fetch('https://api.telegram.org/bot'+token+'/getMe');
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
+ accessAdminBotInfo=j.result;return accessAdminBotInfo;
 }
 async function aggregatorTelegramApi(method,body={}){
  const token=aggregatorBotToken();if(!token)throw new Error('aggregator_telegram_not_configured');
@@ -869,8 +887,8 @@ async function createSharedAccessCode(establishmentId,createdBy){
    [est,sharedAccessCodeHash(code),JSON.stringify(permissions),'admin_bot:'+String(createdBy||'')]);
  return {...q.rows[0],code,venue_name:venue.rows[0].name};
 }
-async function adminVenueKeyPage(chatId,page=0,editMessageId=null){
- if(!DB)return adminTelegramApi('sendMessage',{chat_id:chatId,text:'База данных временно недоступна.'});
+async function adminVenueKeyPage(chatId,page=0,editMessageId=null,api=adminTelegramApi){
+ if(!DB)return api('sendMessage',{chat_id:chatId,text:'База данных временно недоступна.'});
  const p=Math.max(0,Math.floor(Number(page)||0)),size=8,offset=p*size;
  const q=await DB.query(`SELECT establishment_id,name FROM shaurma_venues
    WHERE is_active=TRUE ORDER BY name,establishment_id LIMIT $1 OFFSET $2`,[size+1,offset]);
@@ -880,32 +898,32 @@ async function adminVenueKeyPage(chatId,page=0,editMessageId=null){
  keyboard.push([{text:'🗺 Открыть админку',web_app:{url:PUBLIC_API_URL+'/shaurma-owner?v=4'}}]);
  const body={chat_id:chatId,text:'🔑 Ключи доступа\n\nВыберите заведение. Я создам свежий общий ключ для:\n• @Shefofbotsbot — кабинет заведения\n• @Takejulbot — приём заказов\n\nОдин ключ привязан только к выбранному establishment_id.',reply_markup:{inline_keyboard:keyboard}};
  if(editMessageId){
-   try{return await adminTelegramApi('editMessageText',{...body,message_id:editMessageId})}catch{}
+   try{return await api('editMessageText',{...body,message_id:editMessageId})}catch{}
  }
- return adminTelegramApi('sendMessage',body);
+ return api('sendMessage',body);
 }
-async function handleAdminBotUpdate(update){
+async function handleAdminBotUpdate(update,api=adminTelegramApi){
  const msg=update?.message,cb=update?.callback_query;
  const user=cb?.from||msg?.from,chatId=cb?.message?.chat?.id||msg?.chat?.id;
  if(!user?.id||!chatId)return;
  if(!adminTelegramAllowed(user.id)){
-   if(cb)try{await adminTelegramApi('answerCallbackQuery',{callback_query_id:cb.id,text:'Нет доступа',show_alert:true})}catch{}
-   else try{await adminTelegramApi('sendMessage',{chat_id:chatId,text:'Нет доступа к админ-боту Shaurmeg.'})}catch{}
+   if(cb)try{await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Нет доступа',show_alert:true})}catch{}
+   else try{await api('sendMessage',{chat_id:chatId,text:'Нет доступа к админ-боту Shaurmeg.'})}catch{}
    return;
  }
  if(cb){
    const data=String(cb.data||'');
    const page=data.match(/^akp:(\d+)$/);
    if(page){
-     await adminTelegramApi('answerCallbackQuery',{callback_query_id:cb.id});
-     return adminVenueKeyPage(chatId,Number(page[1]),cb.message?.message_id);
+     await api('answerCallbackQuery',{callback_query_id:cb.id});
+     return adminVenueKeyPage(chatId,Number(page[1]),cb.message?.message_id,api);
    }
    const key=data.match(/^ak:(SC-MSK-[A-F0-9]{10})$/);
    if(key){
      try{
        const invite=await createSharedAccessCode(key[1],user.id);
-       await adminTelegramApi('answerCallbackQuery',{callback_query_id:cb.id,text:'Ключ создан ✓'});
-       return adminTelegramApi('sendMessage',{
+       await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Ключ создан ✓'});
+       return api('sendMessage',{
          chat_id:chatId,
          text:'🔑 Общий ключ создан\n\n🥙 '+invite.venue_name+'\n'+invite.establishment_id+'\n\n'+invite.code+'\n\nПодходит для:\n• @Shefofbotsbot — подключить кабинет\n• @Takejulbot — подключить приём заказов\n\nДействует 7 дней. Ключ относится только к этому заведению.',
          reply_markup:{inline_keyboard:[
@@ -915,16 +933,16 @@ async function handleAdminBotUpdate(update){
          ]}
        });
      }catch(e){
-       await adminTelegramApi('answerCallbackQuery',{callback_query_id:cb.id,text:'Не удалось создать ключ',show_alert:true});
+       await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Не удалось создать ключ',show_alert:true});
        console.error('admin access key:',e.message);
      }
    }
    return;
  }
  const text=String(msg?.text||'').trim();
- if(/^\/(?:keys|access)(?:@[A-Za-z0-9_]+)?$/i.test(text))return adminVenueKeyPage(chatId,0);
+ if(/^\/(?:keys|access)(?:@[A-Za-z0-9_]+)?$/i.test(text))return adminVenueKeyPage(chatId,0,null,api);
  if(/^\/start(?:@[A-Za-z0-9_]+)?/i.test(text)||/^\/admin(?:@[A-Za-z0-9_]+)?$/i.test(text)){
-   return adminTelegramApi('sendMessage',{
+   return api('sendMessage',{
      chat_id:chatId,
      text:'🛡 Shaurmeg Admin\n\nЗдесь можно открыть админку и создать ключ доступа для конкретного заведения.',
      reply_markup:{inline_keyboard:[
@@ -935,29 +953,52 @@ async function handleAdminBotUpdate(update){
  }
 }
 
+async function syncAccessKeyBot(api,info,webhookUrl,label){
+ await api('setChatMenuButton',{menu_button:{type:'default'}});
+ await api('setMyCommands',{commands:[
+   {command:'start',description:'Ключи доступа Shaurmeg'},
+   {command:'keys',description:'Создать ключ для заведения'}
+ ]});
+ await api('setWebhook',{url:webhookUrl,allowed_updates:['message','callback_query'],drop_pending_updates:false});
+ console.log('Telegram access-key bot synced @'+String(info?.username||'')+' · '+label);
+}
 async function syncAdminTelegramMiniApp(){
  const token=adminTelegramBotToken();
  if(!token){console.log('Telegram admin bot token not configured');return}
  try{
   const info=await getAdminBotInfo();
   await adminTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:PUBLIC_API_URL+'/shaurma-owner?v=4'}}});
-  await adminTelegramApi('setMyCommands',{commands:[
-    {command:'start',description:'Админка Shaurmeg'},
-    {command:'keys',description:'Ключи доступа заведений'}
-  ]});
-  if(ADMIN_BOT_WEBHOOK_SECRET)await adminTelegramApi('setWebhook',{
-    url:PUBLIC_API_URL+'/api/shaurmeg-admin-bot/webhook/'+ADMIN_BOT_WEBHOOK_SECRET,
-    allowed_updates:['message','callback_query'],
-    drop_pending_updates:false
-  });
-  console.log('Telegram admin bot synced @'+String(info?.username||'')+' · admin + access keys');
+  if(accessAdminBotToken()){
+    // Dedicated access-key bot configured: keep the legacy superadmin bot focused on its Mini App.
+    await adminTelegramApi('setMyCommands',{commands:[{command:'start',description:'Открыть админку Shaurmeg'}]});
+    console.log('Telegram admin bot synced @'+String(info?.username||'')+' · admin-only');
+    const accessInfo=await getAccessAdminBotInfo();
+    await syncAccessKeyBot(
+      accessAdminTelegramApi,
+      accessInfo,
+      PUBLIC_API_URL+'/api/shaurmeg-access-bot/webhook/'+ACCESS_ADMIN_BOT_WEBHOOK_SECRET,
+      'dedicated access keys'
+    );
+  }else{
+    await syncAccessKeyBot(
+      adminTelegramApi,
+      info,
+      PUBLIC_API_URL+'/api/shaurmeg-admin-bot/webhook/'+ADMIN_BOT_WEBHOOK_SECRET,
+      'admin + access keys fallback'
+    );
+  }
  }catch(e){console.error('Telegram admin Mini App sync:',e.message)}
 }
 
 app.post('/api/shaurmeg-admin-bot/webhook/:secret',async(req,res)=>{
  if(!ADMIN_BOT_WEBHOOK_SECRET||String(req.params.secret)!==ADMIN_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
  res.sendStatus(200);
- try{await handleAdminBotUpdate(req.body||{})}catch(e){console.error('admin bot webhook:',e.message)}
+ try{await handleAdminBotUpdate(req.body||{},adminTelegramApi)}catch(e){console.error('admin bot webhook:',e.message)}
+});
+app.post('/api/shaurmeg-access-bot/webhook/:secret',async(req,res)=>{
+ if(!ACCESS_ADMIN_BOT_WEBHOOK_SECRET||String(req.params.secret)!==ACCESS_ADMIN_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
+ res.sendStatus(200);
+ try{await handleAdminBotUpdate(req.body||{},accessAdminTelegramApi)}catch(e){console.error('access admin bot webhook:',e.message)}
 });
 
 app.post('/api/shaurma/login',(req,res)=>{

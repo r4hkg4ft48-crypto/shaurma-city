@@ -226,7 +226,18 @@ router.post('/admin/markers',auth.requireOwner,async(req,res)=>{
     const b=req.body||{},name=String(b.name||'').trim(),lat=Number(b.lat),lon=Number(b.lon);if(!name||!Number.isFinite(lat)||!Number.isFinite(lon))return res.status(400).json({error:'invalid_marker'});
     const vId=D.venueId(b.venue_id)||crypto.randomBytes(8).toString('hex'),est=D.establishmentIdForVenue(vId);
     const row=await db.tx(async c=>{
-      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:D.venueThemeKey(est)}),est]);
+      const tq=await c.query(`WITH themes AS (
+          SELECT * FROM unnest($1::text[]) WITH ORDINALITY AS t(theme_key,ord)
+        ), used AS (
+          SELECT config->>'theme_key' AS theme_key,count(*)::int AS used_count
+          FROM shaurma_venues WHERE is_active=TRUE GROUP BY 1
+        )
+        SELECT themes.theme_key FROM themes
+        LEFT JOIN used USING(theme_key)
+        ORDER BY COALESCE(used.used_count,0),themes.ord
+        LIMIT 1`,[D.VENUE_THEME_KEYS]);
+      const theme=tq.rows[0]?.theme_key||D.venueThemeKey(est);
+      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:theme}),est]);
       const q=await c.query(`INSERT INTO shaurmeg_markers(venue_id,establishment_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,marker_avatar,marker_style,category,is_active,position_locked,metadata_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,TRUE,TRUE,TRUE) RETURNING *`,[vId,est,name,String(b.address||''),String(b.description||''),lat,lon,String(b.hero_image||''),JSON.stringify(Array.isArray(b.gallery)?b.gallery:[]),String(b.hours||''),String(b.price_label||''),String(b.marker_avatar||''),JSON.stringify(D.markerStyle(b.marker_style)),String(b.category||'shawarma')]);
       return q.rows[0];
     });res.status(201).json(row);

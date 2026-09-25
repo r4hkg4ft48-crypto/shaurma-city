@@ -870,8 +870,17 @@ async function syncAggregatorTelegramMiniApp(){
  }catch(e){console.error('Telegram aggregator bot sync:',e.message)}
 }
 
+function normalizeSharedAccessCode(code){
+ const raw=String(code||'').normalize('NFKC').toUpperCase()
+  .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+  .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+  .replace(/\u00A0/g,' ');
+ const compact=raw.replace(/\s+/g,'');
+ const match=compact.match(/OWN-?([A-F0-9]{10})/);
+ return match?'OWN-'+match[1]:compact;
+}
 function sharedAccessCodeHash(code){
- return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+String(code||'').trim().toUpperCase()).digest('hex');
+ return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeSharedAccessCode(code)).digest('hex');
 }
 async function createSharedAccessCode(establishmentId,createdBy){
  if(!DB)throw new Error('database_not_configured');

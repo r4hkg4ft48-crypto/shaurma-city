@@ -57,6 +57,15 @@
    renderThemePreview();
  }
   function toast(v){$('#toast').textContent=v;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1800)}
+ function normalizeOwnerCode(v){
+   const raw=String(v||'').normalize('NFKC').toUpperCase()
+     .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+     .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+     .replace(/\u00A0/g,' ');
+   const compact=raw.replace(/\s+/g,'');
+   const m=compact.match(/OWN-?([A-F0-9]{10})/);
+   return m?'OWN-'+m[1]:'';
+ }
  async function call(path,opt={}){opt.headers={...(opt.headers||{}),Authorization:'Bearer '+session};if(opt.body){opt.headers['Content-Type']='application/json';if(typeof opt.body!=='string')opt.body=JSON.stringify(opt.body)}const r=await fetch(api+path,opt);if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||'HTTP '+r.status)}return r.json()}
  async function auth(){
    if(session){try{const me=await call('/venue-owner/me');accesses=me.establishments||[];$('#ownerName').textContent=me.user?.first_name||me.user?.username||'OWNER';return true}catch{session='';sessionStorage.removeItem('shaurmeg_venue_owner_session')}}
@@ -73,8 +82,23 @@
    est=new URL(location.href).searchParams.get('establishment')||accesses[0].establishment_id;if(!accesses.some(x=>x.establishment_id===est))est=accesses[0].establishment_id;$('#venueSelect').value=est;await load();
  }
  async function claimAccess(){
-   if(!session)return toast('Откройте Mini App через Telegram-бота владельца');const code=$('#claimCode').value.trim();if(!code)return toast('Введите код');
-   try{const j=await call('/venue-owner/claim',{method:'POST',body:{code}});accesses=j.establishments||[];if(!accesses.length)throw new Error('Доступ не появился');$('#gate').classList.add('hidden');$('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+'</option>').join('');est=accesses[0].establishment_id;$('#venueSelect').value=est;await load();toast('Заведение подключено ✓')}catch(e){toast(e.message)}
+   if(!session)return toast('Откройте Mini App через Telegram-бота владельца');
+   const code=normalizeOwnerCode($('#claimCode').value);
+   if(!code)return toast('Не вижу ключ OWN-XXXXXXXXXX. Можно вставить целиком сообщение из бота.');
+   $('#claimCode').value=code;
+   try{
+     const j=await call('/venue-owner/claim',{method:'POST',body:{code}});
+     accesses=j.establishments||[];
+     if(!accesses.length)throw new Error('Доступ не появился');
+     $('#gate').classList.add('hidden');
+     $('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+'</option>').join('');
+     est=j.establishment_id||accesses[0].establishment_id;
+     if(!accesses.some(x=>x.establishment_id===est))est=accesses[0].establishment_id;
+     $('#venueSelect').value=est;await load();toast('Заведение подключено ✓');
+   }catch(e){
+     const msg=String(e.message||'');
+     toast(msg==='claim_code_invalid_or_expired'?'Ключ уже использован, отключён или срок действия истёк. Создайте свежий ключ в админ-боте.':msg==='bad_claim_code'?'Неверный формат ключа OWN-XXXXXXXXXX':msg);
+   }
  }
 
  function builderForEdit(config={}){

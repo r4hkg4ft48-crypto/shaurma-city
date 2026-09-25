@@ -211,6 +211,17 @@
      x.id=id;x.c=x.c||'shawarma';x.active=true;
    });
  }
+ function menuSectionsForSave(){
+   const names={shawarma:'Шаурма',drinks:'Напитки',bakery:'Выпечка',extras:'Допы'},map=new Map();
+   for(const x of (Array.isArray(data?.sections)?data.sections:[])){
+     const id=String(x?.id||'').trim();if(id&&!map.has(id))map.set(id,{...x,id,name:String(x.name||names[id]||id),active:x.active!==false});
+   }
+   for(const item of menu){
+     const id=String(item.c||item.category||'shawarma').trim()||'shawarma';
+     if(!map.has(id))map.set(id,{id,name:names[id]||id,emoji:'',active:true});
+   }
+   return [...map.values()];
+ }
 
  async function load(){
    data=await call('/venue-owner/establishments/'+encodeURIComponent(est));menu=(data.menu||[]).map(x=>({...x}));builder=builderForEdit(data.config||{});
@@ -232,7 +243,7 @@
  async function saveMenu(){
    readMenu();const btn=$('#saveMenu'),venueAtSave=est;btn.disabled=true;const oldText=btn.textContent;btn.textContent='Сохраняем…';
    try{
-     await call('/venue-owner/establishments/'+encodeURIComponent(venueAtSave)+'/menu',{method:'PUT',body:{menu,sections:data.sections||[]}});
+     await call('/venue-owner/establishments/'+encodeURIComponent(venueAtSave)+'/menu',{method:'PUT',body:{menu,sections:menuSectionsForSave()}});
      if(est===venueAtSave){toast('Меню и фотографии сохранены ✓');await load()}
    }catch(e){toast(e.message)}finally{btn.disabled=false;btn.textContent=oldText}
  }
@@ -287,7 +298,11 @@
      menu=menu.filter(x=>String(x.id)!==id);renderMenu();return;
    }
  };
- $('#menuEditor').onchange=async e=>{
+ $('#menuEditor').oninput=e=>{
+   const input=e.target.closest('[data-k="n"]');if(!input)return;
+   const card=input.closest('.menuEditCard'),head=card?.querySelector('.menuEditCardHead b');if(head)head.textContent=input.value.trim()||'Новая позиция';
+ };
+  $('#menuEditor').onchange=async e=>{
    const input=e.target.closest('[data-photo-input]');if(!input)return;
    const file=input.files?.[0];if(!file)return;
    readMenu();

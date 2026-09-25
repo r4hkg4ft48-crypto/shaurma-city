@@ -5,14 +5,14 @@
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
-    emerald:{accent:'#98e5af',accent2:'#e2f8e8',bg:'#08110d',panel:'#101b15',panel2:'#15231b',hero:'#1b3825',glow:'rgba(110,220,147,.28)',ink:'#0c1b11'},
-    amber:{accent:'#ffc66d',accent2:'#fff0cf',bg:'#150e07',panel:'#20160c',panel2:'#2b1d0f',hero:'#4a2c10',glow:'rgba(255,178,71,.28)',ink:'#241404'},
-    cobalt:{accent:'#82afff',accent2:'#e5edff',bg:'#08101c',panel:'#101927',panel2:'#17243a',hero:'#17345f',glow:'rgba(79,137,255,.28)',ink:'#07142b'},
-    cherry:{accent:'#ff96a8',accent2:'#ffe4e9',bg:'#15090d',panel:'#211117',panel2:'#301720',hero:'#572033',glow:'rgba(255,93,126,.26)',ink:'#2b0710'},
-    violet:{accent:'#b9a2ff',accent2:'#eee9ff',bg:'#0f0a19',panel:'#191225',panel2:'#241936',hero:'#402b65',glow:'rgba(143,108,255,.28)',ink:'#160a2b'},
-    graphite:{accent:'#d5d9df',accent2:'#f5f7f8',bg:'#0d0f11',panel:'#15191c',panel2:'#1e2428',hero:'#333b41',glow:'rgba(210,218,225,.18)',ink:'#111417'},
-    ocean:{accent:'#7ed9e2',accent2:'#dff8fb',bg:'#061316',panel:'#0c1d21',panel2:'#102a2f',hero:'#16424a',glow:'rgba(70,202,217,.25)',ink:'#061d21'},
-    citrus:{accent:'#d7ef72',accent2:'#f4fad8',bg:'#111407',panel:'#1a200d',panel2:'#252d12',hero:'#3c4918',glow:'rgba(200,232,83,.24)',ink:'#182004'}
+    emerald:{accent:'#54d9a0',accent2:'#eafff6',bg:'#120f18',panel:'#1a1420',panel2:'#241a2b',hero:'#25352f',glow:'rgba(84,217,160,.24)',ink:'#143326'},
+    amber:{accent:'#ffb468',accent2:'#fff2dc',bg:'#151019',panel:'#211720',panel2:'#2d201d',hero:'#4b321e',glow:'rgba(255,180,104,.24)',ink:'#3b2410'},
+    cobalt:{accent:'#6d8dff',accent2:'#e9eeff',bg:'#0f101a',panel:'#171927',panel2:'#20243a',hero:'#263f73',glow:'rgba(109,141,255,.27)',ink:'#17244e'},
+    cherry:{accent:'#ff709f',accent2:'#ffe8f0',bg:'#160f17',panel:'#24151d',panel2:'#311b27',hero:'#5e2941',glow:'rgba(255,112,159,.25)',ink:'#451529'},
+    violet:{accent:'#aa6cff',accent2:'#f1e8ff',bg:'#120d1a',panel:'#1d1426',panel2:'#291a37',hero:'#4a306c',glow:'rgba(170,108,255,.28)',ink:'#2d1749'},
+    graphite:{accent:'#cfd3da',accent2:'#f5f7f8',bg:'#111216',panel:'#191b20',panel2:'#23262d',hero:'#39404a',glow:'rgba(207,211,218,.18)',ink:'#20242a'},
+    ocean:{accent:'#58c9dc',accent2:'#e4fbff',bg:'#0d1218',panel:'#132028',panel2:'#17303a',hero:'#1c4b58',glow:'rgba(88,201,220,.24)',ink:'#10323a'},
+    citrus:{accent:'#c9e768',accent2:'#f5fadf',bg:'#12140e',panel:'#1c2115',panel2:'#28301a',hero:'#40511e',glow:'rgba(201,231,104,.23)',ink:'#29330f'}
   };
 
   const cartKey='shaurmeg_cart_'+String(est||marker||'');
@@ -170,7 +170,9 @@
   function add(id){
     const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
     const x=cart.find(x=>String(x.id)===String(id));if(x)x.q++;else cart.push({id:String(src.id),n:String(src.n||src.name),p:Number(src.p??src.price)||0,q:1});
-    save();tg?.HapticFeedback?.impactOccurred?.('light');
+    save();
+    const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
+    tg?.HapticFeedback?.impactOccurred?.('light');
   }
 
   const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готов',done:'Завершён',cancelled:'Отменён'};

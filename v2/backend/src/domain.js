@@ -102,9 +102,8 @@ function normalizeBuilderConfig(raw={}){
   const safeBreads=breads.length?breads:normalizeBuilderOptionList(LEGACY_LEPESH_BUILDER.breads,{prefix:'bread'});
   const safeMeats=meats.length?meats:normalizeBuilderOptionList(LEGACY_LEPESH_BUILDER.meats,{prefix:'meat'});
   const safeSauces=sauces.length?sauces:normalizeBuilderOptionList(LEGACY_LEPESH_BUILDER.sauces,{prefix:'sauce'});
-  const maxSauces=clamp(Number(src.max_sauces)||safeSauces.length,1,Math.max(1,safeSauces.length));
-  const minSauces=clamp(Number(src.min_sauces)||1,0,maxSauces);
-  const maxExtras=clamp(Number(src.max_extras)||safeExtrasLength(src.extras,extras),0,Math.max(0,extras.length||LEGACY_LEPESH_BUILDER.extras.length));
+  const maxSauces=clamp(Number.isFinite(Number(src.max_sauces))?Number(src.max_sauces):safeSauces.length,1,Math.max(1,safeSauces.length));
+  const minSauces=clamp(Number.isFinite(Number(src.min_sauces))?Number(src.min_sauces):1,0,maxSauces);
   const safeExtras=extras.length?extras:normalizeBuilderOptionList(LEGACY_LEPESH_BUILDER.extras,{prefix:'extra'});
   return {
     title:String(src.title||LEGACY_LEPESH_BUILDER.title).trim().slice(0,100)||LEGACY_LEPESH_BUILDER.title,
@@ -112,12 +111,8 @@ function normalizeBuilderConfig(raw={}){
     types:safeTypes,breads:safeBreads,meats:safeMeats,sauces:safeSauces,extras:safeExtras,
     min_sauces:minSauces,
     max_sauces:maxSauces,
-    max_extras:clamp(Number(src.max_extras)||safeExtras.length,0,safeExtras.length)
+    max_extras:clamp(Number.isFinite(Number(src.max_extras))?Number(src.max_extras):safeExtras.length,0,safeExtras.length)
   };
-}
-function safeExtrasLength(raw,normalized){
-  if(normalized.length)return normalized.length;
-  return Array.isArray(raw)&&raw.length?raw.length:LEGACY_LEPESH_BUILDER.extras.length;
 }
 function builderConfig(config={}){
   if(config.builder_enabled!==true&&!config.builder)return null;

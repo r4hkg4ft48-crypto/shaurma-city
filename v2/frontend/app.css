@@ -677,3 +677,415 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 .realCityActive .mapMarker.selected{
   box-shadow:0 0 0 10px rgba(145,87,232,.1),0 20px 54px rgba(0,0,0,.32)
 }
+
+
+/* ===== Venue Editorial Food Experience v3 ===== */
+.venuePage{
+  --menu-paper:#fffaf4;
+  --menu-paper-2:#f5eee8;
+  --menu-ink:#281d30;
+  --menu-muted:#7f7383;
+  --menu-line:rgba(65,43,78,.1);
+  background:
+    radial-gradient(circle at 12% 4%,color-mix(in srgb,var(--venue-accent) 12%,transparent),transparent 25%),
+    radial-gradient(circle at 90% 18%,rgba(95,124,255,.09),transparent 26%),
+    var(--venue-bg);
+}
+.venuePage .venuePageInner{
+  background:
+    radial-gradient(circle at 6% 2%,color-mix(in srgb,var(--venue-accent) 13%,transparent),transparent 23%),
+    radial-gradient(circle at 94% 24%,rgba(95,124,255,.09),transparent 26%),
+    linear-gradient(180deg,var(--venue-bg),color-mix(in srgb,var(--venue-bg) 92%,#17101f) 72%,var(--venue-bg));
+  padding-top:calc(var(--safe-t) + 82px);
+  padding-bottom:calc(var(--safe-b) + 104px)
+}
+.venuePage .venueTopbar{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--venue-panel) 88%,transparent),rgba(20,14,29,.76));
+  border:1px solid color-mix(in srgb,var(--venue-accent) 12%,rgba(255,255,255,.08));
+  box-shadow:0 18px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.035);
+  backdrop-filter:blur(22px) saturate(1.12);
+  -webkit-backdrop-filter:blur(22px) saturate(1.12)
+}
+.venuePage .venueThemeDot{
+  width:10px;height:10px;
+  box-shadow:0 0 0 5px color-mix(in srgb,var(--venue-accent) 10%,transparent),0 0 28px var(--venue-glow)
+}
+.venuePage .venueTopbar .iconBtn{
+  background:rgba(255,255,255,.055);
+  border-color:rgba(255,255,255,.075);
+  color:#f9f4fb;
+  box-shadow:none
+}
+
+/* immersive venue hero */
+.venuePage .venueHeroPanel{
+  min-height:330px;
+  border-radius:31px;
+  background:
+    radial-gradient(circle at 83% 14%,var(--venue-glow),transparent 31%),
+    linear-gradient(145deg,color-mix(in srgb,var(--venue-hero) 91%,#2c1740),var(--venue-panel));
+  border-color:color-mix(in srgb,var(--venue-accent) 20%,rgba(255,255,255,.07));
+  box-shadow:0 32px 90px rgba(0,0,0,.36),0 0 60px color-mix(in srgb,var(--venue-accent) 6%,transparent);
+  overflow:hidden
+}
+.venuePage .venueHeroPanel:before{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    linear-gradient(115deg,rgba(255,255,255,.045),transparent 28%),
+    radial-gradient(circle at 78% 20%,color-mix(in srgb,var(--venue-accent) 16%,transparent),transparent 28%)
+}
+.venuePage .venueHeroPanel img{
+  opacity:.88;
+  filter:saturate(1.07) contrast(1.04);
+  transform:scale(1.015);
+  transition:transform 7s ease
+}
+.venuePage .venueHeroPanel:hover img{transform:scale(1.05)}
+.venuePage .venueHeroPanel:after{
+  z-index:2;
+  background:linear-gradient(180deg,rgba(9,6,13,.04) 5%,rgba(10,7,14,.16) 34%,rgba(12,8,16,.88) 100%)
+}
+.venuePage .heroCopy{z-index:4}
+.venuePage .heroCopy .eyebrow{
+  display:inline-flex;align-items:center;min-height:27px;padding:0 9px;border-radius:999px;
+  background:color-mix(in srgb,var(--venue-accent) 13%,rgba(12,8,16,.36));
+  border:1px solid color-mix(in srgb,var(--venue-accent) 20%,rgba(255,255,255,.06));
+  backdrop-filter:blur(12px)
+}
+.venuePage .venueHeroPanel .heroCopy h1{
+  font-size:clamp(38px,10.8vw,56px);
+  line-height:.93;letter-spacing:-.065em;
+  text-shadow:0 12px 34px rgba(0,0,0,.28)
+}
+.venuePage .venueHeroPanel .heroCopy p{font-size:13px;color:rgba(250,246,250,.7)}
+.venuePage .venueFact{
+  min-height:30px;padding:0 10px;
+  background:rgba(255,255,255,.075);
+  border-color:rgba(255,255,255,.1);
+  color:rgba(255,255,255,.83)
+}
+
+/* editorial engagement rail */
+.menuExperience{
+  margin:11px 0 2px;
+  overflow:hidden;
+  border-radius:18px;
+  border:1px solid color-mix(in srgb,var(--venue-accent) 11%,rgba(255,255,255,.07));
+  background:rgba(255,255,255,.025)
+}
+.experienceTrack{
+  display:flex;align-items:center;gap:6px;width:max-content;
+  padding:7px;
+  animation:experienceDrift 18s linear infinite
+}
+.experienceTrack span{
+  min-height:34px;padding:0 11px;border-radius:12px;display:flex;align-items:center;gap:7px;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.055);
+  color:rgba(255,255,255,.72);white-space:nowrap;font-size:10px
+}
+.experienceTrack i{font-style:normal;color:var(--venue-accent)}
+.experienceTrack b{font-weight:750}
+@keyframes experienceDrift{
+  0%,12%{transform:translateX(0)}
+  44%,56%{transform:translateX(-34px)}
+  88%,100%{transform:translateX(0)}
+}
+
+/* builder becomes a premium feature card */
+.venuePage .builderEntry{
+  position:relative;overflow:hidden;
+  min-height:100px;padding:17px 16px;
+  border-radius:25px;
+  background:
+    radial-gradient(circle at 88% 16%,color-mix(in srgb,var(--venue-accent) 22%,transparent),transparent 38%),
+    linear-gradient(145deg,color-mix(in srgb,var(--venue-panel2) 94%,#2a1740),var(--venue-panel));
+  border-color:color-mix(in srgb,var(--venue-accent) 23%,rgba(255,255,255,.07));
+  box-shadow:0 18px 54px rgba(0,0,0,.24)
+}
+.venuePage .builderEntry:before{
+  content:"";position:absolute;top:-80%;left:-24%;width:36%;height:260%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);
+  transform:rotate(18deg);animation:builderShine 6.8s ease-in-out infinite
+}
+@keyframes builderShine{0%,64%{transform:translateX(-160%) rotate(18deg)}88%,100%{transform:translateX(410%) rotate(18deg)}}
+.venuePage .builderEntry b{font-size:23px}.venuePage .builderEntry em{font-size:11px;max-width:31ch}
+.venuePage .builderEntry strong{
+  flex:0 0 54px;width:54px;height:54px;border-radius:18px;
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  box-shadow:0 12px 32px var(--venue-glow)
+}
+.venuePage .builderEntry:active{transform:scale(.987)}
+
+/* menu section / sticky category selector */
+.venuePage .menuSection{margin-top:28px}
+.venuePage .sectionHead{align-items:end}
+.venuePage .sectionHead>div>small{color:var(--venue-accent);font-size:9px;letter-spacing:.16em}
+.venuePage .sectionHead h2{
+  margin-top:3px;font-size:31px;line-height:1;letter-spacing:-.055em;color:#fbf7fb
+}
+.venuePage .sectionHead>small{color:rgba(255,255,255,.43)}
+.venuePage .chips{
+  position:sticky;top:calc(var(--safe-t) + 73px);z-index:24;
+  margin:0 -4px 12px;padding:7px 4px 8px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--venue-bg) 96%,transparent) 64%,transparent);
+  backdrop-filter:blur(7px);
+  -webkit-backdrop-filter:blur(7px)
+}
+.venuePage .chip{
+  min-height:39px;padding:0 14px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.065);
+  color:rgba(255,255,255,.58);
+  transition:transform .2s ease,background .2s,border-color .2s,color .2s,box-shadow .2s
+}
+.venuePage .chip.active{
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  border-color:transparent;color:var(--venue-ink);
+  box-shadow:0 9px 26px var(--venue-glow);
+  transform:translateY(-1px)
+}
+
+/* milk-paper food cards */
+.venuePage .menuGrid{gap:11px;align-items:stretch}
+.venuePage .foodCard{
+  position:relative;overflow:hidden;
+  min-height:300px;border-radius:25px;
+  background:linear-gradient(160deg,var(--menu-paper),#f8f0eb);
+  border:1px solid rgba(255,255,255,.68);
+  color:var(--menu-ink);
+  box-shadow:0 17px 46px rgba(0,0,0,.21),inset 0 0 0 1px rgba(76,45,89,.035);
+  animation:foodCardIn .55s cubic-bezier(.18,.9,.25,1) both;
+  transform-origin:center bottom
+}
+.venuePage .foodCard:nth-child(2){animation-delay:.045s}
+.venuePage .foodCard:nth-child(3){animation-delay:.09s}
+.venuePage .foodCard:nth-child(4){animation-delay:.135s}
+.venuePage .foodCard:nth-child(5){animation-delay:.18s}
+.venuePage .foodCard:nth-child(6){animation-delay:.225s}
+@keyframes foodCardIn{from{opacity:0;transform:translateY(18px) scale(.975);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+.venuePage .foodCard:after{
+  content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--venue-accent) 5%,transparent)
+}
+.venuePage .foodCard:active{
+  transform:scale(.977);
+  box-shadow:0 10px 28px rgba(0,0,0,.18)
+}
+.venuePage .foodPic{
+  height:158px;
+  background:
+    radial-gradient(circle at 82% 18%,color-mix(in srgb,var(--venue-accent) 25%,transparent),transparent 36%),
+    linear-gradient(145deg,color-mix(in srgb,var(--venue-accent2) 68%,#eee3ef),#e7ddeb);
+}
+.venuePage .foodPic img{
+  width:100%;height:100%;object-fit:cover;
+  transform:scale(1.01);transition:transform .55s cubic-bezier(.2,.8,.2,1),filter .4s
+}
+.venuePage .foodCard:active .foodPic img{transform:scale(1.045)}
+.venuePage .foodPic span{filter:drop-shadow(0 12px 24px color-mix(in srgb,var(--venue-accent) 25%,transparent))}
+.venuePage .foodPic i{
+  height:55%;
+  background:linear-gradient(transparent,rgba(32,20,39,.06))
+}
+.venuePage .foodBody{padding:14px 13px 13px;gap:7px}
+.venuePage .foodBody h3{
+  color:#281d30;font-size:16px;font-weight:900;letter-spacing:-.035em
+}
+.venuePage .foodBody p{
+  color:#827482;font-size:11.5px;line-height:1.36;min-height:32px
+}
+.venuePage .foodRow b{color:#291d31;font-size:18px}
+.venuePage .addBtn{
+  position:relative;overflow:hidden;
+  width:43px;height:43px;border-radius:15px;
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);
+  box-shadow:0 10px 25px var(--venue-glow);
+  transition:transform .14s ease,box-shadow .2s
+}
+.venuePage .addBtn:after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(circle at 35% 25%,rgba(255,255,255,.45),transparent 36%);
+  pointer-events:none
+}
+.venuePage .addBtn:active{transform:scale(.86) rotate(-4deg);box-shadow:0 4px 12px var(--venue-glow)}
+
+/* floating cart — premium bridge between page and checkout */
+.venuePage .floatCart{
+  height:64px;left:10px;right:10px;border-radius:22px;
+  background:
+    linear-gradient(135deg,var(--venue-accent2),color-mix(in srgb,var(--venue-accent) 84%,#fff 5%));
+  color:var(--venue-ink);
+  border:1px solid rgba(255,255,255,.32);
+  box-shadow:0 18px 56px var(--venue-glow),0 14px 38px rgba(0,0,0,.22);
+  backdrop-filter:blur(16px)
+}
+.venuePage .floatCart span,.venuePage .floatCart b{position:relative;z-index:1}
+.venuePage .floatCart:after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.2) 48%,transparent 66%);
+  transform:translateX(-100%)
+}
+.venuePage .floatCart:not(.hidden):after{animation:cartSheen 5s ease-in-out infinite}
+@keyframes cartSheen{0%,65%{transform:translateX(-110%)}88%,100%{transform:translateX(110%)}}
+.cartBump{animation:cartBump .34s cubic-bezier(.2,.9,.25,1)}
+@keyframes cartBump{42%{transform:scale(1.025)}}
+
+/* light editorial order sheets */
+.venuePage .sheetBackdrop{
+  background:rgba(16,10,22,.68);
+  backdrop-filter:blur(7px) saturate(.9)
+}
+.venuePage .sheet{
+  background:
+    radial-gradient(circle at 88% 0,color-mix(in srgb,var(--venue-accent) 7%,transparent),transparent 29%),
+    linear-gradient(180deg,#fffaf5,#f6eee9);
+  color:var(--menu-ink);
+  border:1px solid rgba(255,255,255,.7);
+  box-shadow:0 -30px 90px rgba(0,0,0,.43),inset 0 1px 0 rgba(255,255,255,.8)
+}
+.venuePage .sheetHandle{background:#d9cedb}
+.venuePage .sheetHead h2{color:#2a1e32}
+.venuePage .sheetHead .iconBtn{
+  background:#eee5ec;border-color:rgba(72,46,85,.08);color:#3a2944
+}
+.venuePage .sheetEyebrow{color:color-mix(in srgb,var(--venue-accent) 82%,#6e38a4)}
+.venuePage .cartItem{
+  background:rgba(255,255,255,.67);
+  border:1px solid rgba(71,46,84,.075);
+  color:#2b2033;
+  box-shadow:0 7px 18px rgba(75,49,85,.04)
+}
+.venuePage .cartItemCopy small,.venuePage .orderSummaryLine{color:#867988}
+.venuePage .qty{background:#f0e7ed}
+.venuePage .qty button{
+  background:#e8dfe8;border-color:rgba(73,47,84,.07);color:#392945
+}
+.venuePage .totalRow{border-top-color:rgba(70,46,83,.09);color:#382944}
+.venuePage .checkoutVenueCard{
+  background:linear-gradient(135deg,color-mix(in srgb,var(--venue-accent) 8%,#fffaf5),#f6edf4);
+  border-color:color-mix(in srgb,var(--venue-accent) 17%,rgba(72,46,84,.06));
+  color:#2b2033
+}
+.venuePage .checkoutVenueCard small{color:color-mix(in srgb,var(--venue-accent) 78%,#703ca4)}
+.venuePage .checkoutVenueCard span{color:#857886}
+.venuePage .fulfillmentSegment{
+  background:#eee5ec;border-color:rgba(72,46,84,.06)
+}
+.venuePage .fulfillmentSegment button{
+  color:#786b7d;
+  background:transparent
+}
+.venuePage .fulfillmentSegment button>span{background:rgba(75,46,86,.055)}
+.venuePage .fulfillmentSegment button small{color:#968a98}
+.venuePage .fulfillmentSegment button.active{
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);
+  box-shadow:0 8px 22px var(--venue-glow)
+}
+.venuePage .field label{color:#6f6273}
+.venuePage .field input,.venuePage .field textarea{
+  background:rgba(255,255,255,.72);
+  border:1px solid rgba(70,44,82,.1);
+  color:#2d2135;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7)
+}
+.venuePage .field input::placeholder,.venuePage .field textarea::placeholder{color:#a094a3}
+.venuePage .field input:focus,.venuePage .field textarea:focus{
+  border-color:color-mix(in srgb,var(--venue-accent) 45%,#a77bcc);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--venue-accent) 8%,transparent)
+}
+.venuePage .checkoutNotice{
+  background:color-mix(in srgb,var(--venue-accent) 5%,#fff);
+  border-color:color-mix(in srgb,var(--venue-accent) 13%,rgba(73,47,84,.05));
+  color:#43334c
+}
+.venuePage .checkoutNotice span{color:#847786}
+.venuePage .orderCta{
+  border-radius:17px;
+  transition:transform .15s ease,box-shadow .2s
+}
+.venuePage .orderCta:active{transform:scale(.985)}
+.venuePage .primaryBtn{
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);
+  box-shadow:0 11px 30px var(--venue-glow)
+}
+
+/* builder sheet on milk paper */
+.venuePage .builderBlock>small{color:#7b6e7f;font-weight:850}
+.venuePage .builderChoice{
+  background:rgba(255,255,255,.72);
+  border-color:rgba(72,46,83,.09);
+  color:#2c2034;
+  box-shadow:0 7px 18px rgba(77,47,87,.035)
+}
+.venuePage .builderChoice small{color:#8b7d8c}
+.venuePage .builderChoice.active{
+  border-color:color-mix(in srgb,var(--venue-accent) 42%,rgba(75,47,88,.08));
+  background:color-mix(in srgb,var(--venue-accent) 9%,#fff);
+  box-shadow:0 8px 20px color-mix(in srgb,var(--venue-accent) 9%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--venue-accent) 8%,transparent)
+}
+.venuePage #sauceHint{
+  color:#5f5364;
+  background:color-mix(in srgb,var(--venue-accent) 6%,#fff);
+  border-color:color-mix(in srgb,var(--venue-accent) 12%,rgba(70,44,82,.05))
+}
+
+/* success becomes a designed end-state */
+.venuePage .successSheet{
+  text-align:center;
+  background:
+    radial-gradient(circle at 50% 7%,color-mix(in srgb,var(--venue-accent) 15%,transparent),transparent 27%),
+    linear-gradient(180deg,#fffaf5,#f4ebe8)
+}
+.venuePage .successMark{
+  background:linear-gradient(145deg,var(--venue-accent2),var(--venue-accent));
+  box-shadow:0 18px 52px var(--venue-glow);
+  animation:successPop .62s cubic-bezier(.18,.9,.25,1) both
+}
+@keyframes successPop{from{opacity:0;transform:scale(.55) rotate(-12deg)}70%{transform:scale(1.06) rotate(2deg)}to{opacity:1;transform:none}}
+.venuePage .successSheet h2,.venuePage .successTotal{color:#2b2033}
+.venuePage .successSheet>p{color:#817482}
+.venuePage .successStatus{
+  background:rgba(255,255,255,.68);
+  border-color:rgba(72,45,83,.08);
+  color:#35263f
+}
+.venuePage .successStatus small{color:#887b89}
+.venuePage .successStatus>span{background:var(--venue-accent)}
+.venuePage .plainBtn.orderCta{background:#eee5ec;color:#45334f;border-color:rgba(70,44,82,.08)}
+
+/* profile/order history inside menu */
+.venuePage .historyCard{
+  background:rgba(255,255,255,.68);
+  border-color:rgba(72,46,83,.08);
+  color:#2d2135
+}
+.venuePage .historyMeta,.venuePage .historyBottom span{color:#867987}
+
+/* keep status colors readable on light paper */
+.venuePage .status-new{color:#876200!important}
+.venuePage .status-cooking{color:#a15e13!important}
+.venuePage .status-ready{color:#1b8652!important}
+.venuePage .status-done{color:#69727a!important}
+.venuePage .status-cancelled{color:#b64664!important}
+
+@media(max-width:390px){
+  .venuePage .venueHeroPanel{min-height:292px;border-radius:26px}
+  .venuePage .venueHeroPanel .heroCopy h1{font-size:38px}
+  .venuePage .menuGrid{grid-template-columns:1fr 1fr;gap:9px}
+  .venuePage .foodCard{min-height:282px;border-radius:21px}
+  .venuePage .foodPic{height:132px}
+  .venuePage .foodBody{padding:12px 11px 11px}
+  .venuePage .foodBody h3{font-size:14px}
+  .venuePage .foodRow b{font-size:16px}
+}
+@media(max-width:340px){
+  .venuePage .menuGrid{grid-template-columns:1fr}
+  .venuePage .foodPic{height:175px}
+}
+@media(prefers-reduced-motion:reduce){
+  .experienceTrack,.venuePage .builderEntry:before,.venuePage .foodCard,.venuePage .floatCart:after,.venuePage .successMark{animation:none!important}
+  .venuePage .venueHeroPanel img{transition:none!important}
+}

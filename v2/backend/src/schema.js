@@ -94,11 +94,14 @@ async function ensureSchema(){
     venue_id TEXT NOT NULL,
     venue_name TEXT NOT NULL,
     establishment_id TEXT NOT NULL DEFAULT '',
+    marker_id BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
   CREATE INDEX IF NOT EXISTS idx_v2_orders_user ON shaurma_orders(telegram_user_id,created_at DESC);
+  ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS marker_id BIGINT;
   CREATE INDEX IF NOT EXISTS idx_v2_orders_establishment ON shaurma_orders(establishment_id,created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_v2_orders_marker ON shaurma_orders(marker_id,created_at DESC);
 
   CREATE TABLE IF NOT EXISTS shaurma_venue_admins(
     id BIGSERIAL PRIMARY KEY,

@@ -212,7 +212,7 @@
   $('#builderBreads').onclick=e=>{const b=e.target.closest('[data-bbread]');if(b){builderState.bread=b.dataset.bbread;renderBuilder()}};
   $('#builderMeats').onclick=e=>{const b=e.target.closest('[data-bmeat]');if(b){builderState.meat=b.dataset.bmeat;renderBuilder()}};
   $('#builderSauces').onclick=e=>{const b=e.target.closest('[data-bsauce]');if(b)toggleBuilder(builderState.sauces,b.dataset.bsauce,Math.max(1,Number(builder.max_sauces)||builder.sauces.length))};
-  $('#builderExtras').onclick=e=>{const b=e.target.closest('[data-bextra]');if(b)toggleBuilder(builderState.extras,b.dataset.bextra,Math.max(0,Number(builder.max_extras)||builder.extras.length))};
+  $('#builderExtras').onclick=e=>{const b=e.target.closest('[data-bextra]');if(!b)return;const max=Number.isFinite(Number(builder.max_extras))?Math.max(0,Number(builder.max_extras)):builder.extras.length;toggleBuilder(builderState.extras,b.dataset.bextra,max)};
   $('#addBuilder').onclick=addBuilt;
   $('#cartBtn').onclick=()=>openSheet('cartSheet');
   $('#checkoutBtn').onclick=()=>openSheet('checkoutSheet');

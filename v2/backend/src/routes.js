@@ -7,10 +7,32 @@ const auth=require('./auth');
 const rt=require('./realtime');
 const D=require('./domain');
 const realcity=require('./realcity-service');
+const telegram=require('./telegram');
 
 const router=express.Router();
 
 function fail(res,e,fallback='server_error'){console.error(fallback,e);res.status(e.status||500).json({error:e.message||fallback})}
+function verifyCustomerTelegram(initData){
+  return auth.verifyInitDataAny(initData,[config.AGGREGATOR_BOT_TOKEN,config.CLIENT_BOT_TOKEN]);
+}
+function orderStatusLabel(status){
+  return ({new:'Принят',cooking:'Готовится',ready:'Готов к выдаче',done:'Завершён',cancelled:'Отменён'})[String(status)]||String(status||'');
+}
+function notifyCustomer(order,text,menuCtx=null){
+  if(!order?.telegram_user_id)return;
+  const row=[];
+  if(menuCtx?.marker?.id&&menuCtx?.venue?.establishment_id){
+    const u=new URL(config.PUBLIC_APP_URL+'/menu.html');
+    u.searchParams.set('marker',String(menuCtx.marker.id));
+    u.searchParams.set('establishment',String(menuCtx.venue.establishment_id));
+    u.searchParams.set('from','map');
+    row.push({text:'Открыть меню',web_app:{url:u.toString()}});
+  }else{
+    row.push({text:'Открыть карту',web_app:{url:config.PUBLIC_APP_URL+'/index.html'}});
+  }
+  telegram.sendClientMessage(order.telegram_user_id,text,{inline_keyboard:[row]})
+    .catch(e=>console.error('telegram_customer_notify',e.message));
+}
 const DEFAULT_VENUE_PERMISSIONS=['menu','profile','media','appearance','orders'];
 function normalizeInviteCode(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
 function inviteCodeHash(v){return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeInviteCode(v)).digest('hex')}
@@ -72,7 +94,7 @@ router.get('/menu-context',async(req,res)=>{
 
 router.post('/auth/telegram',async(req,res)=>{
   try{
-    const user=auth.verifyInitData(req.body?.initData||'',config.CLIENT_BOT_TOKEN);
+    const user=verifyCustomerTelegram(req.body?.initData||'');
     const q=await db.query(`
       INSERT INTO shaurma_users(telegram_user_id,username,first_name,last_name,language_code,is_premium,last_seen_at,updated_at)
       VALUES($1,$2,$3,$4,$5,$6,NOW(),NOW())
@@ -104,7 +126,7 @@ router.post('/orders',async(req,res)=>{
   try{
     const sess=auth.readToken(req,'client');
     let tg=sess?{id:sess.sub,username:sess.username,first_name:sess.first_name}:null;
-    if(!tg&&req.body?.telegram_init_data){try{tg=auth.verifyInitData(req.body.telegram_init_data,config.CLIENT_BOT_TOKEN)}catch{}}
+    if(!tg&&req.body?.telegram_init_data){try{tg=verifyCustomerTelegram(req.body.telegram_init_data)}catch{}}
     const ctx=await menuContext(req.body?.marker_id,req.body?.establishment_id);if(!ctx)return res.status(409).json({error:'invalid_venue_context'});
     if(String(req.body?.venue_id||ctx.venue.venue_id)!==String(ctx.venue.venue_id))return res.status(409).json({error:'venue_context_mismatch'});
     const items=Array.isArray(req.body?.items)?req.body.items:[];if(!items.length)return res.status(400).json({error:'empty_order'});
@@ -131,6 +153,7 @@ router.post('/orders',async(req,res)=>{
       VALUES($1,$2::jsonb,$3,$4,$5,$6,$7,'new',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [num,JSON.stringify(normalized),total,String(req.body?.customer_name||tg?.first_name||'Гость').slice(0,120),fulfillment==='delivery'?String(req.body.phone):null,fulfillment==='delivery'?String(req.body.address):null,String(req.body?.comment||'').slice(0,500),tg?'telegram':'web',tg?String(tg.id):null,tg?.username||null,tg?.first_name||null,fulfillment,'pending',req.body?.payment_method||null,ctx.venue.venue_id,ctx.venue.name,ctx.venue.establishment_id]);
     const order=q.rows[0];rt.pushOwner('order',order);rt.pushVenue(order.establishment_id,'order',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'order',order);
+    notifyCustomer(order,'🥙 Заказ '+order.order_number+' принят\n'+order.venue_name+' · '+order.total+' ₽',ctx);
     res.status(201).json(order);
   }catch(e){fail(res,e,'order_create_failed')}
 });
@@ -256,7 +279,9 @@ router.patch('/admin/orders/:id',auth.requireOwner,async(req,res)=>{
   try{
     const status=String(req.body?.status||'');if(!['new','cooking','ready','done','cancelled'].includes(status))return res.status(400).json({error:'bad_status'});
     const q=await db.query('UPDATE shaurma_orders SET status=$2,updated_at=NOW() WHERE id=$1 RETURNING *',[req.params.id,status]);const o=q.rows[0];if(!o)return res.sendStatus(404);
-    rt.pushOwner('update',o);rt.pushVenue(o.establishment_id,'update',o);if(o.telegram_user_id)rt.pushUser(o.telegram_user_id,'update',o);res.json(o);
+    rt.pushOwner('update',o);rt.pushVenue(o.establishment_id,'update',o);if(o.telegram_user_id)rt.pushUser(o.telegram_user_id,'update',o);
+    notifyCustomer(o,'Заказ '+o.order_number+' · '+orderStatusLabel(o.status));
+    res.json(o);
   }catch(e){fail(res,e,'order_update_failed')}
 });
 
@@ -329,6 +354,7 @@ router.patch('/venue-owner/establishments/:establishmentId/orders/:orderId',asyn
     const order=q.rows[0];if(!order)return res.sendStatus(404);
     await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'order_status_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({order_id:order.id,status})]);
     rt.pushOwner('update',order);rt.pushVenue(a.est,'update',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'update',order);
+    notifyCustomer(order,'Заказ '+order.order_number+' · '+orderStatusLabel(order.status));
     res.json(order);
   }catch(e){fail(res,e,'venue_owner_order_update_failed')}
 });

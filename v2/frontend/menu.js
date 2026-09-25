@@ -212,7 +212,7 @@
     tg?.HapticFeedback?.impactOccurred?.('light');
   }
 
-  const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готов',done:'Завершён',cancelled:'Отменён'};
+  const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
   async function myOrders(){
     if(!session){$('#myOrders').innerHTML='<div class="empty">Откройте Mini App внутри Telegram, чтобы видеть историю заказов.</div>';return}
     try{

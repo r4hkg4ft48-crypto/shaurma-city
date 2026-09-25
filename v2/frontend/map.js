@@ -10,10 +10,10 @@
   const FALLBACK={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-saturation':-.22,'raster-contrast':.08,'raster-brightness-min':.08,'raster-brightness-max':.78}}]};
   const STATUS={new:'Принят',cooking:'Готовится',ready:'Готов',done:'Завершён',cancelled:'Отменён'};
   const CITY_PALETTES={
-    morning:{background:'#18231c',water:'#123641',land:'#405b44',residential:'#314036',building:'#c3bfae',road:'#f0eadc',label:'#f2f3ea'},
-    day:{background:'#152019',water:'#0d2f39',land:'#36553e',residential:'#29372d',building:'#bbb8ac',road:'#f0f0e8',label:'#eef0e8'},
-    evening:{background:'#171d19',water:'#102b35',land:'#314738',residential:'#2a332d',building:'#b6aa98',road:'#e8e0d3',label:'#eee9df'},
-    night:{background:'#0b1210',water:'#071d26',land:'#1d3026',residential:'#18221d',building:'#6f786f',road:'#7f8b84',label:'#d8e2dc'}
+    morning:{background:'#eee8f6',water:'#9bbcff',land:'#e8e2f0',residential:'#f6f0ee',building:'#fffaf2',road:'#fffdf8',label:'#44345b'},
+    day:{background:'#e9e2f4',water:'#7fa8ff',land:'#e7e1ef',residential:'#f7f2ef',building:'#fffaf4',road:'#ffffff',label:'#392951'},
+    evening:{background:'#4b3d64',water:'#536fcb',land:'#54466b',residential:'#665675',building:'#f0e6df',road:'#ece7ef',label:'#fff9f6'},
+    night:{background:'#161020',water:'#172957',land:'#21172e',residential:'#2a1d3a',building:'#756382',road:'#a99cb8',label:'#f4ecff'}
   };
   window.__SHAURMEG_MAP_STARTED__=true;
 
@@ -146,12 +146,12 @@
     if(map.getSource('focus-building'))return;
 
     map.addSource('focus-flight',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    map.addLayer({id:'focus-flight-glow',type:'line',source:'focus-flight',paint:{'line-color':'#9ce8b2','line-width':7,'line-opacity':.09,'line-blur':4}});
-    map.addLayer({id:'focus-flight-core',type:'line',source:'focus-flight',paint:{'line-color':'#dff7e5','line-width':1.2,'line-opacity':.48,'line-dasharray':[1.4,1.1]}});
+    map.addLayer({id:'focus-flight-glow',type:'line',source:'focus-flight',paint:{'line-color':'#a46cff','line-width':7,'line-opacity':.09,'line-blur':4}});
+    map.addLayer({id:'focus-flight-core',type:'line',source:'focus-flight',paint:{'line-color':'#f7efff','line-width':1.2,'line-opacity':.48,'line-dasharray':[1.4,1.1]}});
 
     map.addSource('focus-zone',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    map.addLayer({id:'focus-zone-glow',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,22,18,62],'circle-color':'#9ce8b2','circle-opacity':.08,'circle-blur':.7,'circle-stroke-width':1,'circle-stroke-color':'#dff7e5','circle-stroke-opacity':.26}});
-    map.addLayer({id:'focus-zone-core',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,7,18,16],'circle-color':'#baf0c8','circle-opacity':.08,'circle-stroke-width':1.2,'circle-stroke-color':'#dff7e5','circle-stroke-opacity':.38}});
+    map.addLayer({id:'focus-zone-glow',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,22,18,62],'circle-color':'#9a6dff','circle-opacity':.08,'circle-blur':.7,'circle-stroke-width':1,'circle-stroke-color':'#f7efff','circle-stroke-opacity':.26}});
+    map.addLayer({id:'focus-zone-core',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,7,18,16],'circle-color':'#7f9dff','circle-opacity':.08,'circle-stroke-width':1.2,'circle-stroke-color':'#f7efff','circle-stroke-opacity':.38}});
 
     map.addSource('realcity-ground',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-ground-fill',type:'fill',source:'realcity-ground',paint:{
@@ -168,11 +168,11 @@
 
     map.addSource('realcity-roads',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-roads-glow',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#f3efe5','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
+      'line-color':'#fff8f2','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
       'line-opacity':0,'line-blur':5,'line-opacity-transition':{duration:650,delay:120}
     }});
     map.addLayer({id:'realcity-roads-core',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#ded9ce','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
+      'line-color':'#f4edf8','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
       'line-opacity':0,'line-opacity-transition':{duration:650,delay:140}
     }});
 
@@ -184,7 +184,7 @@
       'fill-extrusion-opacity':.78
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
-      'line-color':['coalesce',['get','accent'],'#d7d5cf'],
+      'line-color':['coalesce',['get','accent'],'#ded2ef'],
       'line-width':['case',['==',['get','role'],'nearby'],1,.65],
       'line-opacity':['case',['==',['get','role'],'nearby'],.45,.22]
     }});
@@ -196,7 +196,7 @@
       'fill-extrusion-base':0,'fill-extrusion-opacity':.97
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
-      'line-color':['coalesce',['get','accent'],'#e7f5e9'],'line-width':1.55,'line-opacity':.78
+      'line-color':['coalesce',['get','accent'],'#f2e8ff'],'line-width':1.55,'line-opacity':.78
     }});
 
     map.addSource('realcity-trees',{type:'geojson',data:{type:'FeatureCollection',features:[]}});

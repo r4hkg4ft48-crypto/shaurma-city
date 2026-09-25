@@ -53,13 +53,13 @@
   </section>
 </div>
 
-<div class="claim" id="claim"><div class="claimBox"><div class="brand"><b>SHAURMEG</b><small>ДОСТУП ВЛАДЕЛЬЦА</small></div><h2 id="claimTitle">Подключение заведения</h2><p id="claimText">Откройте кабинет через Telegram-бот владельцев и введите код доступа, который выдал администратор Shaurmeg.</p><input id="claimCode" placeholder="SC-XXXXXXXX"><button id="claimBtn" style="width:100%;margin-top:8px">Подключить</button><div class="err" id="err"></div></div></div>
+<div class="claim" id="claim"><div class="claimBox"><div class="brand"><b>SHAURMEG</b><small>ДОСТУП ВЛАДЕЛЬЦА</small></div><h2 id="claimTitle">Подключение заведения</h2><p id="claimText">Откройте кабинет через Telegram-бот владельцев и введите ключ доступа OWN-XXXXXXXXXX, который выдал администратор Shaurmeg. ID заведения SC-MSK-XXXXXXXXXX — это не ключ доступа.</p><input id="claimCode" placeholder="OWN-XXXXXXXXXX"><button id="claimBtn" style="width:100%;margin-top:8px">Подключить</button><div class="err" id="err"></div></div></div>
 <div class="addVenueModal" id="addVenueModal" hidden>
   <div class="claimBox">
     <div class="brand"><b>ДОБАВИТЬ ЗАВЕДЕНИЕ</b><small>ОДИН БОТ · НЕСКОЛЬКО ТОЧЕК</small></div>
     <h2 style="font-size:24px">Подключить ещё одну точку</h2>
-    <p>Введите одноразовый код доступа для второго или следующего заведения. Уже подключённые точки останутся в кабинете.</p>
-    <input id="addVenueCode" placeholder="SC-XXXXXXXX">
+    <p>Введите одноразовый ключ доступа OWN-XXXXXXXXXX для второго или следующего заведения. ID точки вида SC-MSK-XXXXXXXXXX сюда вводить не нужно. Уже подключённые точки останутся в кабинете.</p>
+    <input id="addVenueCode" placeholder="OWN-XXXXXXXXXX">
     <div class="modalActions"><button class="secondary" id="cancelAddVenue" type="button">Отмена</button><button id="confirmAddVenue" type="button">Подключить</button></div>
     <div class="err" id="addVenueErr"></div>
     <div class="venueAccessList" id="venueAccessList"></div>

@@ -257,3 +257,100 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 @media(max-width:390px){
   .bottomDock{left:8px;right:8px}.appPanel{height:84dvh}.profileStats article{min-height:84px}.profileStats b{font-size:21px}.referralStats{gap:4px}
 }
+
+
+/* ===== Shaurmeg City Motion System ===== */
+.mapApp{
+  --city-sky:rgba(128,224,158,.055);
+  --city-edge:rgba(5,10,7,.5);
+  --city-live:#9fe6b2;
+}
+.mapApp[data-daypart="morning"]{--city-sky:rgba(255,208,142,.07);--city-edge:rgba(13,17,12,.42);--city-live:#d7efae}
+.mapApp[data-daypart="day"]{--city-sky:rgba(133,230,163,.055);--city-edge:rgba(5,10,7,.44);--city-live:#9fe6b2}
+.mapApp[data-daypart="evening"]{--city-sky:rgba(235,169,124,.075);--city-edge:rgba(11,10,9,.5);--city-live:#f0c39d}
+.mapApp[data-daypart="night"]{--city-sky:rgba(90,145,205,.07);--city-edge:rgba(2,6,7,.68);--city-live:#8db9db}
+
+.mapApp .mapAtmosphere{
+  background:
+    radial-gradient(circle at 50% 26%,var(--city-sky),transparent 30%),
+    radial-gradient(circle at 85% 66%,color-mix(in srgb,var(--city-live) 4%,transparent),transparent 24%),
+    linear-gradient(180deg,var(--city-edge),transparent 24%,transparent 57%,rgba(3,7,5,.5));
+  transition:opacity .6s ease,filter .6s ease,transform 1.2s cubic-bezier(.2,.8,.2,1);
+  transform:scale(1.015)
+}
+.mapApp[data-daypart="night"] .mapAtmosphere{
+  background:
+    radial-gradient(circle at 22% 18%,rgba(118,171,226,.08),transparent 23%),
+    radial-gradient(circle at 76% 45%,rgba(144,226,174,.045),transparent 24%),
+    linear-gradient(180deg,rgba(2,6,9,.56),transparent 28%,transparent 53%,rgba(1,5,6,.65))
+}
+.cityLightSweep{
+  position:absolute;inset:-30%;z-index:6;pointer-events:none;opacity:.24;
+  background:linear-gradient(112deg,transparent 38%,rgba(184,245,202,.035) 49%,rgba(255,255,255,.035) 50%,transparent 61%);
+  transform:translateX(-35%) rotate(2deg);animation:citySweep 11s ease-in-out infinite
+}
+@keyframes citySweep{0%,18%{transform:translateX(-42%) rotate(2deg);opacity:0}42%{opacity:.22}68%,100%{transform:translateX(42%) rotate(2deg);opacity:0}}
+.mapMoving .mapAtmosphere{opacity:.82;transform:scale(1.03);filter:saturate(.9)}
+.cityFocus .mapAtmosphere{opacity:.68;filter:saturate(.68) brightness(.78)}
+.cityFocus .mapMarker:not(.selected){filter:saturate(.5) brightness(.72) blur(.1px)}
+.cityFocus .mapMarker.selected{filter:saturate(1.08) brightness(1.08)}
+
+.cityMode{
+  min-width:68px;height:31px;padding:0 8px;border-radius:11px;display:flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.06);color:#809087
+}
+.cityMode i{width:6px;height:6px;border-radius:50%;background:var(--city-live);box-shadow:0 0 0 4px color-mix(in srgb,var(--city-live) 8%,transparent),0 0 14px color-mix(in srgb,var(--city-live) 50%,transparent);animation:liveDot 2s ease-in-out infinite}
+.cityMode span{font-size:7px;line-height:1;letter-spacing:.08em;font-weight:900;white-space:nowrap}
+@keyframes liveDot{50%{transform:scale(.78);opacity:.6}}
+
+.mapFocusFlash{
+  position:absolute;z-index:7;width:72vmin;height:72vmin;left:50%;top:48%;border-radius:50%;pointer-events:none;
+  transform:translate(-50%,-50%) scale(.55);opacity:0;
+  background:radial-gradient(circle,rgba(172,240,192,.11) 0,rgba(128,221,157,.045) 28%,transparent 67%);
+  border:1px solid rgba(174,241,194,.08)
+}
+.mapFocusFlash.active{animation:focusFlash 1.3s cubic-bezier(.2,.8,.2,1) both}
+@keyframes focusFlash{0%{opacity:0;transform:translate(-50%,-50%) scale(.34)}22%{opacity:.8}100%{opacity:0;transform:translate(-50%,-50%) scale(1.22)}}
+
+.focusHud{
+  position:fixed;z-index:29;left:50%;top:calc(var(--safe-t) + 77px);width:max-content;max-width:calc(100vw - 120px);
+  transform:translate(-50%,-12px) scale(.96);opacity:0;pointer-events:none;
+  padding:8px 12px 9px;border-radius:15px;text-align:center;
+  background:rgba(7,14,10,.76);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+  border:1px solid rgba(160,235,181,.11);box-shadow:0 14px 42px rgba(0,0,0,.28);
+  transition:.34s cubic-bezier(.2,.8,.2,1)
+}
+.focusHud.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.focusHud small,.focusHud b,.focusHud span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.focusHud small{font-size:7px;letter-spacing:.15em;color:#9fe6b2;font-weight:900}
+.focusHud b{font-size:12px;margin-top:2px;letter-spacing:-.02em}
+.focusHud span{font-size:8px;color:#718078;margin-top:1px}
+
+.markerReveal{animation:markerReveal .62s calc(var(--reveal-delay,0ms) + 140ms) cubic-bezier(.15,.9,.25,1) both}
+@keyframes markerReveal{
+  0%{clip-path:circle(0 at 50% 50%);filter:blur(5px) brightness(1.6)}
+  62%{clip-path:circle(72% at 50% 50%);filter:blur(0) brightness(1.18)}
+  100%{clip-path:circle(80% at 50% 50%);filter:none}
+}
+.mapMarker{transition:filter .3s ease,box-shadow .3s ease}
+.mapMarker.selected{z-index:2}
+.userLocation{
+  width:22px;height:22px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(224,250,231,.95);border:2px solid #153c25;box-shadow:0 0 0 6px rgba(151,230,174,.14),0 8px 24px rgba(0,0,0,.3)
+}
+.userLocation i{width:7px;height:7px;border-radius:50%;background:#48a968;box-shadow:0 0 0 0 rgba(101,210,134,.42);animation:userPulse 2s ease-out infinite}
+@keyframes userPulse{70%,100%{box-shadow:0 0 0 13px rgba(101,210,134,0)}}
+
+.cityFocus .venueCard.show{animation:venueFocusIn .48s .08s cubic-bezier(.18,.9,.22,1) both}
+@keyframes venueFocusIn{from{opacity:0;transform:translateY(28px) scale(.975)}to{opacity:1;transform:none}}
+
+@media(max-width:390px){
+  .cityMode{min-width:0;padding:0 7px}.cityMode span{display:none}
+  .focusHud{max-width:calc(100vw - 84px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .cityLightSweep,.cityMode i,.userLocation i{animation:none!important}
+  .markerReveal{animation:none!important;clip-path:none!important;filter:none!important}
+  .mapFocusFlash.active{animation:none!important;opacity:0}
+  .mapAtmosphere,.mapRoot,.venueCard,.focusHud{transition-duration:.12s!important}
+}

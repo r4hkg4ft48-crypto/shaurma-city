@@ -9,16 +9,26 @@
 <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
 </head>
 <body class="mapApp">
-<div class="mapRoot"><div id="map"></div><div class="mapShade"></div><div class="mapAtmosphere"></div></div>
+<div class="mapRoot">
+  <div id="map"></div>
+  <div class="mapShade"></div>
+  <div class="mapAtmosphere"></div>
+  <div class="cityLightSweep"></div>
+  <div class="mapFocusFlash" id="mapFocusFlash"></div>
+</div>
 
 <header class="topbar glass mapTopbar">
   <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small></div></div>
-  <div class="grow"></div><div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div><button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
+  <div class="grow"></div>
+  <div class="cityMode" id="cityMode"><i></i><span>ГОРОД LIVE</span></div>
+  <div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div>
+  <button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 
 <div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
 <div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>
+<div class="focusHud" id="focusHud"><small>REAL CITY · ФОКУС</small><b id="focusHudName">Заведение</b><span id="focusHudState">собираем квартал</span></div>
 
 <article class="venueCard glass" id="venueCard">
   <div class="venueHero"><div class="venueAvatar" id="venueAvatar">🥙</div><div><h2 id="venueName">Заведение</h2><p id="venueAddress"></p></div><span class="badge" id="realBadge">REAL CITY</span></div>

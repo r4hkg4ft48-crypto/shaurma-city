@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
@@ -72,13 +72,34 @@
   function closeSheets(){$('#backdrop').classList.remove('show');document.querySelectorAll('.sheet').forEach(x=>x.classList.remove('show'))}
 
   async function authTelegram(){
-    if(!tg?.initData)return;
+    if(!tg?.initData)return !!session;
     try{
       const r=await fetch(api+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})});
-      if(!r.ok)return;
+      if(!r.ok)return !!session;
       const j=await r.json();session=j.session;sessionStorage.setItem('shaurmeg_client_session',session);
       if(j.user?.first_name&&!$('#customer').value)$('#customer').value=j.user.first_name;
-    }catch{}
+      return true;
+    }catch{return !!session}
+  }
+  function favoriteHeaders(){return session?{Authorization:'Bearer '+session}:{}}
+  async function loadFavoriteState(){
+    if(!session||!est){favoriteIds=new Set();renderMenu();return}
+    try{
+      const r=await fetch(api+'/me/favorites',{headers:favoriteHeaders(),cache:'no-store'});if(!r.ok)throw 0;
+      const j=await r.json(),prefix=String(est)+':';
+      favoriteIds=new Set((Array.isArray(j.explicit)?j.explicit:[]).filter(x=>String(x).startsWith(prefix)).map(x=>String(x).slice(prefix.length)));
+    }catch{favoriteIds=new Set()}
+    renderMenu();
+  }
+  async function toggleFavorite(id){
+    if(!session)return toast('Откройте Shaurmeg через Telegram, чтобы сохранять избранное');
+    const itemId=String(id),active=favoriteIds.has(itemId),method=active?'DELETE':'PUT';
+    try{
+      const r=await fetch(api+'/me/favorites/'+encodeURIComponent(est)+'/'+encodeURIComponent(itemId),{method,headers:favoriteHeaders()});
+      if(!r.ok)throw 0;
+      if(active)favoriteIds.delete(itemId);else favoriteIds.add(itemId);
+      renderMenu();toast(active?'Убрано из избранного':'Добавлено в избранное ♥');tg?.HapticFeedback?.selectionChanged?.();
+    }catch{toast('Не удалось изменить избранное')}
   }
 
   function builderConfig(config={}){
@@ -187,7 +208,7 @@
     const menu=(ctx?.venue?.menu||[]).filter(x=>x.active!==false&&(category==='all'||String(x.c||x.category)===category));
     $('#menuGrid').innerHTML=menu.length?menu.map(x=>'<article class="foodCard">'+
       '<div class="foodPic">'+(x.image?'<img src="'+esc(x.image)+'" alt="" loading="lazy" onerror="this.remove()">':'<span>🥙</span>')+'<i></i></div>'+
-      '<div class="foodBody"><div class="foodTitle"><h3>'+esc(x.n||x.name)+'</h3></div><p>'+esc(x.d||x.description||'')+'</p>'+
+      '<div class="foodBody"><div class="foodTitle"><h3>'+esc(x.n||x.name)+'</h3><button class="foodFavorite '+(favoriteIds.has(String(x.id))?'active':'')+'" data-favorite="'+esc(x.id)+'" aria-label="'+(favoriteIds.has(String(x.id))?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div><p>'+esc(x.d||x.description||'')+'</p>'+
       '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(x.id)+'" aria-label="Добавить">+</button></div></div></article>').join('')
       :'<div class="empty" style="grid-column:1/-1">В разделе пока нет позиций</div>';
   }
@@ -202,6 +223,7 @@
       (x.detail?'<small>'+esc(x.detail)+'</small>':'<small>'+money(x.p)+' за шт.</small>')+
       '</div><div class="qty"><button data-minus="'+esc(x.id)+'">−</button><b>'+x.q+'</b><button data-plus="'+esc(x.id)+'">+</button></div></div>').join('')
       :'<div class="empty">Корзина пуста</div>';
+    $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }
 
   function add(id){
@@ -210,6 +232,19 @@
     save();
     const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
     tg?.HapticFeedback?.impactOccurred?.('light');
+  }
+  function runQuickFavoriteOrder(){
+    const itemId=String(qs.get('quick_item')||'');
+    if(!itemId||qs.get('quick_checkout')!=='1')return;
+    const src=(ctx?.venue?.menu||[]).find(x=>x.active!==false&&String(x.id)===itemId);
+    if(!src){toast('Эта позиция больше недоступна');return}
+    add(itemId);
+    try{
+      const u=new URL(location.href);u.searchParams.delete('quick_item');u.searchParams.delete('quick_checkout');
+      history.replaceState({},'',u.toString());
+    }catch{}
+    openSheet('checkoutSheet');
+    tg?.HapticFeedback?.notificationOccurred?.('success');
   }
 
   const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
@@ -241,7 +276,10 @@
   }
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
-  $('#menuGrid').onclick=e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
+  $('#menuGrid').onclick=e=>{
+    const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
+    const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
+  };
   $('#cartItems').onclick=e=>{
     let b=e.target.closest('[data-plus]');if(b){const x=cart.find(x=>x.id===b.dataset.plus);if(x){x.q++;save()}return}
     b=e.target.closest('[data-minus]');if(b){const x=cart.find(x=>x.id===b.dataset.minus);if(x&&--x.q<=0)cart=cart.filter(v=>v!==x);save()}
@@ -270,6 +308,12 @@
   }
   $('#back').onclick=goMap;
   try{tg?.ready();tg?.expand();tg?.BackButton?.show();tg?.BackButton?.onClick(goMap)}catch{}
-  authTelegram();
-  load().catch(e=>{toast(e.message);$('#venueName').textContent='Меню недоступно'});
+  (async()=>{
+    try{
+      await authTelegram();
+      await load();
+      await loadFavoriteState();
+      runQuickFavoriteOrder();
+    }catch(e){toast(e.message);$('#venueName').textContent='Меню недоступно'}
+  })();
 })();

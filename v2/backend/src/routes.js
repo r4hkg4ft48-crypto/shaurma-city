@@ -60,6 +60,112 @@ async function ownerAccesses(userId){
 function publicUser(row){
   return row?{id:String(row.telegram_user_id),username:row.username||'',first_name:row.first_name||'',last_name:row.last_name||'',profile:row.profile||{},favorites:Array.isArray(row.favorites)?row.favorites:[],preferences:row.preferences||{},referral_code:row.referral_code||'',payment:{provider:row.payment_provider||null,card_brand:row.payment_card_brand||null,card_last4:row.payment_card_last4||null,autopay_enabled:!!row.autopay_enabled,linked:!!row.payment_card_last4}}:null;
 }
+function favoriteRefs(value){
+  if(!Array.isArray(value))return [];
+  const seen=new Set(),out=[];
+  for(const raw of value){
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))continue;
+    const establishment_id=D.establishmentId(raw.establishment_id),item_id=String(raw.item_id||'').trim().slice(0,100);
+    if(!establishment_id||!item_id)continue;
+    const key=establishment_id+':'+item_id;if(seen.has(key))continue;seen.add(key);
+    out.push({establishment_id,item_id,added_at:String(raw.added_at||'')||null});
+  }
+  return out.slice(0,200);
+}
+function publicFavoriteImage(establishmentId,item,updatedAt){
+  const raw=String(item?.image||item?.i||'').trim();
+  if(!raw)return '';
+  if(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw)){
+    const stamp=new Date(updatedAt||Date.now()).getTime();
+    return config.PUBLIC_API_URL+'/api/v2/menu-image/'+encodeURIComponent(establishmentId)+'/'+encodeURIComponent(String(item.id))+'?v='+stamp;
+  }
+  return raw;
+}
+async function favoriteView(userId){
+  const uid=String(userId||'');
+  const [uq,oq]=await Promise.all([
+    db.query('SELECT favorites FROM shaurma_users WHERE telegram_user_id=$1',[uid]),
+    db.query(`SELECT establishment_id,venue_name,marker_id,items,created_at
+      FROM shaurma_orders
+      WHERE telegram_user_id=$1 AND status<>'cancelled'
+      ORDER BY created_at DESC LIMIT 300`,[uid])
+  ]);
+  const explicit=favoriteRefs(uq.rows[0]?.favorites),history=new Map(),establishments=new Set(explicit.map(x=>x.establishment_id));
+  for(const order of oq.rows){
+    const est=D.establishmentId(order.establishment_id);if(!est)continue;establishments.add(est);
+    const counted=new Set();
+    for(const item of (Array.isArray(order.items)?order.items:[])){
+      const itemId=String(item?.id||'').trim().slice(0,100);if(!itemId)continue;
+      const key=est+':'+itemId,entry=history.get(key)||{orders:0,quantity:0,last_order_at:null};
+      if(!counted.has(itemId)){entry.orders++;counted.add(itemId)}
+      entry.quantity+=Math.max(1,Number(item?.q)||1);
+      if(!entry.last_order_at)entry.last_order_at=order.created_at;
+      history.set(key,entry);
+    }
+  }
+  const ests=[...establishments];
+  if(!ests.length)return {groups:[],explicit:[]};
+  const vq=await db.query(`SELECT v.establishment_id,v.venue_id,v.name,v.menu,v.updated_at,
+      (SELECT m.id FROM shaurmeg_markers m WHERE m.establishment_id=v.establishment_id AND m.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE ORDER BY m.id LIMIT 1) marker_id,
+      (SELECT m.address FROM shaurmeg_markers m WHERE m.establishment_id=v.establishment_id AND m.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE ORDER BY m.id LIMIT 1) address
+    FROM shaurma_venues v
+    WHERE v.establishment_id=ANY($1::text[]) AND v.is_active=TRUE`,[ests]);
+
+  const explicitSet=new Set(explicit.map(x=>x.establishment_id+':'+x.item_id)),groups=[];
+  for(const venue of vq.rows){
+    if(!venue.marker_id)continue;
+    const menu=(Array.isArray(venue.menu)?venue.menu:[]).filter(x=>x?.active!==false),byId=new Map(menu.map(x=>[String(x.id),x]));
+    const inferred=[...history.entries()]
+      .filter(([key])=>key.startsWith(venue.establishment_id+':'))
+      .map(([key,stats])=>({item_id:key.slice(venue.establishment_id.length+1),...stats}))
+      .filter(x=>byId.has(x.item_id))
+      .sort((a,b)=>b.orders-a.orders||b.quantity-a.quantity||String(byId.get(a.item_id)?.n||byId.get(a.item_id)?.name||'').localeCompare(String(byId.get(b.item_id)?.n||byId.get(b.item_id)?.name||''),'ru'))
+      .slice(0,6);
+    const candidateIds=new Set(inferred.map(x=>x.item_id));
+    for(const fav of explicit)if(fav.establishment_id===venue.establishment_id)candidateIds.add(fav.item_id);
+    const items=[...candidateIds].map(itemId=>{
+      const item=byId.get(itemId);if(!item)return null;
+      const key=venue.establishment_id+':'+itemId,stats=history.get(key)||{orders:0,quantity:0,last_order_at:null};
+      return {
+        item_id:itemId,
+        name:String(item.n||item.name||'Позиция'),
+        description:String(item.d||item.description||''),
+        price:Number(item.p??item.price)||0,
+        image:publicFavoriteImage(venue.establishment_id,item,venue.updated_at),
+        explicit:explicitSet.has(key),
+        order_count:Number(stats.orders)||0,
+        quantity:Number(stats.quantity)||0,
+        last_order_at:stats.last_order_at||null
+      };
+    }).filter(Boolean).sort((a,b)=>Number(b.explicit)-Number(a.explicit)||b.order_count-a.order_count||b.quantity-a.quantity||a.name.localeCompare(b.name,'ru'));
+    if(items.length)groups.push({
+      establishment_id:venue.establishment_id,venue_id:venue.venue_id,venue_name:venue.name,
+      marker_id:String(venue.marker_id),address:venue.address||'',items
+    });
+  }
+  groups.sort((a,b)=>String(a.venue_name).localeCompare(String(b.venue_name),'ru',{sensitivity:'base'}));
+  return {groups,explicit:[...explicitSet]};
+}
+async function setExplicitFavorite(userId,establishmentId,itemId,enabled){
+  const uid=String(userId||''),est=D.establishmentId(establishmentId),id=String(itemId||'').trim().slice(0,100);
+  if(!est||!id)throw Object.assign(new Error('bad_favorite'),{status:400});
+  if(enabled){
+    const vq=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 AND is_active=TRUE LIMIT 1',[est]);
+    const item=(Array.isArray(vq.rows[0]?.menu)?vq.rows[0].menu:[]).find(x=>x?.active!==false&&String(x?.id||'')===id);
+    if(!item)throw Object.assign(new Error('favorite_item_unavailable'),{status:404});
+  }
+  return db.tx(async client=>{
+    const uq=await client.query('SELECT favorites FROM shaurma_users WHERE telegram_user_id=$1 FOR UPDATE',[uid]);
+    if(!uq.rows[0])throw Object.assign(new Error('user_not_found'),{status:404});
+    let refs=favoriteRefs(uq.rows[0].favorites),key=est+':'+id;
+    refs=refs.filter(x=>x.establishment_id+':'+x.item_id!==key);
+    if(enabled)refs.unshift({establishment_id:est,item_id:id,added_at:new Date().toISOString()});
+    refs=refs.slice(0,200);
+    await client.query('UPDATE shaurma_users SET favorites=$2::jsonb,updated_at=NOW() WHERE telegram_user_id=$1',[uid,JSON.stringify(refs)]);
+    return refs;
+  });
+}
+
 async function menuContext(marker,est){
   const markerId=D.markerId(marker),establishment=D.establishmentId(est);
   if(!markerId||!establishment)return null;
@@ -183,6 +289,23 @@ router.get('/me/dashboard',auth.requireSession('client'),async(req,res)=>{
       bonuses:{balance:Number(bq.rows[0]?.balance||0),status:'rules_pending'}
     });
   }catch(e){fail(res,e,'dashboard_failed')}
+});
+
+router.get('/me/favorites',auth.requireSession('client'),async(req,res)=>{
+  try{res.setHeader('Cache-Control','no-store');res.json(await favoriteView(req.session.sub))}
+  catch(e){fail(res,e,'favorites_read_failed')}
+});
+router.put('/me/favorites/:establishmentId/:itemId',auth.requireSession('client'),async(req,res)=>{
+  try{
+    await setExplicitFavorite(req.session.sub,req.params.establishmentId,req.params.itemId,true);
+    res.json({ok:true,favorite:true});
+  }catch(e){fail(res,e,'favorite_add_failed')}
+});
+router.delete('/me/favorites/:establishmentId/:itemId',auth.requireSession('client'),async(req,res)=>{
+  try{
+    await setExplicitFavorite(req.session.sub,req.params.establishmentId,req.params.itemId,false);
+    res.json({ok:true,favorite:false});
+  }catch(e){fail(res,e,'favorite_remove_failed')}
 });
 
 router.get('/me/orders',auth.requireSession('client'),async(req,res)=>{

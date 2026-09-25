@@ -30,10 +30,28 @@
    <div class="rowBtns themeActions"><button class="primaryBtn" id="saveTheme">Сохранить дизайн</button><button class="plainBtn" id="resetTheme">Сбросить к Shaurmeg</button></div>
  </div>
  <div class="rowBtns"><button class="primaryBtn" id="saveProfile">Сохранить профиль</button><button class="plainBtn" id="saveAppearance">Сохранить метку</button></div></div></section>
-<section id="menu" class="panel hidden">
-  <div class="sectionHead"><h2>Меню</h2><button class="plainBtn" id="addItem">＋ Позиция</button></div>
-  <div class="menuEditor" id="menuEditor"></div>
-  <button class="primaryBtn" style="margin-top:12px" id="saveMenu">Сохранить меню</button>
+<section id="menu" class="panel hidden ownerMenuPanel">
+  <div class="ownerMenuHero">
+    <div>
+      <small>МЕНЮ ЗАВЕДЕНИЯ</small>
+      <h2>Позиции и фотографии</h2>
+      <p>Фото, цены и описания сохраняются только для выбранной точки.</p>
+    </div>
+    <button class="primaryBtn ownerAddItem" id="addItem">＋ Новая позиция</button>
+  </div>
+
+  <div class="ownerMenuScope">
+    <div class="ownerMenuScopeIcon">🥙</div>
+    <div><small>СЕЙЧАС РЕДАКТИРУЕТСЯ</small><b id="menuVenueLabel">Заведение</b><span id="menuEstLabel">—</span></div>
+    <strong><span id="menuItemCount">0</span> поз.</strong>
+  </div>
+
+  <div class="menuEditor menuEditorCards" id="menuEditor"></div>
+
+  <div class="ownerMenuSaveBar">
+    <div><b>Изменения меню</b><small>Фото автоматически сжимаются для быстрой загрузки Mini App.</small></div>
+    <button class="primaryBtn" id="saveMenu">Сохранить меню</button>
+  </div>
 
   <div class="builderAdmin" id="builderAdmin">
     <div class="builderAdminHead">

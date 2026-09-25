@@ -230,12 +230,69 @@
   }
 
   function renderMenu(){
-    const menu=(ctx?.venue?.menu||[]).filter(x=>x.active!==false&&(category==='all'||String(x.c||x.category)===category));
-    $('#menuGrid').innerHTML=menu.length?menu.map(x=>'<article class="foodCard">'+
-      '<div class="foodPic">'+(x.image?'<img src="'+esc(x.image)+'" alt="" loading="lazy" onerror="this.remove()">':'<span>🥙</span>')+'<i></i></div>'+
-      '<div class="foodBody"><div class="foodTitle"><h3>'+esc(x.n||x.name)+'</h3><button class="foodFavorite '+(favoriteIds.has(String(x.id))?'active':'')+'" data-favorite="'+esc(x.id)+'" aria-label="'+(favoriteIds.has(String(x.id))?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div><p>'+esc(x.d||x.description||'')+'</p>'+
-      '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(x.id)+'" aria-label="Добавить">+</button></div></div></article>').join('')
-      :'<div class="empty" style="grid-column:1/-1">В разделе пока нет позиций</div>';
+    const all=(ctx?.venue?.menu||[]).filter(x=>x.active!==false);
+    const sections=Array.isArray(ctx?.venue?.sections)?ctx.venue.sections:[];
+    const visible=all.filter(x=>category==='all'||String(x.c||x.category)===category);
+    const sectionById=new Map(sections.map(x=>[String(x.id),x]));
+
+    const card=(x,mode='standard')=>{
+      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
+      const badge=String(x.badge||x.tag||'').trim();
+      const modeClass=mode==='lead'?' foodCardLead':mode==='compact'?' foodCardCompact':'';
+      return '<article class="foodCard'+modeClass+'">'+
+        '<div class="foodPic">'+
+          (x.image?'<img src="'+esc(x.image)+'" alt="'+esc(name)+'" loading="lazy" onerror="this.remove()">':'<span>🥙</span>')+
+          (badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+
+          '<i></i></div>'+
+        '<div class="foodBody">'+
+          '<div class="foodTitle"><h3>'+esc(name)+'</h3><button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div>'+
+          '<p>'+esc(description)+'</p>'+
+          '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
+        '</div></article>';
+    };
+
+    if(!visible.length){
+      $('#menuGrid').innerHTML='<div class="empty menuEmpty">В разделе пока нет позиций</div>';
+      return;
+    }
+
+    if(category!=='all'){
+      const meta=sectionById.get(String(category))||{};
+      const title=String(meta.name||'Выбранное');
+      const icon=String(meta.emoji||'✦');
+      $('#menuGrid').innerHTML=
+        '<section class="menuGroup menuGroupSingle">'+
+          '<div class="menuGroupHead"><div class="menuGroupTitle"><span>'+esc(icon)+'</span><div><h3>'+esc(title)+'</h3><small>'+visible.length+' позиций</small></div></div></div>'+
+          '<div class="menuGroupGrid">'+visible.map((x,i)=>card(x,i<2?'lead':'standard')).join('')+'</div>'+
+        '</section>';
+      return;
+    }
+
+    const grouped=[];
+    const used=new Set();
+    sections.forEach((s,index)=>{
+      const sid=String(s.id);
+      const items=visible.filter(x=>String(x.c||x.category)===sid);
+      if(!items.length)return;
+      items.forEach(x=>used.add(String(x.id)));
+      grouped.push({id:sid,name:String(s.name||'Раздел'),emoji:String(s.emoji||'✦'),items,index});
+    });
+    const extra=visible.filter(x=>!used.has(String(x.id)));
+    if(extra.length)grouped.push({id:'__other',name:sections.length?'Другое':'Меню',emoji:'✦',items:extra,index:grouped.length});
+
+    $('#menuGrid').innerHTML=grouped.map((g,gi)=>{
+      const lead=gi===0;
+      const layoutClass=lead?' menuGroupLead':' menuGroupCompact';
+      const action=g.id==='__other'?'':'<button class="menuSeeAll" data-section-cat="'+esc(g.id)+'">Смотреть все <span>→</span></button>';
+      const cards=g.items.map((x,i)=>card(x,lead&&i<4?'lead':'compact')).join('');
+      return '<section class="menuGroup'+layoutClass+'">'+
+        '<div class="menuGroupHead">'+
+          '<div class="menuGroupTitle"><span>'+esc(g.emoji)+'</span><div><h3>'+esc(g.name)+'</h3><small>'+g.items.length+' позиций</small></div></div>'+
+          action+
+        '</div>'+
+        '<div class="menuGroupGrid">'+cards+'</div>'+
+      '</section>';
+    }).join('');
   }
 
   function renderCart(){
@@ -302,6 +359,14 @@
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
   $('#menuGrid').onclick=e=>{
+    const section=e.target.closest('[data-section-cat]');
+    if(section){
+      category=section.dataset.sectionCat;
+      document.querySelectorAll('#chips [data-cat]').forEach(x=>x.classList.toggle('active',x.dataset.cat===category));
+      renderMenu();
+      try{$('.menuSection')?.scrollIntoView?.({behavior:'smooth',block:'start'})}catch{}
+      return;
+    }
     const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
     const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
   };

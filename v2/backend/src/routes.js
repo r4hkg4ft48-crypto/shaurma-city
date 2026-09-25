@@ -16,7 +16,7 @@ function verifyCustomerTelegram(initData){
   return auth.verifyInitDataAny(initData,[config.AGGREGATOR_BOT_TOKEN,config.CLIENT_BOT_TOKEN]);
 }
 function orderStatusLabel(status){
-  return ({new:'Принят',cooking:'Готовится',ready:'Готов к выдаче',done:'Завершён',cancelled:'Отменён'})[String(status)]||String(status||'');
+  return ({new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'})[String(status)]||String(status||'');
 }
 function notifyCustomer(order,text,menuCtx=null){
   if(!order?.telegram_user_id)return;
@@ -228,6 +228,7 @@ router.post('/orders',async(req,res)=>{
     ]).catch(e=>console.error('order_audit',e.message));
     rt.pushOwner('order',order);rt.pushVenue(order.establishment_id,'order',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'order',order);
     notifyCustomer(order,'🥙 Заказ '+order.order_number+' принят\n'+order.venue_name+' · '+order.total+' ₽',ctx);
+    telegram.notifyKitchenOrder(order).catch(e=>console.error('kitchen_order_notify',e.message));
     res.status(201).json(order);
   }catch(e){fail(res,e,'order_create_failed')}
 });
@@ -366,6 +367,7 @@ router.patch('/admin/orders/:id',auth.requireOwner,async(req,res)=>{
     const q=await db.query('UPDATE shaurma_orders SET status=$2,updated_at=NOW() WHERE id=$1 RETURNING *',[req.params.id,status]);const o=q.rows[0];if(!o)return res.sendStatus(404);
     rt.pushOwner('update',o);rt.pushVenue(o.establishment_id,'update',o);if(o.telegram_user_id)rt.pushUser(o.telegram_user_id,'update',o);
     notifyCustomer(o,'Заказ '+o.order_number+' · '+orderStatusLabel(o.status));
+    telegram.refreshKitchenOrderMessages(o).catch(e=>console.error('kitchen_order_refresh',e.message));
     res.json(o);
   }catch(e){fail(res,e,'order_update_failed')}
 });
@@ -477,6 +479,7 @@ router.patch('/venue-owner/establishments/:establishmentId/orders/:orderId',asyn
     await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'order_status_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({order_id:order.id,status})]);
     rt.pushOwner('update',order);rt.pushVenue(a.est,'update',order);if(order.telegram_user_id)rt.pushUser(order.telegram_user_id,'update',order);
     notifyCustomer(order,'Заказ '+order.order_number+' · '+orderStatusLabel(order.status));
+    telegram.refreshKitchenOrderMessages(order).catch(e=>console.error('kitchen_order_refresh',e.message));
     res.json(order);
   }catch(e){fail(res,e,'venue_owner_order_update_failed')}
 });

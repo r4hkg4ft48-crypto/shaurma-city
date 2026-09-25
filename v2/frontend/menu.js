@@ -336,7 +336,7 @@
       return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
         '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
         '<div class="foodBody">'+
-          '<div class="foodTitle"><h3>'+esc(name)+'</h3><button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button></div>'+
+          '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
           '<p>'+esc(description)+'</p>'+
           '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
         '</div></article>';

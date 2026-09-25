@@ -3312,3 +3312,178 @@ body.venuePage .foodPic img{
   body.venuePage .otherDishGrid .foodBody p{display:none!important}
   body.venuePage .otherDishGrid .foodRow b{font-size:12px!important}
 }
+
+
+/* ===== Per-venue site studio & builder singularity ===== */
+.venuePage{
+  --site-radius:20px;
+  --site-ambient:.16;
+  --site-panel-opacity:.9;
+  --site-contrast:1;
+}
+.venuePage .venuePageInner{
+  position:relative;
+  isolation:isolate;
+  filter:contrast(var(--site-contrast))
+}
+.venuePage .venuePageInner:before{
+  content:"";
+  position:fixed;
+  z-index:-5;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(180deg,color-mix(in srgb,var(--venue-bg) 76%,transparent),var(--venue-bg)),
+    var(--site-background-image,linear-gradient(145deg,var(--venue-bg),var(--venue-panel)));
+  background-size:cover;
+  background-position:center;
+  opacity:var(--site-ambient)
+}
+.venuePage[data-site-mode="minimal"] .venuePageInner:before{opacity:calc(var(--site-ambient) * .45)}
+.venuePage[data-site-mode="editorial"] .venuePageInner:before{opacity:calc(var(--site-ambient) * 1.15)}
+.venuePage[data-site-mode="glass"] .venuePageInner:before{opacity:calc(var(--site-ambient) * 1.35)}
+.venuePage[data-site-mode="glass"] .menuFeatureCard,
+.venuePage[data-site-mode="glass"] .foodCardRef,
+.venuePage[data-site-mode="glass"] .builderEntry{
+  backdrop-filter:blur(22px) saturate(1.15);
+  background-color:color-mix(in srgb,var(--venue-panel) calc(var(--site-panel-opacity) * 100%),transparent)
+}
+.venuePage[data-site-mode="minimal"] .menuFeatureCard,
+.venuePage[data-site-mode="minimal"] .foodCardRef{
+  box-shadow:0 8px 20px rgba(0,0,0,.14)!important
+}
+.venuePage .menuFeatureCard,
+.venuePage .foodCardRef,
+.venuePage .builderEntry,
+.venuePage .floatCart{border-radius:var(--site-radius)!important}
+.venuePage[data-card-style="solid"] .foodCardRef{
+  background:var(--venue-panel)!important;
+  backdrop-filter:none!important
+}
+.venuePage[data-card-style="glass"] .foodCardRef{
+  background:color-mix(in srgb,var(--venue-panel2) 62%,transparent)!important;
+  backdrop-filter:blur(20px) saturate(1.12)
+}
+.venuePage[data-menu-descriptions="hide"] .foodCardRef .foodBody p,
+.venuePage[data-menu-descriptions="hide"] .menuFeatureCopy p{display:none!important}
+.venuePage .foodPic.fit-contain img{object-fit:contain!important;padding:8px;background:color-mix(in srgb,var(--venue-panel) 92%,#000)}
+.venuePage .foodPic.fit-cover img{object-fit:cover!important}
+
+/* Builder cinematic completion */
+.venuePage .builderSheet{overflow-y:auto;overflow-x:hidden}
+.venuePage .builderStage{
+  position:relative;
+  transform-origin:50% 62%;
+  transition:filter .24s ease
+}
+.venuePage .builderStage .builderBlock,
+.venuePage .builderStage .totalRow,
+.venuePage .builderStage>#addBuilder{
+  transform-origin:50% 50%
+}
+.venuePage .builderSingularity{
+  position:absolute;
+  z-index:20;
+  left:50%;
+  top:68%;
+  width:18px;
+  height:18px;
+  transform:translate(-50%,-50%) scale(0);
+  opacity:0;
+  pointer-events:none
+}
+.venuePage .builderSingularity span{
+  position:absolute;inset:0;border-radius:50%;
+  background:#020205;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb,var(--venue-accent) 72%,#fff 10%),
+    0 0 28px 9px var(--venue-glow),
+    0 0 80px 30px color-mix(in srgb,var(--venue-accent) 18%,transparent)
+}
+.venuePage .builderSingularity i{
+  position:absolute;left:50%;top:50%;width:76px;height:18px;
+  border-radius:50%;
+  border:1px solid color-mix(in srgb,var(--venue-accent) 56%,transparent);
+  transform:translate(-50%,-50%) rotate(var(--r,0deg));
+  box-shadow:0 0 18px var(--venue-glow)
+}
+.venuePage .builderSingularity i:nth-child(1){--r:16deg}
+.venuePage .builderSingularity i:nth-child(2){--r:76deg;width:58px}
+.venuePage .builderSingularity i:nth-child(3){--r:136deg;width:94px}
+.venuePage .builderStage.builderCollapsing{filter:saturate(.72)}
+.venuePage .builderStage.builderCollapsing .builderBlock,
+.venuePage .builderStage.builderCollapsing .totalRow,
+.venuePage .builderStage.builderCollapsing>#addBuilder{
+  animation:builderIntoSingularity var(--singularity-duration,1050ms) cubic-bezier(.66,-.02,.22,1) forwards
+}
+.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(1){animation-delay:0ms}
+.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(2){animation-delay:40ms}
+.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(3){animation-delay:80ms}
+.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(4){animation-delay:120ms}
+.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(5){animation-delay:160ms}
+.venuePage .builderStage.builderCollapsing .builderSingularity{
+  animation:singularityBorn var(--singularity-duration,1050ms) ease-out forwards
+}
+.venuePage .builderStage.builderCollapsing .builderSingularity i{animation:singularityOrbit .42s linear infinite}
+@keyframes builderIntoSingularity{
+  0%{transform:translate3d(0,0,0) scale(1);filter:blur(0);opacity:1}
+  34%{transform:translate3d(0,-8px,0) scale(.96);filter:blur(.2px);opacity:1}
+  76%{transform:translate3d(0,-54px,0) scale(.24);filter:blur(3px);opacity:.64}
+  100%{transform:translate3d(0,-110px,0) scale(.015);filter:blur(10px);opacity:0}
+}
+@keyframes singularityBorn{
+  0%,12%{transform:translate(-50%,-50%) scale(0);opacity:0}
+  32%{transform:translate(-50%,-50%) scale(.72);opacity:.9}
+  76%{transform:translate(-50%,-50%) scale(1.28);opacity:1}
+  100%{transform:translate(-50%,-50%) scale(.05);opacity:0}
+}
+@keyframes singularityOrbit{to{transform:translate(-50%,-50%) rotate(calc(var(--r) + 360deg))}}
+
+.venuePage .builderResult{
+  padding:4px 0 10px;
+  text-align:center;
+  animation:builderResultReveal .55s cubic-bezier(.22,.9,.27,1) both
+}
+.venuePage .builderResult[hidden]{display:none!important}
+.venuePage .builderResultVisual{
+  position:relative;
+  width:min(100%,390px);
+  aspect-ratio:1.16/1;
+  margin:2px auto 18px;
+  overflow:hidden;
+  border-radius:calc(var(--site-radius) + 6px);
+  background:var(--venue-hero);
+  box-shadow:0 24px 60px rgba(0,0,0,.28),0 0 34px var(--venue-glow)
+}
+.venuePage .builderResultVisual img{
+  position:relative;z-index:1;width:100%;height:100%;object-fit:cover;display:block;
+  animation:builderProductIn .7s cubic-bezier(.22,.9,.27,1) both
+}
+.venuePage .builderResultGlow{
+  position:absolute;z-index:2;inset:auto 0 0;height:58%;
+  background:linear-gradient(transparent,color-mix(in srgb,var(--venue-bg) 70%,transparent))
+}
+.venuePage .builderResult h2{
+  margin:5px 0 7px;
+  font-size:30px;
+  line-height:.98;
+  letter-spacing:-.05em
+}
+.venuePage .builderResult p{
+  max-width:34ch;
+  margin:0 auto 14px;
+  color:var(--muted);
+  font-size:12px
+}
+.venuePage .builderResult .totalRow{text-align:left}
+@keyframes builderResultReveal{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes builderProductIn{from{opacity:0;transform:scale(.82);filter:blur(8px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
+
+@media(prefers-reduced-motion:reduce){
+  .venuePage .builderStage.builderCollapsing .builderBlock,
+  .venuePage .builderStage.builderCollapsing .totalRow,
+  .venuePage .builderStage.builderCollapsing>#addBuilder,
+  .venuePage .builderStage.builderCollapsing .builderSingularity,
+  .venuePage .builderStage.builderCollapsing .builderSingularity i,
+  .venuePage .builderResult,.venuePage .builderResultVisual img{animation-duration:.01ms!important;animation-iteration-count:1!important}
+}

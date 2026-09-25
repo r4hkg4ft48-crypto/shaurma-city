@@ -161,7 +161,7 @@
    try{
      const nw=Number(img.naturalWidth||img.width),nh=Number(img.naturalHeight||img.height);
      if(!nw||!nh)throw new Error('Не удалось определить размер фото');
-     const firstScale=Math.min(1,1200/Math.max(nw,nh));
+     const firstScale=Math.min(1,1000/Math.max(nw,nh));
      let w=Math.max(320,Math.round(nw*firstScale)),h=Math.max(240,Math.round(nh*firstScale));
      const qualities=[.86,.78,.70,.62,.55,.48];
      for(let i=0;i<qualities.length;i++){
@@ -170,7 +170,7 @@
        ctx.fillStyle='#F7F9FC';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
        const blob=await canvasBlob(canvas,qualities[i]);if(!blob)throw new Error('Не удалось сжать фото');
        const encoded=await photoDataUrl(blob);
-       if(encoded.length<=620000)return encoded;
+       if(encoded.length<=420000)return encoded;
        w=Math.max(360,Math.round(w*.84));h=Math.max(270,Math.round(h*.84));
      }
      throw new Error('Фото не удалось подготовить — выберите другое');

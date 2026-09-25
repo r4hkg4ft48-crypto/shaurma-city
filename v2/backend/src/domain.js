@@ -115,6 +115,7 @@ function normalizeBuilderConfig(raw={}){
   };
 }
 function builderConfig(config={}){
+  if(config.builder_enabled===false)return null;
   if(config.builder_enabled!==true&&!config.builder)return null;
   if(!config.builder)return JSON.parse(JSON.stringify(LEGACY_LEPESH_BUILDER));
   return normalizeBuilderConfig(config.builder);

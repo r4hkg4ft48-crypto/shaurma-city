@@ -53,10 +53,10 @@ function markerStyle(value={}){
   const v=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
   return {
     icon:String(v.icon||'🥙').slice(0,8),
-    background:hex(v.background,'#10221b'),
-    border:hex(v.border,'#f6f3e9'),
+    background:hex(v.background,'#D94343'),
+    border:hex(v.border,'#F7F9FC'),
     text:hex(v.text,'#ffffff'),
-    glow:hex(v.glow,'#7ee3a8'),
+    glow:hex(v.glow,'#E86565'),
     shape:['pin','circle','rounded','square'].includes(v.shape)?v.shape:'rounded',
     size:clamp(Number(v.size)||44,28,72),
     scale:clamp(Number(v.scale)||1,.65,1.8),

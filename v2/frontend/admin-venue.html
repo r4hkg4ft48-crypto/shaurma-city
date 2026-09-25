@@ -5,7 +5,30 @@
 <div class="tabs"><button class="tab active" data-tab="profile">Профиль</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="orders">Заказы</button></div>
 <section id="profile" class="panel"><h2>Профиль точки</h2><div class="formGrid"><div class="field"><label>Название</label><input id="vName"></div><div class="field"><label>Адрес</label><input id="vAddress"></div><div class="field"><label>Описание</label><textarea id="vDescription"></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Часы</label><input id="vHours"></div><div class="field"><label>Цена</label><input id="vPrice"></div></div>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Иконка метки</label><input id="vMarkerIcon"></div><div class="field"><label>Цвет метки</label><input id="vMarkerBg"></div></div>
- <div class="field"><label>Дизайн страницы заведения</label><select id="vTheme"><option value="emerald">Emerald · зелёный</option><option value="amber">Amber · тёплый</option><option value="cobalt">Cobalt · синий</option><option value="cherry">Cherry · красный</option><option value="violet">Violet · фиолетовый</option><option value="graphite">Graphite · графит</option><option value="ocean">Ocean · бирюзовый</option><option value="citrus">Citrus · лайм</option></select></div>
+ <div class="venueThemeEditor" id="venueThemeEditor">
+   <div class="venueThemeEditorHead"><div><small>ДИЗАЙН MINI APP</small><h3>Цвета страницы заказа</h3><p>Настройки применяются только к этому заведению и не меняют карту Shaurmeg.</p></div></div>
+   <div class="themeControls">
+     <div class="themeColorField">
+       <label>Основной цвет</label>
+       <div><input id="themePrimary" type="color" value="#D94343"><input id="themePrimaryHex" maxlength="7" value="#D94343" autocomplete="off"></div>
+       <small>Главные кнопки, выбранные состояния, glow.</small>
+     </div>
+     <div class="themeColorField">
+       <label>Дополнительный цвет</label>
+       <div><input id="themeSecondary" type="color" value="#13233B"><input id="themeSecondaryHex" maxlength="7" value="#13233B" autocomplete="off"></div>
+       <small>Фон, hero и вторичные поверхности.</small>
+     </div>
+     <div class="field themeToneField">
+       <label>Общий тон сайта</label>
+       <select id="themeTone"><option value="balanced">Смешанный · тёмный фон + светлые карточки</option><option value="dark">Тёмный · полностью тёмный</option><option value="light">Светлый · молочный</option></select>
+     </div>
+   </div>
+   <div class="themeLivePreview" id="themePreview">
+     <div class="themePreviewHero"><small>ПРЕВЬЮ ЗАВЕДЕНИЯ</small><b id="themePreviewName">Название</b><span>Hero / фирменный фон</span></div>
+     <div class="themePreviewBody"><div class="themePreviewCard"><i></i><div><b>Позиция меню</b><small>Описание блюда</small></div><strong>390 ₽</strong></div><button>Добавить в корзину</button></div>
+   </div>
+   <div class="rowBtns themeActions"><button class="primaryBtn" id="saveTheme">Сохранить дизайн</button><button class="plainBtn" id="resetTheme">Сбросить к Shaurmeg</button></div>
+ </div>
  <div class="rowBtns"><button class="primaryBtn" id="saveProfile">Сохранить профиль</button><button class="plainBtn" id="saveAppearance">Сохранить метку</button></div></div></section>
 <section id="menu" class="panel hidden">
   <div class="sectionHead"><h2>Меню</h2><button class="plainBtn" id="addItem">＋ Позиция</button></div>

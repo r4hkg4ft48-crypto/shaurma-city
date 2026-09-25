@@ -68,8 +68,33 @@
   }
   function cartStats(){return {count:cart.reduce((s,x)=>s+(Number(x.q)||0),0),total:cart.reduce((s,x)=>s+(Number(x.p)||0)*(Number(x.q)||0),0)}}
   function save(){localStorage.setItem(cartKey,JSON.stringify(cart));renderCart()}
-  function openSheet(id){$('#backdrop').classList.add('show');document.querySelectorAll('.sheet').forEach(x=>x.classList.toggle('show',x.id===id))}
-  function closeSheets(){$('#backdrop').classList.remove('show');document.querySelectorAll('.sheet').forEach(x=>x.classList.remove('show'))}
+  let sheetScrollY=0,sheetLocked=false;
+  function lockSheetBackground(){
+    if(sheetLocked)return;sheetLocked=true;
+    sheetScrollY=Math.max(0,window.scrollY||document.documentElement.scrollTop||0);
+    document.documentElement.classList.add('sheetOpen');
+    document.body.classList.add('sheetOpen');
+    document.body.style.top=(-sheetScrollY)+'px';
+    try{tg?.disableVerticalSwipes?.()}catch{}
+  }
+  function unlockSheetBackground(){
+    if(!sheetLocked)return;sheetLocked=false;
+    document.documentElement.classList.remove('sheetOpen');
+    document.body.classList.remove('sheetOpen');
+    document.body.style.top='';
+    try{window.scrollTo(0,sheetScrollY)}catch{}
+    try{tg?.enableVerticalSwipes?.()}catch{}
+  }
+  function openSheet(id){
+    lockSheetBackground();
+    $('#backdrop').classList.add('show');
+    document.querySelectorAll('.sheet').forEach(x=>x.classList.toggle('show',x.id===id));
+  }
+  function closeSheets(){
+    $('#backdrop').classList.remove('show');
+    document.querySelectorAll('.sheet').forEach(x=>x.classList.remove('show'));
+    unlockSheetBackground();
+  }
 
   async function authTelegram(){
     if(!tg?.initData)return !!session;
@@ -296,6 +321,11 @@
   $('#profileBtn').onclick=()=>{openSheet('profileSheet');myOrders()};
   $('#backdrop').onclick=closeSheets;
   document.querySelectorAll('[data-close]').forEach(x=>x.onclick=closeSheets);
+  document.addEventListener('touchmove',e=>{
+    if(!sheetLocked)return;
+    if(!e.target.closest?.('.sheet.show'))e.preventDefault();
+  },{passive:false});
+  window.addEventListener('pagehide',unlockSheetBackground);
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
   $('#placeOrder').onclick=submitOrder;
   $('#successMenu').onclick=closeSheets;

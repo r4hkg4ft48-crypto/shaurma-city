@@ -3,12 +3,12 @@
   const $=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search);
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false,userMarker=null,focusToken=0;
-  let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],orderFilter='all',userStream=null,currentReferralUrl='';
+  let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
   const STYLE='https://tiles.openfreemap.org/styles/liberty';
   const FALLBACK={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-saturation':-.22,'raster-contrast':.08,'raster-brightness-min':.08,'raster-brightness-max':.78}}]};
-  const STATUS={new:'Принят',cooking:'Готовится',ready:'Готов',done:'Завершён',cancelled:'Отменён'};
+  const STATUS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
   const CITY_PALETTES={
     morning:{background:'#15263E',water:'#173A63',land:'#1D3048',residential:'#24384F',building:'#F2F5F8',road:'#FFFFFF',label:'#F7F9FC'},
     day:{background:'#0F2035',water:'#14375F',land:'#192D44',residential:'#21364E',building:'#F7F9FC',road:'#FFFFFF',label:'#F7F9FC'},
@@ -108,20 +108,63 @@
       '</article>';
     }).join(''):'<div class="panelEmpty"><b>Здесь пока пусто</b><span>Выберите точку на карте и сделайте первый заказ.</span></div>';
   }
+  async function loadFavorites(){
+    const box=$('#favoritesPanelList');
+    if(!session){
+      favoriteGroups=[];$('#favoritesCount').textContent='0';
+      box.innerHTML='<div class="favoritesEmpty"><div>♥</div><b>Избранное живёт в Telegram</b><span>Откройте Shaurmeg через @Shaurmeggbot — здесь появятся любимые блюда из заказов и сохранённые позиции.</span></div>';
+      return;
+    }
+    try{
+      const r=await fetch(api+'/me/favorites',{headers:authHeaders(),cache:'no-store'});if(!r.ok)throw 0;
+      const j=await r.json();favoriteGroups=Array.isArray(j.groups)?j.groups:[];renderFavorites();
+    }catch{
+      favoriteGroups=[];$('#favoritesCount').textContent='0';
+      box.innerHTML='<div class="favoritesEmpty"><div>!</div><b>Не удалось загрузить избранное</b><span>Попробуйте открыть раздел ещё раз.</span></div>';
+    }
+  }
+  function renderFavorites(){
+    const box=$('#favoritesPanelList'),total=favoriteGroups.reduce((s,g)=>s+(g.items?.length||0),0);
+    $('#favoritesCount').textContent=String(total);
+    if(!favoriteGroups.length){
+      box.innerHTML='<div class="favoritesEmpty"><div>♡</div><b>Здесь появится твой вкус</b><span>Закажи блюдо или нажми сердечко в меню заведения — Shaurmeg соберёт любимое здесь.</span></div>';
+      return;
+    }
+    box.innerHTML=favoriteGroups.map(group=>{
+      const initial=String(group.venue_name||'Ш').trim().slice(0,1).toUpperCase()||'Ш';
+      return '<section class="favoriteVenueGroup">'+
+        '<header class="favoriteVenueHead"><div class="favoriteVenueMonogram">'+esc(initial)+'</div><div><small>ЗАВЕДЕНИЕ</small><h3>'+esc(group.venue_name||'Заведение')+'</h3><span>'+esc(group.address||'')+'</span></div><strong>'+String(group.items?.length||0)+'</strong></header>'+
+        '<div class="favoriteDishGrid">'+(group.items||[]).map(item=>{
+          const meta=item.explicit?(item.order_count?'♥ В избранном · заказывали '+item.order_count+'×':'♥ В избранном'):(item.order_count>1?'Заказывали '+item.order_count+' раза':'Из истории заказов');
+          return '<article class="favoriteDishCard">'+
+            '<div class="favoriteDishPhoto">'+(item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" onerror="this.remove()">':'<span>🥙</span>')+
+              (item.explicit?'<i>♥</i>':'')+'</div>'+
+            '<div class="favoriteDishBody"><small>'+esc(meta)+'</small><h4>'+esc(item.name||'Позиция')+'</h4>'+
+              (item.description?'<p>'+esc(item.description)+'</p>':'')+
+              '<div class="favoriteDishFooter"><b>'+money(item.price||0)+'</b><div class="favoriteDishActions">'+
+                (item.explicit?'<button class="favoriteRemoveBtn" data-fav-remove="'+esc(item.item_id)+'" data-fav-est="'+esc(group.establishment_id)+'" aria-label="Убрать из избранного">♥</button>':'')+
+                '<button class="favoriteOrderBtn" data-fav-order="'+esc(item.item_id)+'" data-fav-marker="'+esc(group.marker_id)+'" data-fav-est="'+esc(group.establishment_id)+'">Заказать <span>→</span></button>'+
+              '</div></div></div>'+
+          '</article>';
+        }).join('')+'</div>'+
+      '</section>';
+    }).join('');
+  }
+
   function connectUserStream(){
     try{userStream?.close()}catch{};if(!session)return;
     userStream=new EventSource(api+'/me/stream?session='+encodeURIComponent(session));
-    const refresh=()=>{loadOrders();loadDashboard()};
+    const refresh=()=>{loadOrders();loadDashboard();loadFavorites()};
     userStream.addEventListener('order',refresh);userStream.addEventListener('update',refresh);
   }
 
   function openPanel(kind){
     closeCard();
-    const id=kind==='orders'?'ordersPanel':kind==='profile'?'profilePanel':'';
+    const id=kind==='orders'?'ordersPanel':kind==='favorites'?'favoritesPanel':kind==='profile'?'profilePanel':'';
     document.querySelectorAll('.appPanel').forEach(x=>x.classList.toggle('show',x.id===id));
     $('#panelBackdrop').classList.toggle('show',!!id);document.body.classList.toggle('panelOpen',!!id);
     document.querySelectorAll('.dockBtn').forEach(x=>x.classList.toggle('active',x.dataset.dock===(kind||'map')));
-    if(kind==='orders')loadOrders();if(kind==='profile')loadDashboard();
+    if(kind==='orders')loadOrders();if(kind==='favorites')loadFavorites();if(kind==='profile')loadDashboard();
     tg?.HapticFeedback?.selectionChanged?.();
   }
   function closePanels(){openPanel('map')}
@@ -427,6 +470,21 @@
   $('#panelBackdrop').onclick=closePanels;document.querySelectorAll('[data-panel-close]').forEach(x=>x.onclick=closePanels);
   $('#orderFilter').onclick=e=>{const b=e.target.closest('[data-order-filter]');if(!b)return;orderFilter=b.dataset.orderFilter;document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===b));renderOrdersPanel()};
   $('#ordersPanelList').onclick=e=>{const b=e.target.closest('[data-order-menu]');if(!b)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',b.dataset.orderMenu);u.searchParams.set('establishment',b.dataset.orderEst);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
+  $('#favoritesPanelList').onclick=async e=>{
+    const order=e.target.closest('[data-fav-order]');
+    if(order){
+      const u=new URL('menu.html',location.href);
+      u.searchParams.set('marker',order.dataset.favMarker);u.searchParams.set('establishment',order.dataset.favEst);
+      u.searchParams.set('from','map');u.searchParams.set('quick_item',order.dataset.favOrder);u.searchParams.set('quick_checkout','1');u.hash=location.hash;
+      tg?.HapticFeedback?.impactOccurred?.('light');location.assign(u.toString());return;
+    }
+    const remove=e.target.closest('[data-fav-remove]');if(!remove||!session)return;
+    remove.disabled=true;
+    try{
+      const r=await fetch(api+'/me/favorites/'+encodeURIComponent(remove.dataset.favEst)+'/'+encodeURIComponent(remove.dataset.favRemove),{method:'DELETE',headers:authHeaders()});
+      if(!r.ok)throw 0;toast('Убрано из избранного');await loadFavorites();tg?.HapticFeedback?.selectionChanged?.();
+    }catch{remove.disabled=false;toast('Не удалось изменить избранное')}
+  };
   $('#copyReferral').onclick=async()=>{if(!currentReferralUrl)return toast('Откройте профиль через Telegram');try{await navigator.clipboard.writeText(currentReferralUrl);toast('Ссылка скопирована ✓');tg?.HapticFeedback?.notificationOccurred?.('success')}catch{toast(currentReferralUrl)}};
   $('#shareReferral').onclick=async()=>{
     if(!currentReferralUrl)return toast('Откройте профиль через Telegram');
@@ -436,6 +494,6 @@
   };
 
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
-  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();connectUserStream()}else{renderGuestProfile();renderOrdersPanel()}});
+  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();loadFavorites()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

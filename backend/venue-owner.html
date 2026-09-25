@@ -105,13 +105,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API=location.origin,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_LAUNCH.searchParams.get('establishment')||''),REQUESTED_TAB=String(OWNER_LAUNCH.searchParams.get('tab')||'');
-let session=sessionStorage.getItem('venue_owner_session')||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
+const API=location.origin,$=s=>document.querySelector(s),$=s=>[...document.querySelectorAll(s)];
+const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_LAUNCH.searchParams.get('establishment')||''),REQUESTED_TAB=String(OWNER_LAUNCH.searchParams.get('tab')||''),MASTER_MODE=OWNER_LAUNCH.searchParams.get('master')==='1';
+const SESSION_KEY=MASTER_MODE?'venue_owner_master_session':'venue_owner_session';
+let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1500)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function api(path,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};if(session)opt.headers.Authorization='Bearer '+session;if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}const r=await fetch(API+path,opt);const j=await r.json().catch(()=>({}));if(r.status===401){session='';sessionStorage.removeItem('venue_owner_session')}if(!r.ok)throw Object.assign(new Error(j.error||'request_failed'),{body:j,status:r.status});return j}
+async function api(path,opt={}){opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};if(session)opt.headers.Authorization='Bearer '+session;if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}const r=await fetch(API+path,opt);const j=await r.json().catch(()=>({}));if(r.status===401){session='';sessionStorage.removeItem(SESSION_KEY)}if(!r.ok)throw Object.assign(new Error(j.error||'request_failed'),{body:j,status:r.status});return j}
 async function compress(file,maxW=1500,maxH=1100,q=.82){return new Promise((resolve,reject)=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{let w=img.width,h=img.height,k=Math.min(1,maxW/w,maxH/h);w=Math.round(w*k);h=Math.round(h*k);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',q))};img.onerror=reject;img.src=url})}
 function setClaim(show,text=''){if(text)$('#err').textContent=text;$('#claim').style.display=show?'grid':'none';$('#app').hidden=show}
 function activateTab(name){
@@ -139,14 +140,23 @@ async function claimAdditionalVenue(code){
 }
 async function auth(){
  const tg=window.Telegram?.WebApp;
- if(!tg?.initData){setClaim(true,'Откройте эту страницу через Telegram-бот владельцев.');return false}
+ if(!tg?.initData){setClaim(true,MASTER_MODE?'Откройте этот раздел через Master Admin Bot.':'Откройте эту страницу через Telegram-бот владельцев.');return false}
  tg.ready();tg.expand();
- try{const j=await fetch(API+'/api/venue-owner/telegram-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'auth');return j});session=j.session;sessionStorage.setItem('venue_owner_session',session);accesses=j.establishments||[];return true}catch(e){setClaim(true,e.message==='venue_owner_bot_not_configured'?'Бот владельцев ещё не подключён к серверу.':'Не удалось войти через Telegram.');return false}
+ const endpoint=MASTER_MODE?'/api/venue-owner/master-auth':'/api/venue-owner/telegram-auth';
+ try{
+   const j=await fetch(API+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'auth');return j});
+   session=j.session;sessionStorage.setItem(SESSION_KEY,session);accesses=j.establishments||[];
+   if(MASTER_MODE){$('#addVenueButton').hidden=true;$('#topId').title='MASTER ADMIN';}
+   return true
+ }catch(e){
+   setClaim(true,MASTER_MODE?'Не удалось подтвердить доступ Master Admin.':(e.message==='venue_owner_bot_not_configured'?'Бот владельцев ещё не подключён к серверу.':'Не удалось войти через Telegram.'));
+   return false
+ }
 }
 async function refreshMe(){
  const j=await api('/api/venue-owner/me');accesses=j.establishments||[];
  renderAccessList();
- if(!accesses.length){setClaim(true);return}
+ if(!accesses.length){setClaim(true,MASTER_MODE?'В системе пока нет активных заведений.':'У вас пока нет подключённых заведений.');return}
  setClaim(false);
  $('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+' · '+esc(x.establishment_id)+'</option>').join('');
  $('#venueCount').textContent=accesses.length+' '+(accesses.length===1?'заведение':accesses.length<5?'заведения':'заведений');
@@ -158,7 +168,7 @@ async function refreshMe(){
    launchApplied=true;
    const tab=['profile','menu','site','orders'].includes(REQUESTED_TAB)?REQUESTED_TAB:'';
    if(tab)activateTab(tab);
-   if(REQUESTED_TAB==='add')openAddVenue();
+   if(REQUESTED_TAB==='add'&&!MASTER_MODE)openAddVenue();
  }
 }
 async function openVenue(id){
@@ -267,7 +277,7 @@ $('#menuRows').addEventListener('click',e=>{const b=e.target.closest('[data-rm]'
 $('#sectionRows').addEventListener('click',e=>{const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-rm]');if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSections[i-1],menuSections[i]]=[menuSections[i],menuSections[i-1]];renderSections();renderMenu();return}if(down){const i=Number(down.dataset.sectionDown);if(i<menuSections.length-1)[menuSections[i+1],menuSections[i]]=[menuSections[i],menuSections[i+1]];renderSections();renderMenu();return}if(rm){const i=Number(rm.dataset.sectionRm),s=menuSections[i];if(!s)return;if(menu.some(x=>String(x.c||x.category)===s.id))return toast('Сначала перенесите блюда из этого раздела');menuSections.splice(i,1);renderSections();renderMenu()}});
 
 $('#orders').onclick=async e=>{const b=e.target.closest('[data-order]');if(!b)return;b.disabled=true;try{await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/orders/'+b.dataset.order,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await loadOrders()}catch{toast('Не удалось изменить заказ')}finally{b.disabled=false}};
-(async()=>{if(!session){const ok=await auth();if(!ok)return}try{await refreshMe()}catch{const ok=await auth();if(ok)await refreshMe()}})();
+(async()=>{if(MASTER_MODE){$('#addVenueButton').hidden=true;$('#claimBtn').hidden=true}if(!session){const ok=await auth();if(!ok)return}try{await refreshMe()}catch{session='';sessionStorage.removeItem(SESSION_KEY);const ok=await auth();if(ok)await refreshMe()}})();
 </script>
 </body>
 </html>

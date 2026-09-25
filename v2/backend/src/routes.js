@@ -35,6 +35,21 @@ function notifyCustomer(order,text,menuCtx=null){
 const DEFAULT_VENUE_PERMISSIONS=['menu','profile','media','appearance','orders'];
 function normalizeInviteCode(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
 function inviteCodeHash(v){return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeInviteCode(v)).digest('hex')}
+function referralCodeFor(userId){return 'SR'+crypto.createHash('sha256').update('shaurmeg-referral:'+String(userId)).digest('hex').slice(0,10).toUpperCase()}
+function normalizeReferralCode(v){return String(v||'').trim().toUpperCase().replace(/^REF[_-]?/,'').replace(/[^A-Z0-9]/g,'').slice(0,24)}
+function referralStartParam(initData){
+  try{return new URLSearchParams(String(initData||'')).get('start_param')||''}catch{return ''}
+}
+async function applyReferral(referredUserId,rawCode){
+  const code=normalizeReferralCode(rawCode);if(!/^SR[A-F0-9]{10}$/.test(code))return false;
+  const q=await db.query('SELECT telegram_user_id FROM shaurma_users WHERE referral_code=$1',[code]);
+  const referrer=String(q.rows[0]?.telegram_user_id||'');const referred=String(referredUserId||'');
+  if(!referrer||!referred||referrer===referred)return false;
+  const ins=await db.query(`INSERT INTO shaurma_referrals(referrer_user_id,referred_user_id,referral_code,status)
+    VALUES($1,$2,$3,'joined') ON CONFLICT(referred_user_id) DO NOTHING RETURNING id`,[referrer,referred,code]);
+  return !!ins.rows[0];
+}
+function referralUrl(code){return 'https://t.me/'+config.AGGREGATOR_BOT_USERNAME+'?startapp=ref_'+encodeURIComponent(code)}
 async function ownerAccesses(userId){
   const q=await db.query(`SELECT a.establishment_id,a.role,a.permissions,v.name,v.venue_id,
     (SELECT id FROM shaurmeg_markers m WHERE m.establishment_id=a.establishment_id ORDER BY id LIMIT 1) marker_id
@@ -43,7 +58,7 @@ async function ownerAccesses(userId){
   return q.rows;
 }
 function publicUser(row){
-  return row?{id:String(row.telegram_user_id),username:row.username||'',first_name:row.first_name||'',last_name:row.last_name||'',profile:row.profile||{},favorites:Array.isArray(row.favorites)?row.favorites:[],preferences:row.preferences||{},payment:{provider:row.payment_provider||null,card_brand:row.payment_card_brand||null,card_last4:row.payment_card_last4||null,autopay_enabled:!!row.autopay_enabled,linked:!!row.payment_card_last4}}:null;
+  return row?{id:String(row.telegram_user_id),username:row.username||'',first_name:row.first_name||'',last_name:row.last_name||'',profile:row.profile||{},favorites:Array.isArray(row.favorites)?row.favorites:[],preferences:row.preferences||{},referral_code:row.referral_code||'',payment:{provider:row.payment_provider||null,card_brand:row.payment_card_brand||null,card_last4:row.payment_card_last4||null,autopay_enabled:!!row.autopay_enabled,linked:!!row.payment_card_last4}}:null;
 }
 async function menuContext(marker,est){
   const markerId=D.markerId(marker),establishment=D.establishmentId(est);
@@ -93,12 +108,14 @@ router.get('/menu-context',async(req,res)=>{
 
 router.post('/auth/telegram',async(req,res)=>{
   try{
-    const user=verifyCustomerTelegram(req.body?.initData||'');
+    const initData=req.body?.initData||'',user=verifyCustomerTelegram(initData),ownCode=referralCodeFor(user.id);
     const q=await db.query(`
-      INSERT INTO shaurma_users(telegram_user_id,username,first_name,last_name,language_code,is_premium,last_seen_at,updated_at)
-      VALUES($1,$2,$3,$4,$5,$6,NOW(),NOW())
-      ON CONFLICT(telegram_user_id) DO UPDATE SET username=EXCLUDED.username,first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,language_code=EXCLUDED.language_code,is_premium=EXCLUDED.is_premium,last_seen_at=NOW(),updated_at=NOW()
-      RETURNING *`,[String(user.id),user.username||null,user.first_name||null,user.last_name||null,user.language_code||null,!!user.is_premium]);
+      INSERT INTO shaurma_users(telegram_user_id,username,first_name,last_name,language_code,is_premium,referral_code,last_seen_at,updated_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+      ON CONFLICT(telegram_user_id) DO UPDATE SET username=EXCLUDED.username,first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,language_code=EXCLUDED.language_code,is_premium=EXCLUDED.is_premium,referral_code=COALESCE(shaurma_users.referral_code,EXCLUDED.referral_code),last_seen_at=NOW(),updated_at=NOW()
+      RETURNING *`,[String(user.id),user.username||null,user.first_name||null,user.last_name||null,user.language_code||null,!!user.is_premium,ownCode]);
+    const rawRef=referralStartParam(initData)||req.body?.referral_code||'';
+    if(rawRef)await applyReferral(user.id,rawRef);
     res.json({ok:true,session:auth.sign(user,'client'),user:publicUser(q.rows[0])});
   }catch(e){fail(res,e,'telegram_auth_failed')}
 });
@@ -115,6 +132,40 @@ router.patch('/me',auth.requireSession('client'),async(req,res)=>{
     res.json(publicUser(q.rows[0]));
   }catch(e){fail(res,e,'profile_update_failed')}
 });
+router.get('/me/dashboard',auth.requireSession('client'),async(req,res)=>{
+  try{
+    const uid=String(req.session.sub);
+    const [uq,sq,fq,rq,bq]=await Promise.all([
+      db.query('SELECT * FROM shaurma_users WHERE telegram_user_id=$1',[uid]),
+      db.query(`SELECT
+        COUNT(*) FILTER(WHERE status<>'cancelled')::int order_count,
+        COUNT(*) FILTER(WHERE status IN ('new','cooking','ready'))::int active_orders,
+        COUNT(*) FILTER(WHERE status='done')::int completed_orders,
+        COALESCE(SUM(total) FILTER(WHERE status<>'cancelled'),0)::int total_spent,
+        COALESCE(ROUND(AVG(total) FILTER(WHERE status<>'cancelled')),0)::int avg_check
+        FROM shaurma_orders WHERE telegram_user_id=$1`,[uid]),
+      db.query(`SELECT venue_name,COUNT(*)::int orders,COALESCE(SUM(total),0)::int spent
+        FROM shaurma_orders WHERE telegram_user_id=$1 AND status<>'cancelled'
+        GROUP BY venue_name ORDER BY orders DESC,spent DESC LIMIT 1`,[uid]),
+      db.query(`SELECT COUNT(*)::int invited,
+        COUNT(*) FILTER(WHERE status IN ('ordered','qualified'))::int ordered,
+        COUNT(*) FILTER(WHERE status='qualified')::int qualified
+        FROM shaurma_referrals WHERE referrer_user_id=$1`,[uid]),
+      db.query('SELECT COALESCE(SUM(amount),0)::int balance FROM shaurma_bonus_ledger WHERE telegram_user_id=$1',[uid])
+    ]);
+    const user=uq.rows[0];if(!user)return res.sendStatus(404);
+    const code=user.referral_code||referralCodeFor(uid);
+    if(!user.referral_code)await db.query('UPDATE shaurma_users SET referral_code=$2,updated_at=NOW() WHERE telegram_user_id=$1',[uid,code]);
+    res.json({
+      user:publicUser({...user,referral_code:code}),
+      stats:sq.rows[0]||{order_count:0,active_orders:0,completed_orders:0,total_spent:0,avg_check:0},
+      favorite_venue:fq.rows[0]||null,
+      referral:{code,url:referralUrl(code),invited:Number(rq.rows[0]?.invited||0),ordered:Number(rq.rows[0]?.ordered||0),qualified:Number(rq.rows[0]?.qualified||0)},
+      bonuses:{balance:Number(bq.rows[0]?.balance||0),status:'rules_pending'}
+    });
+  }catch(e){fail(res,e,'dashboard_failed')}
+});
+
 router.get('/me/orders',auth.requireSession('client'),async(req,res)=>{
   try{const q=await db.query('SELECT * FROM shaurma_orders WHERE telegram_user_id=$1 ORDER BY created_at DESC LIMIT 100',[String(req.session.sub)]);res.json(q.rows)}
   catch(e){fail(res,e,'orders_read_failed')}
@@ -152,6 +203,7 @@ router.post('/orders',async(req,res)=>{
       VALUES($1,$2::jsonb,$3,$4,$5,$6,$7,'new',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
       [num,JSON.stringify(normalized),total,String(req.body?.customer_name||tg?.first_name||'Гость').slice(0,120),fulfillment==='delivery'?String(req.body.phone):null,fulfillment==='delivery'?String(req.body.address):null,String(req.body?.comment||'').slice(0,500),tg?'telegram':'web',tg?String(tg.id):null,tg?.username||null,tg?.first_name||null,fulfillment,'pending',req.body?.payment_method||null,ctx.venue.venue_id,ctx.venue.name,ctx.venue.establishment_id,ctx.marker.id]);
     const order=q.rows[0];
+    if(order.telegram_user_id)db.query(`UPDATE shaurma_referrals SET status=CASE WHEN status='joined' THEN 'ordered' ELSE status END,first_order_id=COALESCE(first_order_id,$2),updated_at=NOW() WHERE referred_user_id=$1`,[String(order.telegram_user_id),order.id]).catch(e=>console.error('referral_order_mark',e.message));
     db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'order_created',$3::jsonb)",[
       order.establishment_id,String(order.telegram_user_id||''),JSON.stringify({order_id:order.id,order_number:order.order_number,marker_id:order.marker_id,total:order.total})
     ]).catch(e=>console.error('order_audit',e.message));

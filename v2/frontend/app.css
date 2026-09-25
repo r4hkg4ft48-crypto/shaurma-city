@@ -3369,6 +3369,297 @@ body.venuePage .foodPic img{
 .venuePage .foodPic.fit-contain img{object-fit:contain!important;padding:8px;background:color-mix(in srgb,var(--venue-panel) 92%,#000)}
 .venuePage .foodPic.fit-cover img{object-fit:cover!important}
 
+/* Builder signature collection */
+.venuePage .builderModeSwitch{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+  margin:4px 0 16px;
+  padding:5px;
+  border-radius:18px;
+  background:rgba(70,46,83,.055);
+  border:1px solid rgba(70,46,83,.075)
+}
+.venuePage .builderModeSwitch button{
+  min-width:0;
+  min-height:58px;
+  display:grid;
+  align-content:center;
+  gap:2px;
+  padding:9px 10px;
+  border:0;
+  border-radius:14px;
+  background:transparent;
+  color:#827586;
+  text-align:left;
+  transition:transform .18s ease,background .22s ease,box-shadow .22s ease,color .22s ease
+}
+.venuePage .builderModeSwitch button b{font-size:12px;line-height:1.15}
+.venuePage .builderModeSwitch button small{font-size:9px;color:#9a8e9c}
+.venuePage .builderModeSwitch button.active{
+  color:var(--venue-ink);
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  box-shadow:0 9px 24px var(--venue-glow)
+}
+.venuePage .builderModeSwitch button.active small{color:color-mix(in srgb,var(--venue-ink) 72%,transparent)}
+.venuePage .builderModeSwitch button:active{transform:scale(.975)}
+
+.venuePage .signatureMode{
+  min-height:590px;
+  padding:2px 0 10px;
+  text-align:center;
+  animation:signatureModeIn .38s cubic-bezier(.22,.9,.27,1) both
+}
+.venuePage .signatureMode[hidden]{display:none!important}
+.venuePage .signatureTopline{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin:2px 1px 12px;
+  color:#7c6f80
+}
+.venuePage .signatureTopline small{
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.16em
+}
+.venuePage .signatureTopline b{
+  min-width:60px;
+  font-size:10px;
+  letter-spacing:.08em
+}
+.venuePage .signatureCarousel{
+  position:relative;
+  min-height:470px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  perspective:1100px;
+  isolation:isolate
+}
+.venuePage .signatureViewport{
+  position:relative;
+  width:min(52vw,280px);
+  min-width:188px;
+  max-width:58%;
+  aspect-ratio:.62/1;
+  overflow:visible;
+  touch-action:pan-y;
+  user-select:none;
+  -webkit-user-select:none
+}
+.venuePage .signatureCard{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  border-radius:30px;
+  background:#141017;
+  color:#fff;
+  text-align:left;
+  border:1px solid rgba(255,255,255,.2);
+  box-shadow:
+    0 34px 68px rgba(32,18,36,.36),
+    0 12px 34px color-mix(in srgb,var(--venue-accent) 19%,transparent);
+  transform:rotate(-4.2deg) rotateY(-2deg) translateZ(0);
+  transform-origin:50% 62%;
+  will-change:transform,opacity,filter;
+  transition:
+    transform .28s cubic-bezier(.22,.8,.22,1),
+    opacity .23s ease,
+    filter .23s ease;
+  backface-visibility:hidden
+}
+.venuePage .signatureCard:before{
+  content:"";
+  position:absolute;
+  z-index:4;
+  inset:0;
+  pointer-events:none;
+  border-radius:inherit;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)
+}
+.venuePage .signatureCard.signatureOutNext{
+  transform:translate3d(-68%,12px,-80px) rotate(-12deg) rotateY(18deg) scale(.88);
+  opacity:0;
+  filter:blur(2px)
+}
+.venuePage .signatureCard.signatureOutPrev{
+  transform:translate3d(68%,8px,-80px) rotate(5deg) rotateY(-18deg) scale(.88);
+  opacity:0;
+  filter:blur(2px)
+}
+.venuePage .signatureCard.signatureInNext{
+  transition:none;
+  transform:translate3d(68%,-4px,-90px) rotate(6deg) rotateY(-22deg) scale(.88);
+  opacity:0;
+  filter:blur(2px)
+}
+.venuePage .signatureCard.signatureInPrev{
+  transition:none;
+  transform:translate3d(-68%,-4px,-90px) rotate(-12deg) rotateY(22deg) scale(.88);
+  opacity:0;
+  filter:blur(2px)
+}
+.venuePage .signaturePhoto{
+  position:relative;
+  flex:1 1 61%;
+  min-height:0;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 28% 16%,color-mix(in srgb,var(--venue-accent) 26%,transparent),transparent 36%),
+    #201824
+}
+.venuePage .signaturePhoto img{width:100%;height:100%;display:block;object-fit:cover;transform:scale(1.025)}
+.venuePage .signaturePhotoFallback{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:#fff}
+.venuePage .signaturePhotoFallback b{font-size:15px;letter-spacing:.12em}.venuePage .signaturePhotoFallback small{display:block;margin-top:5px;font-size:8px;opacity:.62}
+.venuePage .signaturePhotoShade{
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(180deg,rgba(0,0,0,.02) 34%,rgba(10,6,13,.18) 70%,rgba(10,6,13,.78) 100%),
+    linear-gradient(110deg,rgba(255,255,255,.08),transparent 30%)
+}
+.venuePage .signatureCardBadge{
+  position:absolute;
+  z-index:3;
+  left:12px;
+  top:12px;
+  padding:7px 9px;
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:999px;
+  background:rgba(12,8,14,.46);
+  backdrop-filter:blur(12px);
+  color:#fff;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.11em
+}
+.venuePage .signatureCardBody{
+  position:relative;
+  flex:0 0 39%;
+  display:flex;
+  flex-direction:column;
+  padding:14px 14px 13px;
+  background:
+    radial-gradient(circle at 95% 0,color-mix(in srgb,var(--venue-accent) 22%,transparent),transparent 45%),
+    linear-gradient(160deg,#19121d,#100d13)
+}
+.venuePage .signatureCardBody small{
+  color:color-mix(in srgb,var(--venue-accent2) 82%,#fff);
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.11em
+}
+.venuePage .signatureCardBody h3{
+  margin:5px 0 6px;
+  color:#fff;
+  font-size:clamp(18px,5.2vw,27px);
+  line-height:.94;
+  letter-spacing:-.055em
+}
+.venuePage .signatureCardBody p{
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  margin:0;
+  color:#a99eac;
+  font-size:9.5px;
+  line-height:1.36
+}
+.venuePage .signatureCardPrice{
+  margin-top:auto;
+  padding-top:8px;
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  gap:8px
+}
+.venuePage .signatureCardPrice b{font-size:20px;color:#fff;letter-spacing:-.04em}
+.venuePage .signatureCardPrice span{max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#908395;font-size:8px}
+
+.venuePage .signatureArrow{
+  position:absolute;
+  z-index:8;
+  top:50%;
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  transform:translateY(-50%);
+  border-radius:50%;
+  border:1px solid rgba(71,46,83,.12);
+  background:rgba(255,255,255,.76);
+  color:#3c2b45;
+  box-shadow:0 10px 26px rgba(55,34,62,.14);
+  backdrop-filter:blur(14px);
+  font:500 31px/1 system-ui;
+  transition:transform .15s ease,opacity .2s
+}
+.venuePage .signatureArrowPrev{left:8%}
+.venuePage .signatureArrowNext{right:8%}
+.venuePage .signatureArrow:active{transform:translateY(-50%) scale(.88)}
+.venuePage .signatureArrow:disabled{opacity:.25}
+.venuePage .signatureDots{
+  min-height:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  margin:0 0 8px
+}
+.venuePage .signatureDots button{
+  width:5px;
+  height:5px;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  background:#cabfca;
+  transition:width .22s ease,background .22s ease
+}
+.venuePage .signatureDots button.active{
+  width:19px;
+  background:var(--venue-accent)
+}
+.venuePage .signatureChoose{margin-top:4px}
+.venuePage .signatureBack{margin-top:7px}
+@keyframes signatureModeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+.venuePage[data-tone="dark"] .builderModeSwitch{
+  background:rgba(255,255,255,.035);
+  border-color:rgba(255,255,255,.06)
+}
+.venuePage[data-tone="dark"] .builderModeSwitch button{color:#95a0ac}
+.venuePage[data-tone="dark"] .builderModeSwitch button small{color:#6f7b87}
+.venuePage[data-tone="dark"] .signatureTopline{color:#8f9aa6}
+.venuePage[data-tone="dark"] .signatureArrow{
+  background:rgba(21,28,36,.8);
+  color:#f5f7f9;
+  border-color:rgba(255,255,255,.08)
+}
+
+@media(max-width:390px){
+  .venuePage .signatureMode{min-height:535px}
+  .venuePage .signatureCarousel{min-height:420px}
+  .venuePage .signatureViewport{width:52vw;min-width:174px;max-width:58%}
+  .venuePage .signatureArrowPrev{left:3%}.venuePage .signatureArrowNext{right:3%}
+  .venuePage .signatureCard{border-radius:25px}
+  .venuePage .signatureCardBody{padding:12px 12px 11px}
+  .venuePage .signatureCardBody h3{font-size:20px}
+}
+@media(max-width:340px){
+  .venuePage .signatureViewport{width:56vw;min-width:168px}
+  .venuePage .signatureArrow{width:38px;height:38px}
+}
+@media(prefers-reduced-motion:reduce){
+  .venuePage .signatureCard,.venuePage .builderModeSwitch button,.venuePage .signatureDots button{transition:none!important}
+  .venuePage .signatureMode{animation:none!important}
+}
+
 /* Builder cinematic completion */
 .venuePage .builderSheet{overflow-y:auto;overflow-x:hidden}
 .venuePage .builderStage{
@@ -3376,9 +3667,9 @@ body.venuePage .foodPic img{
   transform-origin:50% 62%;
   transition:filter .24s ease
 }
-.venuePage .builderStage .builderBlock,
-.venuePage .builderStage .totalRow,
-.venuePage .builderStage>#addBuilder{
+.venuePage .builderStage #builderCustomMode .builderBlock,
+.venuePage .builderStage #builderCustomMode .totalRow,
+.venuePage .builderStage #addBuilder{
   transform-origin:50% 50%
 }
 .venuePage .builderSingularity{
@@ -3411,16 +3702,16 @@ body.venuePage .foodPic img{
 .venuePage .builderSingularity i:nth-child(2){--r:76deg;width:58px}
 .venuePage .builderSingularity i:nth-child(3){--r:136deg;width:94px}
 .venuePage .builderStage.builderCollapsing{filter:saturate(.72)}
-.venuePage .builderStage.builderCollapsing .builderBlock,
-.venuePage .builderStage.builderCollapsing .totalRow,
-.venuePage .builderStage.builderCollapsing>#addBuilder{
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock,
+.venuePage .builderStage.builderCollapsing #builderCustomMode .totalRow,
+.venuePage .builderStage.builderCollapsing #addBuilder{
   animation:builderIntoSingularity var(--singularity-duration,1050ms) cubic-bezier(.66,-.02,.22,1) forwards
 }
-.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(1){animation-delay:0ms}
-.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(2){animation-delay:40ms}
-.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(3){animation-delay:80ms}
-.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(4){animation-delay:120ms}
-.venuePage .builderStage.builderCollapsing .builderBlock:nth-child(5){animation-delay:160ms}
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock:nth-child(1){animation-delay:0ms}
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock:nth-child(2){animation-delay:40ms}
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock:nth-child(3){animation-delay:80ms}
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock:nth-child(4){animation-delay:120ms}
+.venuePage .builderStage.builderCollapsing #builderCustomMode .builderBlock:nth-child(5){animation-delay:160ms}
 .venuePage .builderStage.builderCollapsing .builderSingularity{
   animation:singularityBorn var(--singularity-duration,1050ms) ease-out forwards
 }

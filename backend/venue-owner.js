@@ -43,8 +43,20 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     if(!out.length)return LEGACY_SECTIONS.map((x,i)=>({...x,order:i}));
     return out.map((x,i)=>({...x,order:i}));
   }
-  const normalizeCode=v=>String(v||'').trim().toUpperCase().replace(/\s+/g,'');
-  const codeHash=v=>crypto.createHash('sha256').update('venue-owner-claim:'+normalizeCode(v)).digest('hex');
+  const normalizeCode=v=>{
+    const raw=String(v||'').normalize('NFKC').toUpperCase()
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+      .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+      .replace(/\u00A0/g,' ');
+    const compact=raw.replace(/\s+/g,'');
+    const own=compact.match(/OWN-?([A-F0-9]{10})/);
+    if(own)return 'OWN-'+own[1];
+    const legacy=compact.match(/SC-?([A-F0-9]{8})/);
+    if(legacy)return 'SC-'+legacy[1];
+    return compact;
+  };
+  const codeHash=v=>crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeCode(v)).digest('hex');
+  const legacyCodeHash=v=>crypto.createHash('sha256').update('venue-owner-claim:'+normalizeCode(v)).digest('hex');
   const publicAccess=row=>({
     establishment_id:row.establishment_id,
     name:row.name,
@@ -161,15 +173,16 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   async function claimForTelegramUser(user,code){
     if(!DB)throw new Error('persistent_storage_required');
     const normalized=normalizeCode(code);
-    if(!/^[A-Z0-9_-]{6,40}$/.test(normalized))throw new Error('bad_claim_code');
+    if(!/^(OWN-[A-F0-9]{10}|SC-[A-F0-9]{8})$/.test(normalized))throw new Error('bad_claim_code');
     const client=await DB.connect();
     try{
       await client.query('BEGIN');
+      const canonicalHash=codeHash(normalized),oldHash=legacyCodeHash(normalized);
       const q=await client.query(`
         SELECT * FROM shaurma_venue_invites
-        WHERE code_hash=$1 AND is_active=TRUE AND expires_at>NOW() AND uses<max_uses
+        WHERE code_hash IN ($1,$2) AND is_active=TRUE AND expires_at>NOW() AND uses<max_uses
         FOR UPDATE
-      `,[codeHash(normalized)]);
+      `,[canonicalHash,oldHash]);
       const inv=q.rows[0];if(!inv)throw new Error('claim_code_invalid_or_expired');
       await client.query(`
         INSERT INTO shaurma_venue_admins(establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,added_by)
@@ -375,7 +388,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     try{
       const venue=(await DB.query("SELECT establishment_id,name FROM shaurma_venues WHERE establishment_id=$1",[est])).rows[0];
       if(!venue)return res.sendStatus(404);
-      const raw='SC-'+crypto.randomBytes(4).toString('hex').toUpperCase();
+      const raw='OWN-'+crypto.randomBytes(5).toString('hex').toUpperCase();
       const days=Math.max(1,Math.min(30,Number(req.body?.expires_days)||7));
       const q=await DB.query(`
         INSERT INTO shaurma_venue_invites(establishment_id,code_hash,role,permissions,expires_at,max_uses,created_by)
@@ -497,8 +510,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
       try{
         const venue=(await DB.query("SELECT establishment_id FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1",[bootstrapEstablishment])).rows[0];
         if(venue){
-          const hash=codeHash(bootstrapCode);
-          const existing=(await DB.query("SELECT id FROM shaurma_venue_invites WHERE code_hash=$1 LIMIT 1",[hash])).rows[0];
+          const normalizedBootstrap=normalizeCode(bootstrapCode);
+          const hash=codeHash(normalizedBootstrap);
+          const oldHash=legacyCodeHash(normalizedBootstrap);
+          const existing=(await DB.query("SELECT id FROM shaurma_venue_invites WHERE code_hash IN ($1,$2) LIMIT 1",[hash,oldHash])).rows[0];
           if(!existing)await DB.query(`
             INSERT INTO shaurma_venue_invites(establishment_id,code_hash,role,permissions,expires_at,max_uses,created_by)
             VALUES($1,$2,'owner',$3::jsonb,NOW()+INTERVAL '7 days',1,'bootstrap')

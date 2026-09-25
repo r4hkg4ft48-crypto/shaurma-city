@@ -35,7 +35,7 @@ function key(scope){
     ? (config.ADMIN_BOT_TOKEN||config.OWNER_API_TOKEN)
     : scope==='venue'
       ? (config.VENUE_OWNER_BOT_TOKEN||config.OWNER_API_TOKEN)
-      : config.CLIENT_BOT_TOKEN;
+      : (config.AGGREGATOR_BOT_TOKEN||config.CLIENT_BOT_TOKEN||config.OWNER_API_TOKEN);
   if(!base)throw Object.assign(new Error('session_not_configured'),{status:503});
   return crypto.createHmac('sha256','ShaurmegV2:'+scope).update(base).digest();
 }

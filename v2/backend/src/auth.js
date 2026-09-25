@@ -18,6 +18,18 @@ function verifyInitData(initData,botToken){
   if(!user.id)throw new Error('no_user');
   return user;
 }
+function verifyInitDataAny(initData,botTokens=[]){
+  const tokens=[...new Set((Array.isArray(botTokens)?botTokens:[botTokens]).map(x=>String(x||'').trim()).filter(Boolean))];
+  if(!tokens.length)throw Object.assign(new Error('telegram_not_configured'),{status:503});
+  let lastError=null;
+  for(const token of tokens){
+    try{return verifyInitData(initData,token)}
+    catch(e){lastError=e}
+  }
+  if(lastError&&!lastError.status)lastError.status=401;
+  throw lastError||Object.assign(new Error('bad_init_data'),{status:401});
+}
+
 function key(scope){
   const base=scope==='admin'
     ? (config.ADMIN_BOT_TOKEN||config.OWNER_API_TOKEN)
@@ -54,4 +66,4 @@ function ownerOk(req){
   const s=readToken(req,'admin');return !!(s&&config.ADMIN_IDS.has(String(s.sub)));
 }
 function requireOwner(req,res,next){if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});next()}
-module.exports={verifyInitData,sign,readToken,requireSession,ownerOk,requireOwner};
+module.exports={verifyInitData,verifyInitDataAny,sign,readToken,requireSession,ownerOk,requireOwner};

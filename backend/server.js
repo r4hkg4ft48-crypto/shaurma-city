@@ -980,6 +980,122 @@ async function handleAdminBotUpdate(update,api=adminTelegramApi){
  }
 }
 
+function masterAdminUrl(tab='overview'){
+ const u=new URL(PUBLIC_API_URL+'/master-admin');
+ if(tab)u.searchParams.set('tab',String(tab));
+ u.searchParams.set('v','1');
+ return u.toString();
+}
+function masterModuleUrl(module){
+ if(module==='orders')return PUBLIC_API_URL+'/shaurma-owner?section=orders&from=master&v=5';
+ if(module==='menu')return PUBLIC_API_URL+'/shaurma-owner?section=menu&from=master&v=5';
+ if(module==='map'||module==='realcity'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
+ if(module==='owners')return masterAdminUrl('owners');
+ if(module==='sites')return masterAdminUrl('sites');
+ if(module==='bots')return masterAdminUrl('bots');
+ return masterAdminUrl('overview');
+}
+async function masterAdminHome(chatId,api=masterAdminTelegramApi){
+ return api('sendMessage',{
+  chat_id:chatId,
+  text:'🛡 SHAURMEG MASTER ADMIN\n\nЕдиная точка управления системой. Старые административные модули не переписаны — они подключены сюда как рабочие разделы, поэтому сохраняют исходную логику.',
+  reply_markup:{inline_keyboard:[
+   [{text:'◈ Главная',web_app:{url:masterAdminUrl('overview')}}],
+   [{text:'🧾 Заказы',web_app:{url:masterModuleUrl('orders')}},{text:'🍽 Меню',web_app:{url:masterModuleUrl('menu')}}],
+   [{text:'🗺 Карта / точки',web_app:{url:masterModuleUrl('map')}},{text:'🏙 RealCity',web_app:{url:masterModuleUrl('realcity')}}],
+   [{text:'🔑 Ключи доступа',callback_data:'akp:0'},{text:'👥 Владельцы',web_app:{url:masterModuleUrl('owners')}}],
+   [{text:'🎛 Сайты заведений',web_app:{url:masterModuleUrl('sites')}},{text:'🤖 Боты',web_app:{url:masterModuleUrl('bots')}}]
+  ]}
+ });
+}
+async function masterAdminVenues(chatId,api=masterAdminTelegramApi){
+ if(!DB)return api('sendMessage',{chat_id:chatId,text:'База данных временно недоступна.'});
+ const q=await DB.query("SELECT establishment_id,name,is_active FROM shaurma_venues ORDER BY is_active DESC,name LIMIT 40");
+ const rows=q.rows.map(x=>[{text:(x.is_active===false?'⏸ ':'🥙 ')+String(x.name||x.establishment_id).slice(0,38),web_app:{url:masterAdminUrl('sites')+'&establishment='+encodeURIComponent(x.establishment_id)}}]);
+ rows.push([{text:'🗺 Добавить / редактировать точку',web_app:{url:masterModuleUrl('add')}}]);
+ return api('sendMessage',{chat_id:chatId,text:'🏪 Заведения Shaurmeg\n\nВыберите точку или откройте редактор карты.',reply_markup:{inline_keyboard:rows}});
+}
+async function masterBotHealthText(){
+ const defs=[
+  ['Master Admin',masterAdminBotToken()],
+  ['Legacy Admin',adminTelegramBotToken()],
+  ['Access Keys',accessAdminBotToken()],
+  ['Venue Owner',String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim()],
+  ['Kitchen',String(process.env.KITCHEN_TELEGRAM_BOT_TOKEN||'').trim()],
+  ['Aggregator',aggregatorBotToken()],
+  ['Order Bot',clientBotToken()]
+ ];
+ const out=[];
+ for(const [label,token] of defs){
+  if(!token){out.push('○ '+label+' — не настроен');continue}
+  try{
+   const r=await fetch('https://api.telegram.org/bot'+token+'/getWebhookInfo');
+   const j=await r.json().catch(()=>({}));
+   const w=j.result||{};
+   out.push((j.ok?'● ':'◌ ')+label+' — '+(w.url?'webhook ✓':'без webhook')+(w.pending_update_count?' · очередь '+w.pending_update_count:'')+(w.last_error_message?' · ошибка':''));
+  }catch{out.push('◌ '+label+' — проверка недоступна')}
+ }
+ return out.join('\n');
+}
+async function handleMasterAdminUpdate(update){
+ const api=masterAdminTelegramApi,msg=update?.message,cb=update?.callback_query;
+ const user=cb?.from||msg?.from,chatId=cb?.message?.chat?.id||msg?.chat?.id;
+ if(!user?.id||!chatId)return;
+ if(!adminTelegramAllowed(user.id)){
+  if(cb)try{await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Нет доступа',show_alert:true})}catch{}
+  else try{await api('sendMessage',{chat_id:chatId,text:'Нет доступа к Master Admin Shaurmeg.'})}catch{}
+  return;
+ }
+ if(cb){
+  const data=String(cb.data||'');
+  if(/^ak(?::|p:)/.test(data))return handleAdminBotUpdate(update,api);
+  if(data==='ma:bots'){
+   await api('answerCallbackQuery',{callback_query_id:cb.id});
+   return api('sendMessage',{chat_id:chatId,text:'🤖 Состояние ботов\n\n'+await masterBotHealthText(),reply_markup:{inline_keyboard:[[{text:'Открыть раздел',web_app:{url:masterModuleUrl('bots')}}]]}});
+  }
+  return;
+ }
+ const text=String(msg?.text||'').trim();
+ if(/^\/(?:keys|access)(?:@[A-Za-z0-9_]+)?$/i.test(text))return adminVenueKeyPage(chatId,0,null,api);
+ if(/^\/id(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'Ваш Telegram ID: '+String(user.id)});
+ if(/^\/venues(?:@[A-Za-z0-9_]+)?$/i.test(text))return masterAdminVenues(chatId,api);
+ if(/^\/(?:map|add|realcity)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🗺 Редактор карты, точек и RealCity.',reply_markup:{inline_keyboard:[[{text:'Открыть редактор',web_app:{url:masterModuleUrl('map')}}]]}});
+ if(/^\/menu(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🍽 Управление меню всех заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:masterModuleUrl('menu')}}]]}});
+ if(/^\/orders(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🧾 Заказы Shaurmeg в реальном времени.',reply_markup:{inline_keyboard:[[{text:'Открыть заказы',web_app:{url:masterModuleUrl('orders')}}]]}});
+ if(/^\/owners(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'👥 Доступы владельцев и заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть владельцев',web_app:{url:masterModuleUrl('owners')}}],[{text:'Создать ключ',callback_data:'akp:0'}]]}});
+ if(/^\/site(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🎛 Индивидуальные сайты заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть сайты',web_app:{url:masterModuleUrl('sites')}}]]}});
+ if(/^\/(?:bots|status)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🤖 Состояние ботов\n\n'+await masterBotHealthText(),reply_markup:{inline_keyboard:[[{text:'Открыть раздел',web_app:{url:masterModuleUrl('bots')}}]]}});
+ if(/^\/(?:start|admin|dashboard|help)(?:@[A-Za-z0-9_]+)?/i.test(text))return masterAdminHome(chatId,api);
+}
+async function syncMasterAdminBot(){
+ const token=masterAdminBotToken();
+ if(!token){console.log('Master admin bot token not configured');return}
+ try{
+  const info=await getMasterAdminBotInfo();
+  await masterAdminTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Master Admin',web_app:{url:masterAdminUrl('overview')}}});
+  await masterAdminTelegramApi('setMyCommands',{commands:[
+   {command:'start',description:'Открыть Master Admin'},
+   {command:'dashboard',description:'Главная админки'},
+   {command:'orders',description:'Заказы'},
+   {command:'menu',description:'Меню заведений'},
+   {command:'map',description:'Карта и точки'},
+   {command:'venues',description:'Все заведения'},
+   {command:'keys',description:'Ключи доступа'},
+   {command:'owners',description:'Владельцы и права'},
+   {command:'realcity',description:'RealCity и фасады'},
+   {command:'site',description:'Сайты заведений'},
+   {command:'bots',description:'Состояние ботов'},
+   {command:'add',description:'Добавить заведение'},
+   {command:'id',description:'Показать Telegram ID'}
+  ]});
+  if(MASTER_ADMIN_BOT_WEBHOOK_SECRET)await masterAdminTelegramApi('setWebhook',{
+   url:PUBLIC_API_URL+'/api/master-admin-bot/webhook/'+MASTER_ADMIN_BOT_WEBHOOK_SECRET,
+   allowed_updates:['message','callback_query'],drop_pending_updates:false
+  });
+  console.log('Telegram master admin bot synced @'+String(info?.username||''));
+ }catch(e){console.error('Telegram master admin bot sync:',e.message)}
+}
+
 async function syncAccessKeyBot(api,info,webhookUrl,label){
  await api('setChatMenuButton',{menu_button:{type:'default'}});
  await api('setMyCommands',{commands:[
@@ -1017,6 +1133,11 @@ async function syncAdminTelegramMiniApp(){
  }catch(e){console.error('Telegram admin Mini App sync:',e.message)}
 }
 
+app.post('/api/master-admin-bot/webhook/:secret',async(req,res)=>{
+ if(!MASTER_ADMIN_BOT_WEBHOOK_SECRET||String(req.params.secret)!==MASTER_ADMIN_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
+ res.sendStatus(200);
+ try{await handleMasterAdminUpdate(req.body||{})}catch(e){console.error('master admin bot webhook:',e.message)}
+});
 app.post('/api/shaurmeg-admin-bot/webhook/:secret',async(req,res)=>{
  if(!ADMIN_BOT_WEBHOOK_SECRET||String(req.params.secret)!==ADMIN_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
  res.sendStatus(200);

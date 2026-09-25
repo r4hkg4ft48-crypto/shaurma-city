@@ -1981,3 +1981,31 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
   .mapApp .mapCount{display:none}
   .mapApp .brandProfileButton{max-width:calc(100vw - 94px)}
 }
+
+
+/* ===== iOS / Telegram WebView sheet scroll lock ===== */
+html.sheetOpen,body.sheetOpen{
+  overscroll-behavior:none;
+  overflow:hidden;
+}
+body.sheetOpen{
+  position:fixed;
+  left:0;
+  right:0;
+  width:100%;
+  height:100%;
+  touch-action:none;
+}
+body.sheetOpen .sheet.show{
+  touch-action:pan-y;
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+}
+body.sheetOpen .sheetBackdrop.show{
+  touch-action:none;
+}
+.venuePage .sheet{
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+}

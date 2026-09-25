@@ -1760,7 +1760,136 @@ app.post('/api/shaurma/orders',async(req,res)=>{
 
 function adminOrderFilter(query,{includeStatus=true}={}){
  const where=[],params=[];
- const add=(sql,val)=>{params.push(val);where.push(sql.replace('?', '
+ const add=(sql,val)=>{params.push(val);where.push(sql.replace('?',String.fromCharCode(36)+params.length))};
+ const establishmentId=String(query.establishment_id||'').trim().toUpperCase();
+ if(establishmentId){
+  if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))throw Object.assign(new Error('bad_establishment_id'),{status:400});
+  add('establishment_id=?',establishmentId);
+ }
+ const period=String(query.period||'all').toLowerCase();
+ if(period==='today')where.push("created_at>=CURRENT_DATE");
+ else if(period==='7d')where.push("created_at>=NOW()-INTERVAL '7 days'");
+ else if(period==='30d')where.push("created_at>=NOW()-INTERVAL '30 days'");
+ else if(period==='90d')where.push("created_at>=NOW()-INTERVAL '90 days'");
+ else if(period==='custom'){
+  const from=String(query.from||'').trim(),to=String(query.to||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to))throw Object.assign(new Error('bad_date_range'),{status:400});
+  add('created_at>=?::date',from);add("created_at<?::date+INTERVAL '1 day'",to);
+ }else if(period!=='all')throw Object.assign(new Error('bad_period'),{status:400});
+ if(includeStatus){
+  const status=String(query.status||'all').toLowerCase();
+  if(status==='active')where.push("status IN ('new','cooking','ready')");
+  else if(['new','cooking','ready','done','cancelled'].includes(status))add('status=?',status);
+  else if(status!=='all')throw Object.assign(new Error('bad_status'),{status:400});
+ }
+ return {where:where.length?' WHERE '+where.join(' AND '):'',params,period,establishmentId};
+}
+function fallbackOrderRows(query){
+ let rows=(readStore().shaurma_orders||[]).slice();
+ const est=String(query.establishment_id||'').trim().toUpperCase();
+ if(est)rows=rows.filter(x=>String(x.establishment_id||'').toUpperCase()===est);
+ const now=Date.now(),period=String(query.period||'all');
+ if(period==='today'){const d=new Date();d.setHours(0,0,0,0);rows=rows.filter(x=>new Date(x.created_at)>=d)}
+ if(period==='7d')rows=rows.filter(x=>now-new Date(x.created_at).getTime()<=7*86400000);
+ if(period==='30d')rows=rows.filter(x=>now-new Date(x.created_at).getTime()<=30*86400000);
+ if(period==='90d')rows=rows.filter(x=>now-new Date(x.created_at).getTime()<=90*86400000);
+ if(period==='custom'){const a=new Date(String(query.from||'')+'T00:00:00'),b=new Date(String(query.to||'')+'T23:59:59.999');rows=rows.filter(x=>{const d=new Date(x.created_at);return d>=a&&d<=b})}
+ const status=String(query.status||'all');
+ if(status==='active')rows=rows.filter(x=>['new','cooking','ready'].includes(x.status));
+ else if(['new','cooking','ready','done','cancelled'].includes(status))rows=rows.filter(x=>x.status===status);
+ return rows;
+}
+
+app.get('/api/shaurma/admin/orders',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ try{
+  const limit=Math.max(20,Math.min(250,Number(req.query.limit)||100)),offset=Math.max(0,Number(req.query.offset)||0);
+  const sort=String(req.query.sort||'newest');
+  const orderBy={newest:'created_at DESC',oldest:'created_at ASC',total_desc:'total DESC, created_at DESC',total_asc:'total ASC, created_at DESC'}[sort];
+  if(!orderBy)return res.status(400).json({error:'bad_sort'});
+  if(DB){
+   const flt=adminOrderFilter(req.query);
+   const count=await DB.query('SELECT COUNT(*)::int AS count FROM shaurma_orders'+flt.where,flt.params);
+   const params=[...flt.params,limit,offset];
+   const rows=await DB.query('SELECT * FROM shaurma_orders'+flt.where+' ORDER BY '+orderBy+' LIMIT '+String.fromCharCode(36)+(flt.params.length+1)+' OFFSET '+String.fromCharCode(36)+(flt.params.length+2),params);
+   const total=Number(count.rows[0]?.count||0);
+   return res.json({orders:rows.rows,total,limit,offset,has_more:offset+rows.rows.length<total});
+  }
+  let rows=fallbackOrderRows(req.query);
+  rows.sort((a,b)=>sort==='oldest'?new Date(a.created_at)-new Date(b.created_at):sort==='total_desc'?(Number(b.total)||0)-(Number(a.total)||0):sort==='total_asc'?(Number(a.total)||0)-(Number(b.total)||0):new Date(b.created_at)-new Date(a.created_at));
+  const total=rows.length,slice=rows.slice(offset,offset+limit);
+  res.json({orders:slice,total,limit,offset,has_more:offset+slice.length<total});
+ }catch(e){res.status(e.status||500).json({error:e.message||'admin_orders_failed'})}
+});
+
+app.get('/api/shaurma/admin/order-analytics',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);
+ try{
+  if(!DB){
+   const periodRows=fallbackOrderRows({...req.query,status:'all'}),allRows=fallbackOrderRows({establishment_id:req.query.establishment_id,status:'all',period:'all'});
+   const live=periodRows.filter(x=>x.status!=='cancelled'),life=allRows.filter(x=>x.status!=='cancelled'),products=new Map(),timeline=new Map();
+   for(const o of live){
+    const key=new Date(o.created_at).toISOString().slice(0,10),t=timeline.get(key)||{bucket:key,orders:0,revenue:0};t.orders++;t.revenue+=Number(o.total)||0;timeline.set(key,t);
+    for(const it of Array.isArray(o.items)?o.items:[]){const n=String(it.n||it.name||'Позиция'),q=Number(it.q)||1,p=Number(it.p)||0,v=products.get(n)||{name:n,qty:0,revenue:0};v.qty+=q;v.revenue+=q*p;products.set(n,v)}
+   }
+   const lifeRevenue=life.reduce((s,x)=>s+(Number(x.total)||0),0),periodRevenue=live.reduce((s,x)=>s+(Number(x.total)||0),0);
+   return res.json({
+    lifetime:{orders:allRows.length,sales:life.length,revenue:lifeRevenue,avg_check:life.length?lifeRevenue/life.length:0,first_order_at:allRows.map(x=>x.created_at).sort()[0]||null,last_order_at:allRows.map(x=>x.created_at).sort().slice(-1)[0]||null},
+    period:{orders:periodRows.length,sales:live.length,cancelled:periodRows.filter(x=>x.status==='cancelled').length,revenue:periodRevenue,avg_check:live.length?periodRevenue/live.length:0,new:periodRows.filter(x=>x.status==='new').length,cooking:periodRows.filter(x=>x.status==='cooking').length,ready:periodRows.filter(x=>x.status==='ready').length,done:periodRows.filter(x=>x.status==='done').length},
+    products:[...products.values()].sort((a,b)=>b.qty-a.qty).slice(0,100),
+    timeline:[...timeline.values()].sort((a,b)=>String(a.bucket).localeCompare(String(b.bucket)))
+   });
+  }
+  const pf=adminOrderFilter(req.query,{includeStatus:false});
+  const lf=adminOrderFilter({establishment_id:req.query.establishment_id,period:'all'},{includeStatus:false});
+  const summary=await DB.query(`
+   SELECT
+    COUNT(*)::int AS orders,
+    COUNT(*) FILTER (WHERE status<>'cancelled')::int AS sales,
+    COUNT(*) FILTER (WHERE status='cancelled')::int AS cancelled,
+    COUNT(*) FILTER (WHERE status='new')::int AS new,
+    COUNT(*) FILTER (WHERE status='cooking')::int AS cooking,
+    COUNT(*) FILTER (WHERE status='ready')::int AS ready,
+    COUNT(*) FILTER (WHERE status='done')::int AS done,
+    COALESCE(SUM(total) FILTER (WHERE status<>'cancelled'),0)::numeric AS revenue,
+    COALESCE(AVG(total) FILTER (WHERE status<>'cancelled'),0)::numeric AS avg_check,
+    MIN(created_at) AS first_order_at,
+    MAX(created_at) AS last_order_at
+   FROM shaurma_orders`+pf.where,pf.params);
+  const lifetime=await DB.query(`
+   SELECT COUNT(*)::int AS orders,
+    COUNT(*) FILTER (WHERE status<>'cancelled')::int AS sales,
+    COALESCE(SUM(total) FILTER (WHERE status<>'cancelled'),0)::numeric AS revenue,
+    COALESCE(AVG(total) FILTER (WHERE status<>'cancelled'),0)::numeric AS avg_check,
+    MIN(created_at) AS first_order_at,
+    MAX(created_at) AS last_order_at
+   FROM shaurma_orders`+lf.where,lf.params);
+  const products=await DB.query(`
+   WITH filtered AS (
+    SELECT items FROM shaurma_orders`+pf.where+(pf.where?' AND ':' WHERE ')+`status<>'cancelled'
+   )
+   SELECT COALESCE(NULLIF(item->>'n',''),NULLIF(item->>'name',''),'Позиция') AS name,
+    COALESCE(SUM(COALESCE(NULLIF(item->>'q','')::numeric,1)),0)::numeric AS qty,
+    COALESCE(SUM(COALESCE(NULLIF(item->>'q','')::numeric,1)*COALESCE(NULLIF(item->>'p','')::numeric,0)),0)::numeric AS revenue
+   FROM filtered CROSS JOIN LATERAL jsonb_array_elements(COALESCE(items,'[]'::jsonb)) item
+   GROUP BY 1 ORDER BY qty DESC,revenue DESC LIMIT 100`,pf.params);
+  const bucket=pf.period==='all'?"date_trunc('month',created_at)":"date_trunc('day',created_at)";
+  const timeline=await DB.query(`
+   SELECT `+bucket+` AS bucket,
+    COUNT(*) FILTER (WHERE status<>'cancelled')::int AS orders,
+    COALESCE(SUM(total) FILTER (WHERE status<>'cancelled'),0)::numeric AS revenue
+   FROM shaurma_orders`+pf.where+`
+   GROUP BY 1 ORDER BY 1 ASC`,pf.params);
+  res.json({
+   lifetime:lifetime.rows[0]||{},
+   period:summary.rows[0]||{},
+   products:products.rows.map(x=>({...x,qty:Number(x.qty||0),revenue:Number(x.revenue||0)})),
+   timeline:timeline.rows.map(x=>({...x,orders:Number(x.orders||0),revenue:Number(x.revenue||0)}))
+  });
+ }catch(e){res.status(e.status||500).json({error:e.message||'order_analytics_failed'})}
+});
+
+app.get('/api/shaurma/orders',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);
  try{
   const venueId=req.query.venue_id?normalizeVenueId(req.query.venue_id):null;

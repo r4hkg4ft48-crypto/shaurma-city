@@ -46,6 +46,20 @@
   <div class="panelScroll"><div id="ordersPanelList" class="mapOrdersList"><div class="panelSkeleton"></div><div class="panelSkeleton"></div></div></div>
 </section>
 
+<section class="appPanel favoritesPanel" id="favoritesPanel">
+  <div class="appPanelHandle"></div>
+  <div class="appPanelHead favoritesPanelHead">
+    <div><small>ТВОЙ ВКУС</small><h2>Избранное</h2><p>Любимые блюда из заказов и то, что ты сохранил сам</p></div>
+    <div class="favoritesHeadMeta"><b id="favoritesCount">0</b><span>блюд</span></div>
+    <button class="iconBtn" data-panel-close>×</button>
+  </div>
+  <div class="panelScroll favoritesScroll">
+    <div id="favoritesPanelList" class="favoritesList">
+      <div class="panelSkeleton"></div><div class="panelSkeleton"></div>
+    </div>
+  </div>
+</section>
+
 <section class="appPanel profilePanel" id="profilePanel">
   <div class="appPanelHandle"></div>
   <div class="appPanelHead"><div><small>ЛИЧНЫЙ ПРОФИЛЬ</small><h2 id="profileTitle">Shaurmeg</h2><p id="profileSubtitle">Ваша история внутри города</p></div><button class="iconBtn" data-panel-close>×</button></div>
@@ -85,6 +99,7 @@
 <nav class="bottomDock glass" id="bottomDock">
   <button class="dockBtn active" data-dock="map"><span class="dockIcon">⌖</span><small>Карта</small></button>
   <button class="dockBtn" data-dock="orders"><span class="dockIcon">▤</span><small>Заказы</small><i id="activeOrderDot" class="hidden"></i></button>
+  <button class="dockBtn" data-dock="favorites"><span class="dockIcon favoritesDockIcon">♥</span><small>Избранное</small></button>
   <button class="dockBtn" data-dock="profile"><span class="dockIcon">◉</span><small>Профиль</small></button>
 </nav>
 

@@ -28,6 +28,12 @@
     return CITY_PALETTES[part]||CITY_PALETTES.day;
   }
   const cityPalette=applyDaypart();
+  function setHeaderTgId(value){
+    const el=$('#headerTgId');if(!el)return;
+    const id=String(value||'').trim();
+    el.textContent=id?'TG ID · '+id:'TG ID · —';
+  }
+  setHeaderTgId(tg?.initDataUnsafe?.user?.id||'');
   function toast(v){const el=$('#toast');if(!el)return;el.textContent=v;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1900)}
   function dismissBoot(){
     clearTimeout(window.__SHAURMEG_BOOT_WATCHDOG__);
@@ -72,6 +78,7 @@
     }catch{$('#ordersPanelList').innerHTML='<div class="panelEmpty">Не удалось загрузить заказы</div>'}
   }
   function renderGuestProfile(){
+    setHeaderTgId(tg?.initDataUnsafe?.user?.id||'');
     $('#profileName').textContent='Откройте в Telegram';$('#profileUsername').textContent='Профиль привязывается к Telegram ID';
     $('#profileAvatar').textContent='Ш';$('#avgCheck').textContent='0 ₽';$('#ordersCount').textContent='0';$('#totalSpent').textContent='0 ₽';$('#activeOrders').textContent='0';
     $('#favoriteVenue').textContent='Пока определяем';$('#favoriteMeta').textContent='История появится после авторизации';
@@ -80,6 +87,7 @@
   function renderDashboard(){
     const d=dashboard||{},u=d.user||{},s=d.stats||{},r=d.referral||{},b=d.bonuses||{},fav=d.favorite_venue;
     const name=[u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||'Пользователь';
+    setHeaderTgId(u.id||'');
     $('#profileName').textContent=name;$('#profileTitle').textContent=u.first_name?u.first_name+', это твой Shaurmeg':'Твой Shaurmeg';
     $('#profileUsername').textContent=u.username?'@'+u.username:'Telegram ID · '+(u.id||'');
     $('#profileAvatar').textContent=(u.first_name||u.username||'Ш').slice(0,1).toUpperCase();
@@ -164,6 +172,7 @@
     document.querySelectorAll('.appPanel').forEach(x=>x.classList.toggle('show',x.id===id));
     $('#panelBackdrop').classList.toggle('show',!!id);document.body.classList.toggle('panelOpen',!!id);
     document.querySelectorAll('.dockBtn').forEach(x=>x.classList.toggle('active',x.dataset.dock===(kind||'map')));
+    $('#profileBtn')?.classList.toggle('active',kind==='profile');
     if(kind==='orders')loadOrders();if(kind==='favorites')loadFavorites();if(kind==='profile')loadDashboard();
     tg?.HapticFeedback?.selectionChanged?.();
   }
@@ -467,6 +476,7 @@
   $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
 
   $('#bottomDock').onclick=e=>{const b=e.target.closest('[data-dock]');if(b)openPanel(b.dataset.dock)};
+  $('#profileBtn').onclick=()=>openPanel('profile');
   $('#panelBackdrop').onclick=closePanels;document.querySelectorAll('[data-panel-close]').forEach(x=>x.onclick=closePanels);
   $('#orderFilter').onclick=e=>{const b=e.target.closest('[data-order-filter]');if(!b)return;orderFilter=b.dataset.orderFilter;document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===b));renderOrdersPanel()};
   $('#ordersPanelList').onclick=e=>{const b=e.target.closest('[data-order-menu]');if(!b)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',b.dataset.orderMenu);u.searchParams.set('establishment',b.dataset.orderEst);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};

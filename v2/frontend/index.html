@@ -18,7 +18,11 @@
 </div>
 
 <header class="topbar glass mapTopbar">
-  <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small></div></div>
+  <button class="brand brandProfileButton" id="profileBtn" type="button" aria-label="Открыть профиль">
+    <span class="brandMark brandLogo"><img src="shaurmeg-emblem.svg" alt="" aria-hidden="true"></span>
+    <span class="brandCopy"><b>шаурмег</b><small id="headerTgId">TG ID · —</small></span>
+    <span class="brandProfileHint" aria-hidden="true">◉</span>
+  </button>
   <div class="grow"></div>
   <div class="cityMode" id="cityMode"><i></i><span>ГОРОД LIVE</span></div>
   <div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div>
@@ -100,7 +104,6 @@
   <button class="dockBtn active" data-dock="map"><span class="dockIcon">⌖</span><small>Карта</small></button>
   <button class="dockBtn" data-dock="orders"><span class="dockIcon">▤</span><small>Заказы</small><i id="activeOrderDot" class="hidden"></i></button>
   <button class="dockBtn" data-dock="favorites"><span class="dockIcon favoritesDockIcon">♥</span><small>Избранное</small></button>
-  <button class="dockBtn" data-dock="profile"><span class="dockIcon">◉</span><small>Профиль</small></button>
 </nav>
 
 <div class="boot cinemaBoot" id="boot">

@@ -49,7 +49,15 @@ function menuUrl(marker,est){
   return u.toString();
 }
 
-function normalizeInviteCode(v){return String(v||'').trim().toUpperCase().replace(/\s+/g,'')}
+function normalizeInviteCode(v){
+  const raw=String(v||'').normalize('NFKC').toUpperCase()
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g,'')
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g,'-')
+    .replace(/\u00A0/g,' ');
+  const compact=raw.replace(/\s+/g,'');
+  const match=compact.match(/OWN-?([A-F0-9]{10})/);
+  return match?'OWN-'+match[1]:compact;
+}
 function inviteCodeHash(v){return crypto.createHash('sha256').update('shaurmeg-v2-owner:'+normalizeInviteCode(v)).digest('hex')}
 function orderStatusLabel(status){
   return ({new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'})[String(status)]||String(status||'');
@@ -215,15 +223,15 @@ async function handleKitchenMessage(msg){
   const raw=String(msg.text||'').trim();
   const start=raw.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
   const connect=raw.match(/^\/connect(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
-  const direct=raw.match(/^(OWN-[A-F0-9]{10})$/i);
-  const code=normalizeInviteCode(start?.[1]||connect?.[1]||direct?.[1]||'');
+  const code=normalizeInviteCode(start?.[1]||connect?.[1]||raw);
+  const hasCode=/^OWN-[A-F0-9]{10}$/.test(code);
 
   if(/^\/disconnect(?:@[A-Za-z0-9_]+)?$/i.test(raw)){
     await db.query('UPDATE shaurma_kitchen_access SET is_active=FALSE,updated_at=NOW() WHERE chat_id=$1',[String(chatId)]);
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'Доступ кухни отключён. Чтобы подключить заведение снова, отправьте его ключ OWN-…'});
   }
 
-  if(code){
+  if(hasCode){
     try{
       const access=await claimKitchenAccess(chatId,user,code);
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{

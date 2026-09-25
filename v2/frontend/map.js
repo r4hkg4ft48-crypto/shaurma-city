@@ -10,10 +10,10 @@
   const FALLBACK={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-saturation':-.22,'raster-contrast':.08,'raster-brightness-min':.08,'raster-brightness-max':.78}}]};
   const STATUS={new:'Принят',cooking:'Готовится',ready:'Готов',done:'Завершён',cancelled:'Отменён'};
   const CITY_PALETTES={
-    morning:{background:'#eee8f6',water:'#9bbcff',land:'#e8e2f0',residential:'#f6f0ee',building:'#fffaf2',road:'#fffdf8',label:'#44345b'},
-    day:{background:'#e9e2f4',water:'#7fa8ff',land:'#e7e1ef',residential:'#f7f2ef',building:'#fffaf4',road:'#ffffff',label:'#392951'},
-    evening:{background:'#4b3d64',water:'#536fcb',land:'#54466b',residential:'#665675',building:'#f0e6df',road:'#ece7ef',label:'#fff9f6'},
-    night:{background:'#161020',water:'#172957',land:'#21172e',residential:'#2a1d3a',building:'#756382',road:'#a99cb8',label:'#f4ecff'}
+    morning:{background:'#15263E',water:'#173A63',land:'#1D3048',residential:'#24384F',building:'#F2F5F8',road:'#FFFFFF',label:'#F7F9FC'},
+    day:{background:'#0F2035',water:'#14375F',land:'#192D44',residential:'#21364E',building:'#F7F9FC',road:'#FFFFFF',label:'#F7F9FC'},
+    evening:{background:'#0D192A',water:'#112F52',land:'#16273B',residential:'#1D3047',building:'#EDF1F5',road:'#F4F6F8',label:'#F8FAFC'},
+    night:{background:'#09111D',water:'#0B2340',land:'#111E2D',residential:'#17263A',building:'#DDE4EC',road:'#B7C1CC',label:'#F2F5F8'}
   };
   window.__SHAURMEG_MAP_STARTED__=true;
 
@@ -137,6 +137,7 @@
         else if(l.type==='fill'&&/park|grass|wood|vegetation|forest|landcover/i.test(id)){map.setPaintProperty(l.id,'fill-color',cityPalette.land);map.setPaintProperty(l.id,'fill-opacity',.9)}
         else if(l.type==='fill'&&/residential|landuse|land/i.test(id)){map.setPaintProperty(l.id,'fill-color',cityPalette.residential);map.setPaintProperty(l.id,'fill-opacity',.88)}
         if(l.type==='fill'&&/building/i.test(id)){map.setPaintProperty(l.id,'fill-color',cityPalette.building);map.setPaintProperty(l.id,'fill-opacity',daypart()==='night'?.76:.86)}
+        if(l.type==='fill-extrusion'&&/building/i.test(id)){map.setPaintProperty(l.id,'fill-extrusion-color',cityPalette.building);map.setPaintProperty(l.id,'fill-extrusion-opacity',daypart()==='night'?.78:.9)}
         if(l.type==='line'&&/road|street|highway|path|motorway|trunk/i.test(id)){map.setPaintProperty(l.id,'line-color',cityPalette.road);map.setPaintProperty(l.id,'line-opacity',daypart()==='night'?.6:.82)}
         if(l.type==='symbol'&&/road|place|poi|label/i.test(id)){map.setPaintProperty(l.id,'text-color',cityPalette.label);map.setPaintProperty(l.id,'text-halo-color',cityPalette.background);map.setPaintProperty(l.id,'text-halo-width',1.2)}
       }catch{}
@@ -146,12 +147,12 @@
     if(map.getSource('focus-building'))return;
 
     map.addSource('focus-flight',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    map.addLayer({id:'focus-flight-glow',type:'line',source:'focus-flight',paint:{'line-color':'#a46cff','line-width':7,'line-opacity':.09,'line-blur':4}});
-    map.addLayer({id:'focus-flight-core',type:'line',source:'focus-flight',paint:{'line-color':'#f7efff','line-width':1.2,'line-opacity':.48,'line-dasharray':[1.4,1.1]}});
+    map.addLayer({id:'focus-flight-glow',type:'line',source:'focus-flight',paint:{'line-color':'#D94343','line-width':7,'line-opacity':.09,'line-blur':4}});
+    map.addLayer({id:'focus-flight-core',type:'line',source:'focus-flight',paint:{'line-color':'#FFFFFF','line-width':1.2,'line-opacity':.48,'line-dasharray':[1.4,1.1]}});
 
     map.addSource('focus-zone',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-    map.addLayer({id:'focus-zone-glow',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,22,18,62],'circle-color':'#9a6dff','circle-opacity':.08,'circle-blur':.7,'circle-stroke-width':1,'circle-stroke-color':'#f7efff','circle-stroke-opacity':.26}});
-    map.addLayer({id:'focus-zone-core',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,7,18,16],'circle-color':'#7f9dff','circle-opacity':.08,'circle-stroke-width':1.2,'circle-stroke-color':'#f7efff','circle-stroke-opacity':.38}});
+    map.addLayer({id:'focus-zone-glow',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,22,18,62],'circle-color':'#D94343','circle-opacity':.08,'circle-blur':.7,'circle-stroke-width':1,'circle-stroke-color':'#FFFFFF','circle-stroke-opacity':.26}});
+    map.addLayer({id:'focus-zone-core',type:'circle',source:'focus-zone',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,7,18,16],'circle-color':'#315D93','circle-opacity':.08,'circle-stroke-width':1.2,'circle-stroke-color':'#FFFFFF','circle-stroke-opacity':.38}});
 
     map.addSource('realcity-ground',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-ground-fill',type:'fill',source:'realcity-ground',paint:{
@@ -168,11 +169,11 @@
 
     map.addSource('realcity-roads',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-roads-glow',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#fff8f2','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
+      'line-color':'#FFFFFF','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
       'line-opacity':0,'line-blur':5,'line-opacity-transition':{duration:650,delay:120}
     }});
     map.addLayer({id:'realcity-roads-core',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#f4edf8','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
+      'line-color':'#E8EDF3','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
       'line-opacity':0,'line-opacity-transition':{duration:650,delay:140}
     }});
 
@@ -184,7 +185,7 @@
       'fill-extrusion-opacity':.78
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
-      'line-color':['coalesce',['get','accent'],'#ded2ef'],
+      'line-color':['coalesce',['get','accent'],'#D7E0EA'],
       'line-width':['case',['==',['get','role'],'nearby'],1,.65],
       'line-opacity':['case',['==',['get','role'],'nearby'],.45,.22]
     }});
@@ -196,7 +197,7 @@
       'fill-extrusion-base':0,'fill-extrusion-opacity':.97
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
-      'line-color':['coalesce',['get','accent'],'#f2e8ff'],'line-width':1.55,'line-opacity':.78
+      'line-color':['coalesce',['get','accent'],'#F4F7FA'],'line-width':1.55,'line-opacity':.78
     }});
 
     map.addSource('realcity-trees',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -372,7 +373,7 @@
     dismissBoot();loadPointsWithRetry();
   }
   function markerNode(p,index=0){
-    const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker markerReveal'+(s.pulse!==false?' pulseMarker':'');el.style.setProperty('--reveal-delay',Math.min(index,18)*55+'ms');el.type='button';el.style.background=s.background||'#10221b';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.width=(s.size||44)+'px';el.style.height=(s.size||44)+'px';el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'10px':s.shape==='pin'?'50% 50% 50% 14px':'16px';el.style.transform='translate(-50%,-50%) scale('+(s.scale||1)+')';
+    const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker markerReveal'+(s.pulse!==false?' pulseMarker':'');el.style.setProperty('--reveal-delay',Math.min(index,18)*55+'ms');el.type='button';el.style.background=s.background||'#D94343';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.width=(s.size||44)+'px';el.style.height=(s.size||44)+'px';el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'10px':s.shape==='pin'?'50% 50% 50% 14px':'16px';el.style.transform='translate(-50%,-50%) scale('+(s.scale||1)+')';
     if(p.has_avatar){const img=new Image();img.alt='';img.src=api+'/map/markers/'+p.id+'/avatar';img.onerror=()=>{img.remove();el.insertAdjacentText('afterbegin',s.icon||'🥙')};el.appendChild(img)}else el.textContent=s.icon||'🥙';
     if(s.label_visible){const l=document.createElement('span');l.className='markerLabel';l.textContent=p.name;el.appendChild(l)}
     el.onclick=e=>{e.stopPropagation();selectPoint(p)};return el;
@@ -434,7 +435,7 @@
     try{tg?.openTelegramLink?.('https://t.me/share/url?url='+encodeURIComponent(currentReferralUrl)+'&text='+encodeURIComponent(text))}catch{try{await navigator.clipboard.writeText(currentReferralUrl);toast('Ссылка скопирована ✓')}catch{}}
   };
 
-  try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#161020':'#eee8f6';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
+  try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
   authClient().then(ok=>{if(ok){loadDashboard();loadOrders();connectUserStream()}else{renderGuestProfile();renderOrdersPanel()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

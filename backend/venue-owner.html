@@ -15,7 +15,7 @@
 <div class="wrap" id="app" hidden>
   <div class="top"><div class="brand"><b>SHAURMEG</b><small>VENUE OWNER CONTROL</small></div><div class="id" id="topId">—</div></div>
   <div class="card hero"><div><h1 id="venueName">Заведение</h1><p id="venueAddress">—</p></div><div class="venueTools"><select id="venueSelect"></select><button class="secondary" id="addVenueButton" type="button">＋ Заведение</button><div class="venueCount" id="venueCount">1 заведение</div></div></div>
-  <div class="tabs"><button class="tab active" data-tab="profile">Карточка</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="orders">Заказы</button></div>
+  <div class="tabs"><button class="tab active" data-tab="profile">Карточка</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="site">Сайт</button><button class="tab" data-tab="orders">Заказы</button></div>
 
   <section class="pane active card" id="profilePane">
     <div class="grid">
@@ -45,6 +45,41 @@
     </div>
     <div class="menuRows" id="menuRows"></div>
     <div class="actions"><button class="secondary" id="addMenu">+ Позиция</button><button id="saveMenu">Сохранить меню</button></div>
+  </section>
+
+  <section class="pane card" id="sitePane">
+    <div class="sectionManager">
+      <div class="sectionManagerHead"><div><b>Персональный сайт заведения</b><small>Все настройки ниже относятся только к выбранному ID заведения. Ссылка для точечного редактирования: <span id="siteSelectorHint">—</span>.</small></div></div>
+      <div class="grid">
+        <div class="field"><label>Концепция</label><select id="siteMode"><option value="cinematic">Cinematic</option><option value="editorial">Editorial</option><option value="glass">Glass</option><option value="minimal">Minimal</option></select></div>
+        <div class="field"><label>Сетка меню</label><select id="siteMenuLayout"><option value="hero-2-3">Hero → 2 → 3</option><option value="hero-2">Hero → 2</option><option value="uniform-2">По 2</option><option value="uniform-3">По 3</option></select></div>
+        <div class="field"><label>Стиль карточек</label><select id="siteCardStyle"><option value="photo">Фото / cinematic</option><option value="glass">Стекло</option><option value="solid">Плотные</option></select></div>
+        <div class="field"><label>Фото в карточках</label><select id="siteImageFit"><option value="cover">Заполнять</option><option value="contain">Показывать целиком</option></select></div>
+        <div class="field"><label>Скругление</label><input id="siteRadius" type="range" min="10" max="34" step="1"></div>
+        <div class="field"><label>Насыщенность фона</label><input id="siteAmbient" type="range" min="0" max="0.5" step="0.01"></div>
+        <div class="field"><label>Плотность панелей</label><input id="siteOpacity" type="range" min="0.45" max="0.99" step="0.01"></div>
+        <div class="field"><label>Контраст</label><input id="siteContrast" type="range" min="0.8" max="1.3" step="0.01"></div>
+        <div class="field"><label>Подпись hero-позиции</label><input id="siteHeroLabel" maxlength="40" placeholder="НАША ГОРДОСТЬ"></div>
+        <div class="field"><label><input id="siteDescriptions" type="checkbox" style="width:auto"> Показывать описания карточек</label></div>
+        <div class="field full"><label>Фоновое изображение сайта</label><div class="drop"><span id="siteBgHint">Фото / интерьер / атмосфера</span><img id="siteBgPreview" hidden><input id="siteBgFile" type="file" accept="image/*"></div></div>
+      </div>
+    </div>
+
+    <div class="sectionManager">
+      <div class="sectionManagerHead"><div><b>«Собери свою шаурму»</b><small>Состав конструктора и кинематографичный финал настраиваются отдельно для этого заведения.</small></div></div>
+      <div class="grid">
+        <div class="field full"><label><input id="builderStudioEnabled" type="checkbox" style="width:auto"> Конструктор включён</label></div>
+        <div class="field full"><label>Конфигурация ингредиентов (JSON)</label><textarea id="builderJson" style="min-height:220px;font:11px/1.4 ui-monospace,SFMono-Regular,monospace" spellcheck="false"></textarea></div>
+        <div class="field"><label><input id="builderResultEnabled" type="checkbox" style="width:auto"> Показывать итоговую сцену</label></div>
+        <div class="field"><label><input id="builderSingularity" type="checkbox" style="width:auto"> Сингулярность ингредиентов</label></div>
+        <div class="field"><label>Длительность анимации, мс</label><input id="builderDuration" type="number" min="650" max="1800" step="50"></div>
+        <div class="field"><label>Заголовок результата</label><input id="builderResultTitle" maxlength="100"></div>
+        <div class="field full"><label>Подпись результата</label><input id="builderResultSubtitle" maxlength="180"></div>
+        <div class="field full"><label>Фото итогового продукта</label><div class="drop"><span id="builderResultHint">Загрузить фотографию готовой шаурмы</span><img id="builderResultPreview" hidden><input id="builderResultFile" type="file" accept="image/*"></div></div>
+      </div>
+    </div>
+
+    <div class="actions"><button id="saveSite">Сохранить вид сайта</button><button class="secondary" id="saveBuilderStudio">Сохранить конструктор</button></div>
   </section>
 
   <section class="pane card" id="ordersPane">

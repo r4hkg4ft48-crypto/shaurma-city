@@ -934,7 +934,7 @@ async function handleAdminBotUpdate(update,api=adminTelegramApi){
        await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Ключ создан ✓'});
        return api('sendMessage',{
          chat_id:chatId,
-         text:'🔑 Общий ключ создан\n\n🥙 '+invite.venue_name+'\n'+invite.establishment_id+'\n\n'+invite.code+'\n\nПодходит для:\n• @Shefofbotsbot — подключить кабинет\n• @Takejulbot — подключить приём заказов\n\nДействует 7 дней. Ключ относится только к этому заведению.',
+         text:'🔑 КЛЮЧ ДОСТУПА\n'+invite.code+'\n\n🥙 '+invite.venue_name+'\nID заведения: '+invite.establishment_id+'\n(ID SC-MSK-… — не ключ доступа)\n\nКлюч OWN-… подходит для:\n• @Shefofbotsbot — подключить кабинет\n• @Takejulbot — подключить приём заказов\n\nДействует 7 дней. Можно скопировать это сообщение целиком и отправить в @Shefofbotsbot.',
          reply_markup:{inline_keyboard:[
            [{text:'👨‍🍳 Открыть @Takejulbot',url:'https://t.me/Takejulbot'}],
            [{text:'⚙️ Открыть @Shefofbotsbot',url:'https://t.me/Shefofbotsbot'}],

@@ -19,17 +19,18 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
   <section class="hero"><span class="eyebrow">MASTER ADMIN · FULL ACCESS</span><h1>Одна админка.<br>Вся система.</h1><p>Единая оболочка над рабочими административными модулями Shaurmeg. Функции внутри разделов используют существующую серверную логику.</p></section>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
 
-  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="access">Доступы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
+  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
 
   <section class="pane active" id="overviewPane">
     <div class="sectionTitle"><h2>Управление</h2><small>исходные модули</small></div>
     <div class="modules">
-      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=5" style="--glow:rgba(111,141,255,.18)"><span>🧾</span><b>Заказы</b><small>Живая лента, статусы, клиенты и сумма.</small></button>
-      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=5" style="--glow:rgba(107,216,163,.13)"><span>🍽</span><b>Меню</b><small>Позиции, категории, цены и вид.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span>🧾</span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span>🍽</span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
       <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span>🗺</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
       <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(241,187,104,.14)"><span>🏙</span><b>RealCity</b><small>Фасады, референсы, анализ и пересборка.</small></button>
       <button class="module" data-tab-open="access"><span>🔑</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
       <button class="module" data-tab-open="sites"><span>🎛</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
+      <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span>👤</span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
       <button class="module wide" data-tab-open="bots"><span>🤖</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
     </div>
   </section>
@@ -41,6 +42,21 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
       <div class="actions"><button class="btn primary" id="createKey">Создать свежий OWN-ключ</button><button class="btn" id="loadAdmins">Владельцы / админы</button></div>
       <div class="code" id="keyOutput" hidden></div>
       <div class="list" id="adminsList"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="ownersPane">
+    <div class="sectionTitle"><h2>Админка владельцев</h2><small>@Shefofbotsbot Mini App</small></div>
+    <div class="panel">
+      <div class="code" style="margin-top:0">Это именно Mini App, который открывается из @Shefofbotsbot. Здесь супер-админ может открыть любую точку без OWN-ключа, используя те же экраны, что видит владелец.</div>
+      <div class="field" style="margin-top:12px"><label>Заведение владельца</label><select id="ownerVenue"></select></div>
+      <div class="actions">
+        <button class="btn primary" data-owner-app-tab="profile">Карточка / профиль</button>
+        <button class="btn" data-owner-app-tab="menu">Меню</button>
+        <button class="btn" data-owner-app-tab="site">Дизайн сайта</button>
+        <button class="btn" data-owner-app-tab="orders">Заказы точки</button>
+      </div>
+      <div class="list" id="ownerAdminList"></div>
     </div>
   </section>
 
@@ -89,12 +105,13 @@ function masterBack(){
  try{window.Telegram?.WebApp?.close?.()}catch{}
 }
 function activate(name){
- if(!['overview','access','sites','bots'].includes(name))name='overview';
+ if(!['overview','access','owners','sites','bots'].includes(name))name='overview';
  $$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
  $$('.pane').forEach(x=>x.classList.toggle('active',x.id===name+'Pane'));
  try{const u=new URL(location.href);u.searchParams.set('tab',name);history.replaceState(null,'',u)}catch{}
  syncMasterBack(name);
  if(name==='bots')loadBots();
+ if(name==='owners')loadOwnerAdmins();
 }
 async function telegramLogin(){
  const tg=window.Telegram?.WebApp;
@@ -116,16 +133,25 @@ async function loadCore(){
  $('#stVenues').textContent=venues.filter(x=>x.is_active!==false).length;
  $('#stToday').textContent=Number(stats.today||0);$('#stNew').textContent=Number(stats.new||0);$('#stRevenue').textContent=Number(stats.revenue||0).toLocaleString('ru-RU')+' ₽';
  const options=venues.filter(x=>x.establishment_id).map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+' · '+esc(x.establishment_id)+'</option>').join('');
- $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;
+ $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;$('#ownerVenue').innerHTML=options;
  renderVenueList();updateSiteSelector()
 }
 function renderVenueList(){
  $('#venueList').innerHTML=venues.filter(x=>x.establishment_id).slice(0,80).map(x=>'<div class="row" data-est="'+esc(x.establishment_id)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.establishment_id)+(x.marker_count?' · меток '+x.marker_count:'')+'</small></div><span class="pill">'+(x.is_active===false?'пауза':'активно')+'</span></div>').join('')||'<div class="empty">Заведений нет</div>'
 }
 function updateSiteSelector(){$('#siteSelector').textContent='site:'+($('#siteVenue').value||'—')}
-function openOwner(tab){
- const est=$('#siteVenue').value;if(!est)return toast('Выберите заведение');
- location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=3'
+function openOwnerFor(est,tab){
+ if(!est)return toast('Выберите заведение');
+ location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=4'
+}
+function openOwner(tab){openOwnerFor($('#siteVenue').value,tab)}
+function openOwnerApp(tab){openOwnerFor($('#ownerVenue').value,tab)}
+async function loadOwnerAdmins(){
+ const est=$('#ownerVenue').value;if(!est)return;
+ try{
+  const rows=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins');
+  $('#ownerAdminList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>@Shefofbotsbot · Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'подключён':'отключён')+'</span></div>').join(''):'<div class="empty">К этой точке ещё не подключён владелец через @Shefofbotsbot</div>'
+ }catch{$('#ownerAdminList').innerHTML='<div class="empty">Не удалось загрузить владельцев</div>'}
 }
 async function createKey(){
  const est=$('#accessVenue').value;if(!est)return toast('Выберите заведение');
@@ -164,8 +190,10 @@ document.addEventListener('click',e=>{
  const open=e.target.closest('[data-open]');if(open){location.href=open.dataset.open;return}
  const tab=e.target.closest('[data-tab-open]');if(tab){activate(tab.dataset.tabOpen);return}
  const own=e.target.closest('[data-owner-tab]');if(own){openOwner(own.dataset.ownerTab);return}
+ const ownerApp=e.target.closest('[data-owner-app-tab]');if(ownerApp){openOwnerApp(ownerApp.dataset.ownerAppTab);return}
  const rev=e.target.closest('[data-revoke]');if(rev)revoke(rev.dataset.revoke)
 });
+$('#ownerVenue').onchange=loadOwnerAdmins;
 $('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{
  if(adminSession||ownerToken){await boot();return}

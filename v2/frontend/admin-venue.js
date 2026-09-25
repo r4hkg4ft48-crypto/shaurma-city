@@ -42,7 +42,8 @@
  }}
  function renderThemePreview(theme=readThemeInputs()){
    const p=$('#themePreview');if(!p)return;
-   p.dataset.tone=theme.tone;p.style.setProperty('--preview-primary',theme.primary);p.style.setProperty('--preview-secondary',theme.secondary);
+   const [r,g,b]=theme.primary.slice(1).match(/../g).map(x=>parseInt(x,16)),brightness=(r*299+g*587+b*114)/1000;
+   p.dataset.tone=theme.tone;p.style.setProperty('--preview-primary',theme.primary);p.style.setProperty('--preview-secondary',theme.secondary);p.style.setProperty('--preview-ink',brightness>150?'#142033':'#FFFFFF');
    $('#themePreviewName').textContent=$('#vName').value.trim()||data?.name||'Название';
  }
  function syncThemeInputs(theme){

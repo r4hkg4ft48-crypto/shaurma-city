@@ -23,5 +23,26 @@
 </article>
 <div class="boot" id="boot"><div class="bootLogo"><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small><div class="pulse"></div></div></div>
 <div class="toast" id="toast"></div>
-<script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load(entry));})(window.__SHAURMEG_ASSET_VERSION__,'map.js');</script>
+<script>
+(function(){
+  const dismiss=()=>{const b=document.getElementById('boot');if(!b)return;b.classList.add('out');setTimeout(()=>b.remove(),700)};
+  window.__SHAURMEG_BOOT_WATCHDOG__=setTimeout(dismiss,4500);
+})();
+(function(v,entry){
+  const load=(src,next,attempt=0)=>{
+    const s=document.createElement('script');
+    s.src=src+'?v='+v+(attempt?'-r'+attempt:'');
+    s.onload=next||null;
+    s.onerror=()=>{
+      s.remove();
+      if(attempt<1)return load(src,next,attempt+1);
+      console.error('Shaurmeg asset failed',src);
+      const b=document.getElementById('boot');if(b){b.classList.add('out');setTimeout(()=>b.remove(),700)}
+      const t=document.getElementById('toast');if(t){t.textContent='Не удалось загрузить карту. Откройте приложение ещё раз.';t.classList.add('show')}
+    };
+    document.body.appendChild(s);
+  };
+  load('config.js',()=>load(entry));
+})(window.__SHAURMEG_ASSET_VERSION__,'map.js');
+</script>
 </body></html>

@@ -4,7 +4,15 @@
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false;
   const STYLE='https://tiles.openfreemap.org/styles/liberty';
   const FALLBACK={version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm',paint:{'raster-saturation':-.22,'raster-contrast':.08,'raster-brightness-min':.08,'raster-brightness-max':.78}}]};
-  function toast(v){$('#toast').textContent=v;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1500)}
+  window.__SHAURMEG_MAP_STARTED__=true;
+  function toast(v){const el=$('#toast');if(!el)return;el.textContent=v;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1800)}
+  function dismissBoot(){clearTimeout(window.__SHAURMEG_BOOT_WATCHDOG__);const b=$('#boot');if(!b)return;b.classList.add('out');setTimeout(()=>b.remove(),650)}
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  async function fetchWithTimeout(url,ms=7000){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),ms);
+    try{return await fetch(url,{cache:'no-store',signal:controller.signal})}
+    finally{clearTimeout(timer)}
+  }
   function styleBuildings(){
     const layers=map.getStyle()?.layers||[];
     buildingLayers=layers.filter(x=>x.type==='fill-extrusion'||(/building/i.test(x.id)&&x.type==='fill')).map(x=>x.id);
@@ -42,11 +50,26 @@
   }
   function waitLoad(m,ms=6000){return new Promise((resolve,reject)=>{let done=false;const t=setTimeout(()=>end(new Error('map_timeout')),ms);function end(e){if(done)return;done=true;clearTimeout(t);e?reject(e):resolve()}m.once('load',()=>end());m.once('error',e=>{if(!m.loaded())console.warn('map',e?.error||e)})})}
   async function bootMap(){
-    try{map=createMap(STYLE);await waitLoad(map,6200)}
-    catch(e){try{map?.remove()}catch{};$('#map').innerHTML='';fallback=true;map=createMap(FALLBACK);await waitLoad(map,7000)}
+    try{
+      map=createMap(STYLE);
+      await waitLoad(map,5200);
+    }catch(primaryError){
+      console.warn('primary map style failed',primaryError);
+      try{map?.remove()}catch{}
+      $('#map').innerHTML='';
+      fallback=true;
+      try{
+        map=createMap(FALLBACK);
+        await waitLoad(map,5200);
+      }catch(fallbackError){
+        dismissBoot();
+        throw fallbackError;
+      }
+    }
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
     styleBuildings();addFocusLayers();map.on('click',e=>{if(e.originalEvent.target.closest?.('.mapMarker'))return;closeCard()});
-    await loadPoints();
+    dismissBoot();
+    loadPointsWithRetry();
   }
   function markerNode(p){
     const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker';el.type='button';el.style.background=s.background||'#10221b';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.transform='translate(-50%,-50%) scale('+(s.scale||1)+')';
@@ -56,12 +79,29 @@
     return el;
   }
   async function loadPoints(){
-    const r=await fetch(api+'/map/points',{cache:'no-store'});if(!r.ok)throw new Error('points_'+r.status);points=await r.json();
+    const r=await fetchWithTimeout(api+'/map/points',7000);
+    if(!r.ok)throw new Error('points_'+r.status);
+    const data=await r.json();
+    if(!Array.isArray(data))throw new Error('points_invalid');
+    points=data;
     for(const m of markers.values())m.remove();markers.clear();
     points.forEach(p=>{const el=markerNode(p),m=new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([+p.lon,+p.lat]).addTo(map);markers.set(String(p.id),m)});
     if(points.length)fitAll();
-    const url=new URL(location.href),direct=url.searchParams.get('marker');if(direct){const p=points.find(x=>String(x.id)===direct);if(p)setTimeout(()=>selectPoint(p),350)}
-    $('#boot').classList.add('out');setTimeout(()=>$('#boot').remove(),650);
+    const url=new URL(location.href),direct=url.searchParams.get('marker');
+    if(direct){const p=points.find(x=>String(x.id)===direct);if(p)setTimeout(()=>selectPoint(p),350)}
+  }
+  async function loadPointsWithRetry(){
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        await loadPoints();
+        return;
+      }catch(e){
+        console.warn('points load failed',attempt+1,e);
+        if(attempt<2)await sleep(1200*(attempt+1));
+      }
+    }
+    toast('Карта открыта, точки догружаются…');
+    setTimeout(()=>loadPointsWithRetry(),5000);
   }
   function fitAll(){if(!points.length)return;const b=new maplibregl.LngLatBounds();points.forEach(x=>b.extend([+x.lon,+x.lat]));map.fitBounds(b,{padding:{top:130,bottom:160,left:40,right:40},maxZoom:13,duration:700})}
   function selectPoint(p){
@@ -85,5 +125,5 @@
   $('#home').onclick=()=>{closeCard();fitAll()};$('#closeCard').onclick=closeCard;
   $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();tg?.setHeaderColor?.('#0b0f12');tg?.setBackgroundColor?.('#0b0f12')}catch{}
-  bootMap().catch(e=>{console.error(e);toast('Карта не загрузилась');$('#boot').classList.add('out')});
+  bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

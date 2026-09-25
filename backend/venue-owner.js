@@ -445,7 +445,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         if(access.length){
           await sendOwnerAccessList(msg.chat.id,user.id,{title:'<b>Кабинет владельца Shaurmeg</b>\nУправляйте всеми своими заведениями из одного бота.'});
         }else{
-          await sendOwnerBotMessage(msg.chat.id,'Бот владельца Shaurmeg.\n\nЧтобы подключить первое заведение, откройте ссылку-приглашение или отправьте команду <code>/add КОД</code>.',{reply_markup:{inline_keyboard:[[{text:'Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
+          await sendOwnerBotMessage(msg.chat.id,'Бот владельца Shaurmeg.\n\nЧтобы подключить первое заведение, отправьте ключ доступа <code>OWN-XXXXXXXXXX</code> отдельным сообщением или вставьте целиком сообщение из бота выдачи ключей.\n\n<code>SC-MSK-XXXXXXXXXX</code> — это ID заведения, не ключ доступа.',{reply_markup:{inline_keyboard:[[{text:'Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
         }
         return;
       }
@@ -463,10 +463,20 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         return;
       }
 
-      const add=text.match(/^\/add(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{6,40})$/i);
+      const add=text.match(/^\/add(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i);
       if(add){
+        const supplied=String(add[1]||'').trim();
+        if(!supplied){
+          await sendOwnerBotMessage(msg.chat.id,'Чтобы добавить ещё одно заведение, отправьте:\n<code>/add OWN-XXXXXXXXXX</code>\n\nМожно вставить после <code>/add</code> целиком сообщение из бота выдачи ключей.\n\n<code>SC-MSK-XXXXXXXXXX</code> — это ID заведения, не ключ доступа.',{reply_markup:{inline_keyboard:[[{text:'＋ Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
+          return;
+        }
+        const code=normalizeCode(supplied);
+        if(/^SC-MSK-[A-Z0-9]+$/.test(code)){
+          await sendOwnerBotMessage(msg.chat.id,'Это ID заведения <code>'+String(code)+'</code>, а не ключ доступа.\n\nНужен ключ вида <code>OWN-XXXXXXXXXX</code>. Он выдаётся админ-ботом для выбранного заведения.');
+          return;
+        }
         try{
-          const access=await claimForTelegramUser(user,add[1]);
+          const access=await claimForTelegramUser(user,code);
           const count=(await accessesFor(user.id)).length;
           await sendOwnerBotMessage(
             msg.chat.id,
@@ -477,22 +487,23 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
             ]}}
           );
         }catch{
-          await sendOwnerBotMessage(msg.chat.id,'Не получилось добавить заведение. Код недействителен, истёк или уже использован.');
+          await sendOwnerBotMessage(msg.chat.id,'Не получилось добавить заведение. Нужен действующий ключ <code>OWN-XXXXXXXXXX</code>. Если ключ только что создан и не использовался, запросите новый ключ и пришлите его сюда.');
         }
         return;
       }
-      if(/^\/add(?:@[A-Za-z0-9_]+)?$/i.test(text)){
-        await sendOwnerBotMessage(msg.chat.id,'Чтобы добавить ещё одно заведение, отправьте:\n<code>/add КОД</code>\n\nИли откройте кабинет и нажмите «＋ Заведение».',{reply_markup:{inline_keyboard:[[{text:'＋ Добавить заведение',web_app:{url:ownerAppUrl('', 'add')}}]]}});
+
+      const directCode=normalizeCode(text);
+      if(/^SC-MSK-[A-Z0-9]+$/.test(directCode)){
+        await sendOwnerBotMessage(msg.chat.id,'Это ID заведения <code>'+String(directCode)+'</code>, а не ключ доступа.\n\nДля подключения нужен ключ <code>OWN-XXXXXXXXXX</code>. Можно вставить целиком сообщение из бота выдачи ключей — я сам найду ключ.');
         return;
       }
-
-      if(/^[A-Za-z0-9_-]{6,40}$/.test(text)){
+      if(/^(OWN-[A-F0-9]{10}|SC-[A-F0-9]{8})$/.test(directCode)){
         try{
-          const access=await claimForTelegramUser(user,text);
+          const access=await claimForTelegramUser(user,directCode);
           const count=(await accessesFor(user.id)).length;
-          await sendOwnerBotMessage(msg.chat.id,'✅ Подключено: <b>'+String(access?.name||'Заведение')+'</b>\nВсего заведений: <b>'+count+'</b>.',{reply_markup:{inline_keyboard:[[{text:'🍽 Управлять меню',web_app:{url:ownerAppUrl(access?.establishment_id,'menu')}}],[{text:'Все заведения',web_app:{url:ownerAppUrl('', 'venues')}}]]}});
+          await sendOwnerBotMessage(msg.chat.id,'✅ Подключено: <b>'+String(access?.name||'Заведение')+'</b>\nID: <code>'+String(access?.establishment_id||'')+'</code>\nВсего заведений: <b>'+count+'</b>.',{reply_markup:{inline_keyboard:[[{text:'🍽 Управлять меню',web_app:{url:ownerAppUrl(access?.establishment_id,'menu')}}],[{text:'Все заведения',web_app:{url:ownerAppUrl('', 'venues')}}]]}});
         }catch{
-          await sendOwnerBotMessage(msg.chat.id,'Не получилось применить этот код. Проверьте его или запросите новый.');
+          await sendOwnerBotMessage(msg.chat.id,'Ключ не подошёл. Нужен действующий <code>OWN-XXXXXXXXXX</code>, который ещё не использован для подключения кабинета.');
         }
       }
     }catch(e){console.error('Venue owner bot update:',e.message)}

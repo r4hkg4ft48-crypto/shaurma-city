@@ -1543,6 +1543,7 @@ const v2RealCity=require('../v2/backend/src/realcity-service');
 const v2Telegram=require('../v2/backend/src/telegram');
 const v2Config=require('../v2/backend/src/config');
 app.use('/api/v2',v2Router);
+v2Telegram.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 

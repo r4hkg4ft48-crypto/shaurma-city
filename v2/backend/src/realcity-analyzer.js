@@ -4,7 +4,7 @@ const sharp=require('sharp');
 const {VectorTile}=require('@mapbox/vector-tile');
 const Pbf=require('pbf');
 
-const PROFILE_VERSION=8;
+const PROFILE_VERSION=9;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
@@ -564,7 +564,9 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
     radius_m:190,
     hero_building_id:osm.hero?.id||null,
     buildings,
-    trees:synthesizeTrees(osm,marker,treeDensity)
+    trees:synthesizeTrees(osm,marker,treeDensity),
+    roads:(osm.roads||[]).slice(0,36).map(line=>roundRing(line)),
+    greens:(osm.greens||[]).slice(0,20).map(ring=>roundRing(ring))
   };
 }
 

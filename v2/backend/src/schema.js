@@ -69,10 +69,13 @@ async function ensureSchema(){
     payment_card_brand TEXT,
     payment_card_last4 TEXT,
     autopay_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    referral_code TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE shaurma_users ADD COLUMN IF NOT EXISTS referral_code TEXT;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_users_referral_code ON shaurma_users(referral_code) WHERE referral_code IS NOT NULL;
 
   CREATE TABLE IF NOT EXISTS shaurma_orders(
     id BIGSERIAL PRIMARY KEY,
@@ -102,6 +105,34 @@ async function ensureSchema(){
   ALTER TABLE shaurma_orders ADD COLUMN IF NOT EXISTS marker_id BIGINT;
   CREATE INDEX IF NOT EXISTS idx_v2_orders_establishment ON shaurma_orders(establishment_id,created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_v2_orders_marker ON shaurma_orders(marker_id,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS shaurma_referrals(
+    id BIGSERIAL PRIMARY KEY,
+    referrer_user_id TEXT NOT NULL,
+    referred_user_id TEXT NOT NULL UNIQUE,
+    referral_code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'joined',
+    first_order_id BIGINT,
+    qualified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK(referrer_user_id<>referred_user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_referrals_referrer ON shaurma_referrals(referrer_user_id,created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_v2_referrals_code ON shaurma_referrals(referral_code);
+
+  CREATE TABLE IF NOT EXISTS shaurma_bonus_ledger(
+    id BIGSERIAL PRIMARY KEY,
+    telegram_user_id TEXT NOT NULL,
+    amount INT NOT NULL DEFAULT 0,
+    event_type TEXT NOT NULL,
+    source_user_id TEXT,
+    order_id BIGINT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_bonus_user ON shaurma_bonus_ledger(telegram_user_id,created_at DESC);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_bonus_event_order ON shaurma_bonus_ledger(telegram_user_id,event_type,order_id) WHERE order_id IS NOT NULL;
 
   CREATE TABLE IF NOT EXISTS shaurma_venue_admins(
     id BIGSERIAL PRIMARY KEY,

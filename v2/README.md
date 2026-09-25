@@ -13,7 +13,7 @@ This directory is a clean replacement for the accumulated legacy Shaurma City / 
 ## Apps
 
 ### Public
-- `index.html` — MapLibre/OpenFreeMap aggregator map.
+- `index.html` — immersive MapLibre/OpenFreeMap aggregator shell with cinematic launch, bottom navigation, orders, profile, stats, referral sharing and bonus balance.
 - `menu.html` — venue-specific menu, persistent cart, cafe/delivery checkout, Telegram profile/order history.
 
 ### Administration
@@ -52,6 +52,8 @@ v2 intentionally uses the established table names:
 - `shaurma_venue_admins`
 - `shaurma_venue_invites`
 - `shaurma_venue_audit`
+- `shaurma_referrals`
+- `shaurma_bonus_ledger`
 
 No reset, purge, or destructive migration is executed by v2. Existing orders and Telegram-linked users stay in place.
 
@@ -75,3 +77,16 @@ No reset, purge, or destructive migration is executed by v2. Existing orders and
 ## Validation
 
 GitHub Actions workflow `.github/workflows/v2-validate.yml` checks all JS syntax, installs backend dependencies, loads the API modules and boots the API for a real `/api/v2/health` request.
+
+
+## Referral and bonus foundation
+
+- Each Telegram user gets a stable referral code.
+- Referral attribution is immutable per referred user.
+- The referral relation records join and first-order progress.
+- Bonus accounting uses an append-only ledger.
+- Reward rules are intentionally not enabled yet; percentage/fixed/level mechanics can be added later without changing attribution or user identity.
+
+## Astra 6 / RealCity
+
+The phrase **`делаем realcity`** is a project trigger. Read `REALCITY_ASTRA.md` and the repository root `AGENTS.md` before editing RealCity. RealCity must remain aligned to existing map building geometry and must not degrade into flat photo overlays.

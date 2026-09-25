@@ -2,33 +2,101 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#0b0f12"><title>Шаурмег · карта</title>
+<meta name="theme-color" content="#07100c"><title>Шаурмег · карта</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
 <script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
 </head>
-<body>
-<div class="mapRoot"><div id="map"></div><div class="mapShade"></div></div>
-<header class="topbar glass">
-  <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>КАРТА ШАУРМЫ</small></div></div>
+<body class="mapApp">
+<div class="mapRoot"><div id="map"></div><div class="mapShade"></div><div class="mapAtmosphere"></div></div>
+
+<header class="topbar glass mapTopbar">
+  <div class="brand"><div class="brandMark">Ш</div><div><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small></div></div>
   <div class="grow"></div><div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div><button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
+
 <div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
 <div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>
+
 <article class="venueCard glass" id="venueCard">
   <div class="venueHero"><div class="venueAvatar" id="venueAvatar">🥙</div><div><h2 id="venueName">Заведение</h2><p id="venueAddress"></p></div><span class="badge" id="realBadge">REAL CITY</span></div>
   <p class="venueCardDescription" id="venueDescription"></p>
   <div class="venueQuick"><span id="venueHoursQuick" class="hidden"></span><span id="venuePriceQuick" class="hidden"></span><span>Меню внутри Shaurmeg</span></div>
   <div class="venueActions"><button class="primaryBtn" id="openMenu">Меню и заказ</button><button class="iconBtn" id="closeCard">×</button></div>
 </article>
-<div class="boot" id="boot"><div class="bootLogo"><b>шаурмег</b><small>ГОРОДСКАЯ КАРТА</small><div class="pulse"></div></div></div>
+
+<div class="panelBackdrop" id="panelBackdrop"></div>
+
+<section class="appPanel" id="ordersPanel">
+  <div class="appPanelHandle"></div>
+  <div class="appPanelHead"><div><small>ШАУРМЕГ</small><h2>Заказы</h2><p>Активные и предыдущие заказы в одном месте</p></div><button class="iconBtn" data-panel-close>×</button></div>
+  <div class="orderFilter" id="orderFilter"><button class="active" data-order-filter="all">Все</button><button data-order-filter="active">Активные</button><button data-order-filter="done">Завершённые</button></div>
+  <div class="panelScroll"><div id="ordersPanelList" class="mapOrdersList"><div class="panelSkeleton"></div><div class="panelSkeleton"></div></div></div>
+</section>
+
+<section class="appPanel profilePanel" id="profilePanel">
+  <div class="appPanelHandle"></div>
+  <div class="appPanelHead"><div><small>ЛИЧНЫЙ ПРОФИЛЬ</small><h2 id="profileTitle">Shaurmeg</h2><p id="profileSubtitle">Ваша история внутри города</p></div><button class="iconBtn" data-panel-close>×</button></div>
+  <div class="panelScroll">
+    <div class="profileIdentity">
+      <div class="profileAvatar" id="profileAvatar">Ш</div>
+      <div><small>ПОЛЬЗОВАТЕЛЬ</small><b id="profileName">Гость</b><span id="profileUsername"></span></div>
+    </div>
+
+    <div class="profileStats">
+      <article><small>СРЕДНИЙ ЧЕК</small><b id="avgCheck">0 ₽</b></article>
+      <article><small>ЗАКАЗОВ</small><b id="ordersCount">0</b></article>
+      <article><small>ПОТРАЧЕНО</small><b id="totalSpent">0 ₽</b></article>
+      <article><small>АКТИВНЫХ</small><b id="activeOrders">0</b></article>
+    </div>
+
+    <article class="profileFeature favoriteFeature">
+      <div><small>ЛЮБИМОЕ МЕСТО</small><b id="favoriteVenue">Пока определяем</b><span id="favoriteMeta">Сделайте первый заказ</span></div><strong>⌁</strong>
+    </article>
+
+    <article class="bonusCard">
+      <div class="bonusGlow"></div>
+      <div class="bonusTop"><div><small>SHAURMEG BONUS</small><h3><span id="bonusBalance">0</span> бонусов</h3></div><span class="betaBadge">СКОРО</span></div>
+      <p>Бонусный счёт уже привязан к вашему Telegram ID. Правила начисления включим после настройки механики.</p>
+    </article>
+
+    <article class="referralCard">
+      <div class="referralHead"><div><small>ПРИГЛАШАЙ В SHAURMEG</small><h3>Твоя городская команда</h3></div><strong>↗</strong></div>
+      <p>Поделитесь уникальной ссылкой. Мы уже фиксируем переход, регистрацию и первый заказ приглашённого пользователя.</p>
+      <div class="referralStats"><div><b id="refInvited">0</b><small>перешли</small></div><div><b id="refOrdered">0</b><small>заказали</small></div><div><b id="refQualified">0</b><small>зачтено</small></div></div>
+      <div class="referralLink"><span id="refCode">—</span><button id="copyReferral">Копировать</button></div>
+      <button class="primaryBtn referralShare" id="shareReferral">Поделиться приглашением</button>
+    </article>
+  </div>
+</section>
+
+<nav class="bottomDock glass" id="bottomDock">
+  <button class="dockBtn active" data-dock="map"><span class="dockIcon">⌖</span><small>Карта</small></button>
+  <button class="dockBtn" data-dock="orders"><span class="dockIcon">▤</span><small>Заказы</small><i id="activeOrderDot" class="hidden"></i></button>
+  <button class="dockBtn" data-dock="profile"><span class="dockIcon">◉</span><small>Профиль</small></button>
+</nav>
+
+<div class="boot cinemaBoot" id="boot">
+  <div class="cinemaNoise"></div>
+  <div class="cinemaGrid"></div>
+  <div class="cinemaOrb orbA"></div><div class="cinemaOrb orbB"></div>
+  <div class="cinemaCity"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="cinemaCenter">
+    <div class="cinemaKicker">ГОРОД · ВКУС · ДВИЖЕНИЕ</div>
+    <div class="cinemaLogo"><span>ш</span><span>а</span><span>у</span><span>р</span><span>м</span><span>е</span><span>г</span></div>
+    <div class="cinemaLine"></div>
+    <div class="cinemaStatus"><b>Открываем город</b><small>ищем места рядом с вами</small></div>
+  </div>
+  <div class="cinemaCoordinates">55.75° N&nbsp;&nbsp;37.61° E</div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script>
 (function(){
-  const dismiss=()=>{const b=document.getElementById('boot');if(!b)return;b.classList.add('out');setTimeout(()=>b.remove(),700)};
-  window.__SHAURMEG_BOOT_WATCHDOG__=setTimeout(dismiss,4500);
+  const dismiss=()=>{const b=document.getElementById('boot');if(!b)return;b.classList.add('out');setTimeout(()=>b.remove(),900)};
+  window.__SHAURMEG_BOOT_WATCHDOG__=setTimeout(dismiss,5200);
 })();
 (function(v,entry){
   const load=(src,next,attempt=0)=>{
@@ -39,7 +107,7 @@
       s.remove();
       if(attempt<1)return load(src,next,attempt+1);
       console.error('Shaurmeg asset failed',src);
-      const b=document.getElementById('boot');if(b){b.classList.add('out');setTimeout(()=>b.remove(),700)}
+      const b=document.getElementById('boot');if(b){b.classList.add('out');setTimeout(()=>b.remove(),900)}
       const t=document.getElementById('toast');if(t){t.textContent='Не удалось загрузить карту. Откройте приложение ещё раз.';t.classList.add('show')}
     };
     document.body.appendChild(s);

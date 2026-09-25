@@ -11,6 +11,7 @@ module.exports={
   TELEGRAM_CUTOVER:clean(process.env.V2_TELEGRAM_CUTOVER).toLowerCase()==='true',
   CLIENT_BOT_TOKEN:clean(process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN),
   AGGREGATOR_BOT_TOKEN:clean(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN),
+  AGGREGATOR_BOT_USERNAME:clean(process.env.AGGREGATOR_TELEGRAM_BOT_USERNAME||'Shaurmeggbot').replace(/^@/,'')||'Shaurmeggbot',
   ADMIN_BOT_TOKEN:clean(process.env.ADMIN_TELEGRAM_BOT_TOKEN),
   VENUE_OWNER_BOT_TOKEN:clean(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN),
   OWNER_API_TOKEN:clean(process.env.OWNER_API_TOKEN),

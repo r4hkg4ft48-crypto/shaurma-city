@@ -17,6 +17,13 @@ function markerId(v){
   const id=String(v||'').trim();
   return /^\d{1,20}$/.test(id)?id:null;
 }
+const VENUE_THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
+function venueThemeKey(seed){
+  const s=String(seed||'shaurmeg');
+  let h=2166136261;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
+  return VENUE_THEME_KEYS[Math.abs(h) % VENUE_THEME_KEYS.length];
+}
 function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
 function hex(v,fallback){
   const s=String(v||'').trim().toLowerCase();
@@ -93,4 +100,4 @@ function priceBuilder(config,payload={}){
   return {id:'custom_builder',n:type.name+' · своя сборка',p:type.price,detail,builder:{type:type.id,sauces:sauceIds,extras:extraIds}};
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,builderConfig,priceBuilder,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS};

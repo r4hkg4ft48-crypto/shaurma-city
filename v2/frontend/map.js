@@ -17,9 +17,15 @@
     const layers=map.getStyle()?.layers||[];
     buildingLayers=layers.filter(x=>x.type==='fill-extrusion'||(/building/i.test(x.id)&&x.type==='fill')).map(x=>x.id);
     for(const l of layers){
+      const id=String(l.id||'');
       try{
-        if(l.type==='background')map.setPaintProperty(l.id,'background-color','#1b231d');
-        if(l.type==='fill'&&/land|park|grass|wood|vegetation|residential/i.test(l.id))map.setPaintProperty(l.id,'fill-saturation',-.15);
+        if(l.type==='background')map.setPaintProperty(l.id,'background-color','#152019');
+        if(l.type==='fill'&&/water|river|lake|ocean/i.test(id)){map.setPaintProperty(l.id,'fill-color','#0d2b32');map.setPaintProperty(l.id,'fill-opacity',.96)}
+        else if(l.type==='fill'&&/park|grass|wood|vegetation|forest|landcover/i.test(id)){map.setPaintProperty(l.id,'fill-color','#36553e');map.setPaintProperty(l.id,'fill-opacity',.9)}
+        else if(l.type==='fill'&&/residential|landuse|land/i.test(id)){map.setPaintProperty(l.id,'fill-color','#29372d');map.setPaintProperty(l.id,'fill-opacity',.88)}
+        if(l.type==='fill'&&/building/i.test(id)){map.setPaintProperty(l.id,'fill-color','#b9b7ac');map.setPaintProperty(l.id,'fill-opacity',.86)}
+        if(l.type==='line'&&/road|street|highway|path|motorway|trunk/i.test(id)){map.setPaintProperty(l.id,'line-color','#f0f0e8');map.setPaintProperty(l.id,'line-opacity',.82)}
+        if(l.type==='symbol'&&/road|place|poi|label/i.test(id)){map.setPaintProperty(l.id,'text-color','#eef0e8');map.setPaintProperty(l.id,'text-halo-color','#18221b');map.setPaintProperty(l.id,'text-halo-width',1.2)}
       }catch{}
     }
   }
@@ -72,7 +78,7 @@
     loadPointsWithRetry();
   }
   function markerNode(p){
-    const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker';el.type='button';el.style.background=s.background||'#10221b';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.transform='translate(-50%,-50%) scale('+(s.scale||1)+')';
+    const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker'+(s.pulse!==false?' pulseMarker':'');el.type='button';el.style.background=s.background||'#10221b';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.width=(s.size||44)+'px';el.style.height=(s.size||44)+'px';el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'10px':s.shape==='pin'?'50% 50% 50% 14px':'16px';el.style.transform='translate(-50%,-50%) scale('+(s.scale||1)+')';
     if(p.has_avatar){const img=new Image();img.alt='';img.src=api+'/map/markers/'+p.id+'/avatar';img.onerror=()=>{img.remove();el.insertAdjacentText('afterbegin',s.icon||'🥙')};el.appendChild(img)}else el.textContent=s.icon||'🥙';
     if(s.label_visible){const l=document.createElement('span');l.className='markerLabel';l.textContent=p.name;el.appendChild(l)}
     el.onclick=e=>{e.stopPropagation();selectPoint(p)};
@@ -83,7 +89,7 @@
     if(!r.ok)throw new Error('points_'+r.status);
     const data=await r.json();
     if(!Array.isArray(data))throw new Error('points_invalid');
-    points=data;
+    points=data;$('#pointsCount').textContent=points.length;
     for(const m of markers.values())m.remove();markers.clear();
     points.forEach(p=>{const el=markerNode(p),m=new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([+p.lon,+p.lat]).addTo(map);markers.set(String(p.id),m)});
     if(points.length)fitAll();
@@ -107,10 +113,14 @@
   function selectPoint(p){
     selected=p;markers.forEach((m,k)=>m.getElement().classList.toggle('selected',k===String(p.id)));
     $('#venueName').textContent=p.name||'Заведение';$('#venueAddress').textContent=p.address||'';
+    $('#venueDescription').textContent=p.description||'';
+    $('#venueDescription').classList.toggle('hidden',!p.description);
+    $('#venueHoursQuick').textContent=p.hours||'';$('#venueHoursQuick').classList.toggle('hidden',!p.hours);
+    $('#venuePriceQuick').textContent=p.price_label||'';$('#venuePriceQuick').classList.toggle('hidden',!p.price_label);
     $('#realBadge').textContent=p.realcity_quality&&p.realcity_quality!=='heuristic'?'REAL CITY · '+String(p.realcity_quality).toUpperCase():'REAL CITY';
     const a=$('#venueAvatar');a.innerHTML=p.has_avatar?'<img alt="" src="'+api+'/map/markers/'+encodeURIComponent(p.id)+'/avatar">':esc(p.marker_style?.icon||'🥙');
     $('#venueCard').classList.add('show');
-    map.easeTo({center:[+p.lon,+p.lat],zoom:17.7,pitch:fallback?0:58,bearing:fallback?0:-18,offset:[0,80],duration:850,easing:t=>1-Math.pow(1-t,3)});
+    map.easeTo({center:[+p.lon,+p.lat],zoom:17.35,pitch:fallback?0:60,bearing:fallback?0:-16,offset:[0,92],duration:900,easing:t=>1-Math.pow(1-t,3)});
     setTimeout(()=>nearestBuilding(p,p.realcity_profile||{}),950);
     tg?.HapticFeedback?.selectionChanged?.();
   }

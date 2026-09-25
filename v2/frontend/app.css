@@ -49,3 +49,129 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 .builderEntry{width:100%;border:1px solid rgba(143,224,169,.18);border-radius:24px;padding:16px;display:flex;align-items:center;justify-content:space-between;text-align:left;background:radial-gradient(circle at 90% 10%,rgba(143,224,169,.18),transparent 30%),linear-gradient(145deg,#16231b,#11191a);color:var(--text);box-shadow:var(--shadow)}
 .builderEntry span{display:grid;gap:2px}.builderEntry small{color:#aeeac1;font-size:9px;letter-spacing:.15em;font-weight:950}.builderEntry b{font-size:22px;letter-spacing:-.035em}.builderEntry em{font-style:normal;color:var(--muted);font-size:12px}.builderEntry strong{width:50px;height:50px;border-radius:17px;display:grid;place-items:center;background:#b8efc9;color:#102017;font-size:22px}
 .builderBlock{margin:14px 0}.builderBlock>small{display:block;color:var(--muted);margin-bottom:8px;font-size:11px;letter-spacing:.08em}.builderOptions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.builderChoice{min-height:64px;padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.03);text-align:left}.builderChoice b{display:block}.builderChoice small{display:block;color:var(--muted);margin-top:2px}.builderChoice.active{border-color:rgba(143,224,169,.45);background:rgba(143,224,169,.09);box-shadow:inset 0 0 0 1px rgba(143,224,169,.08)}
+
+
+/* ===== Shaurmeg venue design system v2 ===== */
+:root{
+  --venue-accent:#98e5af;--venue-accent2:#e2f8e8;--venue-bg:#08110d;
+  --venue-panel:#101b15;--venue-panel2:#15231b;--venue-hero:#1b3825;
+  --venue-glow:rgba(110,220,147,.28);--venue-ink:#0c1b11
+}
+.venuePage{background:var(--venue-bg);color:#f7f8f4}
+.venuePage .venuePageInner{
+  background:
+    radial-gradient(circle at 10% 0,var(--venue-glow),transparent 25%),
+    radial-gradient(circle at 95% 28%,color-mix(in srgb,var(--venue-accent) 10%,transparent),transparent 24%),
+    linear-gradient(180deg,var(--venue-bg),color-mix(in srgb,var(--venue-bg) 86%,#111) 65%,var(--venue-bg));
+  padding-bottom:calc(var(--safe-b) + 96px)
+}
+.venuePage .venueTopbar{
+  background:color-mix(in srgb,var(--venue-panel) 86%,transparent);
+  border-color:color-mix(in srgb,var(--venue-accent) 16%,rgba(255,255,255,.08));
+  box-shadow:0 18px 60px rgba(0,0,0,.26)
+}
+.venueBrand{gap:9px}.venueThemeDot{width:9px;height:9px;border-radius:50%;background:var(--venue-accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--venue-accent) 12%,transparent),0 0 24px var(--venue-glow)}
+.venuePage .iconBtn{background:color-mix(in srgb,var(--venue-panel2) 72%,transparent);border-color:color-mix(in srgb,var(--venue-accent) 13%,rgba(255,255,255,.08))}
+.venueHeroPanel{
+  min-height:300px;background:
+    radial-gradient(circle at 82% 20%,var(--venue-glow),transparent 30%),
+    linear-gradient(145deg,var(--venue-hero),var(--venue-panel));
+  border-color:color-mix(in srgb,var(--venue-accent) 20%,rgba(255,255,255,.07));
+  box-shadow:0 28px 80px rgba(0,0,0,.32);
+  isolation:isolate
+}
+.venueHeroPanel img{opacity:.82;filter:saturate(.92) contrast(1.03)}
+.venueHeroPanel:after{z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.08) 8%,rgba(0,0,0,.13) 34%,color-mix(in srgb,var(--venue-bg) 92%,transparent) 100%)}
+.heroAura{position:absolute;inset:-30%;z-index:0;pointer-events:none;background:radial-gradient(circle at 78% 26%,var(--venue-glow),transparent 25%);mix-blend-mode:screen}
+.venueHeroPanel .heroCopy{z-index:3;bottom:20px}
+.venueHeroPanel .heroCopy h1{font-size:clamp(36px,10vw,52px);max-width:92%;text-wrap:balance}
+.venueHeroPanel .heroCopy p{max-width:88%;font-size:13px;line-height:1.35;color:rgba(244,247,245,.75)}
+.venueHeroPanel .eyebrow,.venuePage .sheetEyebrow{color:var(--venue-accent)}
+.venueFacts{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
+.venueFact{display:inline-flex;align-items:center;min-height:28px;padding:0 9px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09);font-size:10px;color:rgba(255,255,255,.82);backdrop-filter:blur(12px)}
+.heroNoImage .heroCopy p{font-size:14px}.heroNoImage:before{content:"";position:absolute;inset:0;background:linear-gradient(135deg,transparent 30%,color-mix(in srgb,var(--venue-accent) 10%,transparent))}
+.menuSection{margin-top:26px}.venuePage .sectionHead h2{font-size:28px}.venuePage .sectionHead>div>small{color:var(--venue-accent);font-weight:900;letter-spacing:.13em}
+.venuePage .chips{gap:8px;padding-bottom:11px}
+.venuePage .chip{min-height:38px;padding:0 14px;background:color-mix(in srgb,var(--venue-panel2) 68%,transparent);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.62);font-weight:800}
+.venuePage .chip.active{color:var(--venue-ink);background:var(--venue-accent);box-shadow:0 8px 24px var(--venue-glow)}
+.venuePage .menuGrid{gap:12px;align-items:stretch}
+.venuePage .foodCard{
+  min-height:292px;border-radius:24px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--venue-panel2) 94%,#fff 2%),var(--venue-panel));
+  border-color:color-mix(in srgb,var(--venue-accent) 11%,rgba(255,255,255,.08));
+  box-shadow:0 14px 40px rgba(0,0,0,.2);
+  transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease
+}
+.venuePage .foodCard:active{transform:scale(.985)}
+.venuePage .foodPic{height:142px;position:relative;overflow:hidden;background:linear-gradient(145deg,var(--venue-hero),var(--venue-panel2));font-size:32px}
+.venuePage .foodPic span{opacity:.72;filter:drop-shadow(0 10px 18px rgba(0,0,0,.2))}
+.venuePage .foodPic i{position:absolute;inset:auto 0 0;height:40%;background:linear-gradient(transparent,color-mix(in srgb,var(--venue-panel2) 58%,transparent));pointer-events:none}
+.venuePage .foodBody{padding:13px 13px 12px;gap:7px}
+.foodTitle{min-height:36px;display:flex;align-items:flex-start}.venuePage .foodBody h3{font-size:16px;line-height:1.1;letter-spacing:-.025em}
+.venuePage .foodBody p{font-size:11.5px;line-height:1.35;min-height:32px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:rgba(255,255,255,.54)}
+.venuePage .foodRow{padding-top:4px}.venuePage .foodRow b{font-size:18px;letter-spacing:-.03em}
+.venuePage .addBtn{width:42px;height:42px;border-radius:14px;background:var(--venue-accent);color:var(--venue-ink);box-shadow:0 9px 24px var(--venue-glow);font-weight:700}
+.venuePage .builderEntry{
+  border-color:color-mix(in srgb,var(--venue-accent) 25%,rgba(255,255,255,.08));
+  background:radial-gradient(circle at 92% 12%,var(--venue-glow),transparent 35%),linear-gradient(145deg,var(--venue-panel2),var(--venue-panel))
+}
+.venuePage .builderEntry small{color:var(--venue-accent)}.venuePage .builderEntry strong{background:var(--venue-accent);color:var(--venue-ink)}
+.venuePage .builderChoice.active{border-color:color-mix(in srgb,var(--venue-accent) 55%,transparent);background:color-mix(in srgb,var(--venue-accent) 11%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--venue-accent) 9%,transparent)}
+.venuePage .floatCart{
+  height:62px;left:10px;right:10px;border-radius:21px;
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);box-shadow:0 18px 52px var(--venue-glow);
+  border:1px solid color-mix(in srgb,var(--venue-accent) 60%,#fff 20%)
+}
+.venuePage .sheetBackdrop{background:rgba(0,0,0,.66);backdrop-filter:blur(4px)}
+.venuePage .sheet{
+  background:linear-gradient(180deg,color-mix(in srgb,var(--venue-panel2) 97%,#fff 1%),var(--venue-panel));
+  border-color:color-mix(in srgb,var(--venue-accent) 14%,rgba(255,255,255,.08));
+  box-shadow:0 -26px 70px rgba(0,0,0,.42)
+}
+.orderSheet{padding-left:14px;padding-right:14px}.sheetEyebrow{display:block;font-size:9px;letter-spacing:.15em;font-weight:950;margin-bottom:3px}
+.venuePage .sheetHead h2{font-size:29px;letter-spacing:-.045em}
+.orderSummaryLine{display:flex;justify-content:space-between;align-items:center;padding:10px 0 2px;color:rgba(255,255,255,.55);font-size:12px}
+.venuePage .cartItem{padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.07)}
+.cartItemCopy{min-width:0}.cartItemCopy b{display:block;line-height:1.15}.cartItemCopy small{line-height:1.3;margin-top:4px;display:block;max-width:42ch}
+.venuePage .qty button{background:color-mix(in srgb,var(--venue-panel2) 78%,transparent);border-color:rgba(255,255,255,.08)}
+.venuePage .totalRow{font-size:19px}.venuePage .totalRow b{font-size:24px;letter-spacing:-.04em}
+.orderCta{width:100%;min-height:54px;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px}
+.venuePage .primaryBtn{background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));color:var(--venue-ink);box-shadow:0 10px 28px var(--venue-glow)}
+.checkoutVenueCard{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;margin:12px 0;border-radius:18px;background:color-mix(in srgb,var(--venue-accent) 7%,rgba(255,255,255,.025));border:1px solid color-mix(in srgb,var(--venue-accent) 15%,rgba(255,255,255,.07))}
+.checkoutVenueCard>div{min-width:0}.checkoutVenueCard small{display:block;color:var(--venue-accent);font-size:9px;letter-spacing:.13em;font-weight:900}.checkoutVenueCard b{display:block;font-size:15px;margin-top:2px}.checkoutVenueCard span{display:block;color:rgba(255,255,255,.5);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65vw}.checkoutVenueCard strong{white-space:nowrap;font-size:20px}
+.fulfillmentSegment{gap:5px;padding:5px}.fulfillmentSegment button{height:76px;display:grid;grid-template-columns:28px 1fr;text-align:left;align-items:center;column-gap:8px;padding:8px 10px}
+.fulfillmentSegment button>span{grid-row:1/3;width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:rgba(255,255,255,.06)}.fulfillmentSegment button b{font-size:13px}.fulfillmentSegment button small{font-size:10px;color:rgba(255,255,255,.45)}
+.fulfillmentSegment button.active{background:var(--venue-accent);color:var(--venue-ink)}.fulfillmentSegment button.active small{color:color-mix(in srgb,var(--venue-ink) 70%,transparent)}.fulfillmentSegment button.active>span{background:rgba(0,0,0,.08)}
+.checkoutFields{margin-top:12px;gap:10px}.venuePage .field label{font-size:10px;letter-spacing:.06em;text-transform:uppercase}.venuePage .field input,.venuePage .field textarea{background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.08);min-height:50px}.venuePage .field input:focus,.venuePage .field textarea:focus{border-color:color-mix(in srgb,var(--venue-accent) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--venue-accent) 8%,transparent)}
+.checkoutNotice{display:grid;gap:2px;background:color-mix(in srgb,var(--venue-accent) 6%,transparent);border-color:color-mix(in srgb,var(--venue-accent) 15%,transparent)}.checkoutNotice b{font-size:12px}.checkoutNotice span{color:rgba(255,255,255,.55)}
+.successSheet{text-align:center;padding-top:28px}.successMark{width:72px;height:72px;margin:0 auto 14px;border-radius:24px;display:grid;place-items:center;background:var(--venue-accent);color:var(--venue-ink);font-size:32px;font-weight:1000;box-shadow:0 18px 50px var(--venue-glow)}
+.successSheet h2{font-size:30px;margin:4px 0 6px;letter-spacing:-.045em}.successSheet>p{margin:0 auto;color:rgba(255,255,255,.58);max-width:36ch}.successTotal{font-size:38px;font-weight:1000;letter-spacing:-.055em;margin:20px 0}
+.successStatus{display:flex;align-items:center;gap:11px;text-align:left;padding:13px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);margin-bottom:14px}.successStatus>span{width:12px;height:12px;border-radius:50%;background:var(--venue-accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--venue-accent) 10%,transparent)}.successStatus b,.successStatus small{display:block}.successStatus small{color:rgba(255,255,255,.5);margin-top:2px}
+.orderHistory{margin-top:13px}.historyCard header>div small,.historyCard header>div b{display:block}.historyCard header>div small{font-size:10px;color:var(--venue-accent);margin-bottom:3px}.historyMeta{font-size:11px;color:rgba(255,255,255,.48);margin-top:7px}.historyBottom{display:flex;justify-content:space-between;align-items:center;margin-top:10px}.historyBottom span{font-size:11px;color:rgba(255,255,255,.48)}.historyBottom b{font-size:18px}
+.status-new{color:#d7ef72!important}.status-cooking{color:#ffc66d!important}.status-ready{color:#98e5af!important}.status-done{color:#9ca7af!important}.status-cancelled{color:#ff96a8!important}
+
+@media(max-width:390px){
+  .venuePage .menuGrid{grid-template-columns:1fr 1fr;gap:9px}
+  .venuePage .foodCard{min-height:270px;border-radius:20px}.venuePage .foodPic{height:124px}.venuePage .foodBody{padding:11px}.venuePage .foodBody h3{font-size:14px}.venuePage .foodRow b{font-size:16px}
+  .venueHeroPanel{min-height:270px}.venueHeroPanel .heroCopy h1{font-size:36px}
+}
+@media(max-width:340px){.venuePage .menuGrid{grid-template-columns:1fr}.venuePage .foodPic{height:160px}}
+
+/* ===== polished owner orders ===== */
+.adminShell .orderCard{padding:14px;border-radius:19px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.018));box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.adminShell .orderCard header b{font-size:15px}.adminOrderMeta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.adminOrderMeta span{font-size:10px;padding:5px 7px;border-radius:9px;background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--line)}
+.adminOrderItems{display:grid;gap:4px;margin-top:10px;font-size:12px}.adminOrderTotal{display:flex;align-items:end;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.adminOrderTotal small{color:var(--muted)}.adminOrderTotal b{font-size:21px}
+
+
+/* ===== map polish ===== */
+.mapCount{display:grid;justify-items:end;line-height:1}.mapCount b{font-size:13px}.mapCount small{font-size:8px;color:var(--muted);letter-spacing:.12em;margin-top:3px}
+.mapRoot:after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;box-shadow:inset 0 0 120px rgba(0,0,0,.3)}
+.mapTools .iconBtn{border-color:rgba(255,255,255,.09);box-shadow:0 9px 30px rgba(0,0,0,.22)}
+.mapMarker{isolation:isolate}.mapMarker:before{content:"";position:absolute;inset:-5px;z-index:-1;border-radius:inherit;border:1px solid rgba(255,255,255,.1);opacity:.7}.pulseMarker:after{content:"";position:absolute;inset:-7px;z-index:-2;border-radius:inherit;border:1px solid currentColor;opacity:.16;animation:markerBreath 2.4s ease-in-out infinite}@keyframes markerBreath{50%{transform:scale(1.18);opacity:0}}
+.mapMarker.selected:before{inset:-8px;border-color:rgba(255,255,255,.36);box-shadow:0 0 0 5px rgba(255,255,255,.05)}
+.venueCard{background:linear-gradient(180deg,rgba(19,27,23,.9),rgba(12,18,15,.94));border-color:rgba(255,255,255,.1);box-shadow:0 26px 80px rgba(0,0,0,.42)}
+.venueCardDescription{margin:11px 2px 0;color:rgba(255,255,255,.58);font-size:12px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.venueQuick{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.venueQuick span{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);font-size:9px;color:#c8d1cb}
+.venueActions .primaryBtn{font-size:14px;letter-spacing:-.01em}.badge{backdrop-filter:blur(10px)}
+.searchBox input{box-shadow:0 14px 40px rgba(0,0,0,.22)}

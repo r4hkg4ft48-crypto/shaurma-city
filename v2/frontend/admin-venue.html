@@ -6,9 +6,58 @@
 <section id="profile" class="panel"><h2>Профиль точки</h2><div class="formGrid"><div class="field"><label>Название</label><input id="vName"></div><div class="field"><label>Адрес</label><input id="vAddress"></div><div class="field"><label>Описание</label><textarea id="vDescription"></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Часы</label><input id="vHours"></div><div class="field"><label>Цена</label><input id="vPrice"></div></div>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="field"><label>Иконка метки</label><input id="vMarkerIcon"></div><div class="field"><label>Цвет метки</label><input id="vMarkerBg"></div></div>
  <div class="field"><label>Дизайн страницы заведения</label><select id="vTheme"><option value="emerald">Emerald · зелёный</option><option value="amber">Amber · тёплый</option><option value="cobalt">Cobalt · синий</option><option value="cherry">Cherry · красный</option><option value="violet">Violet · фиолетовый</option><option value="graphite">Graphite · графит</option><option value="ocean">Ocean · бирюзовый</option><option value="citrus">Citrus · лайм</option></select></div>
- <label class="notice" style="display:flex;align-items:center;gap:9px"><input id="vBuilderEnabled" type="checkbox" style="width:18px;height:18px"> Включить конструктор шаурмы для этой точки</label>
  <div class="rowBtns"><button class="primaryBtn" id="saveProfile">Сохранить профиль</button><button class="plainBtn" id="saveAppearance">Сохранить метку</button></div></div></section>
-<section id="menu" class="panel hidden"><div class="sectionHead"><h2>Меню</h2><button class="plainBtn" id="addItem">＋ Позиция</button></div><div class="menuEditor" id="menuEditor"></div><button class="primaryBtn" style="margin-top:12px" id="saveMenu">Сохранить меню</button></section>
+<section id="menu" class="panel hidden">
+  <div class="sectionHead"><h2>Меню</h2><button class="plainBtn" id="addItem">＋ Позиция</button></div>
+  <div class="menuEditor" id="menuEditor"></div>
+  <button class="primaryBtn" style="margin-top:12px" id="saveMenu">Сохранить меню</button>
+
+  <div class="builderAdmin" id="builderAdmin">
+    <div class="builderAdminHead">
+      <div><small>КОНСТРУКТОР</small><h2>Собери свою шаурму</h2><p>Настройки только для выбранного заведения.</p></div>
+      <label class="builderSwitch"><input id="vBuilderEnabled" type="checkbox"><span></span><b>Включён</b></label>
+    </div>
+
+    <div class="builderAdminMeta">
+      <div class="field"><label>Название блока</label><input id="builderTitle" placeholder="Собери свою шаурму"></div>
+      <div class="field"><label>Подзаголовок</label><input id="builderSubtitle" placeholder="Выбери лаваш, мясо, соусы и добавки"></div>
+    </div>
+
+    <div class="builderAdminGroup">
+      <div class="builderAdminGroupHead"><div><small>ШАГ 1</small><b>Форматы / размер</b><span>Базовая цена сборки</span></div><button class="plainBtn" data-builder-add="types">＋ Добавить</button></div>
+      <div class="builderAdminList" id="builderTypesAdmin"></div>
+    </div>
+
+    <div class="builderAdminGroup">
+      <div class="builderAdminGroupHead"><div><small>ШАГ 2</small><b>Виды лаваша</b><span>Например: классический, сырный, чёрный</span></div><button class="plainBtn" data-builder-add="breads">＋ Лаваш</button></div>
+      <div class="builderAdminList" id="builderBreadsAdmin"></div>
+    </div>
+
+    <div class="builderAdminGroup">
+      <div class="builderAdminGroupHead"><div><small>ШАГ 3</small><b>Мясо</b><span>Например: курица, говядина, микс</span></div><button class="plainBtn" data-builder-add="meats">＋ Мясо</button></div>
+      <div class="builderAdminList" id="builderMeatsAdmin"></div>
+    </div>
+
+    <div class="builderAdminGroup">
+      <div class="builderAdminGroupHead"><div><small>ШАГ 4</small><b>Соусы</b><span>Для каждой опции можно задать доплату</span></div><button class="plainBtn" data-builder-add="sauces">＋ Соус</button></div>
+      <div class="builderAdminList" id="builderSaucesAdmin"></div>
+    </div>
+
+    <div class="builderAdminGroup">
+      <div class="builderAdminGroupHead"><div><small>ШАГ 5</small><b>Ингредиенты / добавки</b><span>Сыр, халапеньо, картофель и любые новые ингредиенты</span></div><button class="plainBtn" data-builder-add="extras">＋ Ингредиент</button></div>
+      <div class="builderAdminList" id="builderExtrasAdmin"></div>
+    </div>
+
+    <div class="builderLimits">
+      <div class="field"><label>Минимум соусов</label><input id="builderMinSauces" type="number" min="0" inputmode="numeric"></div>
+      <div class="field"><label>Максимум соусов</label><input id="builderMaxSauces" type="number" min="1" inputmode="numeric"></div>
+      <div class="field"><label>Максимум добавок</label><input id="builderMaxExtras" type="number" min="0" inputmode="numeric"></div>
+    </div>
+
+    <div class="notice builderAdminNotice">Цена в Mini App пересчитывается по этим настройкам, а при оформлении заказа сервер проверяет её заново.</div>
+    <button class="primaryBtn builderSaveBtn" id="saveBuilder">Сохранить конструктор</button>
+  </div>
+</section>
 <section id="orders" class="panel hidden"><div class="sectionHead"><h2>Заказы</h2><small id="ordersLive">LIVE</small></div><div class="list" id="ordersList"></div></section>
 </main>
 <div class="loginGate" id="gate"><div class="loginCard"><span class="eyebrow">Shaurmeg partner</span><h1>Кабинет владельца</h1><p>Откройте эту админку через подключённого Telegram-бота владельца. Доступ выдаётся отдельно для каждого заведения.</p><div class="notice" id="gateText">Проверяем Telegram-доступ…</div><div id="claimBox" class="formGrid" style="margin-top:10px"><div class="field"><label>Код подключения заведения</label><input id="claimCode" placeholder="OWN-XXXXXXXXXX" autocomplete="off"></div><button class="primaryBtn" id="claimBtn">Подключить заведение</button></div></div></div>

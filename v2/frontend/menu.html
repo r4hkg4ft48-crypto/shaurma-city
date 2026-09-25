@@ -29,7 +29,7 @@
 
   <section class="section hidden" id="builderEntry">
     <button class="builderEntry" id="openBuilder">
-      <span><small>СОБЕРИ СВОЮ</small><b>Шаурма под твой вкус</b><em>Основа → соусы → добавки</em></span><strong>✦</strong>
+      <span><small>СОБЕРИ СВОЮ</small><b id="builderEntryTitle">Шаурма под твой вкус</b><em id="builderEntrySubtitle">Основа → лаваш → мясо → соусы → добавки</em></span><strong>✦</strong>
     </button>
   </section>
 
@@ -76,9 +76,11 @@
 <section class="sheet orderSheet" id="builderSheet">
   <div class="sheetHandle"></div>
   <div class="sheetHead"><div><small class="sheetEyebrow">КОНСТРУКТОР</small><h2>Собери свою</h2></div><button class="iconBtn" data-close>×</button></div>
-  <div class="builderBlock"><small>1 · Основа</small><div class="builderOptions" id="builderTypes"></div></div>
-  <div class="builderBlock"><small>2 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
-  <div class="builderBlock"><small>3 · Добавки</small><div class="builderOptions" id="builderExtras"></div></div>
+  <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
+  <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
+  <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
+  <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
+  <div class="builderBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
   <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
   <button class="primaryBtn orderCta" id="addBuilder">Добавить в корзину</button>
 </section>

@@ -32,6 +32,14 @@ async function call(token,method,body={},attempt=0){
   return j.result;
 }
 
+async function sendClientMessage(chatId,text,replyMarkup=null){
+  const token=config.AGGREGATOR_BOT_TOKEN||config.CLIENT_BOT_TOKEN;
+  if(!token||!chatId)return null;
+  const body={chat_id:chatId,text:String(text||''),disable_web_page_preview:true};
+  if(replyMarkup)body.reply_markup=replyMarkup;
+  return call(token,'sendMessage',body);
+}
+
 function menuUrl(marker,est){
   const u=new URL(config.PUBLIC_APP_URL+'/menu.html');
   u.searchParams.set('marker',String(marker));
@@ -142,4 +150,4 @@ function install(app){
   });
 }
 
-module.exports={sync,install};
+module.exports={sync,install,sendClientMessage};

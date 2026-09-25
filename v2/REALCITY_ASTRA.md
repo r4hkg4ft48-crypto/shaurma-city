@@ -123,3 +123,20 @@ Before production:
 - no facade image is merely pasted as a flat photo inside the footprint;
 - performance remains usable in Telegram Mini App;
 - API health and Telegram sync remain green.
+
+
+## Quarter Dive Engine status
+
+Shaurmeg now includes a local quarter reconstruction engine. Astra should improve realism rather than replace the transition architecture.
+
+Current frontend sources:
+- `realcity-ground`
+- `realcity-greens`
+- `realcity-roads`
+- `realcity-context`
+- `focus-building`
+- `realcity-trees`
+
+Current RealCity profile version persists roads and green zones in addition to buildings and trees.
+
+For a copy/paste implementation brief, use `ASTRA_REALCITY_PROMPT.md`.

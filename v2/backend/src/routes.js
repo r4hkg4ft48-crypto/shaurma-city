@@ -289,7 +289,7 @@ router.post('/admin/markers',auth.requireOwner,async(req,res)=>{
         ORDER BY COALESCE(used.used_count,0),themes.ord
         LIMIT 1`,[D.VENUE_THEME_KEYS]);
       const theme=tq.rows[0]?.theme_key||D.venueThemeKey(est);
-      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:theme}),est]);
+      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:theme,theme:D.DEFAULT_VENUE_THEME}),est]);
       const q=await c.query(`INSERT INTO shaurmeg_markers(venue_id,establishment_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,marker_avatar,marker_style,category,is_active,position_locked,metadata_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,TRUE,TRUE,TRUE) RETURNING *`,[vId,est,name,String(b.address||''),String(b.description||''),lat,lon,String(b.hero_image||''),JSON.stringify(Array.isArray(b.gallery)?b.gallery:[]),String(b.hours||''),String(b.price_label||''),String(b.marker_avatar||''),JSON.stringify(D.markerStyle(b.marker_style)),String(b.category||'shawarma')]);
       return q.rows[0];
     });res.status(201).json(row);
@@ -417,11 +417,29 @@ router.put('/venue-owner/establishments/:establishmentId/builder',async(req,res)
   }catch(e){fail(res,e,'venue_owner_builder_failed')}
 });
 
+router.put('/venue-owner/establishments/:establishmentId/theme',async(req,res)=>{
+  const a=await venueAccess(req,res,'profile');if(!a)return;
+  try{
+    const theme=D.normalizeVenueTheme(req.body?.theme||req.body||{});
+    const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);
+    if(!current.rows[0])return res.sendStatus(404);
+    const cfg={...(current.rows[0].config||{}),theme};
+    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(cfg)]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'theme_updated',$3::jsonb)",[
+      a.est,String(a.s.sub),JSON.stringify(theme)
+    ]);
+    rt.pushVenue(a.est,'venue',q.rows[0]);
+    res.json({ok:true,theme});
+  }catch(e){fail(res,e,'venue_owner_theme_failed')}
+});
+
 router.patch('/venue-owner/establishments/:establishmentId/profile',async(req,res)=>{
   const a=await venueAccess(req,res,'profile');if(!a)return;
   try{
     const b=req.body||{},name=String(b.name||'').trim();if(!name)return res.status(400).json({error:'name_required'});
-    await db.tx(async c=>{await c.query('UPDATE shaurma_venues SET name=$2,config=config||$3::jsonb,updated_at=NOW() WHERE establishment_id=$1',[a.est,name,JSON.stringify(b.config&&typeof b.config==='object'?b.config:{})]);await c.query('UPDATE shaurmeg_markers SET name=$2,address=$3,description=$4,hours=$5,price_label=$6,hero_image=$7,metadata_locked=TRUE,updated_at=NOW() WHERE establishment_id=$1',[a.est,name,String(b.address||''),String(b.description||''),String(b.hours||''),String(b.price_label||''),String(b.hero_image||'')]);});
+    const configPatch=b.config&&typeof b.config==='object'&&!Array.isArray(b.config)?{...b.config}:{};
+    if(configPatch.theme)configPatch.theme=D.normalizeVenueTheme(configPatch.theme);
+    await db.tx(async c=>{await c.query('UPDATE shaurma_venues SET name=$2,config=config||$3::jsonb,updated_at=NOW() WHERE establishment_id=$1',[a.est,name,JSON.stringify(configPatch)]);await c.query('UPDATE shaurmeg_markers SET name=$2,address=$3,description=$4,hours=$5,price_label=$6,hero_image=$7,metadata_locked=TRUE,updated_at=NOW() WHERE establishment_id=$1',[a.est,name,String(b.address||''),String(b.description||''),String(b.hours||''),String(b.price_label||''),String(b.hero_image||'')]);});
     res.json({ok:true});
   }catch(e){fail(res,e,'venue_owner_profile_failed')}
 });

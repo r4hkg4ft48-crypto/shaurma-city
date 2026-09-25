@@ -1,4 +1,5 @@
 'use strict';
+// Admin access-key UI is served by the production adapter; v2 remains the shared data contract.
 
 const clean=v=>String(v||'').trim();
 const csv=v=>clean(v).split(',').map(x=>x.trim()).filter(Boolean);

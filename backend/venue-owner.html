@@ -61,6 +61,8 @@
         <div class="field"><label>Контраст</label><input id="siteContrast" type="range" min="0.8" max="1.3" step="0.01"></div>
         <div class="field"><label>Подпись hero-позиции</label><input id="siteHeroLabel" maxlength="40" placeholder="НАША ГОРДОСТЬ"></div>
         <div class="field"><label><input id="siteDescriptions" type="checkbox" style="width:auto"> Показывать описания карточек</label></div>
+        <div class="field"><label><input id="siteFavorites" type="checkbox" style="width:auto"> Избранное в карточках</label></div>
+        <div class="field"><label><input id="siteBadges" type="checkbox" style="width:auto"> Бейджи «Популярное / Новинка»</label></div>
         <div class="field full"><label>Фоновое изображение сайта</label><div class="drop"><span id="siteBgHint">Фото / интерьер / атмосфера</span><img id="siteBgPreview" hidden><input id="siteBgFile" type="file" accept="image/*"></div></div>
       </div>
     </div>
@@ -203,7 +205,7 @@ function renderSiteStudio(){
  $('#siteSelectorHint').textContent='site:'+currentId;
  $('#siteMode').value=d.mode||'cinematic';$('#siteMenuLayout').value=m.layout||'hero-2-3';$('#siteCardStyle').value=m.card_style||'photo';$('#siteImageFit').value=m.image_fit||'cover';
  $('#siteRadius').value=Number(d.radius)||20;$('#siteAmbient').value=Number.isFinite(Number(d.ambient_strength))?Number(d.ambient_strength):.16;$('#siteOpacity').value=Number.isFinite(Number(d.panel_opacity))?Number(d.panel_opacity):.9;$('#siteContrast').value=Number.isFinite(Number(d.contrast))?Number(d.contrast):1;
- $('#siteHeroLabel').value=m.hero_label||'НАША ГОРДОСТЬ';$('#siteDescriptions').checked=m.show_descriptions!==false;
+ $('#siteHeroLabel').value=m.hero_label||'НАША ГОРДОСТЬ';$('#siteDescriptions').checked=m.show_descriptions!==false;$('#siteFavorites').checked=s.features?.favorites!==false;$('#siteBadges').checked=s.features?.menu_badges!==false;
  $('#builderStudioEnabled').checked=venue?.config?.builder_enabled===true;$('#builderJson').value=JSON.stringify(venue?.config?.builder||{},null,2);
  $('#builderResultEnabled').checked=r.enabled!==false;$('#builderSingularity').checked=r.singularity!==false;$('#builderDuration').value=Number(r.duration_ms)||1050;$('#builderResultTitle').value=r.title||'Твоя шаурма готова';$('#builderResultSubtitle').value=r.subtitle||'Сборка завершена. Осталось добавить её в корзину.';
  if(siteBackground){$('#siteBgPreview').src=siteBackground;$('#siteBgPreview').hidden=false;$('#siteBgHint').hidden=true}else{$('#siteBgPreview').hidden=true;$('#siteBgHint').hidden=false}
@@ -215,7 +217,7 @@ function readSiteStudio(){
   design:{mode:$('#siteMode').value,background_image:siteBackground,ambient_strength:Number($('#siteAmbient').value),radius:Number($('#siteRadius').value),panel_opacity:Number($('#siteOpacity').value),contrast:Number($('#siteContrast').value)},
   menu:{layout:$('#siteMenuLayout').value,card_style:$('#siteCardStyle').value,image_fit:$('#siteImageFit').value,show_descriptions:$('#siteDescriptions').checked,hero_label:$('#siteHeroLabel').value},
   builder_result:{enabled:$('#builderResultEnabled').checked,image:builderResultImage,title:$('#builderResultTitle').value,subtitle:$('#builderResultSubtitle').value,singularity:$('#builderSingularity').checked,duration_ms:Number($('#builderDuration').value)||1050},
-  features:{favorites:true,menu_badges:true,builder_result:true}
+  features:{favorites:$('#siteFavorites').checked,menu_badges:$('#siteBadges').checked,builder_result:true}
  };
 }
 async function saveSiteStudio(){

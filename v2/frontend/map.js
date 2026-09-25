@@ -434,7 +434,7 @@
     try{tg?.openTelegramLink?.('https://t.me/share/url?url='+encodeURIComponent(currentReferralUrl)+'&text='+encodeURIComponent(text))}catch{try{await navigator.clipboard.writeText(currentReferralUrl);toast('Ссылка скопирована ✓')}catch{}}
   };
 
-  try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();tg?.setHeaderColor?.('#07100c');tg?.setBackgroundColor?.('#07100c')}catch{}
+  try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#161020':'#eee8f6';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
   authClient().then(ok=>{if(ok){loadDashboard();loadOrders();connectUserStream()}else{renderGuestProfile();renderOrdersPanel()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

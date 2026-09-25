@@ -6,6 +6,7 @@ const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
 
 function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner}){
   const BOT_TOKEN=String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim();
+  const MASTER_ADMIN_BOT_TOKEN=String(process.env.MASTER_ADMIN_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_MASTER_ADMIN_BOT_TOKEN||'').trim();
   const BASE_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/$/,'');
   const OWNER_APP_URL=String(process.env.VENUE_OWNER_MINI_APP_URL||BASE_URL+'/venue-owner?v=1').trim();
   const SESSION_SECRET=String(process.env.VENUE_OWNER_SESSION_SECRET||process.env.OWNER_API_TOKEN||process.env.ADMIN_TELEGRAM_SESSION_SECRET||'').trim();
@@ -114,10 +115,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     venue_id:row.venue_id||''
   });
 
-  function signSession(user){
+  function signSession(user,extra={}){
     if(!SESSION_SECRET)throw new Error('venue_owner_session_not_configured');
     const now=Math.floor(Date.now()/1000);
-    const payload={sub:String(user.id),username:user.username||'',first_name:user.first_name||'',iat:now,exp:now+7*24*60*60};
+    const payload={sub:String(user.id),username:user.username||'',first_name:user.first_name||'',iat:now,exp:now+7*24*60*60,...extra};
     const body=Buffer.from(JSON.stringify(payload)).toString('base64url');
     const sig=crypto.createHmac('sha256',SESSION_SECRET).update(body).digest('base64url');
     return body+'.'+sig;
@@ -152,10 +153,37 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     `,[String(userId)]);
     return q.rows.map(publicAccess);
   }
+  function masterAdminAllowed(userId){
+    const raw=[process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(',');
+    return raw.split(',').map(x=>x.trim()).filter(Boolean).includes(String(userId));
+  }
+  async function masterAccesses(){
+    if(!DB)return [];
+    const q=await DB.query(`
+      SELECT v.establishment_id,v.name,v.venue_id,v.is_active,m.id AS marker_id
+      FROM shaurma_venues v
+      LEFT JOIN LATERAL (
+        SELECT id FROM shaurmeg_markers WHERE establishment_id=v.establishment_id ORDER BY id LIMIT 1
+      ) m ON TRUE
+      WHERE v.is_active=TRUE
+      ORDER BY v.name
+    `);
+    return q.rows.map(row=>publicAccess({...row,role:'owner',permissions:DEFAULT_PERMISSIONS}));
+  }
+  async function sessionAccesses(sess){
+    if(sess?.master===true&&masterAdminAllowed(sess.sub))return masterAccesses();
+    return accessesFor(sess?.sub);
+  }
   async function requireAccess(req,res,establishmentId,permission){
     const sess=readSession(req);
     if(!sess){res.sendStatus(401);return null}
     if(!DB){res.status(503).json({error:'persistent_storage_required'});return null}
+    if(sess.master===true&&masterAdminAllowed(sess.sub)){
+      const q=await DB.query("SELECT establishment_id,venue_id,name,is_active FROM shaurma_venues WHERE establishment_id=$1 AND is_active=TRUE LIMIT 1",[String(establishmentId)]);
+      const venue=q.rows[0];if(!venue){res.sendStatus(404);return null}
+      const access={...venue,role:'owner',permissions:DEFAULT_PERMISSIONS,telegram_user_id:String(sess.sub)};
+      return {session:sess,access,permissions:DEFAULT_PERMISSIONS,master:true};
+    }
     const q=await DB.query(`
       SELECT a.*,v.venue_id,v.name
       FROM shaurma_venue_admins a
@@ -273,17 +301,27 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     }catch(e){res.status(401).json({error:e.message||'venue_owner_auth_failed'})}
   });
 
+  app.post('/api/venue-owner/master-auth',async(req,res)=>{
+    try{
+      if(!MASTER_ADMIN_BOT_TOKEN)return res.status(503).json({error:'master_admin_bot_not_configured'});
+      const user=verifyTelegramInitDataWithToken((req.body||{}).initData||'',MASTER_ADMIN_BOT_TOKEN);
+      if(!masterAdminAllowed(user.id))return res.status(403).json({error:'admin_not_allowed',user_id:String(user.id)});
+      const session=signSession(user,{master:true}),accesses=await masterAccesses();
+      res.json({ok:true,master:true,session,user:{id:String(user.id),username:user.username||'',first_name:user.first_name||'',last_name:user.last_name||''},establishments:accesses});
+    }catch(e){res.status(401).json({error:e.message||'master_owner_auth_failed'})}
+  });
+
   app.post('/api/venue-owner/claim',async(req,res)=>{
     const sess=readSession(req);if(!sess)return res.sendStatus(401);
     try{
       const access=await claimForTelegramUser({id:sess.sub,username:sess.username||'',first_name:sess.first_name||''},req.body?.code);
-      res.json({ok:true,establishment:access,establishments:await accessesFor(sess.sub)});
+      res.json({ok:true,establishment:access,establishments:await sessionAccesses(sess)});
     }catch(e){res.status(400).json({error:e.message||'claim_failed'})}
   });
 
   app.get('/api/venue-owner/me',async(req,res)=>{
     const sess=readSession(req);if(!sess)return res.sendStatus(401);
-    res.json({user:{id:String(sess.sub),username:sess.username||'',first_name:sess.first_name||''},establishments:await accessesFor(sess.sub)});
+    res.json({user:{id:String(sess.sub),username:sess.username||'',first_name:sess.first_name||''},master:sess.master===true,establishments:await sessionAccesses(sess)});
   });
 
   app.get('/api/venue-owner/establishments/:establishmentId',async(req,res)=>{

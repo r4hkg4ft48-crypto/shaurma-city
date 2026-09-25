@@ -23,5 +23,5 @@ module.exports={
   OWNER_PASSWORD:clean(process.env.OWNER_PASSWORD),
   ADMIN_IDS:new Set(csv([process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(','))),
   SESSION_TTL_SEC:7*24*60*60,
-  BUILD:'v2-clean-1'
+  BUILD:'v2-master-admin-1'
 };

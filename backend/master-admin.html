@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Shaurmeg · Master Admin</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#070b12;--panel:#0d141f;--panel2:#121c29;--line:rgba(255,255,255,.075);--text:#f4f7fb;--muted:#8290a3;--blue:#6f8dff;--cyan:#59c7dc;--green:#6bd8a3;--amber:#f1bb68;--red:#ff7e8d;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
+*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;color:var(--text);font:500 14px/1.45 -apple-system,BlinkMacSystemFont,"Inter","SF Pro Display",sans-serif;background:radial-gradient(circle at 82% -4%,rgba(89,199,220,.12),transparent 28%),radial-gradient(circle at 9% 0,rgba(111,141,255,.16),transparent 30%),var(--bg)}
+button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin:auto;padding:var(--safe-t) 13px calc(var(--safe-b) + 30px)}.top{position:sticky;top:8px;z-index:20;display:flex;gap:10px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:20px;background:rgba(10,16,25,.88);backdrop-filter:blur(18px)}.mark{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#8aa0ff,#4765dc);color:#07101c;font-weight:1000}.brand{min-width:0}.brand b{display:block;font-size:15px;letter-spacing:.02em}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:.13em}.grow{flex:1}.status{display:flex;gap:6px;align-items:center;color:#a8f0ce;font-size:10px}.status i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.hero{padding:28px 4px 17px}.eyebrow{color:#879dff;font-size:9px;font-weight:900;letter-spacing:.16em}.hero h1{font-size:38px;line-height:.92;letter-spacing:-.055em;margin:7px 0 10px}.hero p{margin:0;color:var(--muted);max-width:54ch}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 14px}.stat{padding:13px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(18,28,41,.9),rgba(11,17,26,.92))}.stat small{display:block;color:var(--muted);font-size:9px}.stat b{display:block;font-size:23px;margin-top:5px}.sectionTitle{display:flex;align-items:end;justify-content:space-between;gap:10px;margin:22px 2px 10px}.sectionTitle h2{margin:0;font-size:22px;letter-spacing:-.035em}.sectionTitle small{color:var(--muted)}.modules{display:grid;grid-template-columns:1fr 1fr;gap:9px}.module{min-height:118px;text-align:left;padding:15px;border-radius:21px;border:1px solid var(--line);background:linear-gradient(155deg,#121c29,#0c131d);position:relative;overflow:hidden}.module:before{content:"";position:absolute;width:110px;height:110px;border-radius:50%;right:-42px;top:-52px;background:var(--glow,rgba(111,141,255,.13));filter:blur(3px)}.module span{display:grid;place-items:center;width:35px;height:35px;border-radius:12px;background:rgba(255,255,255,.055);font-size:18px}.module b{display:block;margin-top:15px;font-size:17px}.module small{display:block;margin-top:3px;color:var(--muted);font-size:10px;max-width:29ch}.module.wide{grid-column:1/-1;min-height:100px}.panel{border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,rgba(18,28,41,.94),rgba(10,16,24,.96));padding:14px}.field{display:grid;gap:5px;margin-bottom:9px}.field label{color:var(--muted);font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}select,input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:13px;background:#0a121d;padding:0 11px;outline:none}.actions{display:flex;gap:7px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:13px;min-height:42px;padding:0 13px;background:rgba(255,255,255,.045);font-weight:850}.btn.primary{border:0;background:linear-gradient(135deg,#708cff,#4562d8);color:#fff}.btn.danger{color:#ff9eaa;background:rgba(255,126,141,.08);border-color:rgba(255,126,141,.16)}.code{margin-top:10px;padding:12px;border-radius:15px;background:#080e17;border:1px dashed rgba(111,141,255,.28);font:800 13px/1.5 ui-monospace,SFMono-Regular,monospace;word-break:break-all}.list{display:grid;gap:7px;margin-top:10px}.row{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02)}.row>div{min-width:0;flex:1}.row b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.pill{padding:5px 7px;border-radius:999px;background:rgba(107,216,163,.08);color:#9ce6c4;font-size:9px}.botDot{width:9px;height:9px;border-radius:50%;background:#526072}.botDot.ok{background:var(--green);box-shadow:0 0 10px rgba(107,216,163,.45)}.botDot.bad{background:var(--red)}.tabs{display:flex;gap:5px;overflow:auto;padding:4px;margin:5px 0 12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.018);scrollbar-width:none}.tabs button{border:0;white-space:nowrap;min-height:38px;padding:0 12px;border-radius:11px;background:transparent;color:var(--muted);font-weight:800}.tabs button.active{background:#e8edff;color:#101727}.pane{display:none}.pane.active{display:block}.empty{padding:20px;text-align:center;color:var(--muted)}.login{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at 50% 0,rgba(111,141,255,.18),transparent 35%),#070b12}.loginCard{width:min(410px,100%);padding:20px;border:1px solid var(--line);border-radius:24px;background:#0d1520}.loginCard h2{font-size:28px;margin:5px 0}.loginCard p{color:var(--muted)}.loginCard button{width:100%;margin-top:8px}.err{min-height:18px;color:#ff9ba7;font-size:11px;margin-top:8px}.toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 10px);z-index:120;transform:translate(-50%,15px);opacity:0;pointer-events:none;transition:.2s;padding:9px 12px;border-radius:12px;background:#111b28;border:1px solid var(--line)}.toast.show{opacity:1;transform:translate(-50%,0)}
+@media(max-width:620px){.stats{grid-template-columns:1fr 1fr}.hero h1{font-size:34px}.modules{grid-template-columns:1fr 1fr}.module{min-height:126px;padding:13px}.module b{font-size:15px}.module small{font-size:9.5px}}
+</style>
+</head>
+<body>
+<div class="app" id="app" hidden>
+  <header class="top"><div class="mark">Ш</div><div class="brand"><b>SHAURMEG MASTER</b><small>UNIFIED ADMIN CONTROL</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
+  <section class="hero"><span class="eyebrow">MASTER ADMIN · FULL ACCESS</span><h1>Одна админка.<br>Вся система.</h1><p>Единая оболочка над рабочими административными модулями Shaurmeg. Функции внутри разделов используют существующую серверную логику.</p></section>
+  <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
+
+  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="access">Доступы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
+
+  <section class="pane active" id="overviewPane">
+    <div class="sectionTitle"><h2>Управление</h2><small>исходные модули</small></div>
+    <div class="modules">
+      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=5" style="--glow:rgba(111,141,255,.18)"><span>🧾</span><b>Заказы</b><small>Живая лента, статусы, клиенты и сумма.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=5" style="--glow:rgba(107,216,163,.13)"><span>🍽</span><b>Меню</b><small>Позиции, категории, цены и вид.</small></button>
+      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span>🗺</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
+      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(241,187,104,.14)"><span>🏙</span><b>RealCity</b><small>Фасады, референсы, анализ и пересборка.</small></button>
+      <button class="module" data-tab-open="access"><span>🔑</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
+      <button class="module" data-tab-open="sites"><span>🎛</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
+      <button class="module wide" data-tab-open="bots"><span>🤖</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
+    </div>
+  </section>
+
+  <section class="pane" id="accessPane">
+    <div class="sectionTitle"><h2>Доступы</h2><small>та же логика OWN-ключей</small></div>
+    <div class="panel">
+      <div class="field"><label>Заведение</label><select id="accessVenue"></select></div>
+      <div class="actions"><button class="btn primary" id="createKey">Создать свежий OWN-ключ</button><button class="btn" id="loadAdmins">Владельцы / админы</button></div>
+      <div class="code" id="keyOutput" hidden></div>
+      <div class="list" id="adminsList"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="sitesPane">
+    <div class="sectionTitle"><h2>Заведения</h2><small>точечное управление по SC-MSK</small></div>
+    <div class="panel">
+      <div class="field"><label>Выбрать заведение</label><select id="siteVenue"></select></div>
+      <div class="code" id="siteSelector">site:—</div>
+      <div class="actions" style="margin-top:10px"><button class="btn primary" data-owner-tab="site">Дизайн сайта</button><button class="btn" data-owner-tab="menu">Меню</button><button class="btn" data-owner-tab="profile">Профиль</button><button class="btn" data-owner-tab="orders">Заказы</button></div>
+      <div class="list" id="venueList"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="botsPane">
+    <div class="sectionTitle"><h2>Боты</h2><button class="btn" id="refreshBots">Обновить</button></div>
+    <div class="panel"><div class="list" id="botsList"><div class="empty">Проверяем связки…</div></div></div>
+  </section>
+</div>
+
+<div class="login" id="login"><div class="loginCard"><span class="eyebrow">SHAURMEG MASTER</span><h2>Административный доступ</h2><p id="loginText">Проверяем Telegram-доступ…</p><div id="browserLogin" hidden><input id="password" type="password" placeholder="Пароль владельца"><button class="btn primary" id="loginBtn">Войти</button></div><div class="err" id="err"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API=location.origin,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const launch=new URL(location.href),requestedTab=launch.searchParams.get('tab')||'overview';
+let adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',ownerToken=sessionStorage.getItem('sc_owner_token')||'',venues=[];
+const labels={master_admin:'Master Admin',legacy_admin:'Legacy Admin',access_keys:'Access Keys',venue_owner:'Venue Owner',kitchen:'Kitchen / Orders',aggregator:'Aggregator / Map',order_bot:'Order Bot'};
+function toast(v){const e=$('#toast');e.textContent=v;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),1600)}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function api(path,opt={}){
+ opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};
+ if(adminSession)opt.headers.Authorization='Bearer '+adminSession;else if(ownerToken)opt.headers['X-Owner-Token']=ownerToken;
+ if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}
+ const r=await fetch(API+path,opt),j=await r.json().catch(()=>({}));
+ if(!r.ok)throw Object.assign(new Error(j.error||'request_failed'),{status:r.status,body:j});
+ return j
+}
+function activate(name){
+ if(!['overview','access','sites','bots'].includes(name))name='overview';
+ $$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
+ $$('.pane').forEach(x=>x.classList.toggle('active',x.id===name+'Pane'));
+ try{const u=new URL(location.href);u.searchParams.set('tab',name);history.replaceState(null,'',u)}catch{}
+ if(name==='bots')loadBots();
+}
+async function telegramLogin(){
+ const tg=window.Telegram?.WebApp;
+ if(!tg?.initData)return false;
+ try{
+  tg.ready();tg.expand();
+  const r=await fetch(API+'/api/shaurma/admin-telegram-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'auth_failed');
+  adminSession=j.session;sessionStorage.setItem('sc_admin_tg_session',adminSession);return true
+ }catch(e){$('#err').textContent=e.message==='admin_not_allowed'?'Этот Telegram ID не входит в список администраторов.':'Не удалось подтвердить Telegram-доступ.';return false}
+}
+async function passwordLogin(){
+ const p=$('#password').value.trim();$('#err').textContent='';
+ try{const r=await fetch(API+'/api/shaurma/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});const j=await r.json().catch(()=>({}));if(!r.ok)throw 0;ownerToken=j.token;sessionStorage.setItem('sc_owner_token',ownerToken);await boot()}catch{$('#err').textContent='Неверный пароль'}
+}
+async function loadCore(){
+ const [stats,vs]=await Promise.all([api('/api/shaurma/stats'),api('/api/shaurma/admin/venues')]);
+ venues=Array.isArray(vs)?vs:[];
+ $('#stVenues').textContent=venues.filter(x=>x.is_active!==false).length;
+ $('#stToday').textContent=Number(stats.today||0);$('#stNew').textContent=Number(stats.new||0);$('#stRevenue').textContent=Number(stats.revenue||0).toLocaleString('ru-RU')+' ₽';
+ const options=venues.filter(x=>x.establishment_id).map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+' · '+esc(x.establishment_id)+'</option>').join('');
+ $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;
+ renderVenueList();updateSiteSelector()
+}
+function renderVenueList(){
+ $('#venueList').innerHTML=venues.filter(x=>x.establishment_id).slice(0,80).map(x=>'<div class="row" data-est="'+esc(x.establishment_id)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.establishment_id)+(x.marker_count?' · меток '+x.marker_count:'')+'</small></div><span class="pill">'+(x.is_active===false?'пауза':'активно')+'</span></div>').join('')||'<div class="empty">Заведений нет</div>'
+}
+function updateSiteSelector(){$('#siteSelector').textContent='site:'+($('#siteVenue').value||'—')}
+function openOwner(tab){
+ const est=$('#siteVenue').value;if(!est)return toast('Выберите заведение');
+ location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=3'
+}
+async function createKey(){
+ const est=$('#accessVenue').value;if(!est)return toast('Выберите заведение');
+ const b=$('#createKey');b.disabled=true;
+ try{
+  const j=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/invites',{method:'POST',body:JSON.stringify({role:'owner'})});
+  $('#keyOutput').hidden=false;$('#keyOutput').textContent='КЛЮЧ ДОСТУПА: '+String(j.claim_code||'')+'\nID: '+est+'\nДействует до: '+(j.expires_at?new Date(j.expires_at).toLocaleString('ru-RU'):'—');
+  await loadAdmins();toast('OWN-ключ создан')
+ }catch{toast('Не удалось создать ключ')}finally{b.disabled=false}
+}
+async function loadAdmins(){
+ const est=$('#accessVenue').value;if(!est)return;
+ try{
+  const rows=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins');
+  $('#adminsList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'доступ':'отключён')+'</span>'+(x.is_active?'<button class="btn danger" data-revoke="'+esc(x.telegram_user_id)+'">Отозвать</button>':'')+'</div>').join(''):'<div class="empty">Нет подключённых владельцев</div>'
+ }catch{$('#adminsList').innerHTML='<div class="empty">Не удалось загрузить доступы</div>'}
+}
+async function revoke(userId){
+ const est=$('#accessVenue').value;if(!est||!confirm('Отозвать доступ у Telegram '+userId+'?'))return;
+ try{await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins/'+encodeURIComponent(userId),{method:'DELETE'});await loadAdmins();toast('Доступ отозван')}catch{toast('Не удалось отозвать доступ')}
+}
+async function loadBots(){
+ $('#botsList').innerHTML='<div class="empty">Проверяем связки…</div>';
+ try{
+  const j=await api('/api/shaurma/admin/bot-health'),rows=Array.isArray(j.bots)?j.bots:[];
+  $('#botsList').innerHTML=rows.map(x=>'<div class="row"><span class="botDot '+(x.ok?'ok':x.enabled?'bad':'')+'"></span><div><b>'+esc(labels[x.id]||x.id)+(x.username?' · @'+esc(x.username):'')+'</b><small>'+(x.enabled?(x.webhook?'webhook подключён':'webhook отсутствует'):'не настроен')+(x.pending?' · очередь '+x.pending:'')+(x.last_error?' · '+esc(x.last_error):'')+'</small></div><span class="pill">'+(x.ok?'OK':x.enabled?'ошибка':'off')+'</span></div>').join('')
+ }catch{$('#botsList').innerHTML='<div class="empty">Диагностика недоступна</div>'}
+}
+async function boot(){
+ try{await loadCore();$('#login').style.display='none';$('#app').hidden=false;activate(requestedTab)}catch(e){$('#err').textContent='Не удалось загрузить Master Admin: '+(e.body?.error||e.message)}
+}
+$('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)activate(b.dataset.tab)};
+document.addEventListener('click',e=>{
+ const open=e.target.closest('[data-open]');if(open){location.href=open.dataset.open;return}
+ const tab=e.target.closest('[data-tab-open]');if(tab){activate(tab.dataset.tabOpen);return}
+ const own=e.target.closest('[data-owner-tab]');if(own){openOwner(own.dataset.ownerTab);return}
+ const rev=e.target.closest('[data-revoke]');if(rev)revoke(rev.dataset.revoke)
+});
+$('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
+(async()=>{
+ if(adminSession||ownerToken){await boot();return}
+ const tg=window.Telegram?.WebApp;
+ if(tg?.initData){const ok=await telegramLogin();if(ok)return boot()}
+ $('#loginText').textContent='Откройте Master Admin через Telegram. Для аварийного входа в браузере доступен пароль владельца.';$('#browserLogin').hidden=false
+})();
+</script>
+</body>
+</html>

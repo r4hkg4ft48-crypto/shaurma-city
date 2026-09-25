@@ -294,6 +294,15 @@ async function sync(){
   }
 
   console.log('Shaurmeg v2 Telegram sync · '+ok+' ok · '+failed+' failed · app '+config.PUBLIC_APP_URL);
+  if(config.KITCHEN_BOT_TOKEN){
+    try{
+      const [me,webhook]=await Promise.all([
+        call(config.KITCHEN_BOT_TOKEN,'getMe',{}),
+        call(config.KITCHEN_BOT_TOKEN,'getWebhookInfo',{})
+      ]);
+      console.log('Kitchen bot diagnostics · @'+String(me?.username||'')+' · configured @'+String(config.KITCHEN_BOT_USERNAME||'')+' · webhook '+String(webhook?.url||'')+' · pending '+Number(webhook?.pending_update_count||0)+(webhook?.last_error_message?' · last_error '+String(webhook.last_error_message):''));
+    }catch(e){console.error('Kitchen bot diagnostics failed:',e.message)}
+  }
   return {ok:failed===0,total:tasks.length,failed};
 }
 

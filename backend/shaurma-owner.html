@@ -324,7 +324,7 @@ function normalizeBuilderDraft(raw){
  out.min_sauces=Math.max(0,Number(src?.min_sauces??base.min_sauces)||0);out.max_sauces=Math.max(0,Number(src?.max_sauces??out.sauces.length)||0);out.max_extras=Math.max(0,Number(src?.max_extras??out.extras.length)||0);
  return out;
 }
-function builderOptionId(name,prefix,index){const id=String(name||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я_-]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,40);return id||prefix+'_'+Date.now().toString(36)+'_'+index}
+function builderOptionId(name,prefix,index){const stem=String(name||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я_-]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,28)||prefix;return stem+'_'+Date.now().toString(36)+'_'+index}
 function syncBuilderMetaFromInputs(){
  if(!builderDraft)return;builderDraft.title=$('#builderTitle').value.trim()||'Собери свою шаурму';builderDraft.subtitle=$('#builderSubtitle').value.trim();
  const sauceCount=builderDraft.sauces.length,extraCount=builderDraft.extras.length;

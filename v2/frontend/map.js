@@ -83,7 +83,7 @@
   $('#search').oninput=search;$('#results').onclick=e=>{const b=e.target.closest('[data-id]');if(!b)return;const p=points.find(x=>String(x.id)===b.dataset.id);if(p){selectPoint(p);$('#results').classList.add('hidden')}};
   $('#locate').onclick=()=>{if(!navigator.geolocation)return toast('Геопозиция недоступна');navigator.geolocation.getCurrentPosition(p=>map.easeTo({center:[p.coords.longitude,p.coords.latitude],zoom:15.5,duration:800}),()=>toast('Не удалось получить геопозицию'),{enableHighAccuracy:true,timeout:8000})};
   $('#home').onclick=()=>{closeCard();fitAll()};$('#closeCard').onclick=closeCard;
-  $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');location.assign(u.toString())};
+  $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();tg?.setHeaderColor?.('#0b0f12');tg?.setBackgroundColor?.('#0b0f12')}catch{}
   bootMap().catch(e=>{console.error(e);toast('Карта не загрузилась');$('#boot').classList.add('out')});
 })();

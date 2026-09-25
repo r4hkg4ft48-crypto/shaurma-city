@@ -2550,6 +2550,20 @@ body.venuePage .menuFeaturePhoto img{
 body.venuePage .menuFeaturePhoto.foodPicFallback img{
   filter:saturate(1.02) contrast(1.04) brightness(.8)
 }
+body.venuePage .menuFeatureFallback{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:
+    radial-gradient(circle at 72% 35%,color-mix(in srgb,var(--venue-accent) 22%,transparent),transparent 28%),
+    linear-gradient(145deg,var(--venue-hero),var(--menu-deep))
+}
+body.venuePage .menuFeatureFallback b{
+  color:rgba(255,255,255,.23);
+  font-size:12px;
+  letter-spacing:.28em
+}
 body.venuePage .menuFeatureShade{
   position:absolute;
   inset:0;

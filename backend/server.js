@@ -688,6 +688,9 @@ const MAP_BUILD=String(MAP_CONFIG.version||104);
 function adminTelegramBotToken(){
  return String(process.env.ADMIN_TELEGRAM_BOT_TOKEN||'').trim();
 }
+function masterAdminBotToken(){
+ return String(process.env.MASTER_ADMIN_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_MASTER_ADMIN_BOT_TOKEN||'').trim();
+}
 function accessAdminBotToken(){
  return String(process.env.ACCESS_ADMIN_TELEGRAM_BOT_TOKEN||process.env.ADMIN_ACCESS_TELEGRAM_BOT_TOKEN||'').trim();
 }
@@ -697,9 +700,11 @@ function aggregatorBotToken(){
 const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/map.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
 const ADMIN_BOT_WEBHOOK_SECRET=adminTelegramBotToken()?crypto.createHash('sha256').update('shaurmeg-admin:'+adminTelegramBotToken()).digest('hex').slice(0,32):'';
+const MASTER_ADMIN_BOT_WEBHOOK_SECRET=masterAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-master-admin:'+masterAdminBotToken()).digest('hex').slice(0,32):'';
 const ACCESS_ADMIN_BOT_WEBHOOK_SECRET=accessAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-access-admin:'+accessAdminBotToken()).digest('hex').slice(0,32):'';
 let aggregatorBotInfo=null;
 let adminBotInfo=null;
+let masterAdminBotInfo=null;
 let accessAdminBotInfo=null;
 
 async function adminTelegramApi(method,body={}){
@@ -714,6 +719,19 @@ async function getAdminBotInfo(){
  const j=await r.json().catch(()=>({}));
  if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
  adminBotInfo=j.result;return adminBotInfo;
+}
+async function masterAdminTelegramApi(method,body={}){
+ const token=masterAdminBotToken();if(!token)throw new Error('master_admin_telegram_not_configured');
+ const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw new Error(j.description||('HTTP '+r.status));return j.result;
+}
+async function getMasterAdminBotInfo(){
+ if(masterAdminBotInfo)return masterAdminBotInfo;
+ const token=masterAdminBotToken();if(!token)return null;
+ const r=await fetch('https://api.telegram.org/bot'+token+'/getMe');
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok||!j.ok||!j.result?.username)throw new Error(j.description||('HTTP '+r.status));
+ masterAdminBotInfo=j.result;return masterAdminBotInfo;
 }
 async function accessAdminTelegramApi(method,body={}){
  const token=accessAdminBotToken();if(!token)throw new Error('access_admin_telegram_not_configured');

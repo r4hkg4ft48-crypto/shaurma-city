@@ -203,6 +203,8 @@
     $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>'<button class="builderChoice '+(builderState.extras.includes(String(x.id))?'active':'')+'" data-bextra="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
     $('#builderBreadBlock').classList.toggle('hidden',!(builder.breads||[]).length);
     $('#builderMeatBlock').classList.toggle('hidden',!(builder.meats||[]).length);
+    $('#builderSauces').closest('.builderBlock')?.classList.toggle('hidden',!(builder.sauces||[]).length);
+    $('#builderIngredientsBlock').classList.toggle('hidden',!(builder.extras||[]).length);
     $('#builderPrice').textContent=money(builderTotal());
     const bread=optionName(builder.breads,builderState.bread),meat=optionName(builder.meats,builderState.meat);
     $('#builderSummary').textContent=[type?.name,bread,meat].filter(Boolean).join(' · ');

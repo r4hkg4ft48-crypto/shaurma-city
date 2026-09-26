@@ -30,7 +30,8 @@ Backend:
 
 Persistence:
 - `shaurmeg_markers.realcity_profile`
-- `shaurmeg_markers.realcity_reference_images`
+- `shaurmeg_markers.realcity_astra_assets`
+- `shaurmeg_markers.realcity_astra_config`
 
 Identity/routing invariants:
 - `marker_id + establishment_id + venue_id`
@@ -68,8 +69,8 @@ The backend RealCity profile already persists:
 - roads
 - green zones
 - camera parameters
-- facade analysis
-- user reference-photo analysis
+- map/OSM procedural fallback profile
+- Astra input metadata only
 
 ## What you need to improve
 
@@ -109,11 +110,17 @@ Improve:
 - entrance forecourt;
 - other distinctive objects needed to recognize the place.
 
-## Reference material
+## Reference material — Astra only
 
-The user may provide facade photos, street photos or video.
+All facade photos, entrance photos, street panoramas, district photos and video references come **only** from Master Admin → Astra / RealCity.
 
-Use them to infer structure and appearance.
+Read them from:
+- `shaurmeg_markers.realcity_astra_assets`
+- `shaurmeg_markers.realcity_astra_config`
+
+Do not read or revive any legacy map-editor photo-reference workflow. Do not add photo upload/rebuild controls back to the map editor. Do not pass Astra images into the generic heuristic analyzer.
+
+Use Astra Studio references to infer structure and appearance, then persist the digital twin under `realcity_profile.astra`.
 
 Do NOT paste the photo as a flat texture inside the map footprint.
 
@@ -198,7 +205,8 @@ Use LOD:
 - cap objects and texture sizes;
 - lazy-create GPU resources;
 - dispose/clear them on deselection;
-- keep graceful GeoJSON/procedural fallback.
+- keep graceful GeoJSON/procedural fallback;
+- the fallback is geometry/OSM-only and must never perform photo-derived facade reconstruction.
 
 Respect `prefers-reduced-motion`.
 

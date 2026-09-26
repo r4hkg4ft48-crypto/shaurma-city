@@ -40,12 +40,12 @@ function queueRealCityProfile(markerId){
  const job=(async()=>{
   try{
    await DB.query("UPDATE shaurmeg_markers SET realcity_status='processing' WHERE id=$1",[markerId]);
-   const q=await DB.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,realcity_astra_assets,realcity_astra_config FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
+   const q=await DB.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,realcity_astra_assets,realcity_astra_config,realcity_profile FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
    const marker=q.rows[0];if(!marker)return;
    const astraRefs=astraLegacyReferences(marker.realcity_astra_assets),legacy=Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[];
    const seen=new Set();marker.realcity_reference_images=[...astraRefs,...legacy].filter(x=>{const src=String(x?.src||'');if(!src||seen.has(src))return false;seen.add(src);return true}).slice(0,8);
    const generated=await analyzeRealCityProfile(marker),readiness=astraReadiness(normalizeAstraRealCityAssets(marker.realcity_astra_assets));
-   const profile={...generated,astra_input:{version:1,establishment_id:marker.establishment_id||'',asset_count:normalizeAstraRealCityAssets(marker.realcity_astra_assets).length,readiness,config:normalizeAstraRealCityConfig(marker.realcity_astra_config)}};
+   const profile={...generated,...(marker.realcity_profile?.astra?{astra:marker.realcity_profile.astra}:{}),astra_input:{version:1,establishment_id:marker.establishment_id||'',asset_count:normalizeAstraRealCityAssets(marker.realcity_astra_assets).length,readiness,config:normalizeAstraRealCityConfig(marker.realcity_astra_config)}};
    await DB.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[markerId,JSON.stringify(profile),profile.quality||'heuristic']);
    console.log('RealCity profile ready:',markerId,profile.quality);
   }catch(e){
@@ -1257,7 +1257,7 @@ function normalizeAstraRealCityAssets(value){
    label:String(item.label||'').trim().slice(0,180),
    notes:String(item.notes||'').trim().slice(0,900),
    angle:angles.has(String(item.angle||''))?String(item.angle):'unknown',
-   direction_deg:Number.isFinite(Number(item.direction_deg))?Math.max(0,Math.min(359,Number(item.direction_deg))):null,
+   direction_deg:(item.direction_deg===null||item.direction_deg===''||item.direction_deg===undefined)?null:(Number.isFinite(Number(item.direction_deg))?Math.max(0,Math.min(359,Number(item.direction_deg))):null),
    priority:Math.max(1,Math.min(5,Number(item.priority)||3)),
    primary:item.primary===true,
    created_at:String(item.created_at||new Date().toISOString()).slice(0,40)
@@ -1305,8 +1305,8 @@ function astraManifest(row){
   },
   config,readiness,
   references:{
-   main_building:assets.filter(x=>x.category==='main_building'),
-   panorama:assets.filter(x=>x.category==='panorama')
+   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
   },
   requested_output:{
    hero_building:'accurate facade, entrance, signage, windows, balconies, roof and storefront mapped to the correct footprint',

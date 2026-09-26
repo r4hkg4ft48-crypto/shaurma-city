@@ -10,6 +10,22 @@
 :root{--bg:#070b12;--panel:#0d141f;--panel2:#121c29;--line:rgba(255,255,255,.075);--text:#f4f7fb;--muted:#8290a3;--blue:#6f8dff;--cyan:#59c7dc;--green:#6bd8a3;--amber:#f1bb68;--red:#ff7e8d;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;color:var(--text);font:500 14px/1.45 -apple-system,BlinkMacSystemFont,"Inter","SF Pro Display",sans-serif;background:radial-gradient(circle at 82% -4%,rgba(89,199,220,.12),transparent 28%),radial-gradient(circle at 9% 0,rgba(111,141,255,.16),transparent 30%),var(--bg)}
 button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin:auto;padding:var(--safe-t) 13px calc(var(--safe-b) + 30px)}.top{position:sticky;top:8px;z-index:20;display:flex;gap:10px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:20px;background:rgba(10,16,25,.88);backdrop-filter:blur(18px)}.backBtn{width:38px;height:38px;min-height:38px;padding:0;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.05);color:#e9efff;font-size:20px;font-weight:900;display:grid;place-items:center}.backBtn[hidden]{display:none!important}.mark{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#8aa0ff,#4765dc);color:#07101c;font-weight:1000}.brand{min-width:0}.brand b{display:block;font-size:15px;letter-spacing:.02em}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:.13em}.grow{flex:1}.status{display:flex;gap:6px;align-items:center;color:#a8f0ce;font-size:10px}.status i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.hero{padding:28px 4px 17px}.eyebrow{color:#879dff;font-size:9px;font-weight:900;letter-spacing:.16em}.hero h1{font-size:38px;line-height:.92;letter-spacing:-.055em;margin:7px 0 10px}.hero p{margin:0;color:var(--muted);max-width:54ch}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 14px}.stat{padding:13px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(18,28,41,.9),rgba(11,17,26,.92))}.stat small{display:block;color:var(--muted);font-size:9px}.stat b{display:block;font-size:23px;margin-top:5px}.sectionTitle{display:flex;align-items:end;justify-content:space-between;gap:10px;margin:22px 2px 10px}.sectionTitle h2{margin:0;font-size:22px;letter-spacing:-.035em}.sectionTitle small{color:var(--muted)}.modules{display:grid;grid-template-columns:1fr 1fr;gap:9px}.module{min-height:118px;text-align:left;padding:15px;border-radius:21px;border:1px solid var(--line);background:linear-gradient(155deg,#121c29,#0c131d);position:relative;overflow:hidden}.module:before{content:"";position:absolute;width:110px;height:110px;border-radius:50%;right:-42px;top:-52px;background:var(--glow,rgba(111,141,255,.13));filter:blur(3px)}.module span{display:grid;place-items:center;width:35px;height:35px;border-radius:12px;background:rgba(255,255,255,.055);font-size:18px}.module b{display:block;margin-top:15px;font-size:17px}.module small{display:block;margin-top:3px;color:var(--muted);font-size:10px;max-width:29ch}.module.wide{grid-column:1/-1;min-height:100px}.panel{border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,rgba(18,28,41,.94),rgba(10,16,24,.96));padding:14px}.field{display:grid;gap:5px;margin-bottom:9px}.field label{color:var(--muted);font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}select,input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:13px;background:#0a121d;padding:0 11px;outline:none}.actions{display:flex;gap:7px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:13px;min-height:42px;padding:0 13px;background:rgba(255,255,255,.045);font-weight:850}.btn.primary{border:0;background:linear-gradient(135deg,#708cff,#4562d8);color:#fff}.btn.danger{color:#ff9eaa;background:rgba(255,126,141,.08);border-color:rgba(255,126,141,.16)}.code{margin-top:10px;padding:12px;border-radius:15px;background:#080e17;border:1px dashed rgba(111,141,255,.28);font:800 13px/1.5 ui-monospace,SFMono-Regular,monospace;word-break:break-all}.list{display:grid;gap:7px;margin-top:10px}.row{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02)}.row>div{min-width:0;flex:1}.row b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.pill{padding:5px 7px;border-radius:999px;background:rgba(107,216,163,.08);color:#9ce6c4;font-size:9px}.botDot{width:9px;height:9px;border-radius:50%;background:#526072}.botDot.ok{background:var(--green);box-shadow:0 0 10px rgba(107,216,163,.45)}.botDot.bad{background:var(--red)}.tabs{display:flex;gap:5px;overflow:auto;padding:4px;margin:5px 0 12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.018);scrollbar-width:none}.tabs button{border:0;white-space:nowrap;min-height:38px;padding:0 12px;border-radius:11px;background:transparent;color:var(--muted);font-weight:800}.tabs button.active{background:#e8edff;color:#101727}.pane{display:none}.pane.active{display:block}.empty{padding:20px;text-align:center;color:var(--muted)}.login{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at 50% 0,rgba(111,141,255,.18),transparent 35%),#070b12}.loginCard{width:min(410px,100%);padding:20px;border:1px solid var(--line);border-radius:24px;background:#0d1520}.loginCard h2{font-size:28px;margin:5px 0}.loginCard p{color:var(--muted)}.loginCard button{width:100%;margin-top:8px}.err{min-height:18px;color:#ff9ba7;font-size:11px;margin-top:8px}.toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 10px);z-index:120;transform:translate(-50%,15px);opacity:0;pointer-events:none;transition:.2s;padding:9px 12px;border-radius:12px;background:#111b28;border:1px solid var(--line)}.toast.show{opacity:1;transform:translate(-50%,0)}
+.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
+.astraIntro{padding:15px;border:1px solid rgba(89,199,220,.14);border-radius:20px;background:radial-gradient(circle at 100% 0,rgba(89,199,220,.09),transparent 40%),linear-gradient(155deg,#111b28,#0a111a)}
+.astraIntro b{display:block;font-size:18px}.astraIntro p{margin:5px 0 0;color:var(--muted);font-size:10px}
+.astraSelector{padding:12px;border:1px solid var(--line);border-radius:18px;background:#0c141f}.astraSelector .field{margin:0}.astraStatusRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.astraBadge{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);border-radius:999px;color:#a7b4c5;background:rgba(255,255,255,.025);font-size:9px}.astraBadge.good{color:#9ce6c4;border-color:rgba(107,216,163,.18);background:rgba(107,216,163,.06)}
+.astraConfig{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.astraConfig .field{margin:0}.astraConfig .wide{grid-column:1/-1}.astraConfig textarea{min-height:88px;width:100%;border:1px solid var(--line);border-radius:13px;background:#0a121d;color:var(--text);padding:10px;resize:vertical}
+.astraToggleRow{display:flex;gap:7px;flex-wrap:wrap;grid-column:1/-1}.astraToggle{display:flex;align-items:center;gap:7px;min-height:40px;padding:7px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025);color:#b8c5d4;font-size:10px}.astraToggle input{width:18px;height:18px;min-height:0;margin:0}
+.astraDataset{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.astraDatasetBlock{min-width:0;padding:13px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(180deg,rgba(18,28,41,.9),rgba(10,16,24,.94))}
+.astraDatasetHead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.astraDatasetHead b{display:block;font-size:16px}.astraDatasetHead small{display:block;margin-top:3px;color:var(--muted);font-size:9px;max-width:40ch}
+.astraUpload{position:relative;display:grid;place-items:center;min-height:104px;margin-top:10px;border:1px dashed rgba(111,141,255,.25);border-radius:16px;background:rgba(111,141,255,.035);text-align:center;color:#a7b6ca;overflow:hidden}.astraUpload strong{display:block;font-size:22px;color:#dce6ff}.astraUpload small{display:block;font-size:9px;margin-top:3px}.astraUpload input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.astraUrlRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:7px}.astraUrlRow input{min-width:0}.astraAssetList{display:grid;gap:8px;margin-top:10px}.astraAssetCard{display:grid;grid-template-columns:105px minmax(0,1fr);gap:9px;padding:8px;border:1px solid var(--line);border-radius:15px;background:#09111a}
+.astraThumb{position:relative;min-height:112px;border-radius:11px;overflow:hidden;background:#101925}.astraThumb img{width:100%;height:100%;min-height:112px;object-fit:cover;display:block}.astraThumb .external{height:100%;display:grid;place-items:center;padding:10px;text-align:center;color:#92a1b5;font-size:9px}.astraAssetFields{min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}.astraAssetFields .full{grid-column:1/-1}.astraAssetFields input,.astraAssetFields select,.astraAssetFields textarea{min-width:0;width:100%;min-height:36px;border:1px solid var(--line);border-radius:10px;background:#0b151f;color:var(--text);padding:6px 8px;font-size:9px}.astraAssetFields textarea{min-height:54px;resize:vertical}.astraAssetTools{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:7px}.astraPrimary{display:flex;align-items:center;gap:6px;color:#aebccd;font-size:9px}.astraPrimary input{width:16px;height:16px;min-height:0}.astraRemove{min-height:32px;padding:0 9px;border:1px solid rgba(255,126,141,.16);border-radius:9px;background:rgba(255,126,141,.07);color:#ff9eaa;font-size:9px}
+.astraReadiness{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;margin-top:10px;padding:13px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,#0e1823,#0a1119)}.astraScore{display:grid;place-items:center;width:108px;height:108px;border-radius:50%;border:8px solid rgba(111,141,255,.12);background:#0a121c}.astraScore b{font-size:28px}.astraScore small{color:var(--muted);font-size:8px}.astraChecks{display:grid;gap:5px}.astraCheck{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px}.astraCheck:last-child{border-bottom:0}.astraCheck span{color:var(--muted)}
+.astraActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.astraManifest{margin-top:10px;max-height:200px;overflow:auto;white-space:pre-wrap;font:700 9px/1.45 ui-monospace,SFMono-Regular,monospace}
+@media(max-width:720px){.astraHead,.astraDataset{grid-template-columns:1fr}.astraConfig{grid-template-columns:1fr 1fr}.astraAssetCard{grid-template-columns:90px minmax(0,1fr)}}
+@media(max-width:520px){.astraConfig{grid-template-columns:1fr}.astraConfig .wide{grid-column:1}.astraDataset{grid-template-columns:1fr}.astraAssetCard{grid-template-columns:1fr}.astraThumb{min-height:180px}.astraThumb img{height:180px}.astraReadiness{grid-template-columns:1fr}.astraScore{margin:auto}}
 @media(max-width:620px){.stats{grid-template-columns:1fr 1fr}.hero h1{font-size:34px}.modules{grid-template-columns:1fr 1fr}.module{min-height:126px;padding:13px}.module b{font-size:15px}.module small{font-size:9.5px}}
 </style>
 </head>
@@ -19,7 +35,7 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
   <section class="hero"><span class="eyebrow">MASTER ADMIN · FULL ACCESS</span><h1>Одна админка.<br>Вся система.</h1><p>Единая оболочка над рабочими административными модулями Shaurmeg. Функции внутри разделов используют существующую серверную логику.</p></section>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
 
-  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
+  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
 
   <section class="pane active" id="overviewPane">
     <div class="sectionTitle"><h2>Управление</h2><small>исходные модули</small></div>
@@ -27,12 +43,75 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
       <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span>🧾</span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
       <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span>🍽</span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
       <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span>🗺</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
-      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(241,187,104,.14)"><span>🏙</span><b>RealCity</b><small>Фасады, референсы, анализ и пересборка.</small></button>
+      <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span>✦</span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
       <button class="module" data-tab-open="access"><span>🔑</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
       <button class="module" data-tab-open="sites"><span>🎛</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
       <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span>👤</span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
       <button class="module wide" data-tab-open="bots"><span>🤖</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
     </div>
+  </section>
+
+  <section class="pane" id="astraPane">
+    <div class="sectionTitle"><h2>Astra / RealCity</h2><small>digital twin dataset · per establishment</small></div>
+
+    <div class="astraHead">
+      <div class="astraIntro">
+        <span class="eyebrow">ASTRA DIGITAL TWIN · EXACT WORLD COPY</span>
+        <b>Материалы реального мира конкретной точки</b>
+        <p>Этот раздел не меняет обычные фото меню. Здесь хранится отдельный пакет, по которому Astra должна восстановить реальный фасад, вход и окружающий район поверх существующей геометрии карты.</p>
+        <div class="astraStatusRow"><span class="astraBadge" id="astraEstBadge">SC-MSK-…</span><span class="astraBadge" id="astraMarkerBadge">marker —</span><span class="astraBadge" id="astraReadyBadge">сбор материалов</span></div>
+      </div>
+      <div class="astraSelector">
+        <div class="field"><label>Заведение</label><select id="astraVenue"></select></div>
+        <div class="field" id="astraMarkerField" hidden><label>Конкретная точка / marker</label><select id="astraMarker"></select></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="sectionTitle" style="margin-top:0"><h2 style="font-size:18px">Задание Astra</h2><small>как строить эту цифровую копию</small></div>
+      <div class="astraConfig">
+        <div class="field"><label>Радиус реконструкции, м</label><input id="astraRadius" type="number" min="60" max="350" step="10" value="190"></div>
+        <div class="field"><label>Статус пакета</label><select id="astraStatus"><option value="collecting">Собираем материалы</option><option value="ready_for_astra">Готово для Astra</option><option value="processing">Astra обрабатывает</option><option value="review">На проверке</option><option value="approved">Утверждено</option></select></div>
+        <div class="field"><label>Режим</label><input value="Digital Twin · maximum accuracy" readonly></div>
+        <div class="astraToggleRow">
+          <label class="astraToggle"><input id="astraMainEnabled" type="checkbox" checked> Главное здание</label>
+          <label class="astraToggle"><input id="astraPanoramaEnabled" type="checkbox" checked> Панорама района</label>
+          <label class="astraToggle"><input id="astraStreetObjects" type="checkbox" checked> Уличные объекты</label>
+          <label class="astraToggle"><input id="astraVegetation" type="checkbox" checked> Растительность</label>
+          <label class="astraToggle"><input id="astraSignage" type="checkbox" checked> Вывески</label>
+        </div>
+        <div class="field wide"><label>Комментарии к месту</label><textarea id="astraNotes" placeholder="Что особенно важно сохранить: цвета, этажность, вывеска, парковка, забор, вход со двора…"></textarea></div>
+        <div class="field wide"><label>Дополнительная инструкция Astra</label><textarea id="astraInstruction" placeholder="Дополнительные требования именно для этой точки. Базовый spatial contract уже зафиксирован системой."></textarea></div>
+      </div>
+    </div>
+
+    <div class="astraDataset">
+      <section class="astraDatasetBlock">
+        <div class="astraDatasetHead"><div><b>1 · Главное здание и вход</b><small>Точная цифровая копия фасада заведения: вход, вывеска, двери, окна, отделка, боковые стены и архитектурные детали.</small></div><span class="astraBadge" id="astraMainCount">0 фото</span></div>
+        <label class="astraUpload"><div><strong>＋</strong><b>Добавить фото здания</b><small>несколько ракурсов · фото автоматически сожмутся</small></div><input id="astraMainFiles" type="file" accept="image/*" multiple></label>
+        <div class="astraUrlRow"><input id="astraMainUrl" placeholder="https://… ссылка на большой файл / видео / панораму"><button class="btn" id="addAstraMainUrl" type="button">Добавить ссылку</button></div>
+        <div class="astraAssetList" id="astraMainList"></div>
+      </section>
+
+      <section class="astraDatasetBlock">
+        <div class="astraDatasetHead"><div><b>2 · Панорама вокруг</b><small>Окружающий район: соседние здания, улица, тротуары, парковка, деревья, заборы, перекрёстки и общий вид места.</small></div><span class="astraBadge" id="astraPanoCount">0 фото</span></div>
+        <label class="astraUpload"><div><strong>＋</strong><b>Добавить панораму / фото района</b><small>слева · справа · напротив · вдоль улицы · общий вид</small></div><input id="astraPanoFiles" type="file" accept="image/*" multiple></label>
+        <div class="astraUrlRow"><input id="astraPanoUrl" placeholder="https://… ссылка на большой файл / видео / панораму"><button class="btn" id="addAstraPanoUrl" type="button">Добавить ссылку</button></div>
+        <div class="astraAssetList" id="astraPanoList"></div>
+      </section>
+    </div>
+
+    <div class="astraReadiness">
+      <div class="astraScore"><div><b id="astraScore">0%</b><small>ПОКРЫТИЕ</small></div></div>
+      <div class="astraChecks" id="astraChecks"></div>
+    </div>
+
+    <div class="astraActions">
+      <button class="btn primary" id="saveAstra" type="button">Сохранить пакет Astra</button>
+      <button class="btn" id="rebuildAstra" type="button">Перестроить текущий RealCity</button>
+      <button class="btn" id="copyAstraManifest" type="button">Скопировать Astra manifest</button>
+    </div>
+    <pre class="code astraManifest" id="astraManifest">Выберите заведение — здесь появится готовое техническое задание.</pre>
   </section>
 
   <section class="pane" id="accessPane">
@@ -82,7 +161,7 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
 <script>
 const API=location.origin,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const launch=new URL(location.href),requestedTab=launch.searchParams.get('tab')||'overview';
-let adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',ownerToken=sessionStorage.getItem('sc_owner_token')||'',venues=[];
+let adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',ownerToken=sessionStorage.getItem('sc_owner_token')||'',venues=[],astraState=null,astraAssets=[];
 const labels={master_admin:'Master Admin',legacy_admin:'Legacy Admin',access_keys:'Access Keys',venue_owner:'Venue Owner',kitchen:'Kitchen / Orders',aggregator:'Aggregator / Map',order_bot:'Order Bot'};
 function toast(v){const e=$('#toast');e.textContent=v;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),1600)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -105,13 +184,14 @@ function masterBack(){
  try{window.Telegram?.WebApp?.close?.()}catch{}
 }
 function activate(name){
- if(!['overview','access','owners','sites','bots'].includes(name))name='overview';
+ if(!['overview','astra','access','owners','sites','bots'].includes(name))name='overview';
  $$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
  $$('.pane').forEach(x=>x.classList.toggle('active',x.id===name+'Pane'));
  try{const u=new URL(location.href);u.searchParams.set('tab',name);history.replaceState(null,'',u)}catch{}
  syncMasterBack(name);
  if(name==='bots')loadBots();
  if(name==='owners')loadOwnerAdmins();
+ if(name==='astra')loadAstraStudio();
 }
 async function telegramLogin(){
  const tg=window.Telegram?.WebApp;
@@ -133,7 +213,7 @@ async function loadCore(){
  $('#stVenues').textContent=venues.filter(x=>x.is_active!==false).length;
  $('#stToday').textContent=Number(stats.today||0);$('#stNew').textContent=Number(stats.new||0);$('#stRevenue').textContent=Number(stats.revenue||0).toLocaleString('ru-RU')+' ₽';
  const options=venues.filter(x=>x.establishment_id).map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+' · '+esc(x.establishment_id)+'</option>').join('');
- $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;$('#ownerVenue').innerHTML=options;
+ $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;$('#ownerVenue').innerHTML=options;$('#astraVenue').innerHTML=options;
  renderVenueList();updateSiteSelector()
 }
 function renderVenueList(){
@@ -153,6 +233,116 @@ async function loadOwnerAdmins(){
   $('#ownerAdminList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>@Shefofbotsbot · Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'подключён':'отключён')+'</span></div>').join(''):'<div class="empty">К этой точке ещё не подключён владелец через @Shefofbotsbot</div>'
  }catch{$('#ownerAdminList').innerHTML='<div class="empty">Не удалось загрузить владельцев</div>'}
 }
+async function compressAstraImage(file,maxW=1600,maxH=1200,q=.74){
+ return new Promise((resolve,reject)=>{
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=()=>{const k=Math.min(1,maxW/img.width,maxH/img.height),w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',q))};
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image_read_failed'))};img.src=url;
+ });
+}
+function astraSubtypeOptions(category,current){
+ const rows=category==='main_building'
+  ?[['main_facade','Главный фасад'],['entrance','Вход в заведение'],['signage','Вывеска'],['left_facade','Левая сторона'],['right_facade','Правая сторона'],['rear_facade','Задняя сторона'],['detail','Архитектурная деталь']]
+  :[['front_panorama','Панорама перед входом'],['street_left','Улица слева'],['street_right','Улица справа'],['opposite','Напротив'],['intersection','Перекрёсток'],['courtyard','Двор'],['district','Общий район'],['detail','Деталь окружения']];
+ return rows.map(x=>'<option value="'+x[0]+'" '+(x[0]===current?'selected':'')+'>'+x[1]+'</option>').join('');
+}
+function astraAngleOptions(current){
+ return [['unknown','Не указан'],['front','Спереди'],['left','Слева'],['right','Справа'],['rear','Сзади'],['panorama','Панорама'],['detail','Крупная деталь'],['up','Снизу вверх'],['down','Сверху вниз']].map(x=>'<option value="'+x[0]+'" '+(x[0]===current?'selected':'')+'>'+x[1]+'</option>').join('');
+}
+function astraAssetCard(x){
+ const isImage=String(x.src||'').startsWith('data:image/');
+ return '<article class="astraAssetCard" data-astra-id="'+esc(x.id)+'">'+
+  '<div class="astraThumb">'+(isImage?'<img src="'+esc(x.src)+'" alt="">':'<div class="external">ВНЕШНИЙ ФАЙЛ<br>'+esc(String(x.src||'').replace(/^https?:\/\//,'').slice(0,48))+'</div>')+'</div>'+
+  '<div class="astraAssetFields">'+
+   '<select data-astra-field="subtype">'+astraSubtypeOptions(x.category,x.subtype)+'</select>'+
+   '<select data-astra-field="angle">'+astraAngleOptions(x.angle)+'</select>'+
+   '<input class="full" data-astra-field="label" value="'+esc(x.label||'')+'" placeholder="Подпись: главный вход, дом напротив…">'+
+   '<select data-astra-field="priority"><option value="5" '+(Number(x.priority)===5?'selected':'')+'>Приоритет 5 · критично</option><option value="4" '+(Number(x.priority)===4?'selected':'')+'>Приоритет 4</option><option value="3" '+(Number(x.priority)===3?'selected':'')+'>Приоритет 3</option><option value="2" '+(Number(x.priority)===2?'selected':'')+'>Приоритет 2</option><option value="1" '+(Number(x.priority)===1?'selected':'')+'>Приоритет 1</option></select>'+
+   '<input data-astra-field="direction_deg" type="number" min="0" max="359" value="'+(x.direction_deg??'')+'" placeholder="Направление °">'+
+   '<textarea class="full" data-astra-field="notes" placeholder="Что Astra должна увидеть именно на этом кадре">'+esc(x.notes||'')+'</textarea>'+
+   '<div class="astraAssetTools"><label class="astraPrimary"><input type="checkbox" data-astra-primary '+(x.primary?'checked':'')+'> Главное фото в группе</label><button class="astraRemove" type="button" data-astra-remove>Удалить</button></div>'+
+  '</div></article>';
+}
+function renderAstraAssets(){
+ const main=astraAssets.filter(x=>x.category==='main_building'),pano=astraAssets.filter(x=>x.category==='panorama');
+ $('#astraMainList').innerHTML=main.length?main.map(astraAssetCard).join(''):'<div class="empty">Пока нет материалов главного здания.</div>';
+ $('#astraPanoList').innerHTML=pano.length?pano.map(astraAssetCard).join(''):'<div class="empty">Пока нет панорамных материалов.</div>';
+ $('#astraMainCount').textContent=main.length+' материал'+(main.length===1?'':main.length<5?'а':'ов');
+ $('#astraPanoCount').textContent=pano.length+' материал'+(pano.length===1?'':pano.length<5?'а':'ов');
+}
+function readAstraConfig(){
+ return {
+  version:1,mode:'digital_twin_exact',status:$('#astraStatus').value,accuracy:'maximum',preserve_map_geometry:true,
+  radius_m:Number($('#astraRadius').value)||190,main_building_enabled:$('#astraMainEnabled').checked,panorama_enabled:$('#astraPanoramaEnabled').checked,
+  include_street_objects:$('#astraStreetObjects').checked,include_vegetation:$('#astraVegetation').checked,include_signage:$('#astraSignage').checked,
+  notes:$('#astraNotes').value,astra_instruction:$('#astraInstruction').value
+ };
+}
+function applyAstraState(j){
+ astraState=j;astraAssets=Array.isArray(j.assets)?j.assets.map(x=>({...x})):[];
+ $('#astraEstBadge').textContent=j.establishment_id||'SC-MSK-…';$('#astraMarkerBadge').textContent='marker '+(j.marker_id||'—');
+ const cfg=j.config||{};$('#astraRadius').value=Number(cfg.radius_m)||190;$('#astraStatus').value=cfg.status||'collecting';$('#astraMainEnabled').checked=cfg.main_building_enabled!==false;$('#astraPanoramaEnabled').checked=cfg.panorama_enabled!==false;$('#astraStreetObjects').checked=cfg.include_street_objects!==false;$('#astraVegetation').checked=cfg.include_vegetation!==false;$('#astraSignage').checked=cfg.include_signage!==false;$('#astraNotes').value=cfg.notes||'';$('#astraInstruction').value=cfg.astra_instruction||'';
+ const markers=Array.isArray(j.markers)?j.markers:[];$('#astraMarkerField').hidden=markers.length<2;$('#astraMarker').innerHTML=markers.map(x=>'<option value="'+esc(x.marker_id)+'" '+(String(x.marker_id)===String(j.marker_id)?'selected':'')+'>'+esc(x.name)+' · marker '+esc(x.marker_id)+'</option>').join('');
+ renderAstraAssets();renderAstraReadiness(j.readiness||{});$('#astraManifest').textContent=JSON.stringify(j.manifest||{},null,2);
+}
+function renderAstraReadiness(r){
+ const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.ready?'готово для Astra':'сбор материалов';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
+ const checks=[
+  ['Главное здание',Number(r.main_count||0)+' материала',Number(r.main_count||0)>=2],
+  ['Главный фасад',r.has_main_facade?'есть':'нужно добавить',!!r.has_main_facade],
+  ['Вход в заведение',r.has_entrance?'есть':'желательно добавить',!!r.has_entrance],
+  ['Панорама района',Number(r.panorama_count||0)+' материала',Number(r.panorama_count||0)>=3],
+  ['Разные направления',Number(r.panorama_coverage||0)+' типа',Number(r.panorama_coverage||0)>=3]
+ ];
+ $('#astraChecks').innerHTML=checks.map(x=>'<div class="astraCheck"><b>'+x[0]+'</b><span style="color:'+(x[2]?'#9ce6c4':'#8290a3')+'">'+x[1]+'</span></div>').join('');
+}
+async function loadAstraStudio(){
+ const est=$('#astraVenue').value;if(!est)return;
+ try{
+  const marker=$('#astraMarker').value,qs=marker?'?marker_id='+encodeURIComponent(marker):'';
+  const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est)+qs);applyAstraState(j);
+ }catch(e){$('#astraManifest').textContent='Не удалось загрузить Astra-пакет: '+(e.body?.error||e.message)}
+}
+async function addAstraImages(category,files){
+ const left=Math.max(0,24-astraAssets.length),arr=[...files].slice(0,left);if(!arr.length)return toast('Лимит: 24 материала на точку');
+ for(const file of arr){
+  try{
+   toast('Обрабатываю фото…');const src=await compressAstraImage(file);
+   const subtype=category==='main_building'?(astraAssets.some(x=>x.category==='main_building')?'detail':'main_facade'):'district';
+   astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype,role:category==='main_building'?'hero_facade':'environment',src,kind:'image',filename:file.name||'',label:'',notes:'',angle:category==='panorama'?'panorama':'unknown',direction_deg:null,priority:3,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});
+  }catch{toast('Не удалось обработать одно из фото')}
+ }
+ renderAstraAssets();
+}
+function addAstraUrl(category){
+ const input=$(category==='main_building'?'#astraMainUrl':'#astraPanoUrl'),url=input.value.trim();
+ if(!/^https:\/\//i.test(url))return toast('Нужна https-ссылка');
+ if(astraAssets.length>=24)return toast('Лимит: 24 материала на точку');
+ astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype:category==='main_building'?'detail':'district',role:category==='main_building'?'hero_facade':'environment',src:url,kind:'external_file',filename:'',label:'',notes:'',angle:'unknown',direction_deg:null,priority:3,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});input.value='';renderAstraAssets();
+}
+function updateAstraAsset(target){
+ const card=target.closest('[data-astra-id]');if(!card)return;const x=astraAssets.find(v=>v.id===card.dataset.astraId);if(!x)return;
+ const field=target.dataset.astraField;
+ if(field)x[field]=field==='priority'?Number(target.value):field==='direction_deg'?(target.value===''?null:Number(target.value)):target.value;
+ if(target.matches('[data-astra-primary]')&&target.checked){astraAssets.forEach(v=>{if(v.category===x.category)v.primary=v.id===x.id});renderAstraAssets()}
+ else if(target.matches('[data-astra-primary]'))x.primary=false;
+}
+async function saveAstraStudio(){
+ const est=$('#astraVenue').value;if(!est||!astraState)return;const b=$('#saveAstra');b.disabled=true;
+ try{
+  const body={marker_id:astraState.marker_id,config:readAstraConfig(),assets:astraAssets};
+  const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est),{method:'PUT',body:JSON.stringify(body)});
+  astraState={...astraState,...j,markers:astraState.markers};applyAstraState(astraState);toast('Astra-пакет сохранён ✓');
+ }catch(e){toast('Не удалось сохранить Astra-пакет')}finally{b.disabled=false}
+}
+async function rebuildAstra(){
+ const est=$('#astraVenue').value;if(!est||!astraState)return;const b=$('#rebuildAstra');b.disabled=true;
+ try{await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est)+'/rebuild',{method:'POST',body:JSON.stringify({marker_id:astraState.marker_id})});toast('RealCity отправлен на перестроение')}catch{toast('Не удалось запустить перестроение')}finally{b.disabled=false}
+}
+async function copyAstraManifest(){
+ const value=$('#astraManifest').textContent||'';try{await navigator.clipboard.writeText(value);toast('Astra manifest скопирован')}catch{prompt('Astra manifest',value)}
+}
+
 async function createKey(){
  const est=$('#accessVenue').value;if(!est)return toast('Выберите заведение');
  const b=$('#createKey');b.disabled=true;
@@ -193,6 +383,15 @@ document.addEventListener('click',e=>{
  const ownerApp=e.target.closest('[data-owner-app-tab]');if(ownerApp){openOwnerApp(ownerApp.dataset.ownerAppTab);return}
  const rev=e.target.closest('[data-revoke]');if(rev)revoke(rev.dataset.revoke)
 });
+$('#astraVenue').onchange=()=>{astraState=null;$('#astraMarker').innerHTML='';loadAstraStudio()};
+$('#astraMarker').onchange=loadAstraStudio;
+$('#astraMainFiles').onchange=async e=>{await addAstraImages('main_building',e.target.files);e.target.value=''};
+$('#astraPanoFiles').onchange=async e=>{await addAstraImages('panorama',e.target.files);e.target.value=''};
+$('#addAstraMainUrl').onclick=()=>addAstraUrl('main_building');$('#addAstraPanoUrl').onclick=()=>addAstraUrl('panorama');
+$('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
+$('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
+$('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});
+$('#saveAstra').onclick=saveAstraStudio;$('#rebuildAstra').onclick=rebuildAstra;$('#copyAstraManifest').onclick=copyAstraManifest;
 $('#ownerVenue').onchange=loadOwnerAdmins;
 $('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{

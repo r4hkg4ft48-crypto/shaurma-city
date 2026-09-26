@@ -140,3 +140,40 @@ Current frontend sources:
 Current RealCity profile version persists roads and green zones in addition to buildings and trees.
 
 For a copy/paste implementation brief, use `ASTRA_REALCITY_PROMPT.md`.
+
+
+## Astra Studio input package
+
+Master Admin now has a dedicated **Astra / RealCity** studio scoped to one establishment and one concrete marker.
+
+Persistent input columns on `shaurmeg_markers`:
+- `realcity_astra_assets` — full reference dataset for Astra, independent of the legacy RealCity photo editor.
+- `realcity_astra_config` — per-location digital-twin instructions and workflow status.
+
+The dataset is intentionally divided into two primary groups:
+
+1. `main_building`
+   - main facade
+   - entrance
+   - signage
+   - left/right/rear facade
+   - architectural details
+
+2. `panorama`
+   - panorama in front of the venue
+   - street left/right
+   - opposite side
+   - intersection
+   - courtyard
+   - district/environment details
+
+Each reference can carry subtype, angle, compass direction, priority, primary flag, label, notes and either an uploaded image or an HTTPS external-file URL.
+
+Master-admin API:
+- `GET /api/shaurma/admin/astra-realcity/:establishmentId?marker_id=...`
+- `PUT /api/shaurma/admin/astra-realcity/:establishmentId`
+- `POST /api/shaurma/admin/astra-realcity/:establishmentId/rebuild`
+
+The GET response includes a compiled `manifest` with the spatial contract, marker coordinates, current hero building footprint when available, grouped references, readiness score and requested output. This manifest is the preferred handoff object for Astra.
+
+Astra assets do not get destroyed by the legacy map-reference editor. During the current heuristic RealCity rebuild, the best Astra building and panorama images are also injected as high-priority compatible references. Future Astra output should be persisted under `realcity_profile.astra`; input metadata remains separately durable in the Astra columns.

@@ -40,9 +40,12 @@ function queueRealCityProfile(markerId){
  const job=(async()=>{
   try{
    await DB.query("UPDATE shaurmeg_markers SET realcity_status='processing' WHERE id=$1",[markerId]);
-   const q=await DB.query("SELECT id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
+   const q=await DB.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,realcity_astra_assets,realcity_astra_config,realcity_profile FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
    const marker=q.rows[0];if(!marker)return;
-   const profile=await analyzeRealCityProfile(marker);
+   const astraRefs=astraLegacyReferences(marker.realcity_astra_assets),legacy=Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[];
+   const seen=new Set();marker.realcity_reference_images=[...astraRefs,...legacy].filter(x=>{const src=String(x?.src||'');if(!src||seen.has(src))return false;seen.add(src);return true}).slice(0,8);
+   const generated=await analyzeRealCityProfile(marker),readiness=astraReadiness(normalizeAstraRealCityAssets(marker.realcity_astra_assets));
+   const profile={...generated,...(marker.realcity_profile?.astra?{astra:marker.realcity_profile.astra}:{}),astra_input:{version:1,establishment_id:marker.establishment_id||'',asset_count:normalizeAstraRealCityAssets(marker.realcity_astra_assets).length,readiness,config:normalizeAstraRealCityConfig(marker.realcity_astra_config)}};
    await DB.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[markerId,JSON.stringify(profile),profile.quality||'heuristic']);
    console.log('RealCity profile ready:',markerId,profile.quality);
   }catch(e){
@@ -195,6 +198,8 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_poster TEXT NOT NULL DEFAULT ''");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_config JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_reference_images JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_assets JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_config JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_profile JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_status TEXT NOT NULL DEFAULT 'pending'");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_quality TEXT NOT NULL DEFAULT 'heuristic'");
@@ -999,7 +1004,8 @@ function masterAdminUrl(tab='overview'){
 function masterModuleUrl(module){
  if(module==='orders')return PUBLIC_API_URL+'/shaurma-owner?section=orders&from=master&v=5';
  if(module==='menu')return PUBLIC_API_URL+'/shaurma-owner?section=menu&from=master&v=5';
- if(module==='map'||module==='realcity'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
+ if(module==='realcity')return masterAdminUrl('astra');
+ if(module==='map'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
  if(module==='owners')return masterAdminUrl('owners');
  if(module==='sites')return masterAdminUrl('sites');
  if(module==='bots')return masterAdminUrl('bots');
@@ -1069,7 +1075,8 @@ async function handleMasterAdminUpdate(update){
  if(/^\/(?:keys|access)(?:@[A-Za-z0-9_]+)?$/i.test(text))return adminVenueKeyPage(chatId,0,null,api);
  if(/^\/id(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'Ваш Telegram ID: '+String(user.id)});
  if(/^\/venues(?:@[A-Za-z0-9_]+)?$/i.test(text))return masterAdminVenues(chatId,api);
- if(/^\/(?:map|add|realcity)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🗺 Редактор карты, точек и RealCity.',reply_markup:{inline_keyboard:[[{text:'Открыть редактор',web_app:{url:masterModuleUrl('map')}}]]}});
+ if(/^\/(?:map|add)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🗺 Редактор карты и точек.',reply_markup:{inline_keyboard:[[{text:'Открыть редактор',web_app:{url:masterModuleUrl('map')}}]]}});
+ if(/^\/realcity(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'✦ Astra / RealCity · материалы для точного цифрового двойника конкретного заведения.',reply_markup:{inline_keyboard:[[{text:'Открыть Astra Studio',web_app:{url:masterModuleUrl('realcity')}}]]}});
  if(/^\/menu(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🍽 Управление меню всех заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:masterModuleUrl('menu')}}]]}});
  if(/^\/orders(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🧾 Заказы Shaurmeg в реальном времени.',reply_markup:{inline_keyboard:[[{text:'Открыть заказы',web_app:{url:masterModuleUrl('orders')}}]]}});
  if(/^\/owners(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'👥 Доступы владельцев и заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть владельцев',web_app:{url:masterModuleUrl('owners')}}],[{text:'Создать ключ',callback_data:'akp:0'}]]}});
@@ -1204,6 +1211,111 @@ function publishVenue(venue){
   if(!clients.size)venueClients.delete(venue.venue_id);
  }
 
+}
+
+function normalizeAstraRealCityConfig(raw={}){
+ const src=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+ const statuses=new Set(['collecting','ready_for_astra','processing','review','approved']);
+ return {
+  version:1,
+  mode:'digital_twin_exact',
+  status:statuses.has(String(src.status||''))?String(src.status):'collecting',
+  accuracy:'maximum',
+  preserve_map_geometry:true,
+  radius_m:Math.max(60,Math.min(350,Number(src.radius_m)||190)),
+  main_building_enabled:src.main_building_enabled!==false,
+  panorama_enabled:src.panorama_enabled!==false,
+  include_street_objects:src.include_street_objects!==false,
+  include_vegetation:src.include_vegetation!==false,
+  include_signage:src.include_signage!==false,
+  notes:String(src.notes||'').trim().slice(0,2500),
+  astra_instruction:String(src.astra_instruction||'').trim().slice(0,4000),
+  updated_at:String(src.updated_at||new Date().toISOString()).slice(0,40)
+ };
+}
+function normalizeAstraRealCityAssets(value){
+ if(!Array.isArray(value))return [];
+ const mainTypes=new Set(['main_facade','entrance','signage','left_facade','right_facade','rear_facade','detail']);
+ const panoTypes=new Set(['front_panorama','street_left','street_right','opposite','intersection','courtyard','district','detail']);
+ const angles=new Set(['front','left','right','rear','up','down','panorama','detail','unknown']);
+ return value.slice(0,24).map((item,index)=>{
+  if(!item||typeof item!=='object')return null;
+  const category=item.category==='panorama'?'panorama':'main_building';
+  const rawSrc=String(item.src||item.url||item.image||'').trim();
+  const isImage=rawSrc.startsWith('data:image/');
+  const isExternal=/^https:\/\//i.test(rawSrc);
+  if(!isImage&&!isExternal)return null;
+  const allowed=category==='main_building'?mainTypes:panoTypes;
+  const subtype=allowed.has(String(item.subtype||''))?String(item.subtype):(category==='main_building'?(index===0?'main_facade':'detail'):'district');
+  const role=category==='main_building'?'hero_facade':'environment';
+  const seed=rawSrc.slice(0,160)+category+subtype+index;
+  const id=/^[a-zA-Z0-9_-]{4,80}$/.test(String(item.id||''))?String(item.id):'astra_'+crypto.createHash('sha1').update(seed).digest('hex').slice(0,16);
+  return {
+   id,category,subtype,role,src:rawSrc.slice(0,isImage?1800000:2200),
+   kind:isImage?'image':'external_file',
+   filename:String(item.filename||'').trim().slice(0,180),
+   label:String(item.label||'').trim().slice(0,180),
+   notes:String(item.notes||'').trim().slice(0,900),
+   angle:angles.has(String(item.angle||''))?String(item.angle):'unknown',
+   direction_deg:(item.direction_deg===null||item.direction_deg===''||item.direction_deg===undefined)?null:(Number.isFinite(Number(item.direction_deg))?Math.max(0,Math.min(359,Number(item.direction_deg))):null),
+   priority:Math.max(1,Math.min(5,Number(item.priority)||3)),
+   primary:item.primary===true,
+   created_at:String(item.created_at||new Date().toISOString()).slice(0,40)
+  };
+ }).filter(Boolean);
+}
+function astraLegacyReferences(assets){
+ const rows=(Array.isArray(assets)?assets:[]).filter(x=>String(x.src||'').startsWith('data:image/'));
+ const sort=(a,b)=>(b.primary===true)-(a.primary===true)||(Number(b.priority)||0)-(Number(a.priority)||0);
+ const main=rows.filter(x=>x.category==='main_building').sort(sort).slice(0,4);
+ const pano=rows.filter(x=>x.category==='panorama').sort(sort).slice(0,4);
+ return [...main.map(x=>({src:x.src,role:'hero_facade'})),...pano.map(x=>({src:x.src,role:'environment'}))];
+}
+function astraReadiness(assets){
+ const list=Array.isArray(assets)?assets:[],main=list.filter(x=>x.category==='main_building'),pano=list.filter(x=>x.category==='panorama');
+ const mainPrimary=main.some(x=>x.primary)||main.some(x=>x.subtype==='main_facade'),entrance=main.some(x=>x.subtype==='entrance');
+ const panoSpread=new Set(pano.map(x=>x.subtype)).size;
+ let score=0;
+ if(main.length)score+=20;if(main.length>=3)score+=15;if(mainPrimary)score+=10;if(entrance)score+=10;
+ if(pano.length)score+=20;if(pano.length>=4)score+=15;if(panoSpread>=3)score+=10;
+ return {score:Math.min(100,score),ready:main.length>=2&&pano.length>=3,main_count:main.length,panorama_count:pano.length,has_main_facade:mainPrimary,has_entrance:entrance,panorama_coverage:panoSpread};
+}
+function astraManifest(row){
+ const assets=normalizeAstraRealCityAssets(row?.realcity_astra_assets),config=normalizeAstraRealCityConfig(row?.realcity_astra_config),readiness=astraReadiness(assets);
+ return {
+  schema:'shaurmeg.astra.realcity.digital_twin.v1',
+  target:{
+   marker_id:String(row?.id||''),establishment_id:String(row?.establishment_id||''),venue_id:String(row?.venue_id||''),
+   name:String(row?.name||''),address:String(row?.address||''),coordinates:{lat:Number(row?.lat),lon:Number(row?.lon)}
+  },
+  objective:'Create a geometrically anchored digital twin of the real venue and its surrounding district, matching the supplied references as closely as possible.',
+  spatial_contract:{
+   preserve_map_geometry:true,
+   building_footprints_are_spatial_truth:true,
+   keep_marker_coordinates:true,
+   facade_must_align_to_existing_building:true,
+   forbid_flat_photo_billboard:true,
+   forbid_unrelated_panorama_scene:true
+  },
+  map_geometry:{
+   source:'MapLibre/OpenFreeMap building footprint at venue coordinates',
+   hero_building_id:row?.realcity_profile?.scene?.hero_building_id||null,
+   hero_building_ring:(row?.realcity_profile?.scene?.buildings||[]).find(x=>x?.role==='hero')?.ring||null,
+   scene_radius_m:Number(row?.realcity_profile?.scene?.radius_m||config.radius_m)||config.radius_m
+  },
+  config,readiness,
+  references:{
+   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
+  },
+  requested_output:{
+   hero_building:'accurate facade, entrance, signage, windows, balconies, roof and storefront mapped to the correct footprint',
+   environment:'accurate neighboring buildings, roads, sidewalks, vegetation, parking, fences and street objects inside radius',
+   radius_m:config.radius_m,
+   lod:'optimized for iPhone Telegram Mini App',
+   persistence:'durable deterministic RealCity profile reproducible after reload'
+  }
+ };
 }
 
 function normalizeRealCityReferences(value){
@@ -1428,6 +1540,61 @@ app.post('/api/shaurmeg/admin/discovery/moscow',async(req,res)=>{
  if(!VENUE_DISCOVERY_ENABLED)return res.status(409).json({error:'discovery_disabled',message:'Каталог зафиксирован. Новые точки добавляются вручную.'});
  const promise=runMoscowDiscovery({reason:'manual'});res.status(202).json({ok:true,running:true});
  promise.catch(()=>{});
+});
+
+app.get('/api/shaurma/admin/astra-realcity/:establishmentId',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const est=String(req.params.establishmentId||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(est))return res.status(400).json({error:'bad_establishment_id'});
+ try{
+  const all=await DB.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_astra_assets,realcity_astra_config,realcity_status,realcity_quality,realcity_updated_at,realcity_profile FROM shaurmeg_markers WHERE establishment_id=$1 AND is_active=TRUE ORDER BY id",[est]);
+  if(!all.rows.length)return res.sendStatus(404);
+  const wanted=String(req.query.marker_id||''),row=all.rows.find(x=>String(x.id)===wanted)||all.rows[0];
+  const assets=normalizeAstraRealCityAssets(row.realcity_astra_assets),config=normalizeAstraRealCityConfig(row.realcity_astra_config);
+  res.json({
+   ok:true,
+   markers:all.rows.map(x=>({marker_id:String(x.id),name:x.name,address:x.address,lat:x.lat,lon:x.lon})),
+   marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,
+   assets,config,readiness:astraReadiness(assets),manifest:astraManifest({...row,realcity_astra_assets:assets,realcity_astra_config:config}),
+   realcity:{status:row.realcity_status||'pending',quality:row.realcity_quality||'heuristic',updated_at:row.realcity_updated_at||null,profile_version:Number(row.realcity_profile?.version||0)}
+  });
+ }catch(e){console.error('astra realcity read:',e.message);res.status(500).json({error:'astra_realcity_read_failed'})}
+});
+
+app.put('/api/shaurma/admin/astra-realcity/:establishmentId',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const est=String(req.params.establishmentId||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(est))return res.status(400).json({error:'bad_establishment_id'});
+ try{
+  const markerId=String(req.body?.marker_id||req.query.marker_id||'');
+  const q=markerId
+   ?await DB.query("SELECT * FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE LIMIT 1",[markerId,est])
+   :await DB.query("SELECT * FROM shaurmeg_markers WHERE establishment_id=$1 AND is_active=TRUE ORDER BY id LIMIT 1",[est]);
+  const row=q.rows[0];if(!row)return res.sendStatus(404);
+  const assets=normalizeAstraRealCityAssets(req.body?.assets),readiness=astraReadiness(assets);
+  const config=normalizeAstraRealCityConfig({...req.body?.config,status:req.body?.config?.status||(readiness.ready?'ready_for_astra':'collecting'),updated_at:new Date().toISOString()});
+  const legacy=astraLegacyReferences(assets);
+  const updated=await DB.query(
+   "UPDATE shaurmeg_markers SET realcity_astra_assets=$2::jsonb,realcity_astra_config=$3::jsonb,realcity_reference_images=$4::jsonb,realcity_status='pending',updated_at=NOW() WHERE id=$1 RETURNING *",
+   [row.id,JSON.stringify(assets),JSON.stringify(config),JSON.stringify(legacy)]
+  );
+  const saved=updated.rows[0];
+  res.json({ok:true,marker_id:String(saved.id),establishment_id:est,assets,config,readiness,manifest:astraManifest(saved)});
+ }catch(e){console.error('astra realcity save:',e.message);res.status(500).json({error:'astra_realcity_save_failed'})}
+});
+
+app.post('/api/shaurma/admin/astra-realcity/:establishmentId/rebuild',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+ const est=String(req.params.establishmentId||'').trim().toUpperCase();
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(est))return res.status(400).json({error:'bad_establishment_id'});
+ try{
+  const markerId=String(req.body?.marker_id||req.query.marker_id||'');
+  const q=markerId
+   ?await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending',updated_at=NOW() WHERE id=$1 AND establishment_id=$2 RETURNING id",[markerId,est])
+   :await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending',updated_at=NOW() WHERE id=(SELECT id FROM shaurmeg_markers WHERE establishment_id=$1 AND is_active=TRUE ORDER BY id LIMIT 1) RETURNING id",[est]);
+  if(!q.rows[0])return res.sendStatus(404);
+  queueRealCityProfile(q.rows[0].id);res.status(202).json({ok:true,marker_id:String(q.rows[0].id),status:'pending'});
+ }catch(e){res.status(500).json({error:'astra_realcity_rebuild_failed'})}
 });
 
 app.get('/api/shaurmeg/realcity-profile/:id',async(req,res)=>{

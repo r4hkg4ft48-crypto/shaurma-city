@@ -27,7 +27,6 @@ Source of truth:
 - `v2/backend/src/realcity-analyzer.js` — facade/environment analysis.
 - `v2/backend/src/routes.js` — map and RealCity API.
 - `shaurmeg_markers.realcity_profile` — persisted per-marker RealCity data.
-- `shaurmeg_markers.realcity_reference_images` — reference material.
 
 Existing map selection already creates a focused building overlay from rendered MapLibre/OpenFreeMap building geometry. Astra may extend or replace only that RealCity overlay implementation, not the base map.
 
@@ -93,13 +92,16 @@ The renderer should support:
 ## Reference workflow
 
 When the user provides photos/video:
-1. identify the exact marker/establishment;
+1. store them only in **Master Admin → Astra / RealCity** for the exact marker/establishment;
 2. preserve the base map footprint and coordinates;
-3. infer facade orientation from photos + map geometry;
-4. generate/update durable RealCity profile data;
-5. render on top of the same building;
-6. verify from the expected map camera angle;
-7. keep a graceful fallback to current map styling if assets/profile fail.
+3. Astra consumes `realcity_astra_assets` + `realcity_astra_config`;
+4. Astra infers facade/environment structure from those references;
+5. Astra writes durable output under `realcity_profile.astra`;
+6. render that output on top of the same map geometry;
+7. verify from the expected camera angle;
+8. keep the non-photo map/OSM procedural fallback if Astra output is unavailable.
+
+The old map-editor photo-reference pipeline is retired. Generic RealCity fallback code must never analyze user photos, Astra photos, KartaView imagery, or other imagery to recolor/reconstruct facades.
 
 ## Must not break
 
@@ -110,7 +112,6 @@ When the user provides photos/video:
 - order creation
 - owner admin
 - superadmin map admin
-- RealCity photo upload/rebuild endpoints
 - production database compatibility
 
 ## Validation
@@ -147,7 +148,7 @@ For a copy/paste implementation brief, use `ASTRA_REALCITY_PROMPT.md`.
 Master Admin now has a dedicated **Astra / RealCity** studio scoped to one establishment and one concrete marker.
 
 Persistent input columns on `shaurmeg_markers`:
-- `realcity_astra_assets` — full reference dataset for Astra, independent of the legacy RealCity photo editor.
+- `realcity_astra_assets` — the **only** photo/video/reference dataset used for RealCity digital-twin reconstruction.
 - `realcity_astra_config` — per-location digital-twin instructions and workflow status.
 
 The dataset is intentionally divided into two primary groups:
@@ -172,8 +173,13 @@ Each reference can carry subtype, angle, compass direction, priority, primary fl
 Master-admin API:
 - `GET /api/shaurma/admin/astra-realcity/:establishmentId?marker_id=...`
 - `PUT /api/shaurma/admin/astra-realcity/:establishmentId`
-- `POST /api/shaurma/admin/astra-realcity/:establishmentId/rebuild`
 
 The GET response includes a compiled `manifest` with the spatial contract, marker coordinates, current hero building footprint when available, grouped references, readiness score and requested output. This manifest is the preferred handoff object for Astra.
 
-Astra assets do not get destroyed by the legacy map-reference editor. During the current heuristic RealCity rebuild, the best Astra building and panorama images are also injected as high-priority compatible references. Future Astra output should be persisted under `realcity_profile.astra`; input metadata remains separately durable in the Astra columns.
+There is no legacy map-reference editor anymore. The map editor handles markers, coordinates, venue cards and ordinary venue media only.
+
+Astra assets are never injected into the generic procedural RealCity analyzer. The generic fallback uses map/OSM geometry only and has `photo_reconstruction:false`. Digital-twin photo interpretation belongs exclusively to Astra.
+
+Astra output must be persisted under `realcity_profile.astra`; input metadata remains separately durable in the Astra columns.
+
+The former production database column `realcity_reference_images` may still physically exist on already-migrated databases for backward compatibility, but no active code reads, writes, exposes, provisions or rebuilds from it.

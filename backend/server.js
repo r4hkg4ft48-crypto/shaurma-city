@@ -195,6 +195,8 @@ async function initDb(){
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_poster TEXT NOT NULL DEFAULT ''");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS immersive_config JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_reference_images JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_assets JSONB NOT NULL DEFAULT '[]'::jsonb");
+ await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_config JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_profile JSONB NOT NULL DEFAULT '{}'::jsonb");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_status TEXT NOT NULL DEFAULT 'pending'");
  await DB.query("ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_quality TEXT NOT NULL DEFAULT 'heuristic'");

@@ -110,7 +110,11 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
       <button class="btn primary" id="saveAstra" type="button">Сохранить пакет Astra</button>
       
       <button class="btn" id="copyAstraManifest" type="button">Скопировать Astra manifest</button>
+      <button class="btn" id="exportAstraPackage" type="button">Скачать пакет с фото</button>
+      <button class="btn" id="importAstraOutput" type="button">Загрузить реконструкцию Astra</button>
+      <input id="astraOutputFile" type="file" accept="application/json,.json" hidden>
     </div>
+    <p id="astraOutputStatus" role="status" style="font-size:14px;color:var(--muted)">Реконструкция ещё не загружена.</p>
     <pre class="code astraManifest" id="astraManifest">Выберите заведение — здесь появится готовое техническое задание.</pre>
   </section>
 
@@ -284,6 +288,8 @@ function applyAstraState(j){
  const cfg=j.config||{};$('#astraRadius').value=Number(cfg.radius_m)||190;$('#astraStatus').value=cfg.status||'collecting';$('#astraMainEnabled').checked=cfg.main_building_enabled!==false;$('#astraPanoramaEnabled').checked=cfg.panorama_enabled!==false;$('#astraStreetObjects').checked=cfg.include_street_objects!==false;$('#astraVegetation').checked=cfg.include_vegetation!==false;$('#astraSignage').checked=cfg.include_signage!==false;$('#astraNotes').value=cfg.notes||'';$('#astraInstruction').value=cfg.astra_instruction||'';
  const markers=Array.isArray(j.markers)?j.markers:[];$('#astraMarkerField').hidden=markers.length<2;$('#astraMarker').innerHTML=markers.map(x=>'<option value="'+esc(x.marker_id)+'" '+(String(x.marker_id)===String(j.marker_id)?'selected':'')+'>'+esc(x.name)+' · marker '+esc(x.marker_id)+'</option>').join('');
  renderAstraAssets();renderAstraReadiness(j.readiness||{});$('#astraManifest').textContent=JSON.stringify(j.manifest||{},null,2);
+ const output=j.output;
+ $('#astraOutputStatus').textContent=output?.version===2&&output.status==='ready'&&Array.isArray(output.buildings)?'На карте: '+output.buildings.length+' зданий · '+(output.coverage?.observed_edges||0)+' фасадов по фото':output?.status==='stale'?'Материалы изменились. Обновите реконструкцию Astra.':'Реконструкция ещё не загружена.';
 }
 function renderAstraReadiness(r){
  const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.ready?'готово для Astra':'сбор материалов';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
@@ -332,11 +338,33 @@ async function saveAstraStudio(){
  try{
   const body={marker_id:astraState.marker_id,config:readAstraConfig(),assets:astraAssets};
   const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est),{method:'PUT',body:JSON.stringify(body)});
-  astraState={...astraState,...j,markers:astraState.markers};applyAstraState(astraState);toast('Astra-пакет сохранён ✓');
- }catch(e){toast('Не удалось сохранить Astra-пакет')}finally{b.disabled=false}
+  astraState={...astraState,...j,markers:astraState.markers};applyAstraState(astraState);toast('Astra-пакет сохранён ✓');return true;
+ }catch(e){toast('Не удалось сохранить Astra-пакет');return false}finally{b.disabled=false}
 }
 async function copyAstraManifest(){
  const value=$('#astraManifest').textContent||'';try{await navigator.clipboard.writeText(value);toast('Astra manifest скопирован')}catch{prompt('Astra manifest',value)}
+}
+async function exportAstraPackage(){
+ if(!astraState)return;
+ // Save the visible inputs before downloading so the package and revision agree.
+ if(!await saveAstraStudio())return;
+ if(!astraState.manifest?.geometry?.revision)return toast('Сначала обновите страницу Astra');
+ const payload={schema:'shaurmeg.astra.package.v2',manifest:astraState.manifest,assets:astraAssets,output:astraState.output||null};
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='Astra-'+astraState.establishment_id+'-'+astraState.marker_id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+async function importAstraOutput(file){
+ if(!file||!astraState)return;
+ if(file.size>10*1024*1024)return toast('Файл реконструкции слишком большой');
+ const button=$('#importAstraOutput');button.disabled=true;
+ try{
+  const payload=JSON.parse(await file.text()),output=payload.output||payload;
+  const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(astraState.establishment_id)+'/output',{method:'PUT',body:JSON.stringify({marker_id:astraState.marker_id,expected_revision:payload.expected_revision||output.input_revision,output})});
+  astraState.output=j.output;applyAstraState(astraState);toast('Фасады сохранены и доступны на карте');
+ }catch(e){
+  const code=e.body?.error||e.message;
+  $('#astraOutputStatus').textContent=code==='astra_inputs_changed_reload_package'?'Пакет изменился. Скачайте его заново и обновите реконструкцию.':'Реконструкция не сохранена: '+code;
+ }finally{button.disabled=false}
 }
 
 async function createKey(){
@@ -388,6 +416,9 @@ $('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id
 $('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});
 $('#saveAstra').onclick=saveAstraStudio;$('#copyAstraManifest').onclick=copyAstraManifest;
+$('#exportAstraPackage').onclick=exportAstraPackage;
+$('#importAstraOutput').onclick=()=>$('#astraOutputFile').click();
+$('#astraOutputFile').onchange=async e=>{await importAstraOutput(e.target.files[0]);e.target.value=''};
 $('#ownerVenue').onchange=loadOwnerAdmins;
 $('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{

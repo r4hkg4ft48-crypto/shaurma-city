@@ -139,6 +139,8 @@ jobs:
       - name: Install production adapter dependencies
         working-directory: backend
         run: npm install --ignore-scripts
+      - name: RealCity spatial and persistence contract
+        run: node --test v2/backend/test/realcity-astra.test.js
       - name: Load production adapter modules
         working-directory: backend
         run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/routes')"

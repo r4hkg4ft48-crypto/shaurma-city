@@ -1,15 +1,13 @@
 'use strict';
 
-const sharp=require('sharp');
 const {VectorTile}=require('@mapbox/vector-tile');
 const Pbf=require('pbf');
 
-const PROFILE_VERSION=8;
+const PROFILE_VERSION=9;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
 ];
-const KARTAVIEW_ENDPOINT='https://api.openstreetcam.org/2.0/photo/';
 
 const DEFAULT_PALETTE={
   wall:'#d3d1cc',
@@ -18,14 +16,6 @@ const DEFAULT_PALETTE={
   storefront:'#24282b',
   roof:'#b7b4ae',
   ground:'#d9d5cc'
-};
-const LEPYOSHKA_VERIFIED={
-  wall:'#d7d5cf',
-  accent:'#875f4e',
-  windows:'#343c43',
-  storefront:'#272727',
-  roof:'#aaa9a3',
-  ground:'#d8d3c8'
 };
 const NAMED_COLORS={
   white:'#dedbd4',grey:'#c9cbca',gray:'#c9cbca',silver:'#b7bbbd',beige:'#d7cbb8',
@@ -90,130 +80,6 @@ function hashString(s){
   for(const ch of String(s)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}
   return h>>>0;
 }
-function dataUrlBuffer(v){
-  const m=String(v||'').match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/s);
-  if(!m)return null;
-  try{return Buffer.from(m[1],'base64')}catch{return null}
-}
-function normalizeRef(ref,index){
-  if(typeof ref==='string')return {src:ref,role:index===0?'hero_facade':'environment'};
-  if(!ref||typeof ref!=='object')return null;
-  const src=String(ref.src||ref.image||ref.data||'');
-  if(!src.startsWith('data:image/'))return null;
-  const allowed=new Set(['hero_facade','street_left','street_right','neighbor','courtyard','environment']);
-  return {src,role:allowed.has(ref.role)?ref.role:(index===0?'hero_facade':'environment')};
-}
-
-function findPeaks(values,minDistance=5,thresholdFactor=1.22,maxPeaks=18){
-  if(!values.length)return [];
-  const avg=values.reduce((a,b)=>a+b,0)/values.length;
-  const candidates=[];
-  for(let i=1;i<values.length-1;i++){
-    if(values[i]>values[i-1]&&values[i]>=values[i+1]&&values[i]>avg*thresholdFactor)candidates.push({i,v:values[i]});
-  }
-  candidates.sort((a,b)=>b.v-a.v);
-  const picked=[];
-  for(const c of candidates){
-    if(picked.every(x=>Math.abs(x.i-c.i)>=minDistance))picked.push(c);
-    if(picked.length>=maxPeaks)break;
-  }
-  return picked.sort((a,b)=>a.i-b.i).map(x=>x.i);
-}
-
-async function extractImageFeatures(buf){
-  const {data,info}=await sharp(buf,{failOn:'none'})
-    .rotate()
-    .resize({width:160,height:120,fit:'inside',withoutEnlargement:false})
-    .removeAlpha()
-    .raw()
-    .toBuffer({resolveWithObject:true});
-
-  const w=info.width,h=info.height,ch=info.channels;
-  const bins=new Map(),groundBins=new Map();
-  const lum=new Float32Array(w*h);
-  let vegetation=0,sky=0,darkLower=0,lowerCount=0,facadePixels=0,total=0,rough=0,roughN=0;
-
-  function addBin(map,r,g,b){
-    const qr=Math.round(r/20)*20,qg=Math.round(g/20)*20,qb=Math.round(b/20)*20,key=qr+','+qg+','+qb;
-    const rec=map.get(key)||{n:0,r:0,g:0,b:0};rec.n++;rec.r+=r;rec.g+=g;rec.b+=b;map.set(key,rec);
-  }
-
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      const i=(y*w+x)*ch,r=data[i],g=data[i+1],b=data[i+2],L=luminance(r,g,b),hs=hsl(r,g,b);
-      lum[y*w+x]=L;total++;
-      const isSky=hs.h>185&&hs.h<250&&hs.s>.18&&hs.l>.42;
-      const isGreen=hs.h>62&&hs.h<165&&hs.s>.20&&hs.l>.12;
-      if(isSky)sky++;
-      if(isGreen)vegetation++;
-      if(y>h*.70){lowerCount++;if(L<105)darkLower++;if(!isSky&&!isGreen&&L>45&&L<235)addBin(groundBins,r,g,b)}
-      if(!isSky&&!isGreen&&L>22&&L<244){addBin(bins,r,g,b);facadePixels++}
-      if(x>0){rough+=Math.abs(L-lum[y*w+x-1]);roughN++}
-    }
-  }
-
-  const rowEdge=new Array(h).fill(0),colEdge=new Array(w).fill(0);
-  for(let y=1;y<h;y++){
-    for(let x=1;x<w;x++){
-      const L=lum[y*w+x];
-      rowEdge[y]+=Math.abs(L-lum[(y-1)*w+x]);
-      colEdge[x]+=Math.abs(L-lum[y*w+x-1]);
-    }
-  }
-  for(let y=0;y<h;y++)rowEdge[y]/=Math.max(1,w-1);
-  for(let x=0;x<w;x++)colEdge[x]/=Math.max(1,h-1);
-
-  const rowPeaks=findPeaks(rowEdge.slice(Math.round(h*.12),Math.round(h*.90)),5,1.26,18).map(v=>v+Math.round(h*.12));
-  const colPeaks=findPeaks(colEdge.slice(Math.round(w*.08),Math.round(w*.92)),6,1.24,18).map(v=>v+Math.round(w*.08));
-  const rowMean=rowEdge.reduce((a,b)=>a+b,0)/rowEdge.length;
-  const colMean=colEdge.reduce((a,b)=>a+b,0)/colEdge.length;
-
-  const colors=[...bins.values()].map(x=>({n:x.n,r:x.r/x.n,g:x.g/x.n,b:x.b/x.n})).sort((a,b)=>b.n-a.n).slice(0,28);
-  const enriched=colors.map(x=>({...x,lum:luminance(x.r,x.g,x.b),hs:hsl(x.r,x.g,x.b),hex:rgbHex(x.r,x.g,x.b)}));
-  const score=(x,target,satPenalty=.55)=>x.n*(1-Math.min(1,Math.abs(x.lum-target)/175))*(1-Math.min(.72,x.hs.s*satPenalty));
-  const wall=enriched.filter(x=>x.lum>100&&x.lum<235).sort((a,b)=>score(b,182)-score(a,182))[0]||enriched[0];
-  const windows=enriched.filter(x=>x.lum>24&&x.lum<125).sort((a,b)=>b.n-a.n)[0]||enriched.slice().sort((a,b)=>a.lum-b.lum)[0]||wall;
-  const accent=enriched.filter(x=>x.lum>48&&x.lum<210&&wall&&colorDistance(x.hex,wall.hex)>42).sort((a,b)=>(b.n*(.55+b.hs.s))-(a.n*(.55+a.hs.s)))[0]||enriched[1]||wall;
-  const roof=enriched.filter(x=>x.lum>72&&x.lum<190&&x.hs.s<.48).sort((a,b)=>b.n-a.n)[0]||accent||wall;
-  const storefront=enriched.filter(x=>x.lum>20&&x.lum<105).sort((a,b)=>b.n-a.n)[0]||windows||accent||wall;
-
-  const groundColors=[...groundBins.values()].map(x=>({n:x.n,r:x.r/x.n,g:x.g/x.n,b:x.b/x.n})).sort((a,b)=>b.n-a.n);
-  const ground=groundColors[0]?rgbHex(groundColors[0].r,groundColors[0].g,groundColors[0].b):DEFAULT_PALETTE.ground;
-
-  const palette={
-    wall:wall?.hex||DEFAULT_PALETTE.wall,
-    accent:accent?.hex||DEFAULT_PALETTE.accent,
-    windows:windows?.hex||DEFAULT_PALETTE.windows,
-    storefront:storefront?.hex||DEFAULT_PALETTE.storefront,
-    roof:roof?.hex||DEFAULT_PALETTE.roof,
-    ground,
-    swatches:uniqColors(enriched.map(x=>x.hex),8)
-  };
-
-  return {
-    palette,
-    vegetation_ratio:Number((vegetation/Math.max(1,total)).toFixed(3)),
-    sky_ratio:Number((sky/Math.max(1,total)).toFixed(3)),
-    facade_ratio:Number((facadePixels/Math.max(1,total)).toFixed(3)),
-    dark_lower_ratio:Number((darkLower/Math.max(1,lowerCount)).toFixed(3)),
-    roughness:Number((rough/Math.max(1,roughN)/255).toFixed(3)),
-    horizontal_edge_strength:Number(rowMean.toFixed(2)),
-    vertical_edge_strength:Number(colMean.toFixed(2)),
-    row_peaks:rowPeaks.length,
-    col_peaks:colPeaks.length,
-    balcony_score:Number(clamp((rowMean/(colMean||1)-.72)/1.4,0,1).toFixed(3)),
-    vertical_band_score:Number(clamp((colMean/(rowMean||1)-.65)/1.5,0,1).toFixed(3))
-  };
-}
-
-function mergePalettes(weighted,fallback=DEFAULT_PALETTE){
-  const roles=['wall','accent','windows','storefront','roof','ground'],out={};
-  for(const role of roles){
-    out[role]=mixColors(weighted.filter(x=>x.palette?.[role]).map(x=>({color:x.palette[role],weight:x.weight})),fallback[role]);
-  }
-  out.swatches=uniqColors(weighted.flatMap(x=>x.palette?.swatches||[]),8);
-  return out;
-}
 function weightedNumber(items,key,fallback=0){
   let sum=0,w=0;
   for(const x of items){const n=Number(x.features?.[key]);if(Number.isFinite(n)){const ww=Number(x.weight)||1;sum+=n*ww;w+=ww}}
@@ -227,16 +93,6 @@ async function fetchJson(url,timeout=6000){
     return await r.json();
   }finally{clearTimeout(timer)}
 }
-async function fetchBuffer(url,timeout=6000){
-  const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeout);
-  try{
-    const r=await fetch(url,{headers:{'User-Agent':'Shaurmeg-RealCity/4.0'},signal:ac.signal});
-    if(!r.ok)throw new Error('http_'+r.status);
-    const ab=await r.arrayBuffer();
-    if(ab.byteLength>6_000_000)throw new Error('image_too_large');
-    return Buffer.from(ab);
-  }finally{clearTimeout(timer)}
-}
 function haversine(lat1,lon1,lat2,lon2){
   const R=6371000,p1=lat1*Math.PI/180,p2=lat2*Math.PI/180,dp=(lat2-lat1)*Math.PI/180,dl=(lon2-lon1)*Math.PI/180;
   const a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
@@ -247,37 +103,6 @@ function bearing(lat1,lon1,lat2,lon2){
   return (Math.atan2(Math.sin(dl)*Math.cos(p2),Math.cos(p1)*Math.sin(p2)-Math.sin(p1)*Math.cos(p2)*Math.cos(dl))*180/Math.PI+360)%360;
 }
 function angleDiff(a,b){return Math.abs(((a-b+540)%360)-180)}
-
-async function analyzeKartaView(marker){
-  const url=KARTAVIEW_ENDPOINT+'?lat='+encodeURIComponent(marker.lat)+'&lng='+encodeURIComponent(marker.lon)+'&zoomLevel=18&join=sequence&orderBy=id&orderDirection=desc';
-  const j=await fetchJson(url,5500),rows=Array.isArray(j?.result?.data)?j.result.data:[];
-  const scored=rows.map(x=>{
-    const lat=Number(x.lat),lon=Number(x.lng);if(!Number.isFinite(lat)||!Number.isFinite(lon))return null;
-    const d=haversine(marker.lat,marker.lon,lat,lon),target=bearing(lat,lon,marker.lat,marker.lon),head=Number(x.heading),sphere=String(x.projection||'').toUpperCase()==='SPHERE';
-    const diff=Number.isFinite(head)?angleDiff(head,target):180;
-    return {row:x,d,diff,score:d+(sphere?0:diff*.42)};
-  }).filter(Boolean).filter(x=>x.d<220).sort((a,b)=>a.score-b.score);
-
-  const picked=[],seq=new Set();
-  for(const x of scored){
-    const sid=String(x.row.sequence?.id||x.row.sequenceId||'');
-    if(sid&&seq.has(sid)&&picked.length<2)continue;
-    if(sid)seq.add(sid);picked.push(x);
-    if(picked.length>=4)break;
-  }
-
-  const analyses=[],meta=[];
-  for(const x of picked){
-    const url=x.row.imageThUrl||x.row.imageLthUrl||x.row.fileurlTh||x.row.fileurlLTh;
-    if(!url)continue;
-    try{
-      const features=await extractImageFeatures(await fetchBuffer(url,5500));
-      analyses.push({features,palette:features.palette,weight:1.55,role:'street'});
-      meta.push({id:String(x.row.id||''),distance_m:Math.round(x.d),heading:Number(x.row.heading)||null,projection:x.row.projection||'',shot_date:x.row.shotDate||'',sequence_id:String(x.row.sequence?.id||'')});
-    }catch{}
-  }
-  return {analyses,meta};
-}
 
 function toLocal(lon,lat,oLon,oLat){
   const c=Math.cos(oLat*Math.PI/180);
@@ -515,7 +340,6 @@ function facadeConfig(style,heroAnalysis,heroBuilding){
   };
 }
 
-function averageFeature(items,key,fallback=0){return weightedNumber(items,key,fallback)}
 function lcg(seed){
   let s=(seed>>>0)||1;
   return ()=>{s=(Math.imul(1664525,s)+1013904223)>>>0;return s/4294967296};
@@ -568,95 +392,23 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
   };
 }
 
-async function makeFacadeTexture(buf){
-  try{
-    const out=await sharp(buf,{failOn:'none'})
-      .rotate()
-      .resize(128,256,{fit:'cover',position:'attention'})
-      .modulate({brightness:1.03,saturation:.88})
-      .sharpen({sigma:.65,m1:.8,m2:.35})
-      .png({compressionLevel:9,palette:true,quality:82})
-      .toBuffer();
-    if(out.byteLength>180000)return null;
-    return 'data:image/png;base64,'+out.toString('base64');
-  }catch{return null}
-}
-
-async function analyzeUserReferences(marker){
-  const raw=Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[];
-  const refs=raw.map(normalizeRef).filter(Boolean).slice(0,8),analyses=[];
-  for(let i=0;i<refs.length;i++){
-    const ref=refs[i],buf=dataUrlBuffer(ref.src);if(!buf)continue;
-    try{
-      const features=await extractImageFeatures(buf);
-      const heroRole=ref.role==='hero_facade';
-      // Reference photos are used only to infer facade colors/structure.
-      // Never turn the photograph itself into a map texture.
-      analyses.push({role:ref.role,features,palette:features.palette,weight:heroRole?5.2:2.25});
-    }catch{}
-  }
-  return analyses;
-}
-
 async function analyzeRealCityProfile(marker){
   const safe={...marker,lat:Number(marker.lat),lon:Number(marker.lon)};
-  const userPromise=analyzeUserReferences(safe);
-  const streetPromise=analyzeKartaView(safe).catch(()=>({analyses:[],meta:[]}));
   const osmElements=await fetchOsmWorld(safe,190).catch(()=>[]);
   const osmSeed=osmWorld(osmElements,safe,DEFAULT_PALETTE);
-  const [user,street]=await Promise.all([userPromise,streetPromise]);
-
-  const heroRefs=user.filter(x=>x.role==='hero_facade');
-  const envRefs=user.filter(x=>x.role!=='hero_facade');
-  const streetAnalyses=street.analyses||[];
 
   const osmPalette={...DEFAULT_PALETTE};
-  if(osmSeed.colors.length)osmPalette.wall=mixColors(osmSeed.colors.map(color=>({color,weight:1})),DEFAULT_PALETTE.wall);
+  if(osmSeed.colors.length)osmPalette.wall=osmSeed.colors[0]||DEFAULT_PALETTE.wall;
   if(String(osmSeed.dominantMaterial).includes('brick')){osmPalette.wall='#b58f78';osmPalette.accent='#765747';osmPalette.roof='#9d8879'}
   if(String(osmSeed.dominantMaterial).includes('glass')){osmPalette.wall='#8997a3';osmPalette.windows='#1f2c35';osmPalette.accent='#667887'}
   osmPalette.swatches=uniqColors([...osmSeed.colors,osmPalette.wall,osmPalette.accent,osmPalette.roof],8);
 
-  const heroWeighted=heroRefs.length?[
-    ...heroRefs.map(x=>({palette:x.palette,weight:x.weight}))
-  ]:[
-    ...streetAnalyses.map(x=>({palette:x.palette,weight:1.7})),
-    {palette:osmPalette,weight:1}
-  ];
-  const envWeighted=[
-    ...envRefs.map(x=>({palette:x.palette,weight:x.weight})),
-    ...heroRefs.map(x=>({palette:x.palette,weight:1.15})),
-    ...streetAnalyses.map(x=>({palette:x.palette,weight:1.9})),
-    {palette:osmPalette,weight:1.15}
-  ];
-
-  let heroPalette=mergePalettes(heroWeighted,DEFAULT_PALETTE);
-  let environmentPalette=mergePalettes(envWeighted,DEFAULT_PALETTE);
-
-  const isLepe=String(safe.venue_id||'').toLowerCase()==='lepyoshka';
-  const hasDedicatedHero=heroRefs.length>0;
-  if(isLepe&&!hasDedicatedHero){
-    heroPalette={...LEPYOSHKA_VERIFIED,swatches:[LEPYOSHKA_VERIFIED.wall,LEPYOSHKA_VERIFIED.accent,LEPYOSHKA_VERIFIED.windows,LEPYOSHKA_VERIFIED.roof]};
-    environmentPalette={
-      ...environmentPalette,
-      wall:mixColors([{color:environmentPalette.wall,weight:1},{color:'#d2d0ca',weight:1.5}],'#d2d0ca'),
-      accent:mixColors([{color:environmentPalette.accent,weight:1},{color:'#826557',weight:1.2}],'#826557'),
-      ground:'#d8d3c8',
-      swatches:uniqColors(['#d7d5cf','#c9c7c1','#bdbab3','#a8a39b','#875f4e',...(environmentPalette.swatches||[])],8)
-    };
-  }
-
-  const style=isLepe&&!hasDedicatedHero?'panel_balconies_storefront':classifyStyle(osmSeed,heroRefs.length?heroRefs:streetAnalyses);
-  let facade=facadeConfig(style,heroRefs.length?heroRefs:streetAnalyses,osmSeed.hero);
-  if(isLepe&&!hasDedicatedHero){
-    facade={...facade,levels:12,window_rows:11,window_columns:6,balconies:true,balcony_every:2,vertical_bands:true,vertical_band_every:3,storefront:true,storefront_height_m:3.6,panel_grid:true,roof_equipment:true,material:'panel'};
-  }
-
-  const photoVegetation=averageFeature([...user,...streetAnalyses],'vegetation_ratio',.12);
-  const treeDensity=clamp(isLepe&&!user.length?Math.max(.58,photoVegetation*2.1):photoVegetation*2.15,0.08,.82);
-  const scene=buildScene(osmSeed,safe,heroPalette,environmentPalette,style,facade,treeDensity);
-
-  const quality=heroRefs.length||isLepe?'photo':streetAnalyses.length?'street':osmSeed.buildings.length?'osm':'heuristic';
-  const confidence=heroRefs.length?.95:isLepe?.94:streetAnalyses.length?.82:osmSeed.buildings.length?.61:.38;
+  const style=classifyStyle(osmSeed,[]);
+  const facade=facadeConfig(style,[],osmSeed.hero);
+  const treeDensity=clamp((Number(osmSeed.trees?.length||0)/28)+(Number(osmSeed.greens?.length||0)*.04),.08,.62);
+  const scene=buildScene(osmSeed,safe,osmPalette,osmPalette,style,facade,treeDensity);
+  const quality=osmSeed.buildings.length?'osm':'heuristic';
+  const confidence=osmSeed.buildings.length?.61:.38;
 
   return {
     version:PROFILE_VERSION,
@@ -665,16 +417,16 @@ async function analyzeRealCityProfile(marker){
     confidence,
     building_style:style,
     palette:{
-      wall:heroPalette.wall,accent:heroPalette.accent,windows:heroPalette.windows,
-      storefront:heroPalette.storefront,roof:heroPalette.roof,ground:heroPalette.ground||environmentPalette.ground||DEFAULT_PALETTE.ground
+      wall:osmPalette.wall,accent:osmPalette.accent,windows:osmPalette.windows,
+      storefront:osmPalette.storefront,roof:osmPalette.roof,ground:osmPalette.ground||DEFAULT_PALETTE.ground
     },
-    neighborhood_palette:uniqColors([...(environmentPalette.swatches||[]),environmentPalette.wall,environmentPalette.accent,environmentPalette.roof],8),
+    neighborhood_palette:uniqColors([...(osmPalette.swatches||[]),osmPalette.wall,osmPalette.accent,osmPalette.roof],8),
     facade,
-    texture:{hero_data_url:null,source:heroRefs.length?'palette_reference':'procedural'},
+    texture:{hero_data_url:null,source:'procedural_map_geometry'},
     environment:{
       tree_density:Number(treeDensity.toFixed(2)),
-      vegetation_ratio:Number(photoVegetation.toFixed(3)),
-      ground_color:environmentPalette.ground||DEFAULT_PALETTE.ground,
+      vegetation_ratio:null,
+      ground_color:osmPalette.ground||DEFAULT_PALETTE.ground,
       building_count:osmSeed.buildings.length,
       dominant_material:osmSeed.dominantMaterial||null,
       average_levels:osmSeed.avgLevels?Number(osmSeed.avgLevels.toFixed(1)):null
@@ -682,13 +434,11 @@ async function analyzeRealCityProfile(marker){
     camera:{zoom:18.35,pitch:61,bearing:-20},
     scene,
     sources:{
-      user_reference_images:user.length,
-      hero_reference_images:heroRefs.length,
-      verified_project_reference:isLepe&&!hasDedicatedHero,
-      kartaview:{photo_count:street.meta.length,photos:street.meta},
+      mode:'map_geometry_only',
+      photo_reconstruction:false,
       openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length}
     }
   };
 }
 
-module.exports={PROFILE_VERSION,analyzeRealCityProfile,extractImageFeatures};
+module.exports={PROFILE_VERSION,analyzeRealCityProfile};

@@ -32,7 +32,6 @@ async function ensureSchema(){
     price_label TEXT NOT NULL DEFAULT '',
     marker_avatar TEXT NOT NULL DEFAULT '',
     marker_style JSONB NOT NULL DEFAULT '{}'::jsonb,
-    realcity_reference_images JSONB NOT NULL DEFAULT '[]'::jsonb,
     realcity_astra_assets JSONB NOT NULL DEFAULT '[]'::jsonb,
     realcity_astra_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     realcity_profile JSONB NOT NULL DEFAULT '{}'::jsonb,

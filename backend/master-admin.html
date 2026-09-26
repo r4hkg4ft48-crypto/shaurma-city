@@ -108,7 +108,7 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
 
     <div class="astraActions">
       <button class="btn primary" id="saveAstra" type="button">Сохранить пакет Astra</button>
-      <button class="btn" id="rebuildAstra" type="button">Перестроить текущий RealCity</button>
+      
       <button class="btn" id="copyAstraManifest" type="button">Скопировать Astra manifest</button>
     </div>
     <pre class="code astraManifest" id="astraManifest">Выберите заведение — здесь появится готовое техническое задание.</pre>
@@ -335,10 +335,6 @@ async function saveAstraStudio(){
   astraState={...astraState,...j,markers:astraState.markers};applyAstraState(astraState);toast('Astra-пакет сохранён ✓');
  }catch(e){toast('Не удалось сохранить Astra-пакет')}finally{b.disabled=false}
 }
-async function rebuildAstra(){
- const est=$('#astraVenue').value;if(!est||!astraState)return;const b=$('#rebuildAstra');b.disabled=true;
- try{await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est)+'/rebuild',{method:'POST',body:JSON.stringify({marker_id:astraState.marker_id})});toast('RealCity отправлен на перестроение')}catch{toast('Не удалось запустить перестроение')}finally{b.disabled=false}
-}
 async function copyAstraManifest(){
  const value=$('#astraManifest').textContent||'';try{await navigator.clipboard.writeText(value);toast('Astra manifest скопирован')}catch{prompt('Astra manifest',value)}
 }
@@ -391,7 +387,7 @@ $('#addAstraMainUrl').onclick=()=>addAstraUrl('main_building');$('#addAstraPanoU
 $('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});
-$('#saveAstra').onclick=saveAstraStudio;$('#rebuildAstra').onclick=rebuildAstra;$('#copyAstraManifest').onclick=copyAstraManifest;
+$('#saveAstra').onclick=saveAstraStudio;$('#copyAstraManifest').onclick=copyAstraManifest;
 $('#ownerVenue').onchange=loadOwnerAdmins;
 $('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{

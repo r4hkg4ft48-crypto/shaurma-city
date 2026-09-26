@@ -180,6 +180,11 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 .mapMarker.selected:before{inset:-8px;border-color:rgba(255,255,255,.36);box-shadow:0 0 0 5px rgba(255,255,255,.05)}
 .venueCard{background:linear-gradient(180deg,rgba(19,27,23,.9),rgba(12,18,15,.94));border-color:rgba(255,255,255,.1);box-shadow:0 26px 80px rgba(0,0,0,.42)}
 .venueCardDescription{margin:11px 2px 0;color:rgba(255,255,255,.58);font-size:12px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Keep the facade visible even for long venue names and full postal addresses. */
+.mapApp .venueHero{grid-template-columns:48px minmax(0,1fr);gap:8px 12px}
+.mapApp .venueAvatar{width:48px;height:48px;grid-row:1/3}
+.mapApp .venueHero .badge{grid-column:2;justify-self:start}
+.mapApp .venueHero h2,.mapApp .venueHero p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .venueQuick{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.venueQuick span{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);font-size:9px;color:#c8d1cb}
 .venueActions .primaryBtn{font-size:14px;letter-spacing:-.01em}.badge{backdrop-filter:blur(10px)}
 .searchBox input{box-shadow:0 14px 40px rgba(0,0,0,.22)}

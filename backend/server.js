@@ -7,6 +7,7 @@ const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const {discoverMoscowVenues,appearanceFor}=require('./venue-discovery');
 const {installVenueOwner}=require('./venue-owner');
 const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
+const astraRealCity=require('../v2/backend/src/realcity-astra');
 
 const app=express();
 app.use(express.json({limit:'24mb'}));
@@ -32,26 +33,10 @@ function readMapConfig(){
 const MAP_CONFIG=readMapConfig();
 
 
-const realCityJobs=new Map();
 let discoveryJob=null;
 function queueRealCityProfile(markerId){
- if(!DB)return null;
- const key=String(markerId);if(realCityJobs.has(key))return realCityJobs.get(key);
- const job=(async()=>{
-  try{
-   await DB.query("UPDATE shaurmeg_markers SET realcity_status='processing' WHERE id=$1",[markerId]);
-   const q=await DB.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,realcity_astra_assets,realcity_astra_config,realcity_profile FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
-   const marker=q.rows[0];if(!marker)return;
-   const generated=await analyzeRealCityProfile(marker),readiness=astraReadiness(normalizeAstraRealCityAssets(marker.realcity_astra_assets));
-   const profile={...generated,...(marker.realcity_profile?.astra?{astra:marker.realcity_profile.astra}:{}),astra_input:{version:1,mode:'metadata_only',establishment_id:marker.establishment_id||'',asset_count:normalizeAstraRealCityAssets(marker.realcity_astra_assets).length,readiness,config:normalizeAstraRealCityConfig(marker.realcity_astra_config)}};
-   await DB.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[markerId,JSON.stringify(profile),profile.quality||'heuristic']);
-   console.log('RealCity profile ready:',markerId,profile.quality);
-  }catch(e){
-   console.error('RealCity profile:',markerId,e.message);
-   await DB.query("UPDATE shaurmeg_markers SET realcity_status='failed',realcity_updated_at=NOW() WHERE id=$1",[markerId]).catch(()=>{});
-  }
- })().finally(()=>realCityJobs.delete(key));
- realCityJobs.set(key,job);return job;
+ const job=require('../v2/backend/src/realcity-service').queue(markerId);
+ job?.catch(()=>{});return job;
 }
 async function bootstrapRealCityProfiles(){
  if(!DB)return;
@@ -1287,6 +1272,7 @@ function astraManifest(row){
    forbid_flat_photo_billboard:true,
    forbid_unrelated_panorama_scene:true
   },
+  geometry:astraRealCity.geometryManifest(row),
   map_geometry:{
    source:'MapLibre/OpenFreeMap building footprint at venue coordinates',
    hero_building_id:row?.realcity_profile?.scene?.hero_building_id||null,
@@ -1523,13 +1509,14 @@ app.get('/api/shaurma/admin/astra-realcity/:establishmentId',async(req,res)=>{
  try{
   const all=await DB.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_astra_assets,realcity_astra_config,realcity_status,realcity_quality,realcity_updated_at,realcity_profile FROM shaurmeg_markers WHERE establishment_id=$1 AND is_active=TRUE ORDER BY id",[est]);
   if(!all.rows.length)return res.sendStatus(404);
-  const wanted=String(req.query.marker_id||''),row=all.rows.find(x=>String(x.id)===wanted)||all.rows[0];
+  const wanted=String(req.query.marker_id||''),row=wanted?all.rows.find(x=>String(x.id)===wanted):all.rows[0];
+  if(!row)return res.sendStatus(404);
   const assets=normalizeAstraRealCityAssets(row.realcity_astra_assets),config=normalizeAstraRealCityConfig(row.realcity_astra_config);
   res.json({
    ok:true,
    markers:all.rows.map(x=>({marker_id:String(x.id),name:x.name,address:x.address,lat:x.lat,lon:x.lon})),
    marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,name:row.name,address:row.address,lat:row.lat,lon:row.lon,
-   assets,config,readiness:astraReadiness(assets),manifest:astraManifest({...row,realcity_astra_assets:assets,realcity_astra_config:config}),
+   assets,config,readiness:astraReadiness(assets),manifest:astraManifest(row),output:row.realcity_profile?.astra||null,
    realcity:{status:row.realcity_status||'pending',quality:row.realcity_quality||'heuristic',updated_at:row.realcity_updated_at||null,profile_version:Number(row.realcity_profile?.version||0)}
   });
  }catch(e){console.error('astra realcity read:',e.message);res.status(500).json({error:'astra_realcity_read_failed'})}
@@ -1548,12 +1535,30 @@ app.put('/api/shaurma/admin/astra-realcity/:establishmentId',async(req,res)=>{
   const assets=normalizeAstraRealCityAssets(req.body?.assets),readiness=astraReadiness(assets);
   const config=normalizeAstraRealCityConfig({...req.body?.config,status:req.body?.config?.status||(readiness.ready?'ready_for_astra':'collecting'),updated_at:new Date().toISOString()});
   const updated=await DB.query(
-   "UPDATE shaurmeg_markers SET realcity_astra_assets=$2::jsonb,realcity_astra_config=$3::jsonb,updated_at=NOW() WHERE id=$1 RETURNING *",
-   [row.id,JSON.stringify(assets),JSON.stringify(config)]
+   "UPDATE shaurmeg_markers SET realcity_astra_assets=$2::jsonb,realcity_astra_config=$3::jsonb,realcity_profile=jsonb_set(realcity_profile,'{astra_input}',$4::jsonb) || CASE WHEN realcity_profile ? 'astra' AND $5::boolean THEN jsonb_build_object('astra',(realcity_profile->'astra') || '{\"status\":\"stale\"}'::jsonb) ELSE '{}'::jsonb END,updated_at=NOW() WHERE id=$1 RETURNING *",
+   [row.id,JSON.stringify(assets),JSON.stringify(config),JSON.stringify({version:1,mode:'metadata_only',asset_count:assets.length,readiness,config}),astraRealCity.revision(row)!==astraRealCity.revision({...row,realcity_astra_assets:assets,realcity_astra_config:config})]
   );
   const saved=updated.rows[0];
-  res.json({ok:true,marker_id:String(saved.id),establishment_id:est,assets,config,readiness,manifest:astraManifest(saved)});
+  res.json({ok:true,marker_id:String(saved.id),establishment_id:est,assets,config,readiness,manifest:astraManifest(saved),output:saved.realcity_profile?.astra||null});
  }catch(e){console.error('astra realcity save:',e.message);res.status(500).json({error:'astra_realcity_save_failed'})}
+});
+
+// Output is a separate, authenticated Astra operation. It can only touch the
+// astra subtree, never scene, marker routing, venue data or reference originals.
+app.put('/api/shaurma/admin/astra-realcity/:establishmentId/output',async(req,res)=>{
+ if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.sendStatus(503);
+ const est=String(req.params.establishmentId||'').toUpperCase(),id=String(req.body?.marker_id||'');
+ if(!/^SC-MSK-[A-F0-9]{10}$/.test(est)||!/^\d+$/.test(id))return res.sendStatus(400);
+ let client;
+ try{
+  client=await DB.connect();
+  await client.query('BEGIN');
+  const q=await client.query('SELECT * FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE FOR UPDATE',[id,est]);
+  if(!q.rows[0]){await client.query('ROLLBACK');return res.sendStatus(404)}
+  const output=await astraRealCity.save(client,q.rows[0],req.body);
+  await client.query('COMMIT');res.json({ok:true,marker_id:id,establishment_id:est,output});
+ }catch(e){if(client)await client.query('ROLLBACK').catch(()=>{});res.status(e.status||500).json({error:e.status?e.message:'astra_output_failed'})}
+ finally{client?.release()}
 });
 
 app.get('/api/shaurmeg/realcity-profile/:id',async(req,res)=>{

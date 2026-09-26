@@ -12,9 +12,10 @@ function queue(markerId){
       const q=await db.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,realcity_astra_config,realcity_profile,jsonb_array_length(realcity_astra_assets) astra_asset_count FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[id]);
       const marker=q.rows[0];if(!marker)return null;
       const profile=await analyzeRealCityProfile(marker);
-      if(marker.realcity_profile?.astra)profile.astra=marker.realcity_profile.astra;
       if(Number(marker.astra_asset_count||0)>0)profile.astra_input={version:1,mode:'metadata_only',establishment_id:marker.establishment_id||'',asset_count:Number(marker.astra_asset_count||0),config:marker.realcity_astra_config||{}};
-      await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
+      // Merge only generated keys; keep the latest Astra output/input even if an
+      // admin saved a reconstruction while the geometry request was in flight.
+      await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb || (realcity_profile - ARRAY['version','generated_at','quality','confidence','building_style','palette','neighborhood_palette','facade','texture','environment','camera','scene']),realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
       return profile;
     }catch(e){
       console.error('realcity',id,e.message);

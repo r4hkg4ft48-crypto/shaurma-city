@@ -3,6 +3,8 @@
   const $=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search);
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false,userMarker=null,focusToken=0,markerRenderFrame=0;
+  let astraLayer=null,astraScripts=null,quarterFrame=0;
+  const baseBuildingPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
@@ -194,6 +196,10 @@
         if(l.type==='symbol'&&/road|place|poi|label/i.test(id)){map.setPaintProperty(l.id,'text-color',cityPalette.label);map.setPaintProperty(l.id,'text-halo-color',cityPalette.background);map.setPaintProperty(l.id,'text-halo-width',1.2)}
       }catch{}
     }
+    for(const id of buildingLayers){
+      const type=map.getLayer(id)?.type,props=type==='fill-extrusion'?['fill-extrusion-height','fill-extrusion-base']:['fill-opacity'];
+      baseBuildingPaint.set(id,Object.fromEntries(props.map(p=>[p,map.getPaintProperty(id,p)])));
+    }
   }
   function addFocusLayers(){
     if(map.getSource('focus-building'))return;
@@ -233,7 +239,7 @@
     map.addLayer({id:'realcity-context-extrude',type:'fill-extrusion',source:'realcity-context',paint:{
       'fill-extrusion-color':['coalesce',['get','wall'],'#b9b7ad'],
       'fill-extrusion-height':['coalesce',['get','height'],1],
-      'fill-extrusion-base':0,
+      'fill-extrusion-base':['coalesce',['get','base'],0],
       'fill-extrusion-opacity':.78
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
@@ -246,7 +252,7 @@
     map.addLayer({id:'focus-building-extrude',type:'fill-extrusion',source:'focus-building',paint:{
       'fill-extrusion-color':['coalesce',['get','wall'],'#a59c88'],
       'fill-extrusion-height':['coalesce',['get','height'],18],
-      'fill-extrusion-base':0,'fill-extrusion-opacity':.97
+      'fill-extrusion-base':['coalesce',['get','base'],0],'fill-extrusion-opacity':.97
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
       'line-color':['coalesce',['get','accent'],'#F4F7FA'],'line-width':1.55,'line-opacity':.78
@@ -279,14 +285,65 @@
     }
     return {type:'FeatureCollection',features:[{type:'Feature',properties:{ground:p.realcity_profile?.palette?.ground||'#d8d3c8'},geometry:{type:'Polygon',coordinates:[ring]}}]};
   }
-  function setBaseBuildingsDim(active){
+  function setBaseBuildingsDim(active,features=[]){
+    // `within` does not evaluate polygon features in MapLibre. Distance to an
+    // inset footprint detects overlapping native polygons, without hiding a
+    // neighboring building merely because its wall touches the reconstructed one.
+    const polygons=features.map(f=>{
+      const r=f.geometry?.coordinates?.[0];if(!r?.length)return null;
+      const ring=window.RealCitySpatial.bufferRing(r,-.3);
+      return {type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[ring]}};
+    }).filter(Boolean);
+    const covered=['<',['distance',{type:'FeatureCollection',features:polygons}],.05];
+    const mask=value=>{
+      // MapLibre requires zoom to remain at the top-level ramp.
+      if(Array.isArray(value)&&['interpolate','interpolate-hcl','interpolate-lab'].includes(value[0])&&value[2]?.[0]==='zoom')return value.map((v,i)=>i>=4&&i%2===0?mask(v):v);
+      if(Array.isArray(value)&&value[0]==='step'&&value[1]?.[0]==='zoom')return value.map((v,i)=>i>=2&&i%2===0?mask(v):v);
+      return ['case',covered,0,value];
+    };
     for(const id of buildingLayers){
       try{
         const type=map.getLayer(id)?.type;
-        if(type==='fill-extrusion')map.setPaintProperty(id,'fill-extrusion-opacity',active?.14:.84);
-        else if(type==='fill')map.setPaintProperty(id,'fill-opacity',active?.16:(daypart()==='night'?.76:.86));
+        const saved=baseBuildingPaint.get(id)||{};
+        for(const [prop,value] of Object.entries(saved)){
+          const initial=value??(prop==='fill-opacity'?1:0);
+          map.setPaintProperty(id,prop,active&&polygons.length?mask(initial):initial);
+        }
       }catch{}
     }
+  }
+  function loadAstraRenderer(){
+    if(window.RealCityLayer)return Promise.resolve();
+    if(astraScripts)return astraScripts;
+    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-2';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('astra_renderer_unavailable'))};document.head.appendChild(s)});
+    astraScripts=(window.RealCitySpatial?Promise.resolve():load('realcity-spatial.js')).then(()=>load('vendor/earcut.min.js')).then(()=>load('realcity-layer.js')).catch(e=>{astraScripts=null;throw e});
+    return astraScripts;
+  }
+  function removeAstraLayer(){
+    if(map.getLayer('realcity-astra-facades'))map.removeLayer('realcity-astra-facades');astraLayer=null;
+  }
+  async function selectRealCityProfile(p,token){
+    try{
+      const r=await fetchWithTimeout(api+'/map/markers/'+encodeURIComponent(p.id)+'/realcity?establishment_id='+encodeURIComponent(p.establishment_id),10000);
+      if(!r.ok)return;
+      const j=await r.json();if(token!==focusToken||String(j.marker_id)!==String(p.id)||j.establishment_id!==p.establishment_id||j.venue_id!==p.venue_id)return;
+      p.realcity_profile=j.profile||p.realcity_profile;
+      if(j.profile?.astra?.status==='ready'){
+        await loadAstraRenderer();if(token!==focusToken)return;
+        if(window.RealCitySpatial.bound(j.profile.astra,p,j.profile.scene)){
+          removeAstraLayer();
+          const layer=window.RealCityLayer.create({marker:p,profile:j.profile,reducedMotion:reduceMotion,onError:e=>console.warn('Astra renderer fallback',e.message)});
+          if(layer){map.addLayer(layer);if(layer.ready)astraLayer=layer;else removeAstraLayer();}
+        }
+      }
+      if(token!==focusToken)return;
+      if(astraLayer){
+        const cam=j.profile.astra.camera,offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
+        map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
+        $('#realBadge').textContent='REAL CITY · ASTRA';
+      }
+      revealQuarter(p,p.realcity_profile);
+    }catch(e){if(token===focusToken)console.warn('RealCity profile',e.message)}
   }
   function buildQuarterData(p,profile){
     const scene=profile?.scene||{},rawBuildings=Array.isArray(scene.buildings)?scene.buildings:[],heroId=scene.hero_building_id||profile?.scene?.hero_building_id;
@@ -300,6 +357,7 @@
         id:String(b.id||''),role:b.role||'background',wall:b.palette?.wall||'#b9b7ad',
         accent:b.palette?.accent||b.palette?.roof||'#d7d5cf',windows:b.palette?.windows||'#39444a',
         targetHeight:Math.max(3,Math.min(Number(b.height)||9,140)),height:1,
+        base:Math.max(0,Number(b.base_m)||0),
         levels:Number(b.levels)||1,style:String(b.style||'')
       },geometry:{type:'Polygon',coordinates:[ring]}};
     };
@@ -318,6 +376,7 @@
     return {heroFeature,contextFeatures,roads,greens,trees,radius:Math.max(80,Math.min(Number(scene.radius_m)||170,220))};
   }
   function clearQuarter(){
+    cancelAnimationFrame(quarterFrame);removeAstraLayer();
     for(const id of ['realcity-ground','realcity-greens','realcity-roads','realcity-context','realcity-trees','focus-building'])map.getSource(id)?.setData(emptyGeo());
     try{map.setPaintProperty('realcity-ground-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',0)}catch{}
@@ -326,12 +385,15 @@
     setBaseBuildingsDim(false);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
+    cancelAnimationFrame(quarterFrame);
     const token=focusToken,data=buildQuarterData(p,profile);
     if(!data.heroFeature&&!data.contextFeatures.length){
       setTimeout(()=>{if(token===focusToken)nearestBuilding(p,profile)},reduceMotion?0:360);
       return;
     }
-    document.body.classList.add('realCityActive');setBaseBuildingsDim(true);
+    const replaced=new Set(astraLayer?profile.astra.buildings.map(b=>b.building_id):[]);
+    const covered=(profile.scene?.buildings||[]).filter(b=>replaced.has(String(b.id))).map(b=>({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[b.ring]}}));
+    document.body.classList.add('realCityActive');setBaseBuildingsDim(true,[data.heroFeature,...data.contextFeatures,...covered].filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
@@ -343,29 +405,31 @@
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
-    const duration=reduceMotion?1:820,started=performance.now();
-    const context=data.contextFeatures,hero=data.heroFeature;
+    const duration=reduceMotion?1:980,started=performance.now();
+    const context=data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null;
+    if(!hero)heroSource?.setData(emptyGeo());
     const render=(now)=>{
       if(token!==focusToken)return;
       const elapsed=now-started;
+      astraLayer?.setProgress(reduceMotion?1:Math.min(1,elapsed/duration));
       const grown=context.map((f,index)=>{
         const delay=reduceMotion?0:Math.min(index,16)*22;
         const t=reduceMotion?1:Math.max(0,Math.min(1,(elapsed-delay)/610)),e=1-Math.pow(1-t,3);
-        return {...f,properties:{...f.properties,height:Math.max(.8,f.properties.targetHeight*e)}};
+        return {...f,properties:{...f.properties,height:Math.max(.8,f.properties.base+(f.properties.targetHeight-f.properties.base)*e)}};
       });
       contextSource?.setData({type:'FeatureCollection',features:grown});
       if(hero){
         const delay=reduceMotion?0:150,t=reduceMotion?1:Math.max(0,Math.min(1,(elapsed-delay)/650)),e=1-Math.pow(1-t,3);
-        heroSource?.setData({type:'FeatureCollection',features:[{...hero,properties:{...hero.properties,height:Math.max(.8,hero.properties.targetHeight*e)}}]});
+        heroSource?.setData({type:'FeatureCollection',features:[{...hero,properties:{...hero.properties,height:Math.max(.8,hero.properties.base+(hero.properties.targetHeight-hero.properties.base)*e)}}]});
       }
-      if(elapsed<duration)requestAnimationFrame(render);
+      if(elapsed<duration)quarterFrame=requestAnimationFrame(render);
       else{
         document.body.classList.add('realCitySettled');
-        $('#focusHudState').textContent='цифровая копия готова';
+        $('#focusHudState').textContent=astraLayer?'фасады Astra на карте':'геометрия квартала';
         tg?.HapticFeedback?.impactOccurred?.('light');
       }
     };
-    requestAnimationFrame(render);
+    quarterFrame=requestAnimationFrame(render);
   }
   function setFocusZone(p){map.getSource('focus-zone')?.setData(p?pointFeature(p):emptyGeo())}
   function setFlight(from,p){
@@ -375,7 +439,7 @@
     const hud=$('#focusHud');if(!hud)return;
     $('#focusHudName').textContent=p.name||'Заведение';$('#focusHudState').textContent='входим в квартал';
     hud.classList.add('show');clearTimeout(showFocusHud.t);clearTimeout(showFocusHud.t2);
-    showFocusHud.t=setTimeout(()=>{if($('#focusHudState'))$('#focusHudState').textContent='собираем окружение'},720);
+    showFocusHud.t=setTimeout(()=>{if(!document.body.classList.contains('realCitySettled')&&$('#focusHudState'))$('#focusHudState').textContent='собираем окружение'},720);
     showFocusHud.t2=setTimeout(()=>hud.classList.remove('show'),3300);
   }
   function cinematicFocus(p){
@@ -522,6 +586,12 @@
       if(e.originalEvent.target.closest?.('.mapMarker'))return;
       const hit=map.queryRenderedFeatures(e.point,{layers:['venue-clusters','venue-single-dot']});
       if(hit?.length)return;
+      const facade=astraLayer?.pick(e.point);
+      if(facade){
+        $('#focusHudName').textContent=facade.role==='hero'?(selected?.name||'Главное здание'):'Соседнее здание';
+        $('#focusHudState').textContent=facade.evidence==='observed'?'Фасад восстановлен по фото':'Сторона без подтверждённого фото';
+        $('#focusHud').classList.add('show');clearTimeout(showFocusHud.t2);showFocusHud.t2=setTimeout(()=>$('#focusHud').classList.remove('show'),2800);return;
+      }
       closeCard();
     });
     map.on('movestart',()=>document.body.classList.add('mapMoving'));
@@ -557,13 +627,15 @@
   }
   function selectPoint(p){
     closePanels();selected=p;markers.forEach((m,k)=>m.getElement().classList.toggle('selected',k===String(p.id)));
-    $('#venueName').textContent=p.name||'Заведение';$('#venueAddress').textContent=p.address||'';$('#venueDescription').textContent=p.description||'';$('#venueDescription').classList.toggle('hidden',!p.description);
+    $('#venueName').textContent=p.name||'Заведение';$('#venueName').title=p.name||'';$('#venueAddress').textContent=p.address||'';$('#venueAddress').title=p.address||'';$('#venueDescription').textContent=p.description||'';$('#venueDescription').classList.toggle('hidden',!p.description);
     $('#venueHoursQuick').textContent=p.hours||'';$('#venueHoursQuick').classList.toggle('hidden',!p.hours);$('#venuePriceQuick').textContent=p.price_label||'';$('#venuePriceQuick').classList.toggle('hidden',!p.price_label);
     $('#realBadge').textContent=p.realcity_quality&&p.realcity_quality!=='heuristic'?'REAL CITY · '+String(p.realcity_quality).toUpperCase():'REAL CITY';
     const a=$('#venueAvatar');a.innerHTML=p.has_avatar?'<img alt="" src="'+api+'/map/markers/'+encodeURIComponent(p.id)+'/avatar">':esc(p.marker_style?.icon||'🥙');
     $('#venueCard').classList.add('show');
     cinematicFocus(p);
-    setTimeout(()=>{if(selected&&String(selected.id)===String(p.id))revealQuarter(p,p.realcity_profile||{})},reduceMotion?220:560);
+    const token=focusToken;
+    setTimeout(()=>{if(token===focusToken&&!astraLayer)revealQuarter(p,p.realcity_profile||{})},reduceMotion?220:560);
+    selectRealCityProfile(p,token);
     tg?.HapticFeedback?.selectionChanged?.();
   }
   function closeCard(){

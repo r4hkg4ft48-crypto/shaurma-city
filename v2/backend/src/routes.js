@@ -199,7 +199,7 @@ router.get('/map/points',async(req,res)=>{
   try{
     const q=await db.query(`
       SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.description,m.hours,m.price_label,m.lat,m.lon,m.category,m.marker_style,
-        (m.marker_avatar<>'') has_avatar,m.realcity_profile,m.realcity_quality,m.updated_at,
+        (m.marker_avatar<>'') has_avatar,(m.realcity_profile - 'astra') realcity_profile,m.realcity_quality,m.updated_at,
         (jsonb_array_length(v.menu)>0) has_menu
       FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
       WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
@@ -207,6 +207,16 @@ router.get('/map/points',async(req,res)=>{
     res.setHeader('Cache-Control','no-store');
     res.json(q.rows.map(x=>({...x,marker_id:x.id,marker_style:D.markerStyle(x.marker_style),has_avatar:!!x.has_avatar,has_menu:!!x.has_menu,realcity_profile:x.realcity_profile||{}})));
   }catch(e){fail(res,e,'map_points_failed')}
+});
+router.get('/map/markers/:id/realcity',async(req,res)=>{
+  try{
+    const q=await db.query('SELECT id,establishment_id,venue_id,lat,lon,realcity_profile,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
+    const row=q.rows[0];if(!row)return res.sendStatus(404);
+    const profile=row.realcity_profile||{};
+    if(Number(profile.version||0)<realcity.PROFILE_VERSION)realcity.queue(row.id)?.catch(()=>{});
+    res.setHeader('Cache-Control','no-store');
+    res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
+  }catch(e){fail(res,e,'realcity_read_failed')}
 });
 router.get('/map/markers/:id/avatar',async(req,res)=>{
   try{

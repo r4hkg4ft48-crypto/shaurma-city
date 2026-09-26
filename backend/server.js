@@ -40,9 +40,12 @@ function queueRealCityProfile(markerId){
  const job=(async()=>{
   try{
    await DB.query("UPDATE shaurmeg_markers SET realcity_status='processing' WHERE id=$1",[markerId]);
-   const q=await DB.query("SELECT id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
+   const q=await DB.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,hero_image,gallery,realcity_reference_images,realcity_astra_assets,realcity_astra_config FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[markerId]);
    const marker=q.rows[0];if(!marker)return;
-   const profile=await analyzeRealCityProfile(marker);
+   const astraRefs=astraLegacyReferences(marker.realcity_astra_assets),legacy=Array.isArray(marker.realcity_reference_images)?marker.realcity_reference_images:[];
+   const seen=new Set();marker.realcity_reference_images=[...astraRefs,...legacy].filter(x=>{const src=String(x?.src||'');if(!src||seen.has(src))return false;seen.add(src);return true}).slice(0,8);
+   const generated=await analyzeRealCityProfile(marker),readiness=astraReadiness(normalizeAstraRealCityAssets(marker.realcity_astra_assets));
+   const profile={...generated,astra_input:{version:1,establishment_id:marker.establishment_id||'',asset_count:normalizeAstraRealCityAssets(marker.realcity_astra_assets).length,readiness,config:normalizeAstraRealCityConfig(marker.realcity_astra_config)}};
    await DB.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[markerId,JSON.stringify(profile),profile.quality||'heuristic']);
    console.log('RealCity profile ready:',markerId,profile.quality);
   }catch(e){

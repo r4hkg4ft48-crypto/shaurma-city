@@ -33,6 +33,8 @@ async function ensureSchema(){
     marker_avatar TEXT NOT NULL DEFAULT '',
     marker_style JSONB NOT NULL DEFAULT '{}'::jsonb,
     realcity_reference_images JSONB NOT NULL DEFAULT '[]'::jsonb,
+    realcity_astra_assets JSONB NOT NULL DEFAULT '[]'::jsonb,
+    realcity_astra_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     realcity_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
     realcity_status TEXT NOT NULL DEFAULT 'pending',
     realcity_quality TEXT NOT NULL DEFAULT 'heuristic',
@@ -51,6 +53,8 @@ async function ensureSchema(){
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
   CREATE INDEX IF NOT EXISTS idx_v2_markers_establishment ON shaurmeg_markers(establishment_id);
+  ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_assets JSONB NOT NULL DEFAULT '[]'::jsonb;
+  ALTER TABLE shaurmeg_markers ADD COLUMN IF NOT EXISTS realcity_astra_config JSONB NOT NULL DEFAULT '{}'::jsonb;
   CREATE INDEX IF NOT EXISTS idx_v2_markers_geo ON shaurmeg_markers(lat,lon);
 
   CREATE TABLE IF NOT EXISTS shaurma_users(

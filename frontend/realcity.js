@@ -27,7 +27,7 @@ function hexRgb(hex){const m=String(hex||'').match(/^#([0-9a-f]{6})$/i);return m
 function rgbHex(r,g,b){const x=n=>clamp(Math.round(n),0,255).toString(16).padStart(2,'0');return '#'+x(r)+x(g)+x(b)}
 function shade(hex,d){const c=hexRgb(hex);return c?rgbHex(c[0]+d,c[1]+d,c[2]+d):hex}
 function alpha(hex,a){const c=hexRgb(hex);return c?`rgba(${c[0]},${c[1]},${c[2]},${a})`:hex}
-function qualityLabel(q){return ({photo:'PHOTO',street:'STREET',osm:'OSM',heuristic:'AUTO'})[q]||'AUTO'}
+function qualityLabel(q){return ({astra:'ASTRA',osm:'OSM',heuristic:'MAP'})[q]||'MAP'}
 
 const DEFAULT_PROFILE={
  version:8,quality:'heuristic',confidence:.35,building_style:'panel_simple',
@@ -618,24 +618,8 @@ function makeFacadePattern(name,palette,facade,variant=0,style='panel_simple'){
  addOrReplaceImage(name,canvasImageData(c),1);
  return name;
 }
-async function addPhotoPattern(name,dataUrl){
- if(!dataUrl)return false;
- return new Promise(resolve=>{
-   const img=new Image();
-   img.onload=()=>{
-     try{
-       const c=document.createElement('canvas');c.width=128;c.height=256;const x=c.getContext('2d');x.drawImage(img,0,0,128,256);
-       const glaze=x.createLinearGradient(0,0,128,0);glaze.addColorStop(0,'rgba(255,255,255,.03)');glaze.addColorStop(.55,'rgba(255,255,255,0)');glaze.addColorStop(1,'rgba(0,0,0,.05)');x.fillStyle=glaze;x.fillRect(0,0,128,256);
-       addOrReplaceImage(name,canvasImageData(c),1);resolve(true);
-     }catch{resolve(false)}
-   };
-   img.onerror=()=>resolve(false);img.src=dataUrl;
- });
-}
 async function installPatterns(profile){
  const p=safeProfile(profile),names=['rcp-near-1','rcp-near-2','rcp-near-3','rcp-near-4'];
- // IMPORTANT: the selected/hero building is never textured with the source photo.
- // Reference photos are analysis input only; the building itself is recolored from the extracted palette.
  const sw=p.neighborhood_palette||[];
  for(let i=1;i<=4;i++){
    const wall=sw[(i-1)%Math.max(1,sw.length)]||shade(p.palette.wall,(i-2)*7);
@@ -924,7 +908,7 @@ async function focusVenue(m,replay=false){
 
  requestAnimationFrame(()=>requestAnimationFrame(()=>{animateMorph();animateFocusGlow(token)}));
  $('#rcLive').textContent='REAL CITY · '+qualityLabel(p.quality);
- const src=p.quality==='photo'?'по цветам фасада с фото':p.quality==='street'?'по цветам уличных снимков':p.quality==='osm'?'по геометрии зданий':'по фотопрофилю';
+ const src=p.astra?'Astra digital twin':p.quality==='osm'?'по геометрии зданий':'базовая геометрия карты';
  status('Квартал восстановлен '+src);
  setTimeout(()=>{if(token===sceneToken)status('',false)},1900);
 }

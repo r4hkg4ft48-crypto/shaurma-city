@@ -1004,7 +1004,8 @@ function masterAdminUrl(tab='overview'){
 function masterModuleUrl(module){
  if(module==='orders')return PUBLIC_API_URL+'/shaurma-owner?section=orders&from=master&v=5';
  if(module==='menu')return PUBLIC_API_URL+'/shaurma-owner?section=menu&from=master&v=5';
- if(module==='map'||module==='realcity'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
+ if(module==='realcity')return masterAdminUrl('astra');
+ if(module==='map'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
  if(module==='owners')return masterAdminUrl('owners');
  if(module==='sites')return masterAdminUrl('sites');
  if(module==='bots')return masterAdminUrl('bots');
@@ -1074,7 +1075,8 @@ async function handleMasterAdminUpdate(update){
  if(/^\/(?:keys|access)(?:@[A-Za-z0-9_]+)?$/i.test(text))return adminVenueKeyPage(chatId,0,null,api);
  if(/^\/id(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'Ваш Telegram ID: '+String(user.id)});
  if(/^\/venues(?:@[A-Za-z0-9_]+)?$/i.test(text))return masterAdminVenues(chatId,api);
- if(/^\/(?:map|add|realcity)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🗺 Редактор карты, точек и RealCity.',reply_markup:{inline_keyboard:[[{text:'Открыть редактор',web_app:{url:masterModuleUrl('map')}}]]}});
+ if(/^\/(?:map|add)(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🗺 Редактор карты и точек.',reply_markup:{inline_keyboard:[[{text:'Открыть редактор',web_app:{url:masterModuleUrl('map')}}]]}});
+ if(/^\/realcity(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'✦ Astra / RealCity · материалы для точного цифрового двойника конкретного заведения.',reply_markup:{inline_keyboard:[[{text:'Открыть Astra Studio',web_app:{url:masterModuleUrl('realcity')}}]]}});
  if(/^\/menu(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🍽 Управление меню всех заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть меню',web_app:{url:masterModuleUrl('menu')}}]]}});
  if(/^\/orders(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'🧾 Заказы Shaurmeg в реальном времени.',reply_markup:{inline_keyboard:[[{text:'Открыть заказы',web_app:{url:masterModuleUrl('orders')}}]]}});
  if(/^\/owners(?:@[A-Za-z0-9_]+)?$/i.test(text))return api('sendMessage',{chat_id:chatId,text:'👥 Доступы владельцев и заведений.',reply_markup:{inline_keyboard:[[{text:'Открыть владельцев',web_app:{url:masterModuleUrl('owners')}}],[{text:'Создать ключ',callback_data:'akp:0'}]]}});
@@ -1264,11 +1266,10 @@ function normalizeAstraRealCityAssets(value){
 }
 function astraLegacyReferences(assets){
  const rows=(Array.isArray(assets)?assets:[]).filter(x=>String(x.src||'').startsWith('data:image/'));
- return rows
-  .slice()
-  .sort((a,b)=>(b.primary===true)-(a.primary===true)||(Number(b.priority)||0)-(Number(a.priority)||0))
-  .slice(0,8)
-  .map(x=>({src:x.src,role:x.category==='main_building'?'hero_facade':'environment'}));
+ const sort=(a,b)=>(b.primary===true)-(a.primary===true)||(Number(b.priority)||0)-(Number(a.priority)||0);
+ const main=rows.filter(x=>x.category==='main_building').sort(sort).slice(0,4);
+ const pano=rows.filter(x=>x.category==='panorama').sort(sort).slice(0,4);
+ return [...main.map(x=>({src:x.src,role:'hero_facade'})),...pano.map(x=>({src:x.src,role:'environment'}))];
 }
 function astraReadiness(assets){
  const list=Array.isArray(assets)?assets:[],main=list.filter(x=>x.category==='main_building'),pano=list.filter(x=>x.category==='panorama');
@@ -1295,6 +1296,12 @@ function astraManifest(row){
    facade_must_align_to_existing_building:true,
    forbid_flat_photo_billboard:true,
    forbid_unrelated_panorama_scene:true
+  },
+  map_geometry:{
+   source:'MapLibre/OpenFreeMap building footprint at venue coordinates',
+   hero_building_id:row?.realcity_profile?.scene?.hero_building_id||null,
+   hero_building_ring:(row?.realcity_profile?.scene?.buildings||[]).find(x=>x?.role==='hero')?.ring||null,
+   scene_radius_m:Number(row?.realcity_profile?.scene?.radius_m||config.radius_m)||config.radius_m
   },
   config,readiness,
   references:{

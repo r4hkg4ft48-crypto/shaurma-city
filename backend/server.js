@@ -6,7 +6,7 @@ const crypto=require('crypto');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const {discoverMoscowVenues,appearanceFor}=require('./venue-discovery');
 const {installVenueOwner}=require('./venue-owner');
-const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
+const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const v2Realtime=require('../v2/backend/src/realtime');
 const astraRealCity=require('../v2/backend/src/realcity-astra');
 
@@ -1687,9 +1687,13 @@ app.put('/api/shaurma/admin/establishments/:establishmentId/venue',async(req,res
  if(!DB)return res.status(503).json({error:'persistent_storage_required'});
  const establishmentId=String(req.params.establishmentId||'').trim().toUpperCase();
  if(!/^SC-MSK-[A-F0-9]{10}$/.test(establishmentId))return res.status(400).json({error:'bad_establishment_id'});
- const body=req.body||{},config=body.config&&typeof body.config==='object'&&!Array.isArray(body.config)?body.config:{},menu=Array.isArray(body.menu)?body.menu:[];
- const menuBytes=Buffer.byteLength(JSON.stringify(menu),'utf8'),configBytes=Buffer.byteLength(JSON.stringify(config),'utf8');
+ const body=req.body||{},config=body.config&&typeof body.config==='object'&&!Array.isArray(body.config)?body.config:{},inputMenu=Array.isArray(body.menu)?body.menu:[];
+ const menuBytes=Buffer.byteLength(JSON.stringify(inputMenu),'utf8'),configBytes=Buffer.byteLength(JSON.stringify(config),'utf8');
  if(configBytes>250000||menuBytes>12*1024*1024)return res.status(413).json({error:'venue_too_large',menu_bytes:menuBytes,config_bytes:configBytes,menu_limit_bytes:12*1024*1024});
+ const rawIds=inputMenu.map((x,i)=>String(x?.id||'item_'+i).trim().slice(0,100)),duplicateId=rawIds.find((id,i)=>rawIds.indexOf(id)!==i);
+ if(duplicateId)return res.status(400).json({error:'duplicate_menu_item_id',item_id:duplicateId});
+ const menu=normalizeMenu(inputMenu);
+ if(menu.length!==inputMenu.length)return res.status(400).json({error:'invalid_menu_items',received:inputMenu.length,normalized:menu.length});
  try{
   const q=await DB.query(`
    UPDATE shaurma_venues
@@ -1698,11 +1702,12 @@ app.put('/api/shaurma/admin/establishments/:establishmentId/venue',async(req,res
    RETURNING *
   `,[establishmentId,JSON.stringify(config),JSON.stringify(menu),typeof body.is_active==='boolean'?body.is_active:null]);
   if(!q.rows[0])return res.sendStatus(404);
-  const saved=q.rows[0];
+  const saved=q.rows[0],savedMenu=Array.isArray(saved.menu)?saved.menu:[];
   publishVenue(saved);
-  v2Realtime.pushVenue(establishmentId,'menu_changed',{establishment_id:establishmentId,venue_id:saved.venue_id,updated_at:saved.updated_at,menu_count:Array.isArray(saved.menu)?saved.menu.length:0,section_count:Array.isArray(saved.config?.menu_sections)?saved.config.menu_sections.length:0});
+  const syncPayload={establishment_id:establishmentId,venue_id:saved.venue_id,updated_at:saved.updated_at,menu_count:savedMenu.length,image_count:savedMenu.filter(x=>String(x?.image||x?.i||'')).length,section_count:Array.isArray(saved.config?.menu_sections)?saved.config.menu_sections.length:0,item_ids:savedMenu.map(x=>String(x.id))};
+  v2Realtime.pushVenue(establishmentId,'menu_changed',syncPayload);
   const marker=await DB.query("SELECT id FROM shaurmeg_markers WHERE establishment_id=$1 AND venue_id=$2 AND is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE ORDER BY id LIMIT 1",[establishmentId,saved.venue_id]);
-  res.json({...saved,sync:{ok:true,marker_id:marker.rows[0]?.id||null,menu_count:Array.isArray(saved.menu)?saved.menu.length:0,section_count:Array.isArray(saved.config?.menu_sections)?saved.config.menu_sections.length:0,updated_at:saved.updated_at}});
+  res.json({...saved,sync:{ok:true,marker_id:marker.rows[0]?.id||null,...syncPayload}});
  }catch(e){console.error('establishment venue update:',e.message);res.status(500).json({error:'venue_update_failed'})}
 });
 

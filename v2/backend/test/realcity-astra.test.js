@@ -103,6 +103,8 @@ test('renderer uses the map coordinate frame and stops oversized meshes before u
  assert.equal(mesh.vertices.every(Number.isFinite),true);
  const identity=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],matrix=context.RealCityLayer.localMatrix(identity,mesh.origin,mesh.scale);
  assert.ok(Math.abs(matrix[12]-mesh.origin[0])<1e-7);assert.ok(matrix[5]<0&&matrix[0]>0&&matrix[10]>0);
+ const eye=context.RealCityLayer.cameraFromMatrix([1,0,0,0,0,1,0,0,0,0,-1,-1,-3,2,1,5]);
+ assert.deepEqual(Array.from(eye),[3,-2,5]);assert.ok(context.RealCityLayer.cameraFromMatrix(identity).every(Number.isFinite));
  const f=astra.buildings[0].facades[0];f.modules=Array.from({length:4000},()=>f.modules[0]);
  assert.throws(()=>context.RealCityLayer.buildMesh(row,row.realcity_profile.scene,astra,atlas),/astra_geometry_budget/);
 });
@@ -114,9 +116,12 @@ test('photo release keeps the exact venue, map footprints and studio priority',(
  assert.equal(JSON.stringify(row),before);assert.equal(p.custom,'keep');assert.equal(p.astra.references.length,10);
  assert.equal(p.astra.references.find(r=>r.number==='1').file,'IMG_7096.jpeg');
  assert.equal(p.astra.references.find(r=>r.number==='10').file,'IMG_7110.jpeg');
- assert.equal(p.astra.materials.length,0);assert.ok(!JSON.stringify(p.astra).includes('data:image'));
+ assert.equal(p.astra.materials.length,8);assert.ok(p.astra.materials.every(m=>m.rectified&&m.source_quad.length===4&&m.data_url.startsWith('data:image/webp;base64,')));
+ assert.ok(p.astra.materials.reduce((n,m)=>n+m.data_url.length,0)<100000);
  assert.equal(R.build({...row,id:'3140'}),null);assert.equal(R.build({...row,lon:row.lon+.001}),null);
  assert.equal(R.build({...row,realcity_profile:p}),null);
+ const previous={...p,astra:{...p.astra,release_id:'zhulebino-photos-1-10-r1'}};
+ const upgraded=R.build({...row,realcity_profile:previous});assert.equal(upgraded.astra.release_id,R.RELEASE);assert.equal(upgraded.scene,previous.scene);
  assert.equal(R.build({...row,realcity_profile:{...p,astra:{version:2,status:'ready',notes:'studio'}}}),null);
  const hero=p.astra.buildings[0];assert.equal(hero.parts.length,3);
  assert.equal(S.geometryKey(hero.parts[0].ring),S.geometryKey(G.scene.buildings[0].ring));
@@ -127,7 +132,8 @@ test('photo release keeps the exact venue, map footprints and studio priority',(
  const r=R.build(reordered);assert.ok(S.bound(r.astra,reordered,r.scene));
  assert.equal(JSON.stringify(r.astra.buildings[0].parts),JSON.stringify(hero.parts));
  const imported=A.compile(p.astra,{...row,realcity_profile:p});
- assert.deepEqual(imported.environment,p.astra.environment);assert.deepEqual(imported.camera,p.astra.camera);
+ assert.deepEqual(imported.environment,p.astra.environment);assert.deepEqual(imported.camera,p.astra.camera);assert.deepEqual(imported.materials,p.astra.materials);
+ const bad=structuredClone(p.astra);bad.materials[0].repeat_m=[0,2];assert.throws(()=>A.compile(bad,{...row,realcity_profile:p}),/astra_invalid_material_repeat/);
 });
 test('photo-authored quarter stays within the mobile mesh and finite-coordinate budget',()=>{
  const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),R=require('../src/realcity-releases/zhulebino');

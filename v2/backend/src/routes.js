@@ -236,6 +236,15 @@ router.get('/menu-image/:establishmentId/:itemId',async(req,res)=>{
     res.type(m[1]).setHeader('Cache-Control','public,max-age=86400,immutable').send(Buffer.from(m[2],'base64'));
   }catch(e){res.sendStatus(404)}
 });
+router.get('/menu-context/stream',async(req,res)=>{
+  try{
+    const ctx=await menuContext(req.query.marker_id,req.query.establishment_id);
+    if(!ctx)return res.status(404).json({error:'menu_context_not_found'});
+    const close=rt.stream(res,rt.venueSet(ctx.venue.establishment_id));
+    req.on('close',close);
+  }catch(e){fail(res,e,'menu_context_stream_failed')}
+});
+
 router.get('/menu-context',async(req,res)=>{
   try{
     const ctx=await menuContext(req.query.marker_id,req.query.establishment_id);if(!ctx)return res.status(404).json({error:'menu_context_not_found'});

@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,menuReloadTimer=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
@@ -373,8 +373,9 @@
     const menu=(ctx.venue.menu||[]).filter(x=>x.active!==false),sections=Array.isArray(ctx.venue.sections)?ctx.venue.sections:[];
     const usedCats=new Set(menu.map(x=>String(x.c||x.category||'')).filter(Boolean));
     const visibleSections=sections.filter(x=>usedCats.has(String(x.id)));
+    if(category!=='all'&&!visibleSections.some(x=>String(x.id)===String(category)))category='all';
     $('#menuCount').textContent=menu.length+' позиций';
-    $('#chips').innerHTML='<button class="chip active" data-cat="all"><i>✦</i><span>Все</span></button>'+visibleSections.map(x=>'<button class="chip" data-cat="'+esc(x.id)+'"><i>'+esc(x.emoji||'•')+'</i><span>'+esc(x.name)+'</span></button>').join('');
+    $('#chips').innerHTML='<button class="chip '+(category==='all'?'active':'')+'" data-cat="all"><i>✦</i><span>Все</span></button>'+visibleSections.map(x=>'<button class="chip '+(String(x.id)===String(category)?'active':'')+'" data-cat="'+esc(x.id)+'"><i>'+esc(x.emoji||'•')+'</i><span>'+esc(x.name)+'</span></button>').join('');
     if(ctx.marker.hero_image){
       $('#menuSection')?.style.setProperty('--menu-atmosphere','url("'+String(ctx.marker.hero_image).replace(/["\\]/g,'')+'")');
     }
@@ -536,6 +537,23 @@
     }catch(e){toast(e.message||'Ошибка заказа')}finally{btn.disabled=false}
   }
 
+  function scheduleMenuReload(){
+    clearTimeout(menuReloadTimer);
+    menuReloadTimer=setTimeout(async()=>{
+      try{await load();toast('Меню обновлено')}catch(e){console.warn('menu live reload',e)}
+    },180);
+  }
+  function connectMenuStream(){
+    if(menuStream||!marker||!est||typeof EventSource==='undefined')return;
+    const u=api+'/menu-context/stream?marker_id='+encodeURIComponent(marker)+'&establishment_id='+encodeURIComponent(est);
+    try{
+      menuStream=new EventSource(u);
+      menuStream.addEventListener('menu_changed',scheduleMenuReload);
+      menuStream.addEventListener('venue',scheduleMenuReload);
+      menuStream.onerror=()=>{};
+    }catch{}
+  }
+
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
   $('#menuFeature').onclick=e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
@@ -582,7 +600,7 @@
     if(!sheetLocked)return;
     if(!e.target.closest?.('.sheet.show'))e.preventDefault();
   },{passive:false});
-  window.addEventListener('pagehide',unlockSheetBackground);
+  window.addEventListener('pagehide',()=>{unlockSheetBackground();try{menuStream?.close()}catch{}menuStream=null});
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
   $('#placeOrder').onclick=submitOrder;
   $('#successMenu').onclick=closeSheets;
@@ -599,6 +617,7 @@
     try{
       await authTelegram();
       await load();
+      connectMenuStream();
       await loadFavoriteState();
       runQuickFavoriteOrder();
     }catch(e){toast(e.message);$('#venueName').textContent='Меню недоступно'}

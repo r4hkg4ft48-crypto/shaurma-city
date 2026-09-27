@@ -234,14 +234,23 @@ async function loadVenues(){
 }
 async function openVenue(id){editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);builderDraft=normalizeBuilderDraft(editingVenue.config?.builder);signatureIdsDraft=(Array.isArray(editingVenue.config?.signature_item_ids)?editingVenue.config.signature_item_ids:[]).map(String).filter(id=>menuDraft.some(x=>String(x.id)===id)).slice(0,10);$('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');$('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';$('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;$('#saveMenu').disabled=false;renderMenuSections();renderMenuEditor();renderBuilderEditor()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function compressMenuPhoto(file,maxW=560,maxH=560,q=.68){
+async function compressMenuPhoto(file,maxW=640,maxH=640,q=.72){
  return new Promise((resolve,reject)=>{
   const img=new Image(),url=URL.createObjectURL(file);
   img.onload=()=>{
-   let w=img.width,h=img.height,k=Math.min(1,maxW/w,maxH/h);w=Math.max(1,Math.round(w*k));h=Math.max(1,Math.round(h*k));
-   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-   const ctx=canvas.getContext('2d');ctx.fillStyle='#101820';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
-   URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',q));
+   try{
+    let k=Math.min(1,maxW/img.width,maxH/img.height),w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k)),quality=q,data='';
+    for(let pass=0;pass<7;pass++){
+     const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+     const ctx=canvas.getContext('2d');ctx.fillStyle='#101820';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+     data=canvas.toDataURL('image/jpeg',quality);
+     if(data.length<=520000)break;
+     if(quality>.48)quality=Math.max(.48,quality-.08);else{w=Math.max(320,Math.round(w*.84));h=Math.max(320,Math.round(h*.84))}
+    }
+    URL.revokeObjectURL(url);
+    if(data.length>650000)return reject(new Error('image_too_large'));
+    resolve(data);
+   }catch(e){URL.revokeObjectURL(url);reject(e)}
   };
   img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image_read_failed'))};img.src=url;
  });
@@ -306,7 +315,27 @@ function renderMenuEditor(){
   </article>`;
  }).join(''):'<div class="menuEmpty">В меню пока нет позиций. Нажмите «Добавить позицию».</div>';
 }
-async function saveVenueMenu(){if(!editingVenue)return;const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Сохраняю изменения…';try{const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');syncBuilderMetaFromInputs();const validSignatureIds=signatureIdsDraft.filter(id=>menuDraft.some(x=>String(x.id)===String(id))).slice(0,10);const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,builder:builderDraft,menu_sections:menuSectionsDraft,signature_item_ids:validSignatureIds};await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#venueBuilder').checked,builder:builderDraft})});await openVenue(venueId);$('#menuSaveHint').textContent='Сохранено для '+establishmentId;toast('Меню и конструктор сохранены ✓')}catch(e){$('#menuSaveHint').textContent='Не удалось сохранить. Проверьте данные конструктора.';toast('Не удалось сохранить меню')}finally{button.disabled=false}}
+async function saveVenueMenu(){
+ if(!editingVenue)return;
+ const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Сохраняю и синхронизирую с пользовательским Mini App…';
+ try{
+  const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');
+  syncBuilderMetaFromInputs();
+  const validSignatureIds=signatureIdsDraft.filter(id=>menuDraft.some(x=>String(x.id)===String(id))).slice(0,10);
+  const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,builder:builderDraft,menu_sections:menuSectionsDraft,signature_item_ids:validSignatureIds};
+  const saved=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});
+  await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#venueBuilder').checked,builder:builderDraft})});
+  await openVenue(venueId);
+  const sync=saved?.sync||{},markerText=sync.marker_id?(' · marker '+sync.marker_id):' · нет активной метки';
+  $('#menuSaveHint').textContent='Синхронизировано: '+Number(sync.menu_count??menuDraft.length)+' позиций · '+Number(sync.section_count??menuSectionsDraft.length)+' разделов'+markerText;
+  toast('Меню опубликовано в пользовательском Mini App ✓');
+ }catch(e){
+  let msg=String(e?.message||'');
+  try{const j=JSON.parse(msg);if(j.error==='venue_too_large')msg='Меню слишком большое. Уменьшите количество/размер фото.'}catch{}
+  $('#menuSaveHint').textContent=msg||'Не удалось сохранить меню.';
+  toast(msg||'Не удалось сохранить меню');
+ }finally{button.disabled=false}
+}
 const BUILDER_GROUPS=[
  {key:'types',title:'Тип продукта',hint:'Базовый продукт и его базовая цена',add:'Добавить тип',base:true,prefix:'type'},
  {key:'breads',title:'Лаваш / основа',hint:'Можно оставить пустым, если выбор основы не нужен',add:'Добавить основу',prefix:'bread'},

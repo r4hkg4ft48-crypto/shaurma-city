@@ -91,7 +91,7 @@ void main(){
       for(const edge of edges){
         if(edge.length<.2)continue;
         const f=b.facades.find(x=>x.edge_index===edge.index),n=[...edge.normal,0],t=[...edge.tangent,0];
-        const point=(u,z,d=0)=>[edge.a[0]+edge.tangent[0]*u+edge.normal[0]*d,edge.a[1]+edge.tangent[1]*u+edge.normal[1]*d,z];
+        const point=(u,z,d=0)=>[edge.a[0]+edge.tangent[0]*u+edge.normal[0]*(d+.035),edge.a[1]+edge.tangent[1]*u+edge.normal[1]*(d+.035),z];
         const plane=(u,z,w,h,d,col,slot,lod=0)=>{
           // Photo crops and lettering read left-to-right from outside, even
           // when OSM stores a clockwise polygon. Module u still follows edge.
@@ -163,7 +163,7 @@ void main(){
         if(b.roof.parapet_m)box(0,height-b.roof.parapet_m,edge.length,b.roof.parapet_m,.055,b.roof.color,0);
       }
       const roof=S.ring(base.ring).slice(0,-1).map(coordinateFrame.toLocal),idx=root.earcut(roof.flat()),col=rgb(b.roof.color);
-      for(let j=0;j<idx.length;j+=3)addTri([...roof[idx[j]],height],[...roof[idx[j+1]],height],[...roof[idx[j+2]],height],[0,0,1],col,[[0,0],[0,0],[0,0]],0,0,order);
+      for(let j=0;j<idx.length;j+=3)addTri([...roof[idx[j]],height+.035],[...roof[idx[j+1]],height+.035],[...roof[idx[j+2]],height+.035],[0,0,1],col,[[0,0],[0,0],[0,0]],0,0,order);
     }
     const beam=(a,b,width,col)=>{
       const d=b.map((v,i)=>v-a[i]),length=Math.hypot(...d);if(length<.01)return;

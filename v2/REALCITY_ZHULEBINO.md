@@ -33,6 +33,11 @@ is exactly the existing OpenFreeMap polygon. Roof parts are subordinate geometry
 inside that polygon. The neighboring residential facades, podiums, shopping
 centre and four metro structures use their own existing map contours.
 
+Native context stays visible. OpenFreeMap sometimes groups distant houses into
+one MultiPolygon feature, so the photo layer masks only the distinct clinic
+envelope and covers neighboring surfaces with a 3.5 cm depth offset. It does not
+hide all polygons in a shared tile feature or generate extra context extrusions.
+
 This is a manually interpreted architectural reconstruction, not a surveyed
 photogrammetric mesh. Hidden elevations, roof depth, opening dimensions, tree
 roots, lawn bounds, road widths and street furniture are estimates. Observed

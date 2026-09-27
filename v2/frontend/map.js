@@ -407,7 +407,12 @@
       if(profile.astra.buildings.some(a=>a.height_m>=b.height&&window.RealCitySpatial.containsRing(profile.scene.buildings.find(x=>String(x.id)===a.building_id).ring,b.ring)))replaced.add(String(b.id));
     }
     const covered=(profile.scene?.buildings||[]).filter(b=>replaced.has(String(b.id))).map(b=>({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[b.ring]}}));
-    document.body.classList.add('realCityActive');setBaseBuildingsDim(true,[data.heroFeature,...data.contextFeatures,...covered].filter(Boolean));
+    document.body.classList.add('realCityActive');
+    // OpenFreeMap can group distant buildings into one MultiPolygon feature.
+    // A distance expression hides the whole feature, not just its local part.
+    // Authored neighbors cover the native surfaces directly; only the clinic's
+    // distinct footprint needs hiding for its different roof/wing heights.
+    setBaseBuildingsDim(true,astraLayer?[data.heroFeature].filter(Boolean):[data.heroFeature,...data.contextFeatures,...covered].filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
@@ -422,7 +427,7 @@
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
     const duration=reduceMotion?1:980,started=performance.now();
-    const context=data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null;
+    const context=astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null;
     if(!hero)heroSource?.setData(emptyGeo());
     const render=(now)=>{
       if(token!==focusToken)return;

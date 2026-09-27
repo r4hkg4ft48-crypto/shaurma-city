@@ -3781,6 +3781,16 @@ body.venuePage .foodPic img{
 }
 .venuePage .builderResult .totalRow{text-align:left}
 @keyframes builderResultReveal{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.realCityViews{position:absolute;z-index:12;top:88px;left:12px;display:flex;gap:3px;padding:5px;border-radius:16px}
+.realCityViews button{border:0;border-radius:11px;padding:9px 12px;font-family:inherit;font-size:12px;font-weight:600;background:transparent;color:#edf2ee;cursor:pointer}
+.realCityViews button[aria-pressed="true"]{background:#52655e;color:#fff}
+.mapAttribution{position:fixed;z-index:32;bottom:1px;right:12px;color:#c2cbd0;font-size:8px;line-height:10px;background:rgba(10,21,31,.75);padding:1px 4px;border-radius:3px}.mapAttribution a{color:inherit;text-decoration:none}
+.realCityViews~.venueCard{transition:transform .35s,opacity .35s}
+body.realCityExploring .venueCard .venueHero,body.realCityExploring .venueCard .venueCardDescription,body.realCityExploring .venueCard .venueQuick{display:none}
+body.realCityExploring .venueCard{padding:10px}
+body.realCityPhotographic .mapAtmosphere{opacity:.12;filter:none}
+body.realCityPhotographic .mapShade{background:linear-gradient(180deg,rgba(8,16,25,.08),transparent 20%,transparent 76%,rgba(8,16,25,.2))}
+body.realCityExploring .focusHud{top:142px}
 @keyframes builderProductIn{from{opacity:0;transform:scale(.82);filter:blur(8px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
 
 @media(prefers-reduced-motion:reduce){

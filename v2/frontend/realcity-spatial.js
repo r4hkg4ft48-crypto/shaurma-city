@@ -49,6 +49,25 @@
       return f.fromLocal([e.a[0]+(a[0]+b[0])*k,e.a[1]+(a[1]+b[1])*k]);
     });return [...result,result[0]];
   }
+  function containsRing(outer,inner){
+    const origin=outer?.[0];if(!origin||!ring(inner).length)return false;
+    const f=frame(origin),poly=ring(outer).map(f.toLocal);
+    const inside=p=>{
+      let yes=false;
+      for(let i=0,j=poly.length-2;i<poly.length-1;j=i++){
+        const a=poly[j],b=poly[i],dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy;
+        const t=l?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l)):0;
+        if(Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)<.025)return true;
+        if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])yes=!yes;
+      }return yes;
+    };
+    const pts=ring(inner).map(f.toLocal);
+    // Sample every 10 cm, including diagonals across concave map footprints.
+    for(let i=1;i<pts.length;i++){
+      const a=pts[i-1],b=pts[i],steps=Math.max(1,Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.1));
+      for(let j=0;j<=steps;j++)if(!inside([a[0]+(b[0]-a[0])*j/steps,a[1]+(b[1]-a[1])*j/steps]))return false;
+    }return true;
+  }
   function bound(astra,marker,scene){
     if(astra?.version!==2||astra.status!=='ready'||!Array.isArray(astra.buildings))return false;
     const t=astra.target||{};
@@ -60,8 +79,9 @@
       const es=edges(base.ring,t.coordinates);
       // A canonical footprint can survive reordering, but edge-local u cannot.
       // Reject stale edge order instead of attaching a facade to another side.
-      return b.facades.every(f=>JSON.stringify(f.edge)===JSON.stringify(es[f.edge_index]?.coordinates));
+      return b.facades.every(f=>JSON.stringify(f.edge)===JSON.stringify(es[f.edge_index]?.coordinates))&&
+        (b.parts||[]).every(p=>{const pe=edges(p.ring,t.coordinates);return p.facades.every(f=>JSON.stringify(f.edge)===JSON.stringify(pe[f.edge_index]?.coordinates));});
     });
   }
-  return {ring,frame,edges,nearestEdge,bufferRing,geometryKey,bound,signedArea};
+  return {ring,frame,edges,nearestEdge,bufferRing,geometryKey,bound,signedArea,containsRing};
 });

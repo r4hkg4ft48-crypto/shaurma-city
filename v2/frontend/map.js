@@ -595,12 +595,21 @@
     });
   }
   function createMap(style){return new maplibregl.Map({container:'map',style,center:[37.6176,55.7558],zoom:10.3,pitch:42,bearing:-12,maxPitch:72,canvasContextAttributes:{antialias:true},attributionControl:false,renderWorldCopies:false,fadeDuration:140})}
-  function waitLoad(m,ms=6000){return new Promise((resolve,reject)=>{let done=false;const t=setTimeout(()=>end(new Error('map_timeout')),ms);function end(e){if(done)return;done=true;clearTimeout(t);e?reject(e):resolve()}m.once('load',()=>end());m.once('error',e=>{if(!m.loaded())console.warn('map',e?.error||e)})})}
+  // A ready style can accept venue/RealCity sources while base tiles still stream.
+  // Waiting for `load` made slow tiles discard a perfectly usable vector map.
+  function waitLoad(m,ms=20000){return new Promise((resolve,reject)=>{
+    let done=false;const ready=()=>end(),removed=()=>end(new Error('map_removed'));
+    const warning=e=>console.warn('map',e?.error||e);
+    const t=setTimeout(()=>end(new Error('map_style_timeout')),ms);
+    function end(e){if(done)return;done=true;clearTimeout(t);m.off('style.load',ready);m.off('load',ready);m.off('remove',removed);m.off('error',warning);e?reject(e):resolve()}
+    m.on('style.load',ready);m.on('load',ready);m.on('remove',removed);m.on('error',warning);
+    if(m.isStyleLoaded())ready();
+  })}
   async function bootMap(){
-    try{map=createMap(STYLE);await waitLoad(map,5200)}
+    try{map=createMap(STYLE);await waitLoad(map)}
     catch(primaryError){
       console.warn('primary map style failed',primaryError);try{map?.remove()}catch{};$('#map').innerHTML='';fallback=true;
-      try{map=createMap(FALLBACK);await waitLoad(map,5200)}catch(fallbackError){dismissBoot();throw fallbackError}
+      try{map=createMap(FALLBACK);await waitLoad(map,12000)}catch(fallbackError){dismissBoot();throw fallbackError}
     }
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
     styleBuildings();addFocusLayers();ensureVenueClusterLayers();

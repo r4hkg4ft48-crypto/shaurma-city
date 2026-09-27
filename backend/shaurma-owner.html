@@ -74,6 +74,39 @@
 @media(max-width:650px){.builderHeaderGrid,.builderLimits{grid-template-columns:1fr}.builderOptionRow{grid-template-columns:minmax(0,1fr) 92px}.builderOptionActions{grid-column:1/-1;justify-content:flex-end}}
 </style>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+/* ===== Compact mobile superadmin menu editor ===== */
+.compactMenuBlock{padding:12px;border-radius:20px;background:linear-gradient(160deg,rgba(16,25,37,.98),rgba(8,14,22,.99));box-shadow:0 18px 55px rgba(0,0,0,.18)}
+.compactBlockHead{align-items:center;margin-bottom:9px}.compactBlockHead .menuBlockHeadText p{max-width:52ch}
+.compactCounter{min-width:34px;height:34px;padding:0 9px;display:grid;place-items:center;border-radius:11px;background:rgba(121,156,255,.1);border:1px solid rgba(121,156,255,.16);color:#b9c9ff;font-size:11px;font-weight:900}
+.compactPicker{display:flex;gap:6px;overflow:auto hidden;scrollbar-width:none;padding:1px 0 7px;overscroll-behavior-inline:contain}.compactPicker::-webkit-scrollbar{display:none}
+.compactPick{flex:0 0 auto;max-width:190px;min-height:34px;padding:0 10px;border:1px solid var(--l);border-radius:11px;background:rgba(255,255,255,.025);color:#9cabbc;font-size:10px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.compactPick.active{background:linear-gradient(135deg,rgba(71,127,255,.26),rgba(36,86,200,.18));border-color:rgba(121,156,255,.4);color:#eef3ff;box-shadow:inset 0 0 0 1px rgba(121,156,255,.08)}
+.compactPick small{margin-left:5px;color:#7f93aa;font-size:8px}.compactPick.active small{color:#b7c7e9}
+.compactEditorHost{min-height:0}.compactEditorCard{padding:10px;border:1px solid var(--l);border-radius:15px;background:rgba(255,255,255,.022)}
+.compactEditorTop{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.compactEditorTop>div{min-width:0}.compactEditorTop b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.compactEditorTop small{display:block;margin-top:2px;color:var(--m);font-size:8px}
+.compactActions{display:flex;gap:4px}.compactActions button{width:30px;height:30px;min-height:30px;padding:0;border:1px solid var(--l);border-radius:9px;background:rgba(255,255,255,.04);font-size:11px}.compactActions button:disabled{opacity:.28}.compactActions .danger{color:#ffabb4;background:rgba(255,107,120,.07)}
+.compactCategoryFields{display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px}.compactCategoryFields input,.compactAddRow input,.dishScopeRow select{min-width:0;min-height:39px;border:1px solid var(--l);border-radius:11px;background:#0b141e;padding:7px 9px;outline:none}
+.compactCategoryMeta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.compactCategoryMeta span{padding:5px 7px;border-radius:9px;background:rgba(255,255,255,.035);color:#94a4b5;font-size:8px}
+.compactAddRow{display:grid;grid-template-columns:54px minmax(0,1fr) 38px;gap:6px;margin-top:7px}.compactAddBtn{min-height:39px!important;padding:0!important;border-radius:11px!important}
+.dishScopeRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:end;margin-bottom:7px}.dishScopeRow label{display:grid;gap:3px;color:var(--m);font-size:8px;font-weight:850}.dishScopeRow strong{height:39px;display:grid;place-items:center;padding:0 9px;border:1px solid var(--l);border-radius:11px;color:#aebbc9;font-size:9px;background:rgba(255,255,255,.025)}
+.dishPicker{padding-bottom:7px}.dishPicker .compactPick{max-width:170px}
+.compactDishCard{border-radius:16px;background:linear-gradient(155deg,#111b27,#0a121b)}.compactDishCard .menuItemTop{padding:7px 8px}.compactDishCard .menuItemIndex span{width:25px;height:25px;border-radius:8px}.compactDishCard .menuItemActions button{width:29px;height:29px;min-height:29px}
+.compactDishBody{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;padding:8px}
+.dishPhotoMini{display:grid;align-content:start;gap:5px;min-width:0}.dishPhotoThumb{width:76px;height:76px;border:1px dashed rgba(255,255,255,.15);border-radius:13px;overflow:hidden;background:radial-gradient(circle at 50% 35%,rgba(121,156,255,.12),transparent 55%),#09121b;display:grid;place-items:center;color:#8393a6;font-size:17px}.dishPhotoThumb img{width:100%;height:100%;object-fit:cover}.dishPhotoMini input{display:none}
+.dishPhotoButtons{display:flex;gap:4px}.dishPhotoButtons button{min-width:0;height:29px;min-height:29px;padding:0 7px;border:1px solid var(--l);border-radius:9px;background:rgba(255,255,255,.04);font-size:8px;font-weight:850}.dishPhotoButtons .removePhoto{width:29px;padding:0;color:#ffabb4}.dishPhotoState{min-height:11px;color:#7d8da0;font-size:7px;line-height:1.2}.dishPhotoState.busy{color:#9bb2ff}
+.compactDishFields{display:grid;grid-template-columns:minmax(0,1fr) 88px;gap:6px}.compactDishFields .wide{grid-column:1/-1}.compactDishFields .menuLabel{gap:3px;font-size:8px}.compactDishFields .menuLabel input,.compactDishFields .menuLabel select,.compactDishFields .menuLabel textarea{min-height:38px;padding:7px 8px;border-radius:10px}.compactDishFields .menuLabel textarea{min-height:52px;max-height:70px;resize:vertical}
+.dishAdvanced{grid-column:1/-1;border:1px solid var(--l);border-radius:11px;background:rgba(255,255,255,.018);overflow:hidden}.dishAdvanced summary{cursor:pointer;list-style:none;padding:8px 9px;color:#9cabbc;font-size:8px;font-weight:850}.dishAdvanced summary::-webkit-details-marker{display:none}.dishAdvanced summary:after{content:'＋';float:right;color:#7689a1}.dishAdvanced[open] summary:after{content:'−'}
+.dishAdvancedBody{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 8px 8px}.dishAdvancedBody .wide{grid-column:1/-1}.dishAdvancedBody .menuChecks{grid-column:1/-1;gap:5px}.dishAdvancedBody .menuCheck{min-height:32px;padding:5px 7px;font-size:8px;border-radius:9px}.dishAdvancedBody .menuCheck input{width:15px;height:15px}
+.compactMenuBlock .menuEmpty{padding:16px 10px;border-radius:13px;font-size:9px}.compactAddDish{min-height:35px;padding:0 10px;border-radius:10px;font-size:9px}
+@media(max-width:480px){
+ .menuEditorShell{gap:9px}.menuEditorHeader{padding:11px;border-radius:18px}.menuEditorHeader h1{font-size:25px}.menuEditorHeader p{display:none}.menuVenueChooser{grid-template-columns:minmax(0,1fr) 38px;gap:6px}.menuVenueChooser button{width:38px;padding:0;font-size:0}.menuVenueChooser button:after{content:'↻';font-size:16px}
+ .compactMenuBlock{padding:10px;border-radius:17px}.compactBlockHead{flex-direction:row;margin-bottom:7px}.compactBlockHead .menuBlockHeadText p{display:none}.compactBlockHead h3{font-size:17px}.compactBlockHead .menuStep{font-size:8px}
+ .compactDishBody{grid-template-columns:68px minmax(0,1fr);gap:7px;padding:7px}.dishPhotoThumb{width:68px;height:68px}.compactDishFields{grid-template-columns:minmax(0,1fr) 78px;gap:5px}
+ .compactDishFields .menuLabel input,.compactDishFields .menuLabel select,.compactDishFields .menuLabel textarea{min-height:35px;padding:6px 7px}.compactDishFields .menuLabel textarea{min-height:46px}
+ .dishAdvancedBody{grid-template-columns:1fr}.dishAdvancedBody .wide{grid-column:1}.menuSaveBar{padding:8px 9px;border-radius:14px}.menuSaveBar>div b{font-size:10px}.menuSaveBar small{font-size:8px}.menuSaveBar button{min-height:40px}
+}
+</style>
 </head>
 <body>
 <div class="wrap" id="app" hidden>
@@ -141,24 +174,31 @@
       </div>
     </section>
 
-    <section class="menuBlock">
-      <div class="menuBlockHead">
-        <div class="menuBlockHeadText"><small class="menuStep">02 · РАЗДЕЛЫ</small><h3>Категории меню</h3><p>Каждая категория — отдельная карточка. Порядок сверху вниз соответствует порядку категорий в Mini App.</p></div>
+    <section class="menuBlock compactMenuBlock" id="categoryMenuBlock">
+      <div class="menuBlockHead compactBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">02 · КАТЕГОРИИ БЛЮД</small><h3>Категории</h3><p>Выберите раздел и меняйте только его. Остальные категории не занимают экран.</p></div>
+        <div class="compactCounter" id="menuSectionCount">0</div>
       </div>
-      <div class="sectionGrid" id="menuSectionRows"></div>
-      <div class="sectionAddCard">
+      <div class="compactPicker" id="menuSectionTabs" aria-label="Категории меню"></div>
+      <div class="compactEditorHost" id="menuSectionRows"></div>
+      <div class="compactAddRow">
         <input id="newMenuSectionEmoji" maxlength="8" placeholder="🥙" aria-label="Emoji раздела">
-        <input id="newMenuSectionName" maxlength="80" placeholder="Название нового раздела" aria-label="Название раздела">
-        <button class="menuSecondary" id="addMenuSection" type="button">+ Добавить раздел</button>
+        <input id="newMenuSectionName" maxlength="80" placeholder="Новая категория" aria-label="Название раздела">
+        <button class="menuSecondary compactAddBtn" id="addMenuSection" type="button">＋</button>
       </div>
     </section>
 
-    <section class="menuBlock">
-      <div class="menuBlockHead">
-        <div class="menuBlockHeadText"><small class="menuStep">03 · ПОЗИЦИИ И ФОТОГРАФИИ</small><h3>Блюда выбранного заведения</h3><p>Фото, название, цена, раздел и описание сохраняются только для текущего ID. Каждая позиция визуально отделена от остальных.</p></div>
-        <div class="menuBlockActions"><button class="menuPrimary" id="addMenuItem" type="button">＋ Добавить позицию</button></div>
+    <section class="menuBlock compactMenuBlock" id="dishMenuBlock">
+      <div class="menuBlockHead compactBlockHead">
+        <div class="menuBlockHeadText"><small class="menuStep">03 · БЛЮДА</small><h3>Конкретные блюда</h3><p>Сначала раздел, затем блюдо. На экране открыта только одна позиция.</p></div>
+        <div class="menuBlockActions"><button class="menuPrimary compactAddDish" id="addMenuItem" type="button">＋ Блюдо</button></div>
       </div>
-      <div class="menuItemsGrid" id="menuRows"></div>
+      <div class="dishScopeRow">
+        <label><span>Раздел</span><select id="dishCategorySelect" aria-label="Раздел блюд"></select></label>
+        <strong id="dishCount">0 поз.</strong>
+      </div>
+      <div class="compactPicker dishPicker" id="menuItemTabs" aria-label="Блюда выбранной категории"></div>
+      <div class="compactEditorHost menuItemsGrid" id="menuRows"></div>
     </section>
 
     <section class="menuBlock">
@@ -195,7 +235,7 @@
 const API=location.origin;
 const $=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];
 const OWNER_LAUNCH=new URL(location.href),REQUESTED_SECTION=String(OWNER_LAUNCH.searchParams.get('section')||''),FROM_MASTER=OWNER_LAUNCH.searchParams.get('from')==='master';
-let token=sessionStorage.getItem('sc_owner_token')||'',adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',orders=[],filter='active',stream=null,venues=[],editingVenue=null,menuDraft=[],menuSectionsDraft=[],builderDraft=null,signatureIdsDraft=[],orderOffset=0,orderTotal=0,orderHasMore=false,orderLimit=100,orderAnalytics=null;
+let token=sessionStorage.getItem('sc_owner_token')||'',adminSession=sessionStorage.getItem('sc_admin_tg_session')||'',orders=[],filter='active',stream=null,venues=[],editingVenue=null,menuDraft=[],menuSectionsDraft=[],builderDraft=null,signatureIdsDraft=[],selectedMenuSectionId='',selectedMenuItemId='',menuPhotoJobs=new Map(),orderOffset=0,orderTotal=0,orderHasMore=false,orderLimit=100,orderAnalytics=null;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1300)}
 function backToMaster(){location.href='/master-admin?tab=overview&v=1'}
@@ -232,7 +272,23 @@ async function loadVenues(){
  if(venues.length)await openVenue($('#venueSelect').value||venues[0].venue_id);else{$('#menuRows').innerHTML='<div class="empty">Сначала добавьте заведение меткой в редакторе карты</div>';$('#saveMenu').disabled=true}
  updateOrderScope();
 }
-async function openVenue(id){editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);builderDraft=normalizeBuilderDraft(editingVenue.config?.builder);signatureIdsDraft=(Array.isArray(editingVenue.config?.signature_item_ids)?editingVenue.config.signature_item_ids:[]).map(String).filter(id=>menuDraft.some(x=>String(x.id)===id)).slice(0,10);$('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');$('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';$('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;$('#saveMenu').disabled=false;renderMenuSections();renderMenuEditor();renderBuilderEditor()}
+async function openVenue(id){
+ editingVenue=await api('/api/shaurma/venues/'+encodeURIComponent(id));
+ menuDraft=Array.isArray(editingVenue.menu)?editingVenue.menu.map(x=>({...x})):[];
+ menuSectionsDraft=normalizeMenuSections(editingVenue.config?.menu_sections,menuDraft);
+ builderDraft=normalizeBuilderDraft(editingVenue.config?.builder);
+ signatureIdsDraft=(Array.isArray(editingVenue.config?.signature_item_ids)?editingVenue.config.signature_item_ids:[]).map(String).filter(id=>menuDraft.some(x=>String(x.id)===id)).slice(0,10);
+ if(!menuSectionsDraft.some(x=>x.id===selectedMenuSectionId))selectedMenuSectionId=menuSectionsDraft.find(x=>x.active!==false)?.id||menuSectionsDraft[0]?.id||'';
+ const sectionItems=menuDraft.filter(x=>String(x.c||x.category||'')===selectedMenuSectionId);
+ if(!menuDraft.some(x=>String(x.id)===selectedMenuItemId)&&sectionItems.length)selectedMenuItemId=String(sectionItems[0].id);
+ if(selectedMenuItemId&&!sectionItems.some(x=>String(x.id)===selectedMenuItemId))selectedMenuItemId=String(sectionItems[0]?.id||'');
+ $('#editingEstablishmentId').textContent='ID: '+(editingVenue.establishment_id||'—');
+ $('#venueSubtitle').value=editingVenue.config?.subtitle||'МЕНЮ И ЗАКАЗ';
+ $('#venueAccent').value=/^#[0-9a-f]{6}$/i.test(editingVenue.config?.accent||'')?editingVenue.config.accent:'#2f6df6';
+ $('#venueBuilder').checked=editingVenue.config?.builder_enabled===true;
+ $('#saveMenu').disabled=false;
+ renderMenuSections();renderMenuEditor();renderBuilderEditor();
+}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function compressMenuPhoto(file,maxW=640,maxH=640,q=.72){
  return new Promise((resolve,reject)=>{
@@ -257,78 +313,113 @@ async function compressMenuPhoto(file,maxW=640,maxH=640,q=.72){
 }
 function slugMenuSection(v){let s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');return (s||('section_'+Date.now().toString(36))).slice(0,48)}
 function normalizeMenuSections(input,items=[]){const legacy={shawarma:['Шаурма','🥙'],flatbread:['Лепёшка / тарелка','🫓'],sauces:['Соусы','🥫'],extras:['Допы','🍟'],drinks:['Напитки','🥤'],bakery:['Выпечка','🥐']},raw=Array.isArray(input)?input:[],out=[],seen=new Set();raw.forEach((x,i)=>{if(!x||typeof x!=='object')return;const id=slugMenuSection(x.id||x.name||('section_'+i));if(seen.has(id))return;seen.add(id);out.push({id,name:String(x.name||x.title||id).trim().slice(0,80),emoji:String(x.emoji||'').trim().slice(0,8),active:x.active!==false})});[...new Set(items.map(x=>String(x.c||x.category||'').trim()).filter(Boolean))].forEach(rawId=>{const id=slugMenuSection(rawId);if(seen.has(id))return;seen.add(id);const v=legacy[id]||[rawId,''];out.push({id,name:v[0],emoji:v[1],active:true})});if(!out.length)Object.entries(legacy).forEach(([id,v])=>out.push({id,name:v[0],emoji:v[1],active:true}));return out}
+function ensureMenuSelection(){
+ if(!menuSectionsDraft.some(x=>x.id===selectedMenuSectionId))selectedMenuSectionId=menuSectionsDraft.find(x=>x.active!==false)?.id||menuSectionsDraft[0]?.id||'';
+ const candidates=menuDraft.filter(x=>String(x.c||x.category||'')===selectedMenuSectionId);
+ if(!candidates.some(x=>String(x.id)===selectedMenuItemId))selectedMenuItemId=String(candidates[0]?.id||'');
+ return candidates;
+}
 function renderMenuSections(){
- const host=$('#menuSectionRows');
- host.innerHTML=menuSectionsDraft.length?menuSectionsDraft.map((s,i)=>`
-  <article class="sectionCard" data-menu-section-i="${i}">
-   <div class="sectionCardTop">
-    <div class="sectionMeta"><b>Раздел ${i+1}</b><code>${escapeHtml(s.id)}</code></div>
-    <div class="sectionActions">
-     <button type="button" data-section-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
-     <button type="button" data-section-down="${i}" ${i===menuSectionsDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
-     <button class="del" type="button" data-section-remove="${i}" aria-label="Удалить">×</button>
-    </div>
-   </div>
-   <div class="sectionFields">
-    <input data-section-field="emoji" maxlength="8" value="${escapeHtml(s.emoji||'')}" placeholder="🥙" aria-label="Emoji">
-    <input data-section-field="name" maxlength="80" value="${escapeHtml(s.name||'')}" placeholder="Название раздела" aria-label="Название раздела">
-   </div>
-  </article>`).join(''):'<div class="menuEmpty">Разделов пока нет. Добавьте первый раздел ниже.</div>';
+ ensureMenuSelection();
+ const host=$('#menuSectionRows'),tabs=$('#menuSectionTabs');
+ $('#menuSectionCount').textContent=String(menuSectionsDraft.length);
+ tabs.innerHTML=menuSectionsDraft.length?menuSectionsDraft.map(s=>{
+  const count=menuDraft.filter(x=>String(x.c||x.category||'')===s.id).length;
+  return '<button type="button" class="compactPick '+(s.id===selectedMenuSectionId?'active':'')+'" data-section-select="'+escapeHtml(s.id)+'">'+escapeHtml((s.emoji?s.emoji+' ':'')+(s.name||s.id))+'<small>'+count+'</small></button>';
+ }).join(''):'<span class="menuEmpty">Категорий нет</span>';
+ const i=menuSectionsDraft.findIndex(x=>x.id===selectedMenuSectionId),section=menuSectionsDraft[i];
+ if(!section){host.innerHTML='<div class="menuEmpty">Добавьте первую категорию.</div>';return}
+ const dishes=menuDraft.filter(x=>String(x.c||x.category||'')===section.id);
+ host.innerHTML='<article class="compactEditorCard" data-menu-section-i="'+i+'">'+
+  '<div class="compactEditorTop"><div><b>'+escapeHtml((section.emoji?section.emoji+' ':'')+(section.name||'Категория'))+'</b><small>'+escapeHtml(section.id)+' · '+dishes.length+' поз.</small></div>'+
+  '<div class="compactActions"><button type="button" data-section-up="'+i+'" '+(i===0?'disabled':'')+' aria-label="Выше">↑</button><button type="button" data-section-down="'+i+'" '+(i===menuSectionsDraft.length-1?'disabled':'')+' aria-label="Ниже">↓</button><button class="danger" type="button" data-section-remove="'+i+'" aria-label="Удалить">×</button></div></div>'+
+  '<div class="compactCategoryFields"><input data-section-field="emoji" maxlength="8" value="'+escapeHtml(section.emoji||'')+'" placeholder="🥙" aria-label="Emoji"><input data-section-field="name" maxlength="80" value="'+escapeHtml(section.name||'')+'" placeholder="Название категории" aria-label="Название категории"></div>'+
+  '<div class="compactCategoryMeta"><span>'+dishes.length+' блюд</span><span>Порядок '+(i+1)+' / '+menuSectionsDraft.length+'</span></div>'+
+ '</article>';
 }
 function renderMenuEditor(){
- const sections=menuSectionsDraft.filter(s=>s.active!==false);
- $('#menuRows').innerHTML=menuDraft.length?menuDraft.map((x,i)=>{
-  const name=x.n||x.name||'Новая позиция',image=String(x.image||x.i||''),active=x.active!==false;
-  return `
-  <article class="menuItemCard" data-index="${i}">
-   <div class="menuItemTop">
-    <div class="menuItemIndex"><span>${i+1}</span><b>${escapeHtml(name)}</b></div>
-    <div class="menuItemActions">
-     <button type="button" data-item-up="${i}" ${i===0?'disabled':''} aria-label="Выше">↑</button>
-     <button type="button" data-item-down="${i}" ${i===menuDraft.length-1?'disabled':''} aria-label="Ниже">↓</button>
-     <button class="delete" type="button" data-remove-item="${i}" aria-label="Удалить">×</button>
-    </div>
-   </div>
-   <div class="menuItemBody">
-    <div class="menuItemPhoto">
-     ${image?'<img src="'+escapeHtml(image)+'" alt="">':'<div class="menuPhotoPlaceholder"><div><b>＋</b><small>ФОТО БЛЮДА</small></div></div>'}
-     <input type="file" accept="image/*" data-menu-photo="${i}" aria-label="Выбрать фото блюда">
-     <div class="menuPhotoTools"><button type="button" data-choose-photo="${i}">${image?'Заменить фото':'Выбрать фото'}</button>${image?'<button class="removePhoto" type="button" data-remove-photo="'+i+'" aria-label="Удалить фото">×</button>':''}</div>
-    </div>
-    <div class="menuItemFields">
-     <label class="menuLabel"><span>Название</span><input data-field="n" value="${escapeHtml(name)}" placeholder="Название блюда"></label>
-     <label class="menuLabel"><span>Цена, ₽</span><input data-field="p" type="number" min="0" value="${Number(x.p??x.price??0)}" placeholder="0"></label>
-     <label class="menuLabel wide"><span>Раздел</span><select data-field="c">${sections.map(s=>`<option value="${escapeHtml(s.id)}" ${String(x.c||x.category)===s.id?'selected':''}>${escapeHtml((s.emoji?s.emoji+' ':'')+s.name)}</option>`).join('')}</select></label>
-     <label class="menuLabel wide"><span>Описание</span><textarea data-field="d" placeholder="Состав, особенности, вес…">${escapeHtml(x.d||x.description||'')}</textarea></label>
-     <div class="menuItemOptions">
-      <label class="menuLabel"><span>Вид карточки</span><select data-field="display"><option value="auto" ${(x.display||'auto')==='auto'?'selected':''}>Авто</option><option value="main" ${x.display==='main'?'selected':''}>Крупная</option><option value="compact" ${x.display==='compact'?'selected':''}>Компактная</option></select></label>
-      <label class="menuLabel"><span>Фото</span><select data-field="image_fit"><option value="cover" ${(x.image_fit||'cover')==='cover'?'selected':''}>Заполнять</option><option value="contain" ${x.image_fit==='contain'?'selected':''}>Показывать целиком</option></select></label>
-     </div>
-     <label class="menuLabel wide"><span>Бейдж</span><input data-field="badge" maxlength="40" value="${escapeHtml(x.badge||x.tag||'')}" placeholder="Например: Популярное"></label>
-     <div class="menuChecks">
-      <label class="menuCheck"><input type="checkbox" data-field="active" ${active?'checked':''}> Показывать</label>
-      <label class="menuCheck"><input type="checkbox" data-field="featured" ${x.featured===true?'checked':''}> Главная / Hero</label>
-      <label class="menuCheck"><input type="checkbox" data-signature-item="${escapeHtml(String(x.id))}" ${signatureIdsDraft.includes(String(x.id))?'checked':''}> Фирменная <small>${signatureIdsDraft.indexOf(String(x.id))>=0?('#'+(signatureIdsDraft.indexOf(String(x.id))+1)):'до 10'}</small></label>
-     </div>
-    </div>
-   </div>
-  </article>`;
- }).join(''):'<div class="menuEmpty">В меню пока нет позиций. Нажмите «Добавить позицию».</div>';
+ const sectionItems=ensureMenuSelection(),sections=menuSectionsDraft.filter(s=>s.active!==false);
+ const categorySelect=$('#dishCategorySelect');
+ categorySelect.innerHTML=sections.map(s=>'<option value="'+escapeHtml(s.id)+'" '+(s.id===selectedMenuSectionId?'selected':'')+'>'+escapeHtml((s.emoji?s.emoji+' ':'')+s.name)+'</option>').join('');
+ $('#dishCount').textContent=sectionItems.length+' поз.';
+ const tabs=$('#menuItemTabs');
+ tabs.innerHTML=sectionItems.length?sectionItems.map((x,pos)=>'<button type="button" class="compactPick '+(String(x.id)===selectedMenuItemId?'active':'')+'" data-item-select="'+escapeHtml(String(x.id))+'">'+escapeHtml(x.n||x.name||('Блюдо '+(pos+1)))+'<small>'+Math.round(Number(x.p??x.price??0))+'₽</small></button>').join(''):'<span class="menuEmpty">В этой категории пока нет блюд.</span>';
+ const i=menuDraft.findIndex(x=>String(x.id)===selectedMenuItemId),x=menuDraft[i];
+ if(!x){$('#menuRows').innerHTML='<div class="menuEmpty">Нажмите «＋ Блюдо», чтобы добавить позицию.</div>';return}
+ const name=x.n||x.name||'Новая позиция',image=String(x.image||x.i||''),active=x.active!==false,itemId=String(x.id),busy=menuPhotoJobs.has(itemId);
+ $('#menuRows').innerHTML=
+  '<article class="menuItemCard compactDishCard" data-index="'+i+'" data-item-id="'+escapeHtml(itemId)+'">'+
+   '<div class="menuItemTop"><div class="menuItemIndex"><span>'+(sectionItems.findIndex(v=>String(v.id)===itemId)+1)+'</span><b>'+escapeHtml(name)+'</b></div>'+
+    '<div class="menuItemActions"><button type="button" data-item-up="'+i+'" aria-label="Выше">↑</button><button type="button" data-item-down="'+i+'" aria-label="Ниже">↓</button><button class="delete" type="button" data-remove-item="'+i+'" aria-label="Удалить">×</button></div></div>'+
+   '<div class="compactDishBody">'+
+    '<div class="dishPhotoMini">'+
+     '<div class="dishPhotoThumb">'+(image?'<img src="'+escapeHtml(image)+'" alt="">':'＋')+'</div>'+
+     '<input type="file" accept="image/*" data-menu-photo-id="'+escapeHtml(itemId)+'" aria-label="Выбрать фото блюда">'+
+     '<div class="dishPhotoButtons"><button type="button" data-choose-photo-id="'+escapeHtml(itemId)+'">'+(image?'Фото':'＋ Фото')+'</button>'+(image?'<button class="removePhoto" type="button" data-remove-photo-id="'+escapeHtml(itemId)+'" aria-label="Удалить фото">×</button>':'')+'</div>'+
+     '<div class="dishPhotoState '+(busy?'busy':'')+'">'+(busy?'Обработка…':(image?'Фото готово':'Без фото'))+'</div>'+
+    '</div>'+
+    '<div class="compactDishFields">'+
+     '<label class="menuLabel"><span>Название</span><input data-field="n" value="'+escapeHtml(name)+'" placeholder="Название блюда"></label>'+
+     '<label class="menuLabel"><span>Цена ₽</span><input data-field="p" type="number" min="0" value="'+Number(x.p??x.price??0)+'" placeholder="0"></label>'+
+     '<label class="menuLabel wide"><span>Категория</span><select data-field="c">'+sections.map(s=>'<option value="'+escapeHtml(s.id)+'" '+(String(x.c||x.category)===s.id?'selected':'')+'>'+escapeHtml((s.emoji?s.emoji+' ':'')+s.name)+'</option>').join('')+'</select></label>'+
+     '<label class="menuLabel wide"><span>Описание</span><textarea data-field="d" placeholder="Состав, вес, особенности…">'+escapeHtml(x.d||x.description||'')+'</textarea></label>'+
+     '<details class="dishAdvanced"><summary>Дополнительно</summary><div class="dishAdvancedBody">'+
+      '<label class="menuLabel"><span>Карточка</span><select data-field="display"><option value="auto" '+((x.display||'auto')==='auto'?'selected':'')+'>Авто</option><option value="main" '+(x.display==='main'?'selected':'')+'>Крупная</option><option value="compact" '+(x.display==='compact'?'selected':'')+'>Компактная</option></select></label>'+
+      '<label class="menuLabel"><span>Фото</span><select data-field="image_fit"><option value="cover" '+((x.image_fit||'cover')==='cover'?'selected':'')+'>Заполнять</option><option value="contain" '+(x.image_fit==='contain'?'selected':'')+'>Целиком</option></select></label>'+
+      '<label class="menuLabel wide"><span>Бейдж</span><input data-field="badge" maxlength="40" value="'+escapeHtml(x.badge||x.tag||'')+'" placeholder="Например: Популярное"></label>'+
+      '<div class="menuChecks"><label class="menuCheck"><input type="checkbox" data-field="active" '+(active?'checked':'')+'> Показывать</label><label class="menuCheck"><input type="checkbox" data-field="featured" '+(x.featured===true?'checked':'')+'> Hero</label><label class="menuCheck"><input type="checkbox" data-signature-item="'+escapeHtml(itemId)+'" '+(signatureIdsDraft.includes(itemId)?'checked':'')+'> Фирменная</label></div>'+
+     '</div></details>'+
+    '</div>'+
+   '</div>'+
+  '</article>';
+}
+async function waitForMenuPhotoJobs(){
+ const jobs=[...menuPhotoJobs.values()];
+ if(!jobs.length)return;
+ $('#menuSaveHint').textContent='Завершаю обработку фотографий…';
+ const settled=await Promise.allSettled(jobs);
+ if(settled.some(x=>x.status==='rejected'))throw new Error('Не удалось подготовить одно из фото');
+}
+async function verifyPublishedMenu(saved,establishmentId,expectedMenu){
+ const markerId=saved?.sync?.marker_id;
+ if(!markerId)throw new Error('У заведения нет активной метки для публикации меню');
+ const r=await fetch(API+'/api/v2/menu-context?marker_id='+encodeURIComponent(markerId)+'&establishment_id='+encodeURIComponent(establishmentId)+'&verify='+Date.now(),{cache:'no-store'});
+ if(!r.ok)throw new Error('Пользовательское меню пока не отвечает');
+ const ctx=await r.json(),publicMenu=Array.isArray(ctx?.venue?.menu)?ctx.venue.menu:[],byId=new Map(publicMenu.map(x=>[String(x.id),x]));
+ if(publicMenu.length!==expectedMenu.length)throw new Error('Проверка публикации: количество блюд не совпало');
+ for(const expected of expectedMenu){
+  const actual=byId.get(String(expected.id));if(!actual)throw new Error('Проверка публикации: не найдено блюдо «'+String(expected.n||expected.name||expected.id)+'»');
+  if(String(actual.n||actual.name||'')!==String(expected.n||expected.name||''))throw new Error('Проверка публикации: название блюда не обновилось');
+  if(String(actual.c||actual.category||'')!==String(expected.c||expected.category||''))throw new Error('Проверка публикации: категория блюда не обновилась');
+  if(Number(actual.p??actual.price??0)!==Number(expected.p??expected.price??0))throw new Error('Проверка публикации: цена блюда не обновилась');
+  if(String(expected.image||expected.i||'')&&!String(actual.image||actual.i||''))throw new Error('Проверка публикации: фото блюда не дошло');
+ }
+ return {markerId,items:publicMenu.length,photos:publicMenu.filter(x=>String(x.image||x.i||'')).length};
 }
 async function saveVenueMenu(){
  if(!editingVenue)return;
- const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Сохраняю и синхронизирую с пользовательским Mini App…';
+ const button=$('#saveMenu');button.disabled=true;$('#menuSaveHint').textContent='Проверяю блюда и фото…';
  try{
+  await waitForMenuPhotoJobs();
   const venueId=editingVenue.venue_id,establishmentId=editingVenue.establishment_id;if(!establishmentId)throw new Error('missing_establishment_id');
   syncBuilderMetaFromInputs();
-  const validSignatureIds=signatureIdsDraft.filter(id=>menuDraft.some(x=>String(x.id)===String(id))).slice(0,10);
+  const ids=new Set();
+  for(const item of menuDraft){
+   item.id=String(item.id||'').trim();if(!item.id)throw new Error('У одного из блюд нет ID');
+   if(ids.has(item.id))throw new Error('Найдены два блюда с одинаковым ID');ids.add(item.id);
+   if(!menuSectionsDraft.some(s=>s.id===String(item.c||item.category||'')))throw new Error('У блюда «'+String(item.n||item.name||item.id)+'» выбрана удалённая категория');
+  }
+  const expectedMenu=menuDraft.map(x=>({...x}));
+  const validSignatureIds=signatureIdsDraft.filter(id=>expectedMenu.some(x=>String(x.id)===String(id))).slice(0,10);
   const config={...(editingVenue.config||{}),subtitle:$('#venueSubtitle').value.trim()||'МЕНЮ И ЗАКАЗ',accent:$('#venueAccent').value,builder_enabled:$('#venueBuilder').checked,builder:builderDraft,menu_sections:menuSectionsDraft,signature_item_ids:validSignatureIds};
-  const saved=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:menuDraft})});
+  $('#menuSaveHint').textContent='Сохраняю и проверяю пользовательский Mini App…';
+  const saved=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:expectedMenu})});
   await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#venueBuilder').checked,builder:builderDraft})});
+  const canonicalMenu=Array.isArray(saved?.menu)?saved.menu:expectedMenu;
+  const verified=await verifyPublishedMenu(saved,establishmentId,canonicalMenu);
   await openVenue(venueId);
-  const sync=saved?.sync||{},markerText=sync.marker_id?(' · marker '+sync.marker_id):' · нет активной метки';
-  $('#menuSaveHint').textContent='Синхронизировано: '+Number(sync.menu_count??menuDraft.length)+' позиций · '+Number(sync.section_count??menuSectionsDraft.length)+' разделов'+markerText;
-  toast('Меню опубликовано в пользовательском Mini App ✓');
+  $('#menuSaveHint').textContent='Проверено в Mini App: '+verified.items+' блюд · '+verified.photos+' фото · marker '+verified.markerId;
+  toast('Блюда и фото опубликованы ✓');
  }catch(e){
   let msg=String(e?.message||'');
   try{const j=JSON.parse(msg);if(j.error==='venue_too_large')msg='Меню слишком большое. Уменьшите количество/размер фото.'}catch{}
@@ -403,7 +494,23 @@ function render(){const list=orders;$('#orders').innerHTML=list.length?list.map(
 document.addEventListener('click',async e=>{const tab=e.target.closest('[data-admin-tab]');if(tab){qa('[data-admin-tab]').forEach(x=>x.classList.toggle('active',x===tab));$('#ordersPane').classList.toggle('active',tab.dataset.adminTab==='orders');$('#menuPane').classList.toggle('active',tab.dataset.adminTab==='menu');if(tab.dataset.adminTab==='orders'){load(true).catch(()=>toast('Не удалось обновить заказы'));stats().catch(()=>toast('Не удалось загрузить аналитику'))};if(tab.dataset.adminTab==='menu'&&!editingVenue)loadVenues().catch(()=>toast('Не удалось загрузить меню'));return}const b=e.target.closest('[data-status]');if(b){b.disabled=true;try{await api('/api/shaurma/orders/'+b.dataset.id,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await load()}catch{toast('Не удалось изменить статус')}finally{b.disabled=false}}const f=e.target.closest('[data-f]');if(f){filter=f.dataset.f;qa('.filter').forEach(x=>x.classList.toggle('active',x===f));load(true).catch(()=>toast('Не удалось загрузить заказы'))}});
 $('#venueSelect').addEventListener('change',e=>openVenue(e.target.value));
 $('#reloadVenue').onclick=()=>openVenue($('#venueSelect').value);
-$('#addMenuItem').onclick=()=>{if(!editingVenue)return;const section=menuSectionsDraft.find(s=>s.active!==false)||menuSectionsDraft[0];if(!section)return toast('Сначала добавьте раздел');menuDraft.push({id:editingVenue.venue_id+'_'+Date.now().toString(36),n:'Новая позиция',c:section.id,d:'',p:0,image:'',active:true,display:'auto',image_fit:'cover',badge:'',featured:false});renderMenuEditor();setTimeout(()=>$('#menuRows .menuItemCard:last-child')?.scrollIntoView({behavior:'smooth',block:'center'}),30)};$('#addMenuSection').onclick=()=>{const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название раздела');let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});$('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor()};
+$('#menuSectionTabs').addEventListener('click',e=>{const b=e.target.closest('[data-section-select]');if(!b)return;selectedMenuSectionId=b.dataset.sectionSelect;selectedMenuItemId='';renderMenuSections();renderMenuEditor()});
+$('#menuItemTabs').addEventListener('click',e=>{const b=e.target.closest('[data-item-select]');if(!b)return;selectedMenuItemId=b.dataset.itemSelect;renderMenuEditor()});
+$('#dishCategorySelect').addEventListener('change',e=>{selectedMenuSectionId=e.target.value;selectedMenuItemId='';renderMenuSections();renderMenuEditor()});
+$('#addMenuItem').onclick=()=>{
+ if(!editingVenue)return;
+ const section=menuSectionsDraft.find(s=>s.id===selectedMenuSectionId)||menuSectionsDraft.find(s=>s.active!==false)||menuSectionsDraft[0];if(!section)return toast('Сначала добавьте категорию');
+ const id=editingVenue.venue_id+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+ menuDraft.push({id,n:'Новая позиция',c:section.id,d:'',p:0,image:'',active:true,display:'auto',image_fit:'cover',badge:'',featured:false});
+ selectedMenuSectionId=section.id;selectedMenuItemId=id;renderMenuSections();renderMenuEditor();
+ setTimeout(()=>$('#dishMenuBlock')?.scrollIntoView({behavior:'smooth',block:'nearest'}),20);
+};
+$('#addMenuSection').onclick=()=>{
+ const name=$('#newMenuSectionName').value.trim(),emoji=$('#newMenuSectionEmoji').value.trim();if(!name)return toast('Введите название категории');
+ let id=slugMenuSection(name),n=2;while(menuSectionsDraft.some(s=>s.id===id))id=slugMenuSection(name)+'_'+n++;
+ menuSectionsDraft.push({id,name:name.slice(0,80),emoji:emoji.slice(0,8),active:true});selectedMenuSectionId=id;selectedMenuItemId='';
+ $('#newMenuSectionName').value='';$('#newMenuSectionEmoji').value='';renderMenuSections();renderMenuEditor();
+};
 $('#builderGroups').addEventListener('input',e=>{const row=e.target.closest('[data-builder-group]');if(!row||!e.target.dataset.builderField)return;const item=builderDraft?.[row.dataset.builderGroup]?.[Number(row.dataset.builderI)];if(!item)return;const field=e.target.dataset.builderField;item[field]=field==='price'?Math.max(0,Number(e.target.value)||0):e.target.value;if(field==='name'&&!item.id)item.id=builderOptionId(item.name,row.dataset.builderGroup,Number(row.dataset.builderI))});
 $('#builderGroups').addEventListener('click',e=>{const add=e.target.closest('[data-builder-add]');if(add){addBuilderOption(add.dataset.builderAdd);return}const up=e.target.closest('[data-builder-up]');if(up){const a=parseBuilderAction(up.dataset.builderUp);moveBuilderOption(a.key,a.index,-1);return}const down=e.target.closest('[data-builder-down]');if(down){const a=parseBuilderAction(down.dataset.builderDown);moveBuilderOption(a.key,a.index,1);return}const rm=e.target.closest('[data-builder-remove]');if(rm){const a=parseBuilderAction(rm.dataset.builderRemove);removeBuilderOption(a.key,a.index);return}});
 ['builderTitle','builderSubtitle','builderMinSauces','builderMaxSauces','builderMaxExtras'].forEach(id=>$('#'+id).addEventListener('input',syncBuilderMetaFromInputs));
@@ -413,34 +520,43 @@ function updateMenuField(target){
  const row=target.closest('[data-index]');if(!row||!target.dataset.field)return;
  const item=menuDraft[Number(row.dataset.index)],field=target.dataset.field;if(!item)return;
  item[field]=field==='p'?Math.max(0,Number(target.value)||0):(['active','featured'].includes(field)?target.checked:target.value);
- if(field==='n')row.querySelector('.menuItemIndex b').textContent=target.value||'Новая позиция';
+ if(field==='n'){const title=row.querySelector('.menuItemIndex b');if(title)title.textContent=target.value||'Новая позиция'}
 }
 $('#menuRows').addEventListener('input',e=>updateMenuField(e.target));
 $('#menuRows').addEventListener('change',async e=>{
  const signature=e.target.closest('[data-signature-item]');
  if(signature){
   const id=String(signature.dataset.signatureItem);
-  if(signature.checked){
-   if(!signatureIdsDraft.includes(id)){
-    if(signatureIdsDraft.length>=10){signature.checked=false;toast('Можно выбрать максимум 10 фирменных');return}
-    signatureIdsDraft.push(id);
-   }
-  }else signatureIdsDraft=signatureIdsDraft.filter(x=>x!==id);
+  if(signature.checked){if(!signatureIdsDraft.includes(id)){if(signatureIdsDraft.length>=10){signature.checked=false;toast('Можно выбрать максимум 10 фирменных');return}signatureIdsDraft.push(id)}}else signatureIdsDraft=signatureIdsDraft.filter(x=>x!==id);
   renderMenuEditor();return;
  }
  updateMenuField(e.target);
- const fileInput=e.target.closest('[data-menu-photo]');if(!fileInput)return;
- const i=Number(fileInput.dataset.menuPhoto),file=fileInput.files?.[0];if(!file||!menuDraft[i])return;
- try{toast('Обрабатываю фото…');menuDraft[i].image=await compressMenuPhoto(file);renderMenuEditor();toast('Фото добавлено')}catch{toast('Не удалось обработать фото')}
+ if(e.target.dataset.field==='c'){
+  const row=e.target.closest('[data-index]'),item=menuDraft[Number(row?.dataset.index)];
+  selectedMenuSectionId=e.target.value;selectedMenuItemId=String(item?.id||'');renderMenuSections();renderMenuEditor();return;
+ }
+ const fileInput=e.target.closest('[data-menu-photo-id]');if(!fileInput)return;
+ const itemId=String(fileInput.dataset.menuPhotoId),file=fileInput.files?.[0],item=menuDraft.find(x=>String(x.id)===itemId);if(!file||!item)return;
+ let job;
+ job=compressMenuPhoto(file).then(data=>{const live=menuDraft.find(x=>String(x.id)===itemId);if(live)live.image=data;return data}).finally(()=>{if(menuPhotoJobs.get(itemId)===job)menuPhotoJobs.delete(itemId);if(selectedMenuItemId===itemId)renderMenuEditor()});
+ menuPhotoJobs.set(itemId,job);renderMenuEditor();
+ try{toast('Обрабатываю фото…');await job;toast('Фото готово к публикации')}catch{toast('Не удалось обработать фото')}
 });
 $('#menuRows').addEventListener('click',e=>{
- const choose=e.target.closest('[data-choose-photo]');if(choose){const input=$('#menuRows [data-menu-photo="'+choose.dataset.choosePhoto+'"]');input?.click();return}
- const removePhoto=e.target.closest('[data-remove-photo]');if(removePhoto){const i=Number(removePhoto.dataset.removePhoto);if(menuDraft[i])menuDraft[i].image='';renderMenuEditor();return}
- const up=e.target.closest('[data-item-up]');if(up){const i=Number(up.dataset.itemUp);if(i>0)[menuDraft[i-1],menuDraft[i]]=[menuDraft[i],menuDraft[i-1]];renderMenuEditor();return}
- const down=e.target.closest('[data-item-down]');if(down){const i=Number(down.dataset.itemDown);if(i<menuDraft.length-1)[menuDraft[i+1],menuDraft[i]]=[menuDraft[i],menuDraft[i+1]];renderMenuEditor();return}
- const button=e.target.closest('[data-remove-item]');if(button){const i=Number(button.dataset.removeItem);if(confirm('Удалить позицию «'+String(menuDraft[i]?.n||menuDraft[i]?.name||'')+'»?')){const id=String(menuDraft[i]?.id||'');signatureIdsDraft=signatureIdsDraft.filter(x=>x!==id);menuDraft.splice(i,1);renderMenuEditor()}return}
-});$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const s=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!s)return;s[field]=e.target.value.slice(0,field==='emoji'?8:80);renderMenuEditor()});
-$('#menuSectionRows').addEventListener('click',e=>{const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-remove]');if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSectionsDraft[i-1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i-1]];renderMenuSections();renderMenuEditor();return}if(down){const i=Number(down.dataset.sectionDown);if(i<menuSectionsDraft.length-1)[menuSectionsDraft[i+1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i+1]];renderMenuSections();renderMenuEditor();return}if(rm){const i=Number(rm.dataset.sectionRemove),s=menuSectionsDraft[i];if(!s)return;if(menuDraft.some(x=>String(x.c||x.category)===s.id))return toast('Сначала перенесите блюда из раздела');menuSectionsDraft.splice(i,1);renderMenuSections();renderMenuEditor()}});
+ const choose=e.target.closest('[data-choose-photo-id]');if(choose){$('#menuRows [data-menu-photo-id="'+CSS.escape(choose.dataset.choosePhotoId)+'"]')?.click();return}
+ const removePhoto=e.target.closest('[data-remove-photo-id]');if(removePhoto){const id=String(removePhoto.dataset.removePhotoId),item=menuDraft.find(x=>String(x.id)===id);if(item)item.image='';renderMenuEditor();return}
+ const up=e.target.closest('[data-item-up]');if(up){const i=Number(up.dataset.itemUp),cat=String(menuDraft[i]?.c||'');let prev=-1;for(let k=i-1;k>=0;k--){if(String(menuDraft[k]?.c||'')===cat){prev=k;break}}if(prev>=0)[menuDraft[prev],menuDraft[i]]=[menuDraft[i],menuDraft[prev]];renderMenuEditor();return}
+ const down=e.target.closest('[data-item-down]');if(down){const i=Number(down.dataset.itemDown),cat=String(menuDraft[i]?.c||'');let next=-1;for(let k=i+1;k<menuDraft.length;k++){if(String(menuDraft[k]?.c||'')===cat){next=k;break}}if(next>=0)[menuDraft[next],menuDraft[i]]=[menuDraft[i],menuDraft[next]];renderMenuEditor();return}
+ const button=e.target.closest('[data-remove-item]');if(button){const i=Number(button.dataset.removeItem),item=menuDraft[i];if(item&&confirm('Удалить позицию «'+String(item.n||item.name||'')+'»?')){const id=String(item.id||'');signatureIdsDraft=signatureIdsDraft.filter(x=>x!==id);menuPhotoJobs.delete(id);menuDraft.splice(i,1);selectedMenuItemId='';renderMenuSections();renderMenuEditor()}return}
+});
+$('#menuSectionRows').addEventListener('input',e=>{const row=e.target.closest('[data-menu-section-i]'),field=e.target.dataset.sectionField;if(!row||!field)return;const section=menuSectionsDraft[Number(row.dataset.menuSectionI)];if(!section)return;section[field]=e.target.value.slice(0,field==='emoji'?8:80)});
+$('#menuSectionRows').addEventListener('change',()=>{renderMenuSections();renderMenuEditor()});
+$('#menuSectionRows').addEventListener('click',e=>{
+ const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-remove]');
+ if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSectionsDraft[i-1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i-1]];renderMenuSections();renderMenuEditor();return}
+ if(down){const i=Number(down.dataset.sectionDown);if(i<menuSectionsDraft.length-1)[menuSectionsDraft[i+1],menuSectionsDraft[i]]=[menuSectionsDraft[i],menuSectionsDraft[i+1]];renderMenuSections();renderMenuEditor();return}
+ if(rm){const i=Number(rm.dataset.sectionRemove),section=menuSectionsDraft[i];if(!section)return;if(menuDraft.some(x=>String(x.c||x.category)===section.id))return toast('Сначала перенесите блюда из категории');menuSectionsDraft.splice(i,1);selectedMenuSectionId=menuSectionsDraft[Math.min(i,menuSectionsDraft.length-1)]?.id||'';selectedMenuItemId='';renderMenuSections();renderMenuEditor()}
+});
 
 async function telegramAdminLogin(){
  const tg=window.Telegram&&window.Telegram.WebApp;

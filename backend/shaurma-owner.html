@@ -415,7 +415,8 @@ async function saveVenueMenu(){
   $('#menuSaveHint').textContent='Сохраняю и проверяю пользовательский Mini App…';
   const saved=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/venue',{method:'PUT',body:JSON.stringify({is_active:editingVenue.is_active,config,menu:expectedMenu})});
   await api('/api/shaurma/admin/establishments/'+encodeURIComponent(establishmentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#venueBuilder').checked,builder:builderDraft})});
-  const verified=await verifyPublishedMenu(saved,establishmentId,expectedMenu);
+  const canonicalMenu=Array.isArray(saved?.menu)?saved.menu:expectedMenu;
+  const verified=await verifyPublishedMenu(saved,establishmentId,canonicalMenu);
   await openVenue(venueId);
   $('#menuSaveHint').textContent='Проверено в Mini App: '+verified.items+' блюд · '+verified.photos+' фото · marker '+verified.markerId;
   toast('Блюда и фото опубликованы ✓');

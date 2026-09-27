@@ -83,3 +83,44 @@ test('renderer uses the map coordinate frame and stops oversized meshes before u
  const f=astra.buildings[0].facades[0];f.modules=Array.from({length:4000},()=>f.modules[0]);
  assert.throws(()=>context.RealCityLayer.buildMesh(row,row.realcity_profile.scene,astra,atlas),/astra_geometry_budget/);
 });
+test('photo release keeps the exact venue, map footprints and studio priority',()=>{
+ const R=require('../src/realcity-releases/zhulebino'),G=require('../src/realcity-releases/zhulebino-geometry.json');
+ const row={id:R.TARGET.marker_id,establishment_id:R.TARGET.establishment_id,venue_id:R.TARGET.venue_id,lon:R.TARGET.coordinates[0],lat:R.TARGET.coordinates[1],realcity_profile:{custom:'keep',scene:G.scene}};
+ const before=JSON.stringify(row),p=R.build(row);
+ assert.ok(S.bound(p.astra,row,p.scene));assert.equal(p.scene,row.realcity_profile.scene);
+ assert.equal(JSON.stringify(row),before);assert.equal(p.custom,'keep');assert.equal(p.astra.references.length,10);
+ assert.equal(p.astra.references.find(r=>r.number==='1').file,'IMG_7096.jpeg');
+ assert.equal(p.astra.references.find(r=>r.number==='10').file,'IMG_7110.jpeg');
+ assert.equal(p.astra.materials.length,0);assert.ok(!JSON.stringify(p.astra).includes('data:image'));
+ assert.equal(R.build({...row,id:'3140'}),null);assert.equal(R.build({...row,lon:row.lon+.001}),null);
+ assert.equal(R.build({...row,realcity_profile:p}),null);
+ assert.equal(R.build({...row,realcity_profile:{...p,astra:{version:2,status:'ready',notes:'studio'}}}),null);
+ const hero=p.astra.buildings[0];assert.equal(hero.parts.length,3);
+ assert.equal(S.geometryKey(hero.parts[0].ring),S.geometryKey(G.scene.buildings[0].ring));
+ assert.ok(hero.parts.every(part=>S.containsRing(G.scene.buildings[0].ring,part.ring)));
+ assert.ok(hero.parts[1].facades.find(f=>f.edge_index===2).modules.some(m=>m.kind==='medical-heart'));
+ const reordered=structuredClone(row);
+ reordered.realcity_profile.scene.buildings=reordered.realcity_profile.scene.buildings.map(b=>({...b,ring:[...b.ring].reverse()}));
+ const r=R.build(reordered);assert.ok(S.bound(r.astra,reordered,r.scene));
+ assert.equal(JSON.stringify(r.astra.buildings[0].parts),JSON.stringify(hero.parts));
+ const imported=A.compile(p.astra,{...row,realcity_profile:p});
+ assert.deepEqual(imported.environment,p.astra.environment);assert.deepEqual(imported.camera,p.astra.camera);
+});
+test('photo-authored quarter stays within the mobile mesh and finite-coordinate budget',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),R=require('../src/realcity-releases/zhulebino');
+ const row={id:R.TARGET.marker_id,establishment_id:R.TARGET.establishment_id,venue_id:R.TARGET.venue_id,lon:R.TARGET.coordinates[0],lat:R.TARGET.coordinates[1],realcity_profile:{}};
+ const p=R.build(row),context={RealCitySpatial:S,earcut:require('../../frontend/vendor/earcut.min.js'),Float32Array};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../../frontend/realcity-layer.js'),'utf8'),context);
+ const mesh=context.RealCityLayer.buildMesh(row,p.scene,p.astra,{slots:new Map()});
+ assert.ok(mesh.triangles<100000);assert.ok(mesh.vertices.byteLength<18000000);assert.ok(mesh.vertices.every(Number.isFinite));
+});
+test('roof subdivisions cannot leave a concave map footprint or nest more geometry',()=>{
+ const {row,output}=fixture();const main=output.buildings[0];
+ main.parts=[{ring,height_m:6,facades:main.facades.map(f=>({...f,grids:[]}))},{ring:S.bufferRing(ring,2),height_m:10,facades:[]}];
+ assert.throws(()=>A.compile(output,row),/astra_part_outside_footprint/);
+ const frame=S.frame(ring[0]),outer=[[0,0],[20,0],[20,20],[12,20],[12,10],[8,10],[8,20],[0,20],[0,0]].map(frame.fromLocal);
+ const crossing=[[2,15],[18,15],[18,17],[2,17],[2,15]].map(frame.fromLocal);
+ assert.equal(S.containsRing(outer,crossing),false);
+ main.parts=[{ring,height_m:6,facades:main.facades.map(f=>({...f,grids:[]})),parts:[]}];
+ assert.throws(()=>A.compile(output,row),/astra_part_limit/);
+});

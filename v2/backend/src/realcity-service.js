@@ -1,6 +1,21 @@
 'use strict';
 const db=require('./db');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
+const zhulebino=require('./realcity-releases/zhulebino');
+
+async function installPhotoRelease(){
+  if(!db.configured)return null;
+  return db.tx(async client=>{
+    const q=await client.query('SELECT id,establishment_id,venue_id,lat,lon,realcity_profile,realcity_astra_config FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND venue_id=$3 AND is_active=TRUE FOR UPDATE',[zhulebino.TARGET.marker_id,zhulebino.TARGET.establishment_id,zhulebino.TARGET.venue_id]);
+    const row=q.rows[0];if(!row)return null;
+    const profile=zhulebino.build(row);if(!profile)return null;
+    // Lock + exact venue binding. Existing nonempty .scene and all unrelated
+    // profile keys survive. Studio output takes precedence over this release.
+    await client.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb,realcity_status='ready',realcity_updated_at=NOW() WHERE id=$1",[row.id,JSON.stringify(profile)]);
+    console.log('RealCity photo release installed',zhulebino.RELEASE,row.establishment_id);
+    return profile;
+  });
+}
 
 const jobs=new Map();
 function queue(markerId){
@@ -27,7 +42,8 @@ function queue(markerId){
 }
 async function bootstrap(){
   if(!db.configured)return;
+  await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
   const q=await db.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<$1) ORDER BY updated_at DESC LIMIT 8",[PROFILE_VERSION]).catch(()=>({rows:[]}));
   q.rows.forEach(x=>queue(x.id)?.catch(()=>{}));
 }
-module.exports={queue,bootstrap,PROFILE_VERSION};
+module.exports={queue,bootstrap,installPhotoRelease,PROFILE_VERSION};

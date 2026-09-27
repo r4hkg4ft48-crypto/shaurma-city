@@ -341,6 +341,13 @@
         const cam=j.profile.astra.camera,offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
         $('#realBadge').textContent='REAL CITY · ASTRA';
+        const views=j.profile.astra.camera.views||[],box=$('#realCityViews');
+        box.replaceChildren();box.classList.toggle('hidden',!views.length);
+        for(const view of views){const button=document.createElement('button');button.textContent=view.label;button.type='button';button.setAttribute('aria-pressed','false');button.onclick=()=>{
+          document.body.classList.add('realCityExploring');$('#focusHud').classList.remove('show');
+          box.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+          map.easeTo({center:view.center||[+p.lon,+p.lat],bearing:view.bearing,pitch:view.pitch,zoom:view.zoom,offset:[0,70],duration:reduceMotion?0:1000});
+        };box.appendChild(button);}
       }
       revealQuarter(p,p.realcity_profile);
     }catch(e){if(token===focusToken)console.warn('RealCity profile',e.message)}
@@ -366,7 +373,7 @@
       const coords=(Array.isArray(line)?line:[]).map(x=>[Number(x?.[0]),Number(x?.[1])]).filter(x=>Number.isFinite(x[0])&&Number.isFinite(x[1]));
       return coords.length>1?{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords}}:null;
     }).filter(Boolean);
-    const greens=(scene.greens||[]).slice(0,14).map(ring=>{
+    const greens=[...(profile.astra?.environment?.greens||[]),...(scene.greens||[])].slice(0,48).map(ring=>{
       const coords=closeRing(ring);return coords.length>3?{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[coords]}}:null;
     }).filter(Boolean);
     const trees=(scene.trees||[]).slice(0,reduceMotion?22:48).map((t,i)=>({
@@ -377,6 +384,7 @@
   }
   function clearQuarter(){
     cancelAnimationFrame(quarterFrame);removeAstraLayer();
+    $('#realCityViews').classList.add('hidden');$('#realCityViews').replaceChildren();document.body.classList.remove('realCityExploring','realCityPhotographic');
     for(const id of ['realcity-ground','realcity-greens','realcity-roads','realcity-context','realcity-trees','focus-building'])map.getSource(id)?.setData(emptyGeo());
     try{map.setPaintProperty('realcity-ground-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',0)}catch{}
@@ -392,16 +400,24 @@
       return;
     }
     const replaced=new Set(astraLayer?profile.astra.buildings.map(b=>b.building_id):[]);
+    if(astraLayer)for(const b of profile.scene.buildings){
+      if(replaced.has(String(b.id)))continue;
+      // Some vector tiles contain both the building envelope and its inner
+      // parts. Do not draw a second roof through an authored envelope.
+      if(profile.astra.buildings.some(a=>a.height_m>=b.height&&window.RealCitySpatial.containsRing(profile.scene.buildings.find(x=>String(x.id)===a.building_id).ring,b.ring)))replaced.add(String(b.id));
+    }
     const covered=(profile.scene?.buildings||[]).filter(b=>replaced.has(String(b.id))).map(b=>({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[b.ring]}}));
     document.body.classList.add('realCityActive');setBaseBuildingsDim(true,[data.heroFeature,...data.contextFeatures,...covered].filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
     map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:data.trees});
-    try{map.setPaintProperty('realcity-ground-fill','fill-opacity',daypart()==='night'?.16:.22)}catch{}
-    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',.34)}catch{}
-    try{map.setPaintProperty('realcity-roads-glow','line-opacity',.16)}catch{}
-    try{map.setPaintProperty('realcity-roads-core','line-opacity',daypart()==='night'?.42:.56)}catch{}
+    const photoGround=!!(astraLayer&&profile.astra.environment?.roads?.length);
+    document.body.classList.toggle('realCityPhotographic',photoGround);
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoGround?.86:daypart()==='night'?.16:.22)}catch{}
+    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoGround?.9:.34)}catch{}
+    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoGround?0:.16)}catch{}
+    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoGround?0:daypart()==='night'?.42:.56)}catch{}
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
@@ -425,7 +441,8 @@
       if(elapsed<duration)quarterFrame=requestAnimationFrame(render);
       else{
         document.body.classList.add('realCitySettled');
-        $('#focusHudState').textContent=astraLayer?'фасады Astra на карте':'геометрия квартала';
+        $('#focusHudState').textContent=astraLayer?'фасады по вашим фото':'геометрия квартала';
+        if(astraLayer)setTimeout(()=>{if(token===focusToken)$('#focusHud').classList.remove('show')},1400);
         tg?.HapticFeedback?.impactOccurred?.('light');
       }
     };
@@ -572,7 +589,7 @@
       });
     });
   }
-  function createMap(style){return new maplibregl.Map({container:'map',style,center:[37.6176,55.7558],zoom:10.3,pitch:42,bearing:-12,maxPitch:72,attributionControl:false,renderWorldCopies:false,fadeDuration:140})}
+  function createMap(style){return new maplibregl.Map({container:'map',style,center:[37.6176,55.7558],zoom:10.3,pitch:42,bearing:-12,maxPitch:72,canvasContextAttributes:{antialias:true},attributionControl:false,renderWorldCopies:false,fadeDuration:140})}
   function waitLoad(m,ms=6000){return new Promise((resolve,reject)=>{let done=false;const t=setTimeout(()=>end(new Error('map_timeout')),ms);function end(e){if(done)return;done=true;clearTimeout(t);e?reject(e):resolve()}m.once('load',()=>end());m.once('error',e=>{if(!m.loaded())console.warn('map',e?.error||e)})})}
   async function bootMap(){
     try{map=createMap(STYLE);await waitLoad(map,5200)}

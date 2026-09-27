@@ -2,6 +2,29 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const A=require('../src/realcity-astra'),S=require('../../frontend/realcity-spatial');
 const ring=[[37.8,55.68],[37.8004,55.68],[37.8004,55.6802],[37.8,55.6802],[37.8,55.68]];
+function mapReadinessFixture(loaded=false){
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),{EventEmitter}=require('node:events');
+ const text=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+ const source=text.slice(text.indexOf('  function waitLoad('),text.indexOf('  async function bootMap('));
+ const callbacks=new Map();let id=0;const context={console,setTimeout:fn=>{callbacks.set(++id,fn);return id},clearTimeout:key=>callbacks.delete(key)};
+ vm.runInNewContext(source,context);const map=new EventEmitter();map.isStyleLoaded=()=>loaded;
+ return {map,waitLoad:context.waitLoad,callbacks};
+}
+test('map startup uses ready style without waiting for remote tiles and cleans listeners',async()=>{
+ for(const loaded of [false,true]){
+  const f=mapReadinessFixture(loaded),pending=f.waitLoad(f.map);
+  if(!loaded)f.map.emit('style.load');await pending;
+  assert.equal(f.callbacks.size,0);assert.deepEqual(f.map.eventNames(),[]);
+ }
+});
+test('map readiness timeout and removal reject cleanly without dangling listeners',async()=>{
+ for(const event of ['timeout','remove']){
+  const f=mapReadinessFixture(),pending=f.waitLoad(f.map);
+  const rejected=assert.rejects(pending,event==='timeout'?/map_style_timeout/:/map_removed/);
+  if(event==='timeout')[...f.callbacks.values()][0]();else f.map.emit('remove');
+  await rejected;assert.equal(f.callbacks.size,0);assert.deepEqual(f.map.eventNames(),[]);
+ }
+});
 function fixture(){
  const row={id:'3139',establishment_id:'SC-MSK-9342972B1F',venue_id:'b5fe327852468ac7',lon:37.8002,lat:55.67999,realcity_astra_assets:[{id:'front',src:'private-reference'}],realcity_astra_config:{notes:'front view'},realcity_profile:{scene:{hero_building_id:'osm-hero',buildings:[{id:'osm-hero',ring,height:12,levels:4,role:'hero',palette:{wall:'#aaaaaa'}}]}}};
  const output={version:2,target:{marker_id:row.id,establishment_id:row.establishment_id,venue_id:row.venue_id,coordinates:[row.lon,row.lat]},buildings:[{building_id:'osm-hero',geometry_key:S.geometryKey(ring),height_m:12,facades:[{edge_index:0,edge:[ring[0],ring[1]],evidence:'observed',reference_ids:['front'],grids:[{columns:4,rows:3,spacing_x_m:3,spacing_z_m:3,u_m:1,z_m:1,width_m:1.3,height_m:1.6}]}]}]};

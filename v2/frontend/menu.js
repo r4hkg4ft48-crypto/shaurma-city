@@ -440,26 +440,30 @@
       return;
     }
 
-    const feature=visible.find(x=>x.featured===true)||visible[0];
-    const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=String(feature.d||feature.description||'');
-    const featureImage=imageFor(feature);
-    const featureKind=kindFor(feature);
-    $('#menuFeature').innerHTML=
-      '<article class="menuFeatureCard kind-'+featureKind+'">'+
-        '<div class="menuFeaturePhoto '+(!feature.image?'foodPicFallback':'')+'">'+
-          (featureImage?'<img src="'+esc(featureImage)+'" alt="" loading="eager" onerror="this.remove()">':'<div class="menuFeatureFallback"><b>SHAURMEG</b></div>')+
-          '<span class="menuFeatureShade"></span>'+
-        '</div>'+
-        '<div class="menuFeatureCopy">'+
-          '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
-          '<h3>'+esc(featureName)+'</h3>'+
-          '<p>'+esc(featureDesc)+'</p>'+
-          '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
-        '</div>'+
-        '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
-      '</article>';
-
-    const rest=visible.filter(x=>String(x.id)!==featureId);
+    let rest=visible;
+    if(category==='all'){
+      const feature=visible.find(x=>x.featured===true)||visible[0];
+      const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=String(feature.d||feature.description||'');
+      const featureImage=imageFor(feature);
+      const featureKind=kindFor(feature);
+      $('#menuFeature').innerHTML=
+        '<article class="menuFeatureCard kind-'+featureKind+'">'+
+          '<div class="menuFeaturePhoto '+(!feature.image?'foodPicFallback':'')+'">'+
+            (featureImage?'<img src="'+esc(featureImage)+'" alt="" loading="eager" onerror="this.remove()">':'<div class="menuFeatureFallback"><b>SHAURMEG</b></div>')+
+            '<span class="menuFeatureShade"></span>'+
+          '</div>'+
+          '<div class="menuFeatureCopy">'+
+            '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
+            '<h3>'+esc(featureName)+'</h3>'+
+            '<p>'+esc(featureDesc)+'</p>'+
+            '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
+          '</div>'+
+          '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
+        '</article>';
+      rest=visible.filter(x=>String(x.id)!==featureId);
+    }else{
+      $('#menuFeature').innerHTML='';
+    }
     const mainItems=rest.filter(isMain);
     const otherItems=rest.filter(x=>!isMain(x));
     let title='';

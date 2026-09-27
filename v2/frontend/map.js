@@ -648,7 +648,9 @@
     el.onclick=e=>{e.stopPropagation();selectPoint(p)};return el;
   }
   async function loadPoints(){
-    const r=await fetchWithTimeout(api+'/map/points',7000);if(!r.ok)throw new Error('points_'+r.status);
+    // Geometry is fetched for the selected, fully bound venue below. Shipping
+    // every quarter here delayed the initial map by an 8 MB response.
+    const r=await fetchWithTimeout(api+'/map/points?profile=summary',15000);if(!r.ok)throw new Error('points_'+r.status);
     const data=await r.json();if(!Array.isArray(data))throw new Error('points_invalid');
     const seen=new Set();
     points=data.filter(validMapPoint).filter(p=>{const id=String(p.id);if(seen.has(id))return false;seen.add(id);return true});

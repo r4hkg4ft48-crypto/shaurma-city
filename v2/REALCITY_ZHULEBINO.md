@@ -1,6 +1,6 @@
 # Photo-authored quarter: SC-MSK-9342972B1F
 
-Release `zhulebino-photos-1-10-r1` binds marker `3139`, establishment
+Release `zhulebino-photos-1-10-r2` binds marker `3139`, establishment
 `SC-MSK-9342972B1F`, venue `b5fe327852468ac7` and the existing coordinates
 `37.852223461867, 55.68545543282221`.
 
@@ -9,7 +9,8 @@ Release `zhulebino-photos-1-10-r1` binds marker `3139`, establishment
 The owner explicitly supplied these originals directly in chat for this first
 reconstruction. They remain private; no original images, people, car plates or
 panoramas are distributed with the app. The public model contains architectural
-measurements, colours, vector signs and reference filenames only.
+measurements, colours, vector signs, reference filenames and eight rectified
+architecture/asphalt material crops. No original photograph is published.
 
 | Annotation | Original | Observation |
 |---|---|---|
@@ -45,6 +46,55 @@ and inferred facade evidence are separate; clicking a facade reports it.
 The visible references do not establish the entire district or all rear sides.
 There is no invented shawarma storefront on the clinic.
 
+### External cross-checks
+
+- [Clinic's reopening article](https://gp-23.ru/novosti/головное-здание-открыто/),
+  16 December 2024: exact address and photograph of the renovated heart elevation,
+  corner, dark spandrels, cornices and projecting entrance.
+- [Panel manufacturer's project register](https://promalliance.pro/projects/moya-poliklinika/):
+  the Milya 6 entry records corrugated powder-coated aluminium honeycomb panels.
+  The other clinics in the gallery are not substituted for this building.
+- [Mall builder's project page](https://adamant-stroy.ru/objects/zdanie-milya/):
+  2017 aerials DJI_0674 and DJI_0737 cross-check the mall, housing, podiums,
+  clinic plot and paths. The old clinic appearance is superseded by owner photos.
+  Owner photo 5 and these aerials correct the clinic-facing housing end wall:
+  its large blind central field must not receive the long elevation's window grid.
+
+These references are recorded in `astra.external_references`; external images
+are used for inspection, not redistributed as app textures. They corroborate
+relative placement, not centimetre-accurate dimensions or a survey.
+
+## Material realism pass (r2)
+
+`tools/build-zhulebino-materials.js` records the exact quadrilaterals, corrects
+perspective and strips metadata. Window samples retain the photographed glazing,
+blinds and interior lighting. Ribbed cladding, spandrels and asphalt samples have
+their low-frequency photographed illumination removed; calibrated albedo keeps
+surface detail without repeating the dusk exposure as a visible tiled pattern.
+Only the clinic uses its own glazing/cladding samples. Neighboring facades do not
+borrow clinic-specific windows. Sampling does not imply measured dimensions.
+
+Materials are attached to existing edge-local facade/opening geometry. Repeating
+surfaces use metre-scale, mirrored UVs, a 2048px atlas and mipmaps. The same map GL
+context computes linear-space directional/hemisphere lighting and view-dependent
+glass reflection. The sky reflection is an approximation, not captured HDR data.
+A single 1024px packed-depth shadow pass is cached for the static quarter, with
+PCF filtering. Unsupported shadow framebuffers fall back to ordinary shading;
+the packed depth sampler uses high precision and receiver-plane comparison;
+numeric shadow rendering disables framebuffer dithering and restores it afterward.
+all framebuffer, depth and viewport state is restored. GPU resources are disposed
+on selection cleanup and recreated on context restoration. No idle render loop.
+
+Tree crowns use seeded world-oriented leaf clusters and branching rather than
+opaque low-poly ellipsoids. Their positions and species remain inferred. Existing
+map greens and authored lawns share the lighting model. Local POI labels are
+temporarily suppressed to avoid floating labels through the facade; venue markers
+and navigation remain interactive, and original labels return on close.
+
+This pass improves surface response and vegetation but is not a claim of complete
+photorealism. The supplied photos cannot establish unseen roof equipment, all
+back elevations, exact dimensions or a full photogrammetric district mesh.
+
 ## Geometry and persistence
 
 `backend/src/realcity-releases/zhulebino-geometry.json` is an OpenFreeMap / OSM
@@ -57,7 +107,8 @@ At normal backend bootstrap the release acquires a row lock for the exact venue
 triad, installs `realcity_profile.astra`, and initializes `.scene` only when no
 building geometry exists. An existing nonempty `.scene` and all unrelated
 profile fields are preserved. Unknown geometry, moved markers and output saved
-by the studio are not silently overwritten. Installation is idempotent.
+by the studio are not silently overwritten. Installation is idempotent. The known
+reviewed r1 release may upgrade to r2; unrecognized/studio output is preserved.
 No private photo reads, access-control changes or new write endpoints are added.
 
 The same custom WebGL layer uses MapLibre's depth, camera and canvas. The existing

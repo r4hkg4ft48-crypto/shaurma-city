@@ -41,7 +41,9 @@ function compile(raw,row,partDepth=0){
     // Only rectified, cropped architecture patches. Original photos stay private.
     if(m.rectified!==true||!assetIds.has(m.source_asset_id)||!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(m.data_url||'')||m.data_url.length>900000)fail('astra_rectified_material_required');
     if(!Array.isArray(m.source_quad)||m.source_quad.length!==4||m.source_quad.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1)))fail('astra_material_quad_required');
-    return {id:m.id,rectified:true,source_asset_id:m.source_asset_id,source_quad:m.source_quad,data_url:m.data_url};
+    let repeat;
+    if(m.repeat_m!==undefined){if(!Array.isArray(m.repeat_m)||m.repeat_m.length!==2)fail('astra_material_repeat');repeat=m.repeat_m.map(v=>number(v,.1,30,'material_repeat'));}
+    return {id:m.id,rectified:true,source_asset_id:m.source_asset_id,source_quad:m.source_quad,data_url:m.data_url,...(repeat?{repeat_m:repeat}:{})};
   });
   const ids=new Set();
   const buildings=raw.buildings.map(b=>{

@@ -5,6 +5,7 @@
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false,userMarker=null,focusToken=0,markerRenderFrame=0;
   let astraLayer=null,astraScripts=null,quarterFrame=0;
   const baseBuildingPaint=new Map();
+  const baseLabelPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
@@ -200,6 +201,16 @@
       const type=map.getLayer(id)?.type,props=type==='fill-extrusion'?['fill-extrusion-height','fill-extrusion-base']:['fill-opacity'];
       baseBuildingPaint.set(id,Object.fromEntries(props.map(p=>[p,map.getPaintProperty(id,p)])));
     }
+    for(const l of layers)if(l.type==='symbol'&&/poi|housenumber|transit|place/i.test(l.id))baseLabelPaint.set(l.id,{'text-opacity':map.getPaintProperty(l.id,'text-opacity'),'icon-opacity':map.getPaintProperty(l.id,'icon-opacity')});
+  }
+  function setPhotoLabels(marker){
+    const covered=marker?['<',['distance',{type:'Point',coordinates:[Number(marker.lon),Number(marker.lat)]}],244]:null;
+    const mask=value=>{
+      if(Array.isArray(value)&&['interpolate','interpolate-hcl','interpolate-lab'].includes(value[0])&&value[2]?.[0]==='zoom')return value.map((v,i)=>i>=4&&i%2===0?mask(v):v);
+      if(Array.isArray(value)&&value[0]==='step'&&value[1]?.[0]==='zoom')return value.map((v,i)=>i>=2&&i%2===0?mask(v):v);
+      return ['case',covered,0,value??1];
+    };
+    for(const [id,props] of baseLabelPaint)for(const [prop,value] of Object.entries(props))try{map.setPaintProperty(id,prop,marker?mask(value):value??1)}catch{}
   }
   function addFocusLayers(){
     if(map.getSource('focus-building'))return;
@@ -315,7 +326,7 @@
   function loadAstraRenderer(){
     if(window.RealCityLayer)return Promise.resolve();
     if(astraScripts)return astraScripts;
-    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-2';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('astra_renderer_unavailable'))};document.head.appendChild(s)});
+    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-photo-materials-3';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('astra_renderer_unavailable'))};document.head.appendChild(s)});
     astraScripts=(window.RealCitySpatial?Promise.resolve():load('realcity-spatial.js')).then(()=>load('vendor/earcut.min.js')).then(()=>load('realcity-layer.js')).catch(e=>{astraScripts=null;throw e});
     return astraScripts;
   }
@@ -390,7 +401,7 @@
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
-    setBaseBuildingsDim(false);document.body.classList.remove('realCityActive','realCitySettled');
+    setBaseBuildingsDim(false);setPhotoLabels(null);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
     cancelAnimationFrame(quarterFrame);
@@ -418,6 +429,7 @@
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
     map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:data.trees});
     const photoGround=!!(astraLayer&&profile.astra.environment?.roads?.length);
+    setPhotoLabels(photoGround?p:null);
     document.body.classList.toggle('realCityPhotographic',photoGround);
     try{map.setPaintProperty('realcity-ground-fill','fill-color',photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoGround?.86:daypart()==='night'?.16:.22)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoGround?.9:.34)}catch{}

@@ -4,7 +4,9 @@
 const S=require('../../../frontend/realcity-spatial');
 const A=require('../realcity-astra');
 const geometry=require('./zhulebino-geometry.json');
-const RELEASE='zhulebino-photos-1-10-r1';
+const materials=require('./zhulebino-materials.json');
+const RELEASE='zhulebino-photos-1-10-r2';
+const PREVIOUS_RELEASE='zhulebino-photos-1-10-r1';
 const TARGET={marker_id:'3139',establishment_id:'SC-MSK-9342972B1F',venue_id:'b5fe327852468ac7',coordinates:[37.852223461867,55.68545543282221]};
 const REFERENCES=[
   ['IMG_7096.jpeg','1','Фасад у метки с синим знаком, цоколь и ограждение'],
@@ -18,7 +20,7 @@ const REFERENCES=[
   ['IMG_7104.jpeg','9','Павильон Жулебино, выход 7 и стеклянный фонарь'],
   ['IMG_7110.jpeg','10','Близкий оконный фасад; вход, рифление и пояса']
 ].map(([file,number,description])=>({id:'owner-photo-'+number,file,number,description,source:'owner_direct_upload',received_at:'2026-09-27'}));
-const C={ivory:'#e2dfcf',joint:'#cac9be',charcoal:'#414a50',frame:'#a9b2b1',glass:'#728997',roof:'#434b4d',blue:'#2487bb'};
+const C={ivory:'#dedbcc',joint:'#b9b9af',charcoal:'#424d56',frame:'#6d7981',glass:'#728997',roof:'#515554',blue:'#2487bb'};
 const round=n=>Math.round(n*1000)/1000;
 const edges=ring=>S.edges(ring,TARGET.coordinates);
 const ref=(...n)=>n.map(i=>'owner-photo-'+i);
@@ -98,6 +100,12 @@ function apartment(base,brown){
     add(f,'panel',0,0,L,3.6,{color:'#777d7c',depth_m:.018});
     add(f,'panel',0,h-3.2,L,2.9,{color:brown?'#a4785d':'#527160',depth_m:.025});
     if(L<4)return f;
+    // Owner photo 5 and the builder's aerial show a largely blind clinic-facing
+    // end wall. The long elevation's window grid must not wrap onto that end.
+    if(brown&&e.index===0){
+      for(let j=0;j<15;j++)for(const u of [1.05,L-2.65])window(f,u,3.85+j*(h-7.1)/15,1.35,1.47,{frame_color:'#dedfd7',color:'#71828b'});
+      return f;
+    }
     const cols=Math.max(1,Math.floor((L-1)/3)),dx=(L-.8)/cols,rows=15,dz=(h-7.1)/rows;
     for(let j=0;j<rows;j++){
       const z=3.85+j*dz;
@@ -105,7 +113,7 @@ function apartment(base,brown){
       if(!observed)continue;
       for(let i=0;i<cols;i++){
         const w=dx*(i%5===0?.38:.62),u=.4+i*dx+(dx-w)/2;
-        window(f,u,z,w,1.47,{frame_color:'#dedfd7',frame_m:.055,color:['#718491','#879793','#637987'][(i*3+j)%3]});
+        window(f,u,z,w,1.47,{frame_color:'#dedfd7',frame_m:.055,color:['#718491','#879793','#637987','#a1aaa6','#626f74'][(i*7+j*11+i*j)%5]});
         if((i+2*j)%17===0)add(f,'vent',u,z-.47,.52,.36,{color:'#b3b2a8',depth_m:.35});
       }
     }
@@ -183,13 +191,27 @@ function build(row){
   if(!matches(row))return null;
   const old=row.realcity_profile||{};
   // Never silently replace a reconstruction saved through the owner's studio.
-  if(old.astra&&old.astra.release_id!==RELEASE)return null;
+  if(old.astra&&![RELEASE,PREVIOUS_RELEASE].includes(old.astra.release_id))return null;
   if(old.astra?.release_id===RELEASE&&S.bound(old.astra,row,old.scene))return null;
   const scene=old.scene?.buildings?.length?old.scene:structuredClone(geometry.scene);
   const source=geometry.scene.buildings,lookup=new Map(scene.buildings.map(b=>[S.geometryKey(b.ring),b]));
   const at=i=>{const actual=lookup.get(S.geometryKey(source[i].ring));return actual?{...actual,ring:source[i].ring}:null;};
   if(!at(0))return null; // Changed map geometry needs deliberate re-registration.
   const buildings=[clinic(at(0))];
+  // Architectural samples are attached to actual facade surfaces/openings,
+  // never to a photo-sized rectangle, sky, foreground car or landscape plane.
+  for(const part of buildings[0].parts)for(const f of part.facades){
+    f.material_id=f.edge_index===2?'clinic-ribbed-shade':'clinic-ribbed';
+    let index=0;
+    for(const m of f.modules){
+      if(m.kind==='window'){
+        m.material_id=['clinic-glass-a','clinic-glass-b','clinic-glass-c'][(f.edge_index+index++)%3];
+        if([0,2,20].includes(f.edge_index)&&index%4===1)m.material_id='clinic-glass-lit';
+        m.frame_m=.035;m.depth_m=.16;
+      }
+      if(m.kind==='panel'&&m.color===C.charcoal)m.material_id='clinic-spandrel';
+    }
+  }
   for(const i of [1,2])if(at(i))buildings.push(podium(at(i)));
   for(const i of [3,4])if(at(i))buildings.push(apartment(at(i),i===3));
   if(at(6))buildings.push(mall(at(6)));if(at(10))buildings.push(mall(at(10),true));
@@ -212,8 +234,13 @@ function build(row){
     {label:'Сердце',center:TARGET.coordinates,bearing:220,pitch:70,zoom:18.65},
     {label:'Квартал',center:[37.85245,55.68553],bearing:250,pitch:45,zoom:16.7}
   ];
-  const astra=A.compile({version:2,target:TARGET,buildings,environment:environment(scene),camera:{bearing:252,pitch:64,zoom:18.15,views},notes:'Фотографии 1–10: реконструкция видимых фасадов. Тыльные стороны, глубины и положение деревьев оценены; модель не является обмерной съёмкой.'},workingRow);
+  const astra=A.compile({version:2,target:TARGET,buildings,materials,environment:environment(scene),camera:{bearing:252,pitch:64,zoom:18.15,views},notes:'Фотографии 1–10: реконструкция видимых фасадов и выправленные архитектурные материалы. Тыльные стороны, глубины и положение деревьев оценены; модель не является обмерной съёмкой.'},workingRow);
   astra.release_id=RELEASE;astra.references=REFERENCES;
+  astra.external_references=[
+    {url:'https://gp-23.ru/novosti/головное-здание-открыто/',source:'Городская поликлиника №23',date:'2024-12-16',use:'Exact address and post-renovation opening; owner photos govern current facade.'},
+    {url:'https://promalliance.pro/projects/moya-poliklinika/',source:'ПромАльянс, manufacturer project register',date:'2024',use:'Exact Milya 6 entry: corrugated powder-coated aluminium honeycomb panels; other project images are not treated as this clinic.'},
+    {url:'https://adamant-stroy.ru/objects/zdanie-milya/',source:'Адамант-Строй, original builder',date:'2017',use:'Aerials DJI_0674 and DJI_0737: relation of mall, housing podiums, clinic plot and paths. Historical reference, not current clinic appearance.'}
+  ];
   astra.coverage.notes='Visible elevations authored from owner photographs. Roof layout and hidden elevations inferred. Context simplified.';
   return {...old,version:Math.max(11,Number(old.version)||0),scene,astra};
 }

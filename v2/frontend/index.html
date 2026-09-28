@@ -18,23 +18,32 @@
 </div>
 
 <header class="topbar glass mapTopbar">
-  <button class="brand brandProfileButton" id="profileBtn" type="button" aria-label="Открыть профиль">
-    <span class="brandMark brandLogo"><img src="shaurmeg-emblem.svg" alt="" aria-hidden="true"></span>
-    <span class="brandCopy"><b>шаурмег</b><small id="headerTgId">TG ID · —</small></span>
-    <span class="brandProfileHint" aria-hidden="true">◉</span>
+  <div class="mapIdentity">
+    <span class="mapIdentityMark" aria-hidden="true"><img src="shaurmeg-emblem.svg" alt=""></span>
+    <div class="mapIdentityCopy">
+      <div class="cityMode" id="cityMode"><i></i><span>ГОРОД · LIVE</span></div>
+      <small><b id="pointsCount">0</b> мест в выбранном разделе</small>
+    </div>
+  </div>
+
+  <label class="topSearch" for="search">
+    <span class="topSearchIcon" aria-hidden="true">⌕</span>
+    <input id="search" placeholder="Поиск заведений" autocomplete="off" enterkeyhint="search">
+    <button class="topSearchClear hidden" id="searchClear" type="button" aria-label="Очистить поиск">×</button>
+  </label>
+
+  <button class="topProfileBtn" id="profileBtn" type="button" aria-label="Открыть профиль">
+    <span class="topProfileGlyph" aria-hidden="true">◯</span>
+    <span><b>Профиль</b><small id="headerTgId">TG ID · —</small></span>
   </button>
-  <div class="grow"></div>
-  <div class="cityMode" id="cityMode"><i></i><span>ГОРОД LIVE</span></div>
-  <div class="mapCount"><b id="pointsCount">0</b><small>ТОЧЕК</small></div>
-  <button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 
 <div class="sectionSwitcher" aria-label="Раздел карты">
   <button class="sectionToggle" id="sectionToggle" type="button" aria-label="Переключить между шаурмой и кофе">
     <span class="sectionToggleTrack" aria-hidden="true">
       <span class="sectionToggleThumb"></span>
-      <span class="sectionToggleIcon sectionToggleShawarma">🥙</span>
-      <span class="sectionToggleIcon sectionToggleCoffee">☕</span>
+      <span class="sectionToggleIcon sectionToggleShawarma">Ш</span>
+      <span class="sectionToggleIcon sectionToggleCoffee">К</span>
     </span>
     <span class="sectionToggleCaption" id="sectionToggleCaption">ШАУРМА</span>
   </button>
@@ -50,12 +59,27 @@
   <i class="coffeeBean beanArabica bean7"></i>
 </div>
 
-<div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
-<div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>
+<div class="mapTools" aria-label="Масштаб геопозиции">
+  <button class="radiusBtn" id="locateNear" type="button" aria-label="Показать места в радиусе 500 метров"><span>⌖</span><b>Рядом</b><small>500 м</small></button>
+  <button class="radiusBtn" id="locateDistrict" type="button" aria-label="Показать места в радиусе 2.5 километра"><span>◎</span><b>Район</b><small>2.5 км</small></button>
+  <button class="mapResetBtn" id="home" type="button" aria-label="Показать все точки">↗</button>
+</div>
 <div class="focusHud" id="focusHud"><small>REAL CITY · ФОКУС</small><b id="focusHudName">Заведение</b><span id="focusHudState">собираем квартал</span></div>
 <nav class="realCityViews hidden glass" id="realCityViews" aria-label="Ракурсы цифрового квартала"></nav>
 <div class="mapAttribution"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> · <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a></div>
+
+<button class="favoritesFloat glass" id="favoritesFloat" type="button" aria-label="Открыть избранное">
+  <span class="favoritesFloatIcon">♥</span>
+  <span><b>Избранное</b><small id="favoritesFloatMeta">Твои места и блюда</small></span>
+  <i>›</i>
+</button>
+
+<button class="activeOrderSpotlight glass hidden" id="activeOrderSpotlight" type="button" aria-label="Показать активный заказ на карте">
+  <span class="activeOrderPulse"></span>
+  <span class="activeOrderCopy"><small>АКТИВНЫЙ ЗАКАЗ</small><b id="activeOrderVenue">Заказ готовится</b><em id="activeOrderState">Показать на карте</em></span>
+  <span class="activeOrderDish" id="activeOrderDish" aria-hidden="true">🥙</span>
+</button>
 
 <article class="venueCard glass" id="venueCard">
   <div class="venueHero"><div class="venueAvatar" id="venueAvatar">🥙</div><div><h2 id="venueName">Заведение</h2><p id="venueAddress"></p></div><span class="badge" id="realBadge">REAL CITY</span></div>
@@ -123,10 +147,10 @@
   </div>
 </section>
 
-<nav class="bottomDock glass" id="bottomDock">
-  <button class="dockBtn active" data-dock="map"><span class="dockIcon">⌖</span><small>Карта</small></button>
-  <button class="dockBtn" data-dock="orders"><span class="dockIcon">▤</span><small>Заказы</small><i id="activeOrderDot" class="hidden"></i></button>
-  <button class="dockBtn" data-dock="favorites"><span class="dockIcon favoritesDockIcon">♥</span><small>Избранное</small></button>
+<nav class="bottomDock glass" id="bottomDock" aria-label="Основная навигация">
+  <button class="dockBtn" data-dock="map"><span class="dockIcon">⌖</span><small>Карта</small></button>
+  <button class="dockBtn dockOrders active" data-dock="orders"><span class="dockIcon">▱</span><small>Заказы</small><i id="activeOrderDot" class="hidden"></i></button>
+  <button class="dockBtn" data-dock="profile"><span class="dockIcon">◯</span><small>Профиль</small></button>
 </nav>
 
 <div class="boot cinemaBoot" id="boot">

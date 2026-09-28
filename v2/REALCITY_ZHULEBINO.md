@@ -117,6 +117,12 @@ separate viewer, infinite render loop or photo-generation dependency. It adds
 entrance, heart and quarter camera presets; exploration folds the venue card
 while retaining its exact menu route. Closing restores the original map.
 
+The map requests `/map/points?profile=summary`: only palette, camera and profile
+version accompany the point list. Complete scene/Astra geometry still comes from
+the existing exact-marker endpoint after selection. Older callers retain the
+original point response. This avoids downloading every point's quarter before
+opening the requested venue; no stored profile is truncated.
+
 ## Validation
 
 `node --test v2/backend/test/realcity-astra.test.js` covers venue and geometry

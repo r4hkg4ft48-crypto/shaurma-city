@@ -199,11 +199,15 @@ router.get('/map/points',async(req,res)=>{
   try{
     const q=await db.query(`
       SELECT m.id,m.establishment_id,m.venue_id,m.name,m.address,m.description,m.hours,m.price_label,m.lat,m.lon,m.category,m.marker_style,
-        (m.marker_avatar<>'') has_avatar,(m.realcity_profile - 'astra') realcity_profile,m.realcity_quality,m.updated_at,
+        (m.marker_avatar<>'') has_avatar,
+        CASE WHEN $1::boolean THEN jsonb_strip_nulls(jsonb_build_object(
+          'version',m.realcity_profile->'version','camera',m.realcity_profile->'camera',
+          'palette',m.realcity_profile->'palette'
+        )) ELSE (m.realcity_profile - 'astra') END realcity_profile,m.realcity_quality,m.updated_at,
         (jsonb_array_length(v.menu)>0) has_menu
       FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
       WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
-      ORDER BY m.id`);
+      ORDER BY m.id`,[req.query.profile==='summary']);
     res.setHeader('Cache-Control','no-store');
     res.json(q.rows.map(x=>({...x,marker_id:x.id,marker_style:D.markerStyle(x.marker_style),has_avatar:!!x.has_avatar,has_menu:!!x.has_menu,realcity_profile:x.realcity_profile||{}})));
   }catch(e){fail(res,e,'map_points_failed')}

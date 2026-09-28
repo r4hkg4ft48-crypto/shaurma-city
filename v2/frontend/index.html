@@ -29,6 +29,27 @@
   <button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 
+<div class="sectionSwitcher" aria-label="Раздел карты">
+  <button class="sectionToggle" id="sectionToggle" type="button" aria-label="Переключить между шаурмой и кофе">
+    <span class="sectionToggleTrack" aria-hidden="true">
+      <span class="sectionToggleThumb"></span>
+      <span class="sectionToggleIcon sectionToggleShawarma">🥙</span>
+      <span class="sectionToggleIcon sectionToggleCoffee">☕</span>
+    </span>
+    <span class="sectionToggleCaption" id="sectionToggleCaption">ШАУРМА</span>
+  </button>
+</div>
+
+<div class="coffeeBeanField" aria-hidden="true">
+  <i class="coffeeBean beanArabica bean1"></i>
+  <i class="coffeeBean beanRobusta bean2"></i>
+  <i class="coffeeBean beanLiberica bean3"></i>
+  <i class="coffeeBean beanArabica bean4"></i>
+  <i class="coffeeBean beanRobusta bean5"></i>
+  <i class="coffeeBean beanLiberica bean6"></i>
+  <i class="coffeeBean beanArabica bean7"></i>
+</div>
+
 <div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
 <div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>

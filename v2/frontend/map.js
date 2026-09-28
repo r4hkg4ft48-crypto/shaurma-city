@@ -18,25 +18,50 @@
     evening:{background:'#0D192A',water:'#112F52',land:'#16273B',residential:'#1D3047',building:'#EDF1F5',road:'#F4F6F8',label:'#F8FAFC'},
     night:{background:'#09111D',water:'#0B2340',land:'#111E2D',residential:'#17263A',building:'#DDE4EC',road:'#B7C1CC',label:'#F2F5F8'}
   };
+  const COFFEE_PALETTES={
+    morning:{background:'#F8F1E8',water:'#E3EBE5',land:'#F1E5D6',residential:'#E9D8C4',building:'#FFFDF8',road:'#FFFFFF',label:'#513629'},
+    day:{background:'#F5EBDD',water:'#DDE8E1',land:'#EFE2D1',residential:'#E5D2BC',building:'#FFFCF6',road:'#FFFDF9',label:'#4B3023'},
+    evening:{background:'#F0E2D1',water:'#D9E4DE',land:'#E9DAC8',residential:'#DDC5AA',building:'#FFF8EE',road:'#FFF9F1',label:'#4A3023'},
+    night:{background:'#E8D7C3',water:'#D0DDD7',land:'#E1D0BD',residential:'#D4B99D',building:'#F8EEE2',road:'#F9F3EA',label:'#422A1E'}
+  };
+  const DISCOVERY={
+    shawarma:{label:'ШАУРМА',city:'ГОРОД',theme:'#0F2035',cluster:['#D94343','#C83747','#A8263B'],dot:'#D94343',stroke:'#F7F9FC',count:'#FFFFFF',icon:'🥙'},
+    coffee:{label:'КОФЕ',city:'КОФЕ',theme:'#F2E6D6',cluster:['#9B6848','#815238','#68402D'],dot:'#7A4D34',stroke:'#FFF9F0',count:'#FFF9F1',icon:'☕'}
+  };
+  const initialSection=String(qs.get('section')||sessionStorage.getItem('shaurmeg_discovery_mode')||'shawarma').toLowerCase();
+  let discoveryMode=initialSection==='coffee'?'coffee':'shawarma';
+  document.body.dataset.discoveryMode=discoveryMode;
   window.__SHAURMEG_MAP_STARTED__=true;
 
+  function categoryOf(p){
+    const raw=String(p?.category||'shawarma').trim().toLowerCase();
+    if(['coffee','cafe','coffee_shop','coffeeshop','кофе','кофейня'].includes(raw))return 'coffee';
+    if(!raw||['shawarma','shaurma','шаурма','food'].includes(raw))return 'shawarma';
+    return raw;
+  }
+  function activePoints(){return points.filter(p=>categoryOf(p)===discoveryMode)}
   function daypart(){
     const h=new Date().getHours();
     return h>=5&&h<11?'morning':h>=11&&h<17?'day':h>=17&&h<22?'evening':'night';
   }
+  function paletteForMode(part=daypart()){
+    const palettes=discoveryMode==='coffee'?COFFEE_PALETTES:CITY_PALETTES;
+    return palettes[part]||palettes.day;
+  }
   function applyDaypart(){
     const part=daypart(),labels={morning:'УТРО',day:'ДЕНЬ',evening:'ВЕЧЕР',night:'НОЧЬ'};
     document.body.dataset.daypart=part;
-    const mode=$('#cityMode');if(mode)mode.querySelector('span').textContent='ГОРОД · '+labels[part];
-    return CITY_PALETTES[part]||CITY_PALETTES.day;
+    const mode=$('#cityMode');if(mode)mode.querySelector('span').textContent=(DISCOVERY[discoveryMode]?.city||'ГОРОД')+' · '+labels[part];
+    return paletteForMode(part);
   }
-  const cityPalette=applyDaypart();
+  let cityPalette=applyDaypart();
   function setHeaderTgId(value){
     const el=$('#headerTgId');if(!el)return;
     const id=String(value||'').trim();
     el.textContent=id?'TG ID · '+id:'TG ID · —';
   }
   setHeaderTgId(tg?.initDataUnsafe?.user?.id||'');
+  setDiscoveryMode(discoveryMode,{fit:false,persist:false,announce:false});
   function toast(v){const el=$('#toast');if(!el)return;el.textContent=v;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1900)}
   function dismissBoot(){
     clearTimeout(window.__SHAURMEG_BOOT_WATCHDOG__);
@@ -203,6 +228,51 @@
     }
     for(const l of layers)if(l.type==='symbol'&&/poi|housenumber|transit|place/i.test(l.id))baseLabelPaint.set(l.id,{'text-opacity':map.getPaintProperty(l.id,'text-opacity'),'icon-opacity':map.getPaintProperty(l.id,'icon-opacity')});
   }
+  function styleVenueClusters(){
+    if(!map)return;
+    const theme=DISCOVERY[discoveryMode]||DISCOVERY.shawarma;
+    try{
+      if(map.getLayer('venue-clusters')){
+        map.setPaintProperty('venue-clusters','circle-color',['step',['get','point_count'],theme.cluster[0],20,theme.cluster[1],80,theme.cluster[2]]);
+        map.setPaintProperty('venue-clusters','circle-stroke-color',theme.stroke);
+      }
+      if(map.getLayer('venue-cluster-count'))map.setPaintProperty('venue-cluster-count','text-color',theme.count);
+      if(map.getLayer('venue-single-dot')){
+        map.setPaintProperty('venue-single-dot','circle-color',theme.dot);
+        map.setPaintProperty('venue-single-dot','circle-stroke-color',theme.stroke);
+      }
+    }catch{}
+  }
+  function setDiscoveryMode(mode,{fit=true,persist=true,announce=true}={}){
+    const next=mode==='coffee'?'coffee':'shawarma';
+    if(selected&&categoryOf(selected)!==next)closeCard();
+    discoveryMode=next;
+    document.body.dataset.discoveryMode=next;
+    cityPalette=applyDaypart();
+    const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.setAttribute('content',DISCOVERY[next].theme);
+    const caption=$('#sectionToggleCaption');if(caption)caption.textContent=DISCOVERY[next].label;
+    const toggle=$('#sectionToggle');if(toggle){
+      toggle.dataset.mode=next;
+      toggle.setAttribute('aria-label',next==='coffee'?'Сейчас раздел кофе. Переключить на шаурму':'Сейчас раздел шаурмы. Переключить на кофе');
+    }
+    const input=$('#search');if(input)input.placeholder=next==='coffee'?'Найти кофейню или адрес…':'Найти заведение или адрес…';
+    document.title=next==='coffee'?'Шаурмег · кофе':'Шаурмег · карта';
+    if(persist){
+      sessionStorage.setItem('shaurmeg_discovery_mode',next);
+      try{const u=new URL(location.href);u.searchParams.set('section',next);history.replaceState(null,'',u.pathname+u.search+u.hash)}catch{}
+    }
+    if(map){
+      styleBuildings();styleVenueClusters();
+      map.getSource('venue-points')?.setData(venueGeoJSON(activePoints()));
+    }
+    const current=activePoints();
+    const counter=$('#pointsCount');if(counter)counter.textContent=current.length;
+    clearDomMarkers();renderVisibleMarkers();
+    if(fit&&current.length)fitAll();
+    if(announce)toast((next==='coffee'?'Кофе':'Шаурма')+' · '+current.length+' точек');
+    tg?.HapticFeedback?.selectionChanged?.();
+  }
+
   function setPhotoLabels(marker){
     const covered=marker?['<',['distance',{type:'Point',coordinates:[Number(marker.lon),Number(marker.lat)]}],244]:null;
     const mask=value=>{
@@ -511,7 +581,7 @@
     const lat=Number(p?.lat),lon=Number(p?.lon);
     return Number.isFinite(lat)&&Number.isFinite(lon)&&lat>=-85&&lat<=85&&lon>=-180&&lon<=180&&p?.id!=null;
   }
-  function venueGeoJSON(list=points){
+  function venueGeoJSON(list=activePoints()){
     return {type:'FeatureCollection',features:(list||[]).filter(validMapPoint).map(p=>({
       type:'Feature',id:Number.isFinite(Number(p.id))?Number(p.id):undefined,
       properties:{marker_id:String(p.id)},
@@ -559,20 +629,23 @@
     });
     map.on('click','venue-single-dot',e=>{
       const id=String(e.features?.[0]?.properties?.marker_id||'');
-      const p=points.find(x=>String(x.id)===id);if(p)selectPoint(p);
+      const p=activePoints().find(x=>String(x.id)===id);if(p)selectPoint(p);
     });
     const interactiveLayers=['venue-clusters','venue-single-dot'];if(!fallback)interactiveLayers.push('venue-cluster-count');
     for(const layer of interactiveLayers){
       map.on('mouseenter',layer,()=>{map.getCanvas().style.cursor='pointer'});
       map.on('mouseleave',layer,()=>{map.getCanvas().style.cursor=''});
     }
+    styleVenueClusters();
   }
   function clearDomMarkers(){
     for(const m of markers.values())m.remove();
     markers.clear();
   }
   function renderVisibleMarkers(){
-    if(!map||!points.length)return;
+    if(!map)return;
+    const modePoints=activePoints();
+    if(!modePoints.length){clearDomMarkers();return}
     cancelAnimationFrame(markerRenderFrame);
     markerRenderFrame=requestAnimationFrame(()=>{
       const zoom=map.getZoom();
@@ -580,7 +653,7 @@
       const bounds=map.getBounds(),center=map.getCenter();
       const latPad=Math.max(.002,(bounds.getNorth()-bounds.getSouth())*.18);
       const lonPad=Math.max(.002,(bounds.getEast()-bounds.getWest())*.18);
-      let visible=points.filter(p=>{
+      let visible=modePoints.filter(p=>{
         const lat=Number(p.lat),lon=Number(p.lon);
         return validMapPoint(p)&&lat>=bounds.getSouth()-latPad&&lat<=bounds.getNorth()+latPad&&lon>=bounds.getWest()-lonPad&&lon<=bounds.getEast()+lonPad;
       });
@@ -642,8 +715,8 @@
     dismissBoot();loadPointsWithRetry();
   }
   function markerNode(p,index=0,animate=true){
-    const s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker'+(animate?' markerReveal':'')+(animate&&s.pulse!==false?' pulseMarker':'');el.style.setProperty('--reveal-delay',Math.min(index,12)*38+'ms');el.type='button';el.style.background=s.background||'#D94343';el.style.borderColor=s.border||'#f6f3e9';el.style.opacity=s.opacity??1;el.style.width=(s.size||44)+'px';el.style.height=(s.size||44)+'px';el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'10px':s.shape==='pin'?'50% 50% 50% 14px':'16px';
-    if(p.has_avatar){const img=new Image();img.alt='';img.src=api+'/map/markers/'+p.id+'/avatar';img.onerror=()=>{img.remove();el.insertAdjacentText('afterbegin',s.icon||'🥙')};el.appendChild(img)}else el.textContent=s.icon||'🥙';
+    const category=categoryOf(p),theme=DISCOVERY[category]||DISCOVERY.shawarma,s=p.marker_style||{},el=document.createElement('button');el.className='mapMarker'+(animate?' markerReveal':'')+(animate&&s.pulse!==false?' pulseMarker':'');el.dataset.category=category;el.style.setProperty('--reveal-delay',Math.min(index,12)*38+'ms');el.type='button';el.style.background=s.background||theme.dot;el.style.borderColor=s.border||theme.stroke;el.style.opacity=s.opacity??1;el.style.width=(s.size||44)+'px';el.style.height=(s.size||44)+'px';el.style.borderRadius=s.shape==='circle'?'50%':s.shape==='square'?'10px':s.shape==='pin'?'50% 50% 50% 14px':'16px';
+    if(p.has_avatar){const img=new Image();img.alt='';img.src=api+'/map/markers/'+p.id+'/avatar';img.onerror=()=>{img.remove();el.insertAdjacentText('afterbegin',s.icon||theme.icon)};el.appendChild(img)}else el.textContent=s.icon||theme.icon;
     if(s.label_visible){const l=document.createElement('span');l.className='markerLabel';l.textContent=p.name;el.appendChild(l)}
     el.onclick=e=>{e.stopPropagation();selectPoint(p)};return el;
   }
@@ -654,19 +727,19 @@
     const data=await r.json();if(!Array.isArray(data))throw new Error('points_invalid');
     const seen=new Set();
     points=data.filter(validMapPoint).filter(p=>{const id=String(p.id);if(seen.has(id))return false;seen.add(id);return true});
-    $('#pointsCount').textContent=points.length;
-    clearDomMarkers();
-    map.getSource('venue-points')?.setData(venueGeoJSON(points));
-    if(points.length)fitAll();
+    const direct=qs.get('marker'),directPoint=direct?points.find(x=>String(x.id)===direct):null;
+    if(directPoint&&['coffee','shawarma'].includes(categoryOf(directPoint)))discoveryMode=categoryOf(directPoint);
+    setDiscoveryMode(discoveryMode,{fit:false,persist:false,announce:false});
+    if(activePoints().length)fitAll();
     renderVisibleMarkers();
-    const direct=qs.get('marker');if(direct){const p=points.find(x=>String(x.id)===direct);if(p)setTimeout(()=>selectPoint(p),350)}
+    if(directPoint)setTimeout(()=>selectPoint(directPoint),350)
   }
   async function loadPointsWithRetry(){
     for(let attempt=0;attempt<3;attempt++){try{await loadPoints();return}catch(e){console.warn('points load failed',attempt+1,e);if(attempt<2)await sleep(1200*(attempt+1))}}
     toast('Карта открыта, точки догружаются…');setTimeout(()=>loadPointsWithRetry(),5000);
   }
   function fitAll(){
-    const valid=points.filter(validMapPoint);if(!valid.length)return;
+    const valid=activePoints().filter(validMapPoint);if(!valid.length)return;
     const b=new maplibregl.LngLatBounds();valid.forEach(x=>b.extend([Number(x.lon),Number(x.lat)]));
     map.fitBounds(b,{padding:{top:130,bottom:210,left:40,right:40},maxZoom:12.4,duration:700});
   }
@@ -675,7 +748,7 @@
     $('#venueName').textContent=p.name||'Заведение';$('#venueName').title=p.name||'';$('#venueAddress').textContent=p.address||'';$('#venueAddress').title=p.address||'';$('#venueDescription').textContent=p.description||'';$('#venueDescription').classList.toggle('hidden',!p.description);
     $('#venueHoursQuick').textContent=p.hours||'';$('#venueHoursQuick').classList.toggle('hidden',!p.hours);$('#venuePriceQuick').textContent=p.price_label||'';$('#venuePriceQuick').classList.toggle('hidden',!p.price_label);
     $('#realBadge').textContent=p.realcity_quality&&p.realcity_quality!=='heuristic'?'REAL CITY · '+String(p.realcity_quality).toUpperCase():'REAL CITY';
-    const a=$('#venueAvatar');a.innerHTML=p.has_avatar?'<img alt="" src="'+api+'/map/markers/'+encodeURIComponent(p.id)+'/avatar">':esc(p.marker_style?.icon||'🥙');
+    const a=$('#venueAvatar'),theme=DISCOVERY[categoryOf(p)]||DISCOVERY.shawarma;a.innerHTML=p.has_avatar?'<img alt="" src="'+api+'/map/markers/'+encodeURIComponent(p.id)+'/avatar">':esc(p.marker_style?.icon||theme.icon);
     $('#venueCard').classList.add('show');
     cinematicFocus(p);
     const token=focusToken;
@@ -690,9 +763,10 @@
   }
   function search(){
     const q=$('#search').value.trim().toLowerCase(),box=$('#results');if(!q){box.classList.add('hidden');return}
-    const list=points.filter(x=>(x.name+' '+x.address).toLowerCase().includes(q)).slice(0,8);box.innerHTML=list.length?list.map(x=>'<button class="searchResult" data-id="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+esc(x.address||'')+'</small></button>').join(''):'<div class="empty">Ничего не найдено</div>';box.classList.remove('hidden');
+    const list=activePoints().filter(x=>(x.name+' '+x.address).toLowerCase().includes(q)).slice(0,8);box.innerHTML=list.length?list.map(x=>'<button class="searchResult" data-id="'+x.id+'"><b>'+esc(x.name)+'</b><small>'+esc(x.address||'')+'</small></button>').join(''):'<div class="empty">Ничего не найдено</div>';box.classList.remove('hidden');
   }
 
+  $('#sectionToggle').onclick=()=>setDiscoveryMode(discoveryMode==='coffee'?'shawarma':'coffee');
   $('#searchToggle').onclick=()=>{$('#searchBox').classList.toggle('hidden');if(!$('#searchBox').classList.contains('hidden'))setTimeout(()=>$('#search').focus(),60);else $('#results').classList.add('hidden')};
   $('#search').oninput=search;$('#results').onclick=e=>{const b=e.target.closest('[data-id]');if(!b)return;const p=points.find(x=>String(x.id)===b.dataset.id);if(p){selectPoint(p);$('#results').classList.add('hidden')}};
   $('#locate').onclick=()=>{if(!navigator.geolocation)return toast('Геопозиция недоступна');navigator.geolocation.getCurrentPosition(p=>{

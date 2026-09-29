@@ -498,18 +498,22 @@
 
     map.addSource('realcity-greens',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-greens-fill',type:'fill',source:'realcity-greens',paint:{
-      'fill-color':'#45694d','fill-opacity':0,
+      'fill-color':'#65745B','fill-opacity':0,
       'fill-opacity-transition':{duration:620,delay:100}
     }});
 
     map.addSource('realcity-roads',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-roads-glow',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#FFFFFF','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
-      'line-opacity':0,'line-blur':5,'line-opacity-transition':{duration:650,delay:120}
+      'line-color':'#303437','line-width':['interpolate',['linear'],['zoom'],14,8,18,15],
+      'line-opacity':0,'line-blur':1.3,'line-opacity-transition':{duration:650,delay:120}
     }});
     map.addLayer({id:'realcity-roads-core',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#E8EDF3','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
+      'line-color':'#9E9B94','line-width':['interpolate',['linear'],['zoom'],14,4,18,8.4],
       'line-opacity':0,'line-opacity-transition':{duration:650,delay:140}
+    }});
+    map.addLayer({id:'realcity-roads-center',type:'line',source:'realcity-roads',paint:{
+      'line-color':'#E5D5A7','line-width':['interpolate',['linear'],['zoom'],14,.45,18,1],
+      'line-opacity':0,'line-dasharray':[3.5,3.5],'line-opacity-transition':{duration:650,delay:180}
     }});
 
     map.addSource('realcity-context',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -520,9 +524,9 @@
       'fill-extrusion-opacity':.78
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
-      'line-color':['coalesce',['get','accent'],'#D7E0EA'],
-      'line-width':['case',['==',['get','role'],'nearby'],1,.65],
-      'line-opacity':['case',['==',['get','role'],'nearby'],.45,.22]
+      'line-color':['coalesce',['get','accent'],'#B8B1A6'],
+      'line-width':['case',['==',['get','role'],'nearby'],.85,.55],
+      'line-opacity':['case',['==',['get','role'],'nearby'],.34,.18]
     }});
 
     map.addSource('focus-building',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -532,18 +536,22 @@
       'fill-extrusion-base':['coalesce',['get','base'],0],'fill-extrusion-opacity':.97
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
-      'line-color':['coalesce',['get','accent'],'#F4F7FA'],'line-width':1.55,'line-opacity':.78
+      'line-color':['coalesce',['get','accent'],'#E9D9BF'],'line-width':1.25,'line-opacity':.62
     }});
 
     map.addSource('realcity-trees',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-tree-glow',type:'circle',source:'realcity-trees',paint:{
-      'circle-radius':['interpolate',['linear'],['zoom'],14,4,18,10],
-      'circle-color':'#1b3424','circle-opacity':.28,'circle-blur':.35
+      'circle-radius':['interpolate',['linear'],['zoom'],14,4.2,18,10.8],
+      'circle-color':'#18211A','circle-opacity':.26,'circle-blur':.28,'circle-translate':[1.8,2.6]
+    }});
+    map.addLayer({id:'realcity-tree-trunk',type:'circle',source:'realcity-trees',paint:{
+      'circle-radius':['interpolate',['linear'],['zoom'],14,.7,18,1.8],
+      'circle-color':'#62513F','circle-opacity':.82
     }});
     map.addLayer({id:'realcity-tree-crown',type:'circle',source:'realcity-trees',paint:{
-      'circle-radius':['interpolate',['linear'],['zoom'],14,2.2,18,6.4],
-      'circle-color':['coalesce',['get','color'],'#5f8a62'],
-      'circle-opacity':.86,'circle-stroke-width':.7,'circle-stroke-color':'#bed0b8','circle-stroke-opacity':.22
+      'circle-radius':['interpolate',['linear'],['zoom'],14,2.4,18,6.8],
+      'circle-color':['coalesce',['get','color'],'#627B59'],
+      'circle-opacity':.91,'circle-stroke-width':.7,'circle-stroke-color':'#8EA081','circle-stroke-opacity':.3
     }});
   }
   function emptyGeo(){return {type:'FeatureCollection',features:[]}}
@@ -667,6 +675,7 @@
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
+    try{map.setPaintProperty('realcity-roads-center','line-opacity',0)}catch{}
     setBaseBuildingsDim(false);setPhotoLabels(null);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
@@ -699,8 +708,9 @@
     document.body.classList.toggle('realCityPhotographic',photoGround);
     try{map.setPaintProperty('realcity-ground-fill','fill-color',photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoGround?.86:daypart()==='night'?.16:.22)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoGround?.9:.34)}catch{}
-    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoGround?0:.16)}catch{}
-    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoGround?0:daypart()==='night'?.42:.56)}catch{}
+    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoGround?0:daypart()==='night'?.5:.64)}catch{}
+    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoGround?0:daypart()==='night'?.68:.86)}catch{}
+    try{map.setPaintProperty('realcity-roads-center','line-opacity',photoGround?0:daypart()==='night'?.18:.34)}catch{}
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');

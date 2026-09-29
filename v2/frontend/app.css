@@ -4155,3 +4155,220 @@ body.mapApp .brandProfileButton{display:none!important}
   .activeOrderPulse{animation:none}
   body.orderFocus .activeOrderSpotlight{animation:none}
 }
+
+
+/* ===== REALISTIC CITY OPTICS · PREMIUM PASS ===== */
+body.mapApp #map canvas{
+  filter:saturate(.92) contrast(1.045) brightness(.985);
+  transition:filter .45s ease
+}
+body.mapApp[data-daypart="morning"] #map canvas{filter:saturate(.9) contrast(1.045) brightness(1.035)}
+body.mapApp[data-daypart="day"] #map canvas{filter:saturate(.94) contrast(1.055) brightness(1.01)}
+body.mapApp[data-daypart="evening"] #map canvas{filter:saturate(.9) contrast(1.07) brightness(.9)}
+body.mapApp[data-daypart="night"] #map canvas{filter:saturate(.82) contrast(1.09) brightness(.78)}
+
+body.mapApp .mapRoot::after{
+  content:"";position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.055;
+  background:
+    repeating-linear-gradient(18deg,rgba(255,255,255,.06) 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(108deg,rgba(0,0,0,.05) 0 1px,transparent 1px 5px);
+  mix-blend-mode:soft-light
+}
+body.mapApp .mapShade{
+  z-index:4;
+  background:
+    radial-gradient(ellipse at 50% 42%,transparent 0 38%,rgba(2,5,8,.055) 66%,rgba(2,5,8,.24) 100%),
+    linear-gradient(180deg,rgba(3,8,13,.13),transparent 20%,transparent 72%,rgba(4,8,12,.38))
+}
+body.mapApp[data-daypart="morning"] .mapShade,
+body.mapApp[data-daypart="day"] .mapShade{
+  background:
+    radial-gradient(ellipse at 50% 44%,rgba(255,248,230,.06),transparent 45%,rgba(23,22,19,.08) 100%),
+    linear-gradient(180deg,rgba(24,27,27,.08),transparent 18%,transparent 76%,rgba(13,17,18,.22))
+}
+body.mapApp .mapAtmosphere{
+  opacity:.72;mix-blend-mode:soft-light;
+  background:
+    radial-gradient(circle at 78% 11%,rgba(255,207,145,.15),transparent 28%),
+    radial-gradient(circle at 12% 78%,rgba(83,132,160,.12),transparent 32%)
+}
+body.mapApp[data-daypart="day"] .mapAtmosphere{
+  opacity:.42;background:
+    radial-gradient(circle at 78% 10%,rgba(255,244,216,.17),transparent 30%),
+    radial-gradient(circle at 17% 82%,rgba(116,150,163,.08),transparent 34%)
+}
+body.mapApp[data-daypart="evening"] .mapAtmosphere{
+  opacity:.9;background:
+    radial-gradient(circle at 82% 12%,rgba(255,157,81,.21),transparent 31%),
+    radial-gradient(circle at 16% 77%,rgba(42,93,138,.18),transparent 36%)
+}
+body.mapApp[data-daypart="night"] .mapAtmosphere{
+  opacity:.78;background:
+    radial-gradient(circle at 72% 10%,rgba(84,136,191,.16),transparent 31%),
+    radial-gradient(circle at 22% 76%,rgba(231,151,80,.08),transparent 28%)
+}
+body.mapApp .cityLightSweep{
+  position:absolute;inset:-25%;z-index:5;pointer-events:none;opacity:.22;
+  background:linear-gradient(112deg,transparent 25%,rgba(255,238,207,.08) 43%,rgba(255,255,255,.12) 49%,rgba(255,220,177,.06) 55%,transparent 72%);
+  transform:translate3d(-28%,0,0) rotate(3deg);
+  animation:realisticCitySweep 16s ease-in-out infinite alternate;
+  mix-blend-mode:soft-light
+}
+@keyframes realisticCitySweep{
+  0%{transform:translate3d(-28%,0,0) rotate(3deg)}
+  100%{transform:translate3d(24%,0,0) rotate(3deg)}
+}
+
+/* stronger premium glass with thinner, more architectural borders */
+body.mapApp .mapTopbar,
+body.mapApp .bottomDock,
+body.mapApp .favoritesFloat,
+body.mapApp .activeOrderSpotlight,
+body.mapApp .venueCard,
+body.mapApp .searchResults{
+  box-shadow:
+    0 22px 64px rgba(0,0,0,.34),
+    0 3px 10px rgba(0,0,0,.14),
+    inset 0 1px 0 rgba(255,255,255,.075),
+    inset 0 -1px 0 rgba(255,255,255,.018)
+}
+body.mapApp .mapTopbar{
+  border-color:rgba(255,255,255,.155);
+  background:
+    linear-gradient(150deg,rgba(12,23,36,.94),rgba(5,12,21,.91)),
+    radial-gradient(circle at 20% 0,rgba(255,184,91,.1),transparent 34%)
+}
+body.mapApp .mapIdentityMark{
+  box-shadow:0 10px 27px rgba(0,0,0,.24),0 0 26px rgba(236,163,75,.1),inset 0 1px 0 rgba(255,255,255,.08)
+}
+body.mapApp .topSearch{
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.025));
+  border-color:rgba(255,255,255,.135)
+}
+body.mapApp .topSearch:focus-within{
+  border-color:rgba(120,190,246,.52);
+  box-shadow:0 0 0 3px rgba(75,158,226,.075),inset 0 1px 0 rgba(255,255,255,.06)
+}
+body.mapApp .topProfileBtn,
+body.mapApp .radiusBtn,
+body.mapApp .mapResetBtn{
+  box-shadow:0 13px 32px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.05)
+}
+body.mapApp .radiusBtn{
+  transition:transform .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease
+}
+body.mapApp .radiusBtn:active{transform:scale(.965)}
+body.mapApp .radiusBtn.active{
+  border-color:rgba(108,186,248,.58);
+  box-shadow:0 0 0 3px rgba(68,161,239,.075),0 16px 40px rgba(0,0,0,.33),inset 0 1px 0 rgba(255,255,255,.07)
+}
+
+/* map markers read as physical pins on the city */
+body.mapApp .mapMarker{
+  box-shadow:
+    0 14px 24px rgba(0,0,0,.42),
+    0 3px 7px rgba(0,0,0,.24),
+    inset 0 1px 0 rgba(255,255,255,.14);
+  transition:transform .24s cubic-bezier(.2,.8,.2,1),box-shadow .24s ease,filter .24s ease
+}
+body.mapApp .mapMarker:not(.selected){filter:saturate(.9)}
+body.mapApp .mapMarker.selected{
+  filter:saturate(1.08);
+  box-shadow:
+    0 0 0 5px rgba(255,74,91,.12),
+    0 0 0 10px rgba(255,74,91,.045),
+    0 0 32px rgba(255,58,78,.26),
+    0 18px 38px rgba(0,0,0,.48)
+}
+body.mapApp .mapMarker.selected::after{
+  content:"";position:absolute;inset:-13px;border:1px solid rgba(255,106,119,.32);border-radius:25px;
+  animation:markerRadar 2.2s ease-out infinite
+}
+@keyframes markerRadar{
+  0%{transform:scale(.68);opacity:.72}
+  75%,100%{transform:scale(1.32);opacity:0}
+}
+
+/* selected venue behaves like a high-end HUD rather than a delivery card */
+body.mapApp .venueCard{
+  border-color:rgba(255,255,255,.15);
+  background:
+    linear-gradient(148deg,rgba(12,22,35,.965),rgba(5,11,20,.95)),
+    radial-gradient(circle at 88% 12%,rgba(230,151,68,.09),transparent 35%)
+}
+body.mapApp .venueAvatar{
+  box-shadow:0 10px 25px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.08)
+}
+body.mapApp .venueHero h2{font-weight:900;letter-spacing:-.035em}
+body.mapApp .badge{
+  letter-spacing:.12em;
+  background:rgba(228,177,107,.075);
+  border-color:rgba(233,185,116,.16);
+  color:#e6c28f
+}
+body.mapApp .venueActions .primaryBtn{
+  border:1px solid rgba(255,143,151,.14);
+  background:linear-gradient(135deg,#e84354,#a91831);
+  box-shadow:0 12px 30px rgba(177,25,49,.23),inset 0 1px 0 rgba(255,255,255,.15)
+}
+
+/* RealCity focus: quieter UI, stronger city */
+body.mapApp .focusHud{
+  background:linear-gradient(145deg,rgba(8,15,24,.9),rgba(5,10,17,.84));
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 18px 46px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter:blur(22px) saturate(1.08);
+  -webkit-backdrop-filter:blur(22px) saturate(1.08)
+}
+body.mapApp .focusHud small{color:#d8b77f;letter-spacing:.13em}
+body.mapApp .focusHud b{letter-spacing:-.025em}
+body.mapApp .realCityViews{
+  border-color:rgba(255,255,255,.12);
+  box-shadow:0 14px 42px rgba(0,0,0,.28)
+}
+body.mapApp .mapFocusFlash{
+  background:radial-gradient(circle at 50% 50%,rgba(255,206,135,.12),rgba(255,85,101,.055) 26%,transparent 57%)
+}
+
+/* active order gets energy but stays elegant */
+body.mapApp .activeOrderSpotlight{
+  border-color:rgba(255,86,103,.3)!important;
+  box-shadow:0 18px 52px rgba(0,0,0,.34),0 0 34px rgba(202,36,58,.1),inset 0 1px 0 rgba(255,255,255,.075)
+}
+body.mapApp .activeOrderDish{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 0 22px rgba(255,118,74,.09);
+  animation:dishFloat 3.3s ease-in-out infinite
+}
+@keyframes dishFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-2px) rotate(1deg)}}
+
+/* coffee mode keeps warm identity while retaining real-world map depth */
+body.mapApp[data-discovery-mode="coffee"] #map canvas{
+  filter:saturate(.82) sepia(.08) contrast(1.045) brightness(1.015)
+}
+body.mapApp[data-discovery-mode="coffee"][data-daypart="evening"] #map canvas{filter:saturate(.78) sepia(.12) contrast(1.06) brightness(.92)}
+body.mapApp[data-discovery-mode="coffee"][data-daypart="night"] #map canvas{filter:saturate(.72) sepia(.1) contrast(1.08) brightness(.8)}
+body.mapApp[data-discovery-mode="coffee"] .mapTopbar{
+  background:
+    linear-gradient(148deg,rgba(53,38,29,.95),rgba(27,20,17,.92)),
+    radial-gradient(circle at 20% 0,rgba(222,169,110,.14),transparent 36%)
+}
+body.mapApp[data-discovery-mode="coffee"] .venueCard{
+  background:
+    linear-gradient(148deg,rgba(55,38,28,.97),rgba(28,20,16,.955)),
+    radial-gradient(circle at 88% 12%,rgba(220,164,105,.11),transparent 36%);
+  color:#fff7ed;border-color:rgba(255,236,214,.16)
+}
+body.mapApp[data-discovery-mode="coffee"] .venueCard .venueHero p,
+body.mapApp[data-discovery-mode="coffee"] .venueCardDescription{color:#c7b3a2}
+body.mapApp[data-discovery-mode="coffee"] .venueCard .badge{color:#e6bd8d;background:rgba(210,155,94,.08);border-color:rgba(224,172,112,.17)}
+body.mapApp[data-discovery-mode="coffee"] .venueQuick span{color:#c7ad98;background:rgba(255,244,231,.045);border-color:rgba(255,238,216,.08)}
+body.mapApp[data-discovery-mode="coffee"] .venueActions .primaryBtn{
+  color:#fff9f1;background:linear-gradient(135deg,#a56b47,#633b29);border-color:rgba(236,187,137,.16);
+  box-shadow:0 12px 30px rgba(89,52,32,.26),inset 0 1px 0 rgba(255,255,255,.12)
+}
+
+@media(prefers-reduced-motion:reduce){
+  body.mapApp .cityLightSweep,
+  body.mapApp .mapMarker.selected::after,
+  body.mapApp .activeOrderDish{animation:none!important}
+}

@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,menuReloadTimer=null,favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
@@ -514,6 +514,41 @@
   }
 
   const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
+  const ACTIVE_ORDER_STATUSES=new Set(['new','cooking','ready']);
+  function renderActiveOrderBadge(){
+    const badge=$('#activeOrderBadge');if(!badge)return;
+    const active=(activeOrderRows||[]).filter(o=>ACTIVE_ORDER_STATUSES.has(String(o.status)));
+    if(!session||!active.length){badge.classList.add('hidden');return}
+    const order=active[0],img=$('#activeOrderImage'),fallback=$('#activeOrderFallback'),count=$('#activeOrderCount');
+    badge.dataset.status=ACTIVE_ORDER_STATUSES.has(String(order.status))?String(order.status):'new';
+    badge.classList.remove('hidden');
+    badge.setAttribute('aria-label','Активные заказы: '+active.length+'. '+(STATUS_LABELS[order.status]||order.status||''));
+    fallback.textContent=String(order.venue_name||'Ш').trim().slice(0,1).toUpperCase()||'Ш';
+    if(order.marker_id){
+      img.onerror=()=>{img.classList.add('hidden');fallback.classList.remove('hidden')};
+      img.onload=()=>{img.classList.remove('hidden');fallback.classList.add('hidden')};
+      img.src=api+'/map/markers/'+encodeURIComponent(order.marker_id)+'/avatar?order='+encodeURIComponent(order.order_number||'');
+    }else{
+      img.removeAttribute('src');img.classList.add('hidden');fallback.classList.remove('hidden');
+    }
+    count.textContent=String(active.length);count.classList.toggle('hidden',active.length<2);
+  }
+  async function loadActiveOrders(){
+    if(!session){activeOrderRows=[];renderActiveOrderBadge();return []}
+    try{
+      const r=await fetch(api+'/me/orders',{headers:{Authorization:'Bearer '+session},cache:'no-store'});if(!r.ok)throw 0;
+      activeOrderRows=await r.json();renderActiveOrderBadge();return activeOrderRows;
+    }catch{renderActiveOrderBadge();return activeOrderRows}
+  }
+  function connectOrderStream(){
+    try{orderStream?.close()}catch{};orderStream=null;
+    if(!session||typeof EventSource==='undefined')return;
+    try{
+      orderStream=new EventSource(api+'/me/stream?session='+encodeURIComponent(session));
+      const refresh=()=>{loadActiveOrders();if($('#profileSheet')?.classList.contains('show'))myOrders()};
+      orderStream.addEventListener('order',refresh);orderStream.addEventListener('update',refresh);orderStream.onerror=()=>{};
+    }catch{}
+  }
   async function myOrders(){
     if(!session){$('#myOrders').innerHTML='<div class="empty">Откройте Mini App внутри Telegram, чтобы видеть историю заказов.</div>';return}
     try{
@@ -537,7 +572,7 @@
       $('#successNumber').textContent=j.order_number||'Заказ принят';
       $('#successVenue').textContent=(ctx?.venue?.name||'Заведение')+(ctx?.marker?.address?' · '+ctx.marker.address:'');
       $('#successTotal').textContent=money(j.total??total);
-      cart=[];save();openSheet('successSheet');tg?.HapticFeedback?.notificationOccurred?.('success');
+      cart=[];save();await loadActiveOrders();openSheet('successSheet');tg?.HapticFeedback?.notificationOccurred?.('success');
     }catch(e){toast(e.message||'Ошибка заказа')}finally{btn.disabled=false}
   }
 
@@ -604,11 +639,12 @@
     if(!sheetLocked)return;
     if(!e.target.closest?.('.sheet.show'))e.preventDefault();
   },{passive:false});
-  window.addEventListener('pagehide',()=>{unlockSheetBackground();try{menuStream?.close()}catch{}menuStream=null});
+  window.addEventListener('pagehide',()=>{unlockSheetBackground();try{menuStream?.close()}catch{}menuStream=null;try{orderStream?.close()}catch{}orderStream=null});
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
   $('#placeOrder').onclick=submitOrder;
   $('#successMenu').onclick=closeSheets;
   $('#successOrders').onclick=()=>{openSheet('profileSheet');myOrders()};
+  $('#activeOrderBadge').onclick=()=>{openSheet('profileSheet');myOrders();tg?.HapticFeedback?.selectionChanged?.()};
 
   function goMap(){
     try{tg?.BackButton?.hide?.()}catch{}
@@ -623,6 +659,8 @@
       await load();
       connectMenuStream();
       await loadFavoriteState();
+      await loadActiveOrders();
+      connectOrderStream();
       runQuickFavoriteOrder();
     }catch(e){toast(e.message);$('#venueName').textContent='Меню недоступно'}
   })();

@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07090d">
+<meta name="description" content="Шаурмег — городская платформа для заведений: карта, меню, заказы, Telegram Mini App, управление и аналитика в одной системе.">
+<title>Шаурмег — платформа для заведений</title>
+<style>
+:root{
+  --bg:#07090d;
+  --bg2:#0b0f15;
+  --panel:#101620;
+  --panel2:#151d28;
+  --text:#f6f8fb;
+  --muted:#8d98a8;
+  --line:rgba(255,255,255,.09);
+  --fire:#ff7a2f;
+  --fire2:#ffb14f;
+  --cyan:#36d8ff;
+  --blue:#5577ff;
+  --green:#61e7a6;
+  --shadow:0 30px 90px rgba(0,0,0,.35);
+  --radius:28px;
+  --safeT:max(env(safe-area-inset-top),12px);
+  --safeB:max(env(safe-area-inset-bottom),12px);
+}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-behavior:smooth}
+body{
+  margin:0;
+  color:var(--text);
+  background:
+    radial-gradient(circle at 15% -5%,rgba(255,122,47,.15),transparent 26%),
+    radial-gradient(circle at 90% 18%,rgba(85,119,255,.14),transparent 24%),
+    linear-gradient(180deg,#07090d,#0b0f15 48%,#07090d);
+  font:500 16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+button,input{font:inherit}
+button{color:inherit}
+::selection{background:rgba(255,122,47,.3)}
+.noise{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.12;background-image:radial-gradient(rgba(255,255,255,.22) .55px,transparent .55px);background-size:5px 5px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.45),transparent 88%)}
+.progress{position:fixed;left:0;top:0;height:2px;width:0;background:linear-gradient(90deg,var(--fire),var(--fire2),var(--cyan));z-index:100}
+.wrap{position:relative;z-index:1;width:min(1240px,calc(100% - 30px));margin:auto}
+.nav{
+  position:sticky;top:10px;z-index:70;margin-top:10px;padding:10px 12px;
+  border:1px solid var(--line);border-radius:22px;background:rgba(8,11,16,.74);
+  backdrop-filter:blur(20px);display:flex;align-items:center;gap:18px;box-shadow:0 18px 50px rgba(0,0,0,.2)
+}
+.logo{display:flex;align-items:center;gap:10px;font-weight:950;letter-spacing:-.03em}
+.logoMark{position:relative;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#121720;border:1px solid rgba(255,255,255,.12);box-shadow:0 0 28px rgba(255,122,47,.18)}
+.logoMark:before,.logoMark:after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(255,122,47,.35);inset:-4px;animation:ring 2.4s ease-in-out infinite}
+.logoMark:after{inset:-8px;border-color:rgba(255,177,79,.15);animation-delay:.7s}
+.logoMark span{font-size:18px;filter:drop-shadow(0 0 8px rgba(255,122,47,.6))}
+@keyframes ring{50%{transform:scale(1.04);opacity:.35}}
+.navlinks{display:flex;gap:18px;margin-left:auto;color:#adb7c6;font-size:13px}
+.navlinks a:hover{color:#fff}
+.navCta{padding:10px 14px;border-radius:14px;background:linear-gradient(135deg,#ff8b3e,#d84d18);font-weight:850;box-shadow:0 10px 28px rgba(255,92,27,.22)}
+.hero{min-height:760px;display:grid;grid-template-columns:1.02fr .98fr;gap:34px;align-items:center;padding:74px 0 70px}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;color:#c7d1df;font-size:11px;font-weight:850;text-transform:uppercase;letter-spacing:.16em}
+.eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--fire);box-shadow:0 0 18px var(--fire)}
+.hero h1{font-size:clamp(56px,7vw,104px);line-height:.88;letter-spacing:-.065em;margin:18px 0 24px;max-width:850px}
+.hero h1 em{font-style:normal;background:linear-gradient(125deg,#fff 10%,#ffbe69 47%,#ff6726 88%);-webkit-background-clip:text;color:transparent}
+.hero p{max-width:660px;color:#a9b4c3;font-size:18px;margin:0}
+.heroActions{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.btn{min-height:52px;border:0;border-radius:16px;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:850;cursor:pointer;transition:.2s}
+.btn:hover{transform:translateY(-2px)}
+.btnPrimary{background:linear-gradient(135deg,#ff8e42,#d84a16);box-shadow:0 12px 34px rgba(255,92,27,.22)}
+.btnGhost{background:rgba(255,255,255,.035);border:1px solid var(--line)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:34px;max-width:690px}
+.metric{padding:14px 15px;border-radius:18px;border:1px solid var(--line);background:rgba(255,255,255,.025)}
+.metric b{display:block;font-size:18px;letter-spacing:-.02em}
+.metric small{color:var(--muted)}
+.heroVisual{position:relative;min-height:620px}
+.orbit{position:absolute;inset:6% 1% 0;border-radius:46px;background:radial-gradient(circle at 45% 42%,rgba(255,122,47,.12),transparent 24%),radial-gradient(circle at 72% 28%,rgba(54,216,255,.09),transparent 25%);border:1px solid rgba(255,255,255,.045);overflow:hidden;box-shadow:var(--shadow)}
+.orbit:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:44px 44px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.75),transparent)}
+.cityRoad{position:absolute;background:rgba(255,255,255,.075);border-radius:999px;transform-origin:left center}
+.r1{width:88%;height:5px;left:5%;top:49%;transform:rotate(-19deg)}
+.r2{width:72%;height:4px;left:18%;top:35%;transform:rotate(42deg)}
+.r3{width:85%;height:3px;left:10%;top:63%;transform:rotate(11deg)}
+.building{position:absolute;border:1px solid rgba(255,255,255,.08);background:linear-gradient(145deg,#161d27,#0d1219);box-shadow:inset 0 0 0 1px rgba(255,255,255,.015),0 16px 35px rgba(0,0,0,.2);transform:rotate(var(--r,0deg))}
+.b1{width:110px;height:88px;left:12%;top:18%;--r:-8deg}.b2{width:76px;height:126px;right:16%;top:22%;--r:12deg}.b3{width:150px;height:65px;right:12%;bottom:18%;--r:-14deg}.b4{width:90px;height:90px;left:17%;bottom:16%;--r:9deg}
+.mapPin{position:absolute;left:49%;top:44%;width:90px;height:90px;border-radius:50%;transform:translate(-50%,-50%);display:grid;place-items:center;background:radial-gradient(circle,rgba(255,122,47,.28),rgba(255,122,47,.04) 58%,transparent 60%)}
+.mapPin:before{content:"";position:absolute;width:54px;height:54px;border-radius:50%;border:1px solid rgba(255,162,81,.5);animation:pinPulse 2.3s ease-out infinite}
+@keyframes pinPulse{from{transform:scale(.75);opacity:1}to{transform:scale(2.5);opacity:0}}
+.mapPinCore{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,#ff9547,#cf4718);border:3px solid #0a0e14;box-shadow:0 0 42px rgba(255,95,28,.55);font-size:21px}
+.floatCard{position:absolute;border:1px solid var(--line);background:rgba(12,17,24,.87);backdrop-filter:blur(15px);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.orderCard{right:0;top:10%;width:245px;padding:16px;animation:float 5s ease-in-out infinite}
+.ownerCard{left:0;bottom:5%;width:250px;padding:16px;animation:float 6s ease-in-out infinite reverse}
+@keyframes float{50%{transform:translateY(-10px)}}
+.cardLabel{font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:#8491a3}
+.orderLine{display:flex;justify-content:space-between;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.orderLine b{font-size:14px}.orderLine span{color:var(--green);font-size:12px}
+.miniBars{display:grid;grid-template-columns:repeat(8,1fr);align-items:end;height:58px;gap:5px;margin-top:13px}
+.miniBars i{display:block;height:var(--h);border-radius:5px 5px 2px 2px;background:linear-gradient(#ffad63,#ff6f2b)}
+.section{padding:80px 0}
+.sectionHead{display:grid;grid-template-columns:1fr .8fr;gap:30px;align-items:end;margin-bottom:28px}
+.sectionHead h2{font-size:clamp(38px,5vw,70px);line-height:.94;letter-spacing:-.055em;margin:10px 0 0}
+.sectionHead p{margin:0;color:#9ba6b5;font-size:16px}
+.kicker{color:#ff9b57;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.15em}
+.stage{display:grid;grid-template-columns:320px 1fr;gap:12px;min-height:650px}
+.stageNav{padding:9px;border:1px solid var(--line);border-radius:26px;background:rgba(255,255,255,.025)}
+.stageBtn{width:100%;padding:15px 14px;border:0;border-radius:18px;background:transparent;text-align:left;display:grid;grid-template-columns:34px 1fr;gap:11px;cursor:pointer;color:#8f9aac}
+.stageBtn+.stageBtn{margin-top:5px}
+.stageBtn.active{background:linear-gradient(135deg,rgba(255,122,47,.14),rgba(255,255,255,.035));color:#fff;border:1px solid rgba(255,122,47,.16)}
+.stageBtn i{width:34px;height:34px;border-radius:12px;background:rgba(255,255,255,.05);display:grid;place-items:center;font-style:normal}
+.stageBtn b{display:block}.stageBtn small{display:block;color:#7f8a99;margin-top:2px}
+.stageView{position:relative;overflow:hidden;border-radius:30px;border:1px solid var(--line);background:#0b1017;min-height:650px}
+.stageGlow{position:absolute;width:360px;height:360px;border-radius:50%;filter:blur(80px);opacity:.2;right:-60px;top:-80px;background:var(--fire)}
+.scene{position:absolute;inset:0;padding:28px;opacity:0;transform:translateY(12px) scale(.985);pointer-events:none;transition:.4s ease}
+.scene.active{opacity:1;transform:none;pointer-events:auto}
+.sceneTop{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.sceneTop h3{margin:0;font-size:28px;letter-spacing:-.03em}
+.sceneTop span{color:#7f8a99;font-size:12px}
+.sceneGrid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;margin-top:20px;height:calc(100% - 60px)}
+.mock{border:1px solid var(--line);background:linear-gradient(180deg,#121924,#0a0f16);border-radius:24px;position:relative;overflow:hidden}
+.mockPad{padding:18px}
+.mapDemo{min-height:100%;background:radial-gradient(circle at 50% 52%,rgba(255,122,47,.11),transparent 25%),linear-gradient(160deg,#121923,#080c12)}
+.mapDemo:before{content:"";position:absolute;inset:0;background-image:linear-gradient(23deg,transparent 49%,rgba(255,255,255,.06) 50%,transparent 51%),linear-gradient(114deg,transparent 48%,rgba(255,255,255,.045) 49%,transparent 50%);background-size:150px 120px,220px 170px}
+.venuePin{position:absolute;left:58%;top:46%;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:#111824;border:1px solid rgba(255,122,47,.35);box-shadow:0 0 38px rgba(255,122,47,.25);z-index:2}
+.venuePin:after{content:"🔥";font-size:22px}
+.venueSheet{position:absolute;left:16px;right:16px;bottom:16px;z-index:3;padding:16px;border-radius:22px;background:rgba(8,12,18,.9);border:1px solid var(--line);backdrop-filter:blur(14px)}
+.venueSheet b{font-size:22px}.venueSheet small{display:block;color:#8d99aa;margin-top:4px}
+.phone{width:min(300px,86%);height:520px;margin:26px auto 0;border:8px solid #1d2531;border-radius:42px;background:#080c11;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.42);position:relative}
+.phone:before{content:"";position:absolute;z-index:9;left:50%;top:7px;transform:translateX(-50%);width:86px;height:19px;border-radius:999px;background:#161c24}
+.phoneHeader{padding:38px 14px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}
+.phoneHeader b{font-size:14px}.phoneHeader small{color:#8090a3}
+.productHero{height:150px;margin:12px;border-radius:22px;background:radial-gradient(circle at 55% 45%,rgba(255,163,82,.6),transparent 13%),linear-gradient(145deg,#22170f,#0d1117);position:relative;overflow:hidden}
+.productHero:after{content:"ШАУРМА";position:absolute;left:15px;bottom:12px;font-size:25px;font-weight:950;letter-spacing:-.04em}
+.productGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px}
+.productTile{height:112px;border-radius:17px;background:linear-gradient(135deg,#151c26,#0d1218);border:1px solid var(--line);padding:12px;display:flex;flex-direction:column;justify-content:flex-end}
+.productTile b{font-size:13px}.productTile small{font-size:10px;color:#8290a2}
+.orderFlow{display:grid;gap:10px;padding:18px}
+.flowStep{padding:15px;border-radius:17px;border:1px solid var(--line);background:rgba(255,255,255,.025);display:grid;grid-template-columns:35px 1fr auto;gap:10px;align-items:center}
+.flowStep i{width:35px;height:35px;border-radius:11px;background:rgba(255,122,47,.1);display:grid;place-items:center;font-style:normal}
+.flowStep b{font-size:14px}.flowStep small{display:block;color:#7f8998}
+.flowStep span{font-size:11px;color:#a8b5c6}
+.flowStep.done span{color:var(--green)}
+.dashboard{padding:18px}
+.dashTop{display:flex;justify-content:space-between;align-items:center}
+.dashGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.statBox{padding:13px;border-radius:17px;border:1px solid var(--line);background:rgba(255,255,255,.025)}
+.statBox b{display:block;font-size:22px}.statBox small{color:#7e8997}
+.chart{height:220px;margin-top:10px;border-radius:20px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(85,119,255,.08),transparent);position:relative;overflow:hidden}
+.chart:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px);background-size:100% 44px}
+.chartLine{position:absolute;left:5%;right:5%;top:18%;bottom:15%;border-bottom:3px solid #6b8dff;clip-path:polygon(0 78%,12% 63%,24% 69%,38% 43%,53% 49%,68% 22%,82% 34%,100% 8%,100% 100%,0 100%);background:linear-gradient(180deg,rgba(85,119,255,.22),transparent)}
+.realCity{background:linear-gradient(160deg,#101821,#0a0f15);position:relative;min-height:100%;overflow:hidden}
+.realCity:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 48% 45%,rgba(54,216,255,.09),transparent 25%),linear-gradient(21deg,transparent 49%,rgba(255,255,255,.05) 50%,transparent 51%);background-size:auto,190px 160px}
+.realBlock{position:absolute;border:1px solid rgba(255,255,255,.1);background:linear-gradient(135deg,#39404a,#151c25);box-shadow:0 18px 35px rgba(0,0,0,.25)}
+.rb1{width:170px;height:90px;left:15%;top:24%;transform:rotate(-11deg);background:linear-gradient(135deg,#695a4d,#2d3136)}
+.rb2{width:120px;height:110px;right:12%;top:18%;transform:rotate(13deg);background:linear-gradient(135deg,#6c757b,#333941)}
+.rb3{width:220px;height:75px;right:16%;bottom:20%;transform:rotate(-7deg);background:linear-gradient(135deg,#4f6252,#262d2a)}
+.realBadge{position:absolute;left:20px;bottom:20px;padding:12px 14px;border-radius:15px;background:rgba(5,9,14,.83);border:1px solid var(--line);backdrop-filter:blur(12px)}
+.realBadge b{display:block}.realBadge small{color:#8794a5}
+.featureGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.feature{min-height:260px;padding:22px;border-radius:26px;border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));position:relative;overflow:hidden}
+.feature:before{content:"";position:absolute;width:170px;height:170px;border-radius:50%;right:-70px;top:-70px;background:var(--glow,rgba(255,122,47,.11));filter:blur(35px)}
+.featureIcon{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:19px}
+.feature h3{font-size:24px;letter-spacing:-.03em;margin:25px 0 8px}
+.feature p{margin:0;color:#8e9aaa;font-size:14px}
+.feature ul{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:7px;color:#bac4d1;font-size:13px}
+.feature li:before{content:"—";color:#ff9f60;margin-right:8px}
+.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.step{padding:20px;border-radius:24px;border:1px solid var(--line);background:rgba(255,255,255,.025)}
+.stepNo{color:#ff9c58;font-size:11px;font-weight:900;letter-spacing:.12em}
+.step h3{font-size:22px;margin:18px 0 8px;letter-spacing:-.03em}
+.step p{margin:0;color:#8f9aa9;font-size:14px}
+.liveGrid{display:grid;grid-template-columns:.78fr 1.22fr;gap:14px}
+.liveCopy{padding:28px;border-radius:28px;border:1px solid var(--line);background:linear-gradient(160deg,#141b25,#0a0f15)}
+.liveCopy h3{font-size:34px;line-height:1;letter-spacing:-.04em;margin:16px 0 12px}
+.liveCopy p{color:#98a4b4}
+.liveLinks{display:grid;gap:8px;margin-top:20px}
+.liveLink{display:flex;justify-content:space-between;gap:14px;padding:13px 14px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.025)}
+.liveLink span{color:#8190a3}
+.liveFrame{min-height:720px;border-radius:28px;border:1px solid var(--line);background:#080c11;overflow:hidden;position:relative}
+.liveFrame iframe{width:100%;height:720px;border:0;background:#080c11}
+.frameLabel{position:absolute;z-index:4;left:14px;top:14px;padding:8px 10px;border-radius:999px;background:rgba(5,8,12,.82);border:1px solid var(--line);font-size:10px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#aab4c2;backdrop-filter:blur(12px)}
+.realcityPanel{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:600px}
+.realcityCopy{padding:30px;border-radius:30px;border:1px solid var(--line);background:linear-gradient(160deg,#151c24,#0a0f15);display:flex;flex-direction:column;justify-content:space-between}
+.realcityCopy h2{font-size:clamp(42px,5vw,70px);line-height:.92;letter-spacing:-.055em;margin:10px 0 16px}
+.realcityCopy p{color:#95a1b0;max-width:620px}
+.status{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid rgba(54,216,255,.17);background:rgba(54,216,255,.06);font-size:11px;color:#aeeeff;width:max-content}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 14px var(--cyan)}
+.realcityViz{border-radius:30px;border:1px solid var(--line);position:relative;overflow:hidden;background:radial-gradient(circle at 45% 40%,rgba(255,122,47,.11),transparent 25%),#0b1016}
+.realcityViz .gridWorld{position:absolute;inset:-20%;transform:perspective(700px) rotateX(57deg) rotateZ(-13deg) scale(1.15);background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);background-size:58px 58px;animation:gridMove 12s linear infinite}
+@keyframes gridMove{to{background-position:116px 58px}}
+.worldCard{position:absolute;left:7%;right:7%;bottom:7%;padding:16px;border-radius:20px;background:rgba(6,10,15,.83);border:1px solid var(--line);backdrop-filter:blur(14px)}
+.worldCard b{display:block;font-size:18px}.worldCard small{color:#8794a4}
+.faq{display:grid;gap:8px}
+.faq details{border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.02);padding:0 18px}
+.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-weight:800}
+.faq summary::-webkit-details-marker{display:none}
+.faq p{margin:0;padding:0 0 18px;color:#8f9baa;max-width:920px}
+.cta{margin:70px 0 30px;padding:38px;border-radius:34px;border:1px solid rgba(255,122,47,.18);background:radial-gradient(circle at 80% 15%,rgba(255,122,47,.18),transparent 28%),linear-gradient(145deg,#171b20,#0a0e13);display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center}
+.cta h2{font-size:clamp(38px,5vw,68px);line-height:.93;letter-spacing:-.055em;margin:0}
+.cta p{color:#9aa5b3;max-width:700px}
+.footer{padding:25px 0 calc(30px + var(--safeB));display:flex;justify-content:space-between;gap:20px;color:#738091;font-size:12px;border-top:1px solid var(--line)}
+.reveal{opacity:0;transform:translateY(18px);transition:.6s ease}
+.reveal.in{opacity:1;transform:none}
+@media(max-width:980px){
+  .navlinks{display:none}.hero{grid-template-columns:1fr;min-height:auto;padding-top:65px}.heroVisual{min-height:560px}
+  .sectionHead{grid-template-columns:1fr}.stage{grid-template-columns:1fr}.stageNav{display:grid;grid-template-columns:repeat(3,1fr)}
+  .stageBtn{grid-template-columns:1fr;text-align:center}.stageBtn i{margin:auto}.stageBtn small{display:none}.stageView{min-height:650px}
+  .featureGrid{grid-template-columns:1fr 1fr}.timeline{grid-template-columns:1fr 1fr}.liveGrid,.realcityPanel{grid-template-columns:1fr}.liveFrame{min-height:650px}.liveFrame iframe{height:650px}
+  .cta{grid-template-columns:1fr}
+}
+@media(max-width:660px){
+  .wrap{width:min(100% - 18px,1240px)}.nav{top:6px;border-radius:18px}.navCta{font-size:12px;padding:9px 11px}
+  .hero{padding-top:48px}.hero h1{font-size:54px}.hero p{font-size:16px}.metrics{grid-template-columns:1fr}
+  .heroVisual{min-height:500px}.orderCard{right:5px;top:6%;width:210px}.ownerCard{left:4px;bottom:1%;width:210px}.orbit{border-radius:28px}
+  .section{padding:60px 0}.sectionHead h2{font-size:44px}
+  .stageNav{grid-template-columns:1fr 1fr}.stageBtn{padding:12px 8px}.scene{padding:16px}.sceneGrid{grid-template-columns:1fr;height:auto}.stageView{min-height:940px}
+  .featureGrid,.timeline{grid-template-columns:1fr}.phone{height:480px}.dashGrid{grid-template-columns:1fr 1fr}
+  .cta{padding:25px}.cta h2{font-size:43px}.footer{flex-direction:column}.liveFrame iframe{height:600px}
+}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="progress" id="progress"></div>
+
+<div class="wrap">
+  <header class="nav">
+    <a class="logo" href="#top" aria-label="Шаурмег">
+      <span class="logoMark"><span>🔥</span></span>
+      <span>ШАУРМЕГ</span>
+    </a>
+    <nav class="navlinks">
+      <a href="#product">Продукт</a>
+      <a href="#business">Для заведений</a>
+      <a href="#realcity">RealCity</a>
+      <a href="#live">Демо</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+    <a class="navCta" href="https://t.me/Shauermenadmenbot" target="_blank" rel="noopener">Подключить заведение</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div>
+        <span class="eyebrow"><i></i> городская food-tech платформа</span>
+        <h1>Заведение становится <em>частью города.</em></h1>
+        <p>Шаурмег объединяет карту заведений, Telegram Mini App, меню, заказы, владельца и аналитику в одной системе. Пользователь находит точку на карте, заказывает — заведение управляет всем без сложной IT-инфраструктуры.</p>
+        <div class="heroActions">
+          <a class="btn btnPrimary" href="#product">Посмотреть как работает →</a>
+          <a class="btn btnGhost" href="https://t.me/Shaurmeggbot" target="_blank" rel="noopener">Открыть клиентский бот</a>
+        </div>
+        <div class="metrics">
+          <div class="metric"><b>1 система</b><small>карта, меню, заказы и управление</small></div>
+          <div class="metric"><b>Telegram ID</b><small>единая идентификация пользователя</small></div>
+          <div class="metric"><b>SC‑ID</b><small>уникальная связка каждого заведения</small></div>
+        </div>
+      </div>
+
+      <div class="heroVisual" aria-hidden="true">
+        <div class="orbit">
+          <i class="cityRoad r1"></i><i class="cityRoad r2"></i><i class="cityRoad r3"></i>
+          <i class="building b1"></i><i class="building b2"></i><i class="building b3"></i><i class="building b4"></i>
+          <div class="mapPin"><div class="mapPinCore">Ш</div></div>
+        </div>
+        <div class="floatCard orderCard">
+          <span class="cardLabel">новый заказ</span>
+          <div class="orderLine"><b>Лепёшка · #1842</b><span>принят</span></div>
+          <div class="orderLine"><b>Классическая ×2</b><span>→ кухня</span></div>
+        </div>
+        <div class="floatCard ownerCard">
+          <span class="cardLabel">сегодня</span>
+          <div class="orderLine"><b>Заказы</b><span>+18</span></div>
+          <div class="miniBars">
+            <i style="--h:32%"></i><i style="--h:48%"></i><i style="--h:39%"></i><i style="--h:72%"></i>
+            <i style="--h:58%"></i><i style="--h:84%"></i><i style="--h:66%"></i><i style="--h:94%"></i>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="product">
+      <div class="sectionHead">
+        <div>
+          <div class="kicker">Продукт в движении</div>
+          <h2>Один путь. Без разрывов между сервисами.</h2>
+        </div>
+        <p>Нажимай на этапы слева. Это не статичная презентация: сайт показывает реальный сценарий Шаурмега — от городской карты до управления конкретным заведением.</p>
+      </div>
+
+      <div class="stage">
+        <div class="stageNav">
+          <button class="stageBtn active" data-scene="map"><i>⌖</i><span><b>Карта</b><small>поиск и выбор точки</small></span></button>
+          <button class="stageBtn" data-scene="menu"><i>▦</i><span><b>Меню</b><small>каждое заведение — своё</small></span></button>
+          <button class="stageBtn" data-scene="orders"><i>↗</i><span><b>Заказ</b><small>доставка или на месте</small></span></button>
+          <button class="stageBtn" data-scene="owner"><i>◫</i><span><b>Владелец</b><small>управление и статусы</small></span></button>
+          <button class="stageBtn" data-scene="analytics"><i>⌁</i><span><b>Аналитика</b><small>операционная картина</small></span></button>
+          <button class="stageBtn" data-scene="real"><i>◇</i><span><b>RealCity</b><small>цифровая среда точки</small></span></button>
+        </div>
+
+        <div class="stageView">
+          <div class="stageGlow"></div>
+
+          <article class="scene active" data-scene-panel="map">
+            <div class="sceneTop"><h3>Городская карта</h3><span>точка → карточка → меню</span></div>
+            <div class="sceneGrid">
+              <div class="mock mapDemo">
+                <div class="venuePin"></div>
+                <div class="venueSheet"><b>Лепёшка</b><small>карточка заведения открывает меню этой точки напрямую</small></div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">что получает заведение</span>
+                <div class="orderFlow">
+                  <div class="flowStep done"><i>01</i><div><b>Собственная метка</b><small>координаты, фото, карточка точки</small></div><span>готово</span></div>
+                  <div class="flowStep done"><i>02</i><div><b>Свое меню</b><small>цены и категории именно этой точки</small></div><span>связано</span></div>
+                  <div class="flowStep"><i>03</i><div><b>Переход к заказу</b><small>без промежуточных страниц</small></div><span>1 tap</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="scene" data-scene-panel="menu">
+            <div class="sceneTop"><h3>Меню внутри Mini App</h3><span>мобильный интерфейс</span></div>
+            <div class="sceneGrid">
+              <div class="mock">
+                <div class="phone">
+                  <div class="phoneHeader"><b>Лепёшка</b><small>SC‑venue</small></div>
+                  <div class="productHero"></div>
+                  <div class="productGrid">
+                    <div class="productTile"><b>Классическая</b><small>основное блюдо</small></div>
+                    <div class="productTile"><b>Сырная</b><small>основное блюдо</small></div>
+                    <div class="productTile"><b>Соусы</b><small>добавки</small></div>
+                    <div class="productTile"><b>Напитки</b><small>категория</small></div>
+                  </div>
+                </div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">гибкость</span>
+                <div class="orderFlow">
+                  <div class="flowStep"><i>✦</i><div><b>Категории</b><small>структура меню настраивается отдельно</small></div><span>owner</span></div>
+                  <div class="flowStep"><i>◉</i><div><b>Блюда и фото</b><small>название, цена, описание, изображение</small></div><span>live</span></div>
+                  <div class="flowStep"><i>＋</i><div><b>Конструктор</b><small>собрать свою шаурму из вариантов</small></div><span>option</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="scene" data-scene-panel="orders">
+            <div class="sceneTop"><h3>Заказ без лишней авторизации</h3><span>Telegram identity</span></div>
+            <div class="sceneGrid">
+              <div class="mock">
+                <div class="orderFlow">
+                  <div class="flowStep done"><i>01</i><div><b>Пользователь</b><small>идентифицируется через Telegram ID</small></div><span>verified</span></div>
+                  <div class="flowStep done"><i>02</i><div><b>Корзина</b><small>заказ закреплён за выбранным заведением</small></div><span>saved</span></div>
+                  <div class="flowStep"><i>03</i><div><b>Способ получения</b><small>доставка или «в заведении»</small></div><span>choice</span></div>
+                  <div class="flowStep"><i>04</i><div><b>Статус</b><small>принят → готовится → готов → выполнен</small></div><span>sync</span></div>
+                </div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">для гостя</span>
+                <h3 style="font-size:36px;line-height:1;margin:14px 0">Минимум полей.<br>Максимум контекста.</h3>
+                <p style="color:#8d99a8">История заказов и персонализация могут храниться вокруг Telegram‑идентичности пользователя — без отдельного пароля для Mini App.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="scene" data-scene-panel="owner">
+            <div class="sceneTop"><h3>Панель владельца</h3><span>операционная работа</span></div>
+            <div class="sceneGrid">
+              <div class="mock">
+                <div class="dashboard">
+                  <div class="dashTop"><b>Сегодня</b><span class="cardLabel">Лепёшка</span></div>
+                  <div class="dashGrid">
+                    <div class="statBox"><b>18</b><small>заказов</small></div>
+                    <div class="statBox"><b>7</b><small>активных</small></div>
+                    <div class="statBox"><b>4</b><small>готовятся</small></div>
+                  </div>
+                  <div class="orderFlow">
+                    <div class="flowStep done"><i>✓</i><div><b>#1842 · принят</b><small>2 позиции · на месте</small></div><span>кухня</span></div>
+                    <div class="flowStep"><i>◷</i><div><b>#1843 · готовится</b><small>3 позиции · доставка</small></div><span>12:18</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">единый ключ заведения</span>
+                <h3 style="font-size:32px;line-height:1.05;margin:14px 0">SC‑ID связывает карту, меню, владельца и поток заказов.</h3>
+                <p style="color:#8d99a8">Это убирает ручную путаницу между разными точками: каждая площадка работает в собственном контексте.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="scene" data-scene-panel="analytics">
+            <div class="sceneTop"><h3>Аналитика по заведению</h3><span>операционный обзор</span></div>
+            <div class="sceneGrid">
+              <div class="mock">
+                <div class="dashboard">
+                  <div class="dashTop"><b>Динамика заказов</b><span class="cardLabel">период</span></div>
+                  <div class="dashGrid">
+                    <div class="statBox"><b>142</b><small>заказа</small></div>
+                    <div class="statBox"><b>₽—</b><small>оборот</small></div>
+                    <div class="statBox"><b>—</b><small>средний чек</small></div>
+                  </div>
+                  <div class="chart"><div class="chartLine"></div></div>
+                </div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">суперадмин</span>
+                <div class="orderFlow">
+                  <div class="flowStep"><i>⌁</i><div><b>По заведению</b><small>заказы, суммы, время</small></div><span>filter</span></div>
+                  <div class="flowStep"><i>⇅</i><div><b>Сортировка</b><small>быстрый контроль сети точек</small></div><span>multi</span></div>
+                  <div class="flowStep"><i>◎</i><div><b>Общая картина</b><small>без переключения между разными сервисами</small></div><span>one UI</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="scene" data-scene-panel="real">
+            <div class="sceneTop"><h3>RealCity × Astra</h3><span>визуальный слой · в развитии</span></div>
+            <div class="sceneGrid">
+              <div class="mock realCity">
+                <i class="realBlock rb1"></i><i class="realBlock rb2"></i><i class="realBlock rb3"></i>
+                <div class="realBadge"><b>Цифровая среда точки</b><small>фасад, окружение, дороги, зелень и узнаваемый контекст</small></div>
+              </div>
+              <div class="mock mockPad">
+                <span class="cardLabel">не фотография поверх карты</span>
+                <div class="orderFlow">
+                  <div class="flowStep"><i>1</i><div><b>Фото здания</b><small>вход, вывеска, материалы, этажи</small></div><span>input</span></div>
+                  <div class="flowStep"><i>2</i><div><b>Панорама окружения</b><small>соседние дома и ландшафт</small></div><span>context</span></div>
+                  <div class="flowStep"><i>3</i><div><b>Реконструкция</b><small>в геометрии карты и тех же координатах</small></div><span>Astra</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="business">
+      <div class="sectionHead">
+        <div><div class="kicker">Для заведений</div><h2>Сложная система снаружи. Простое управление внутри.</h2></div>
+        <p>Владелец не должен разбираться в устройстве платформы. Его рабочая зона — понятные сущности: точка, меню, заказ, статус, аналитика.</p>
+      </div>
+      <div class="featureGrid">
+        <article class="feature" style="--glow:rgba(255,122,47,.16)"><div class="featureIcon">⌖</div><h3>Собственная точка</h3><p>Карточка на городской карте с привязкой к уникальному ID заведения.</p><ul><li>координаты и позиция метки</li><li>фото и визуальные настройки</li><li>переход прямо в меню</li></ul></article>
+        <article class="feature" style="--glow:rgba(85,119,255,.16)"><div class="featureIcon">▦</div><h3>Меню без разработчика</h3><p>Категории и блюда редактируются из административного интерфейса.</p><ul><li>название и цена</li><li>фотография блюда</li><li>категории и порядок</li></ul></article>
+        <article class="feature" style="--glow:rgba(97,231,166,.14)"><div class="featureIcon">↗</div><h3>Заказы в потоке</h3><p>Каждый заказ приходит в контексте нужной точки и проходит прозрачные статусы.</p><ul><li>принят</li><li>готовится</li><li>готов → выполнен</li></ul></article>
+        <article class="feature" style="--glow:rgba(54,216,255,.13)"><div class="featureIcon">◎</div><h3>Telegram как идентичность</h3><p>Mini App знает пользователя через Telegram ID и может сохранять связанный контекст.</p><ul><li>история заказов</li><li>активные заказы</li><li>персонализация</li></ul></article>
+        <article class="feature" style="--glow:rgba(255,177,79,.13)"><div class="featureIcon">◫</div><h3>Несколько заведений</h3><p>Архитектура рассчитана не на одну точку, а на сеть независимых заведений.</p><ul><li>свой ID</li><li>своё меню</li><li>свой поток заказов</li></ul></article>
+        <article class="feature" style="--glow:rgba(186,118,255,.13)"><div class="featureIcon">⌁</div><h3>Единая суперадминка</h3><p>Общий контроль операционных разделов и аналитики без расползания по разным панелям.</p><ul><li>заведения</li><li>меню</li><li>заказы и показатели</li></ul></article>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="sectionHead">
+        <div><div class="kicker">Подключение</div><h2>Четыре понятных шага до запуска.</h2></div>
+        <p>Техническая связка остаётся внутри платформы. Для заведения процесс сводится к созданию точки, наполнению меню и включению рабочего потока.</p>
+      </div>
+      <div class="timeline">
+        <article class="step"><div class="stepNo">01 / ТОЧКА</div><h3>Создать заведение</h3><p>Заведение получает свой SC‑ID и связывается с картой.</p></article>
+        <article class="step"><div class="stepNo">02 / КОНТЕНТ</div><h3>Добавить меню</h3><p>Категории, блюда, фото, цены и опции редактируются отдельно для этой точки.</p></article>
+        <article class="step"><div class="stepNo">03 / ОПЕРАЦИИ</div><h3>Подключить владельца</h3><p>Владелец получает доступ к управлению и заказам своей точки.</p></article>
+        <article class="step"><div class="stepNo">04 / ЗАПУСК</div><h3>Принимать заказы</h3><p>Клиентский путь работает от метки на карте до статуса выполненного заказа.</p></article>
+      </div>
+    </section>
+
+    <section class="section reveal" id="live">
+      <div class="sectionHead">
+        <div><div class="kicker">Live integration</div><h2>Продукт прямо внутри корпоративного сайта.</h2></div>
+        <p>Ниже встраивается текущий пользовательский интерфейс Шаурмега с того же домена. Это позволяет показывать не рендер, а живой продукт.</p>
+      </div>
+      <div class="liveGrid">
+        <div class="liveCopy">
+          <div>
+            <span class="cardLabel">экосистема</span>
+            <h3>Один бренд.<br>Несколько ролей.</h3>
+            <p>Клиент видит карту и меню. Владелец — операционную часть. Администратор — всю систему. Эти интерфейсы связаны общей моделью заведения.</p>
+          </div>
+          <div class="liveLinks">
+            <a class="liveLink" href="https://t.me/Shaurmeggbot" target="_blank" rel="noopener"><b>@Shaurmeggbot</b><span>клиентская карта →</span></a>
+            <a class="liveLink" href="https://t.me/Shefofbotsbot" target="_blank" rel="noopener"><b>@Shefofbotsbot</b><span>владелец →</span></a>
+            <a class="liveLink" href="https://t.me/Shauermenadmenbot" target="_blank" rel="noopener"><b>@Shauermenadmenbot</b><span>доступ заведения →</span></a>
+          </div>
+        </div>
+        <div class="liveFrame">
+          <div class="frameLabel">live mini app preview</div>
+          <iframe src="/" title="Live preview Шаурмег" loading="lazy"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="realcity">
+      <div class="realcityPanel">
+        <div class="realcityCopy">
+          <div>
+            <div class="status"><i></i> REALCITY / развиваемый модуль</div>
+            <h2>Карта, которая знает, как выглядит место.</h2>
+            <p>RealCity — направление визуализации, в котором выбранное заведение получает узнаваемое окружение: реальные цвета и материалы фасада, ключевые детали, соседние здания, дороги и зелень — в геометрии самой карты, а не фотографией поверх неё.</p>
+          </div>
+          <div class="orderFlow" style="padding:0">
+            <div class="flowStep"><i>01</i><div><b>Фото входа и здания</b><small>основная геометрия и детали</small></div><span>source</span></div>
+            <div class="flowStep"><i>02</i><div><b>Панорама вокруг</b><small>контекст соседних объектов</small></div><span>context</span></div>
+            <div class="flowStep"><i>03</i><div><b>Astra</b><small>формирует цифровое представление участка</small></div><span>pipeline</span></div>
+          </div>
+        </div>
+        <div class="realcityViz">
+          <div class="gridWorld"></div>
+          <div class="worldCard"><b>Из абстрактной карты → в узнаваемую городскую среду</b><small>без отдельной сцены и без фото-оверлея</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal" id="faq">
+      <div class="sectionHead">
+        <div><div class="kicker">FAQ</div><h2>Что важно владельцу до подключения.</h2></div>
+        <p>Коротко о логике продукта и ежедневной работе.</p>
+      </div>
+      <div class="faq">
+        <details open><summary>Нужно ли делать отдельное приложение для моего заведения?</summary><p>Нет. Заведение подключается как отдельная точка внутри общей системы Шаурмег и получает собственный контекст: метку, меню, цены, настройки и поток заказов.</p></details>
+        <details><summary>Как система понимает, из какого заведения сделан заказ?</summary><p>Каждая точка связана с уникальным SC‑ID. Он используется как ключ, который соединяет карточку на карте, меню, административный доступ и заказы конкретной точки.</p></details>
+        <details><summary>Нужна ли пользователю отдельная регистрация?</summary><p>В Telegram Mini App основой идентификации служит Telegram ID пользователя. Это позволяет строить пользовательский контекст без отдельного логина и пароля внутри Mini App.</p></details>
+        <details><summary>Можно ли управлять несколькими точками?</summary><p>Да. Архитектура Шаурмега рассчитана на несколько заведений: у каждой точки свои данные, а административный слой может объединять их в общий обзор.</p></details>
+        <details><summary>RealCity уже обязателен для подключения?</summary><p>Нет. Это отдельный развиваемый визуальный модуль. Базовые функции карты, меню, заказов и управления не зависят от готовности цифровой реконструкции окружения.</p></details>
+      </div>
+    </section>
+
+    <section class="cta reveal" id="connect">
+      <div>
+        <div class="kicker">Подключение заведения</div>
+        <h2>Добавьте свою точку в Шаурмег.</h2>
+        <p>Получите идентификатор заведения, настройте карточку и меню, подключите рабочий доступ владельца — после этого точка готова к клиентскому потоку.</p>
+      </div>
+      <div class="heroActions">
+        <a class="btn btnPrimary" href="https://t.me/Shauermenadmenbot" target="_blank" rel="noopener">Начать подключение →</a>
+        <a class="btn btnGhost" href="https://t.me/Shaurmeggbot" target="_blank" rel="noopener">Посмотреть глазами клиента</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>© 2026 Шаурмег · городская платформа заведений</div>
+    <div>Карта · Mini App · Заказы · Управление · RealCity</div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const progress = document.getElementById('progress');
+  const updateProgress = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    progress.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  };
+  addEventListener('scroll', updateProgress, {passive:true});
+  updateProgress();
+
+  const reveal = new IntersectionObserver((entries)=>{
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('in'); });
+  }, {threshold:.12});
+  document.querySelectorAll('.reveal').forEach(el => reveal.observe(el));
+
+  const buttons = [...document.querySelectorAll('.stageBtn')];
+  const scenes = [...document.querySelectorAll('[data-scene-panel]')];
+  let activeIndex = 0;
+  let timer = null;
+
+  function activate(name, manual=false){
+    buttons.forEach((b,i) => {
+      const on = b.dataset.scene === name;
+      b.classList.toggle('active', on);
+      if(on) activeIndex = i;
+    });
+    scenes.forEach(s => s.classList.toggle('active', s.dataset.scenePanel === name));
+    if(manual) restart();
+  }
+  function restart(){
+    clearInterval(timer);
+    timer = setInterval(()=>{
+      activeIndex = (activeIndex + 1) % buttons.length;
+      activate(buttons[activeIndex].dataset.scene);
+    }, 6500);
+  }
+  buttons.forEach(b => b.addEventListener('click', ()=>activate(b.dataset.scene, true)));
+  restart();
+
+  const visual = document.querySelector('.heroVisual');
+  if(visual && matchMedia('(pointer:fine)').matches){
+    visual.addEventListener('pointermove', e => {
+      const r = visual.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - .5;
+      const y = (e.clientY - r.top) / r.height - .5;
+      visual.style.transform = 'perspective(1000px) rotateY('+(x*3)+'deg) rotateX('+(-y*2)+'deg)';
+    });
+    visual.addEventListener('pointerleave', ()=> visual.style.transform = '');
+  }
+})();
+</script>
+</body>
+</html>

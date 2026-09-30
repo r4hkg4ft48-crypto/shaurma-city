@@ -11,6 +11,16 @@
   <div class="grow"></div><button class="iconBtn" id="profileBtn" aria-label="Мои заказы">◉</button>
 </header>
 
+<button class="activeOrderBadge hidden" id="activeOrderBadge" type="button" aria-label="Открыть активные заказы" data-status="new">
+  <span class="activeOrderHalo" aria-hidden="true"></span>
+  <span class="activeOrderPhoto">
+    <img id="activeOrderImage" class="hidden" alt="">
+    <b id="activeOrderFallback">Ш</b>
+  </span>
+  <span class="activeOrderCount hidden" id="activeOrderCount">1</span>
+  <span class="activeOrderPulse" aria-hidden="true"></span>
+</button>
+
 <main class="page venuePageInner">
   <section class="heroPanel venueHeroPanel" id="hero">
     <img id="heroImg" class="hidden" alt="">

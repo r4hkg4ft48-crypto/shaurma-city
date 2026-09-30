@@ -29,6 +29,16 @@
   <button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 
+<button class="activeOrderBadge hidden" id="activeOrderBadge" type="button" aria-label="Открыть активные заказы" data-status="new">
+  <span class="activeOrderHalo" aria-hidden="true"></span>
+  <span class="activeOrderPhoto">
+    <img id="activeOrderImage" class="hidden" alt="">
+    <b id="activeOrderFallback">Ш</b>
+  </span>
+  <span class="activeOrderCount hidden" id="activeOrderCount">1</span>
+  <span class="activeOrderPulse" aria-hidden="true"></span>
+</button>
+
 <div class="searchBox hidden" id="searchBox"><input id="search" placeholder="Найти заведение или адрес…" autocomplete="off"></div>
 <div class="searchResults glass hidden" id="results"></div>
 <div class="mapTools"><button class="iconBtn" id="locate" aria-label="Моя геопозиция">⌖</button><button class="iconBtn" id="home" aria-label="Вся карта">◎</button></div>

@@ -7,6 +7,7 @@
   const baseBuildingPaint=new Map();
   const baseLabelPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
+  let pointsWarmPromise=null;
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
   const STYLE='https://tiles.openfreemap.org/styles/liberty';
@@ -50,6 +51,18 @@
     try{return await fetch(url,{cache:'no-store',signal:controller.signal})}
     finally{clearTimeout(timer)}
   }
+  async function fetchPointsPayload(ms=28000){
+    const r=await fetchWithTimeout(api+'/map/points?profile=summary&boot='+Date.now(),ms);
+    if(!r.ok)throw new Error('points_'+r.status);
+    const data=await r.json();
+    if(!Array.isArray(data))throw new Error('points_invalid');
+    if(!data.length)throw new Error('points_empty');
+    return data;
+  }
+  function warmPoints(){
+    if(!pointsWarmPromise)pointsWarmPromise=fetchPointsPayload().catch(e=>{pointsWarmPromise=null;throw e});
+    return pointsWarmPromise;
+  }
 
   function authHeaders(){return session?{Authorization:'Bearer '+session}:{}}
   async function authClient(){
@@ -73,12 +86,31 @@
       dashboard=await r.json();renderDashboard();
     }catch{renderGuestProfile()}
   }
+  const ACTIVE_ORDER_STATUSES=new Set(['new','cooking','ready']);
+  function renderActiveOrderBadge(){
+    const badge=$('#activeOrderBadge');if(!badge)return;
+    const active=(userOrders||[]).filter(o=>ACTIVE_ORDER_STATUSES.has(String(o.status)));
+    if(!session||!active.length){badge.classList.add('hidden');return}
+    const order=active[0],img=$('#activeOrderImage'),fallback=$('#activeOrderFallback'),count=$('#activeOrderCount');
+    badge.dataset.status=ACTIVE_ORDER_STATUSES.has(String(order.status))?String(order.status):'new';
+    badge.classList.remove('hidden');
+    badge.setAttribute('aria-label','Активные заказы: '+active.length+'. '+(STATUS[order.status]||order.status||''));
+    fallback.textContent=String(order.venue_name||'Ш').trim().slice(0,1).toUpperCase()||'Ш';
+    if(order.marker_id){
+      img.onerror=()=>{img.classList.add('hidden');fallback.classList.remove('hidden')};
+      img.onload=()=>{img.classList.remove('hidden');fallback.classList.add('hidden')};
+      img.src=api+'/map/markers/'+encodeURIComponent(order.marker_id)+'/avatar?order='+encodeURIComponent(order.order_number||'');
+    }else{
+      img.removeAttribute('src');img.classList.add('hidden');fallback.classList.remove('hidden');
+    }
+    count.textContent=String(active.length);count.classList.toggle('hidden',active.length<2);
+  }
   async function loadOrders(){
-    if(!session){userOrders=[];renderOrdersPanel();return}
+    if(!session){userOrders=[];renderOrdersPanel();renderActiveOrderBadge();return}
     try{
       const r=await fetch(api+'/me/orders',{headers:authHeaders(),cache:'no-store'});if(!r.ok)throw 0;
-      userOrders=await r.json();renderOrdersPanel();
-    }catch{$('#ordersPanelList').innerHTML='<div class="panelEmpty">Не удалось загрузить заказы</div>'}
+      userOrders=await r.json();renderOrdersPanel();renderActiveOrderBadge();
+    }catch{$('#ordersPanelList').innerHTML='<div class="panelEmpty">Не удалось загрузить заказы</div>';renderActiveOrderBadge()}
   }
   function renderGuestProfile(){
     setHeaderTgId(tg?.initDataUnsafe?.user?.id||'');
@@ -648,10 +680,10 @@
     el.onclick=e=>{e.stopPropagation();selectPoint(p)};return el;
   }
   async function loadPoints(){
-    // Geometry is fetched for the selected, fully bound venue below. Shipping
-    // every quarter here delayed the initial map by an 8 MB response.
-    const r=await fetchWithTimeout(api+'/map/points?profile=summary',15000);if(!r.ok)throw new Error('points_'+r.status);
-    const data=await r.json();if(!Array.isArray(data))throw new Error('points_invalid');
+    // The points request starts before MapLibre is ready. On a cold backend this
+    // removes the first-open race that previously required a manual reload.
+    const data=await warmPoints();
+    pointsWarmPromise=null;
     const seen=new Set();
     points=data.filter(validMapPoint).filter(p=>{const id=String(p.id);if(seen.has(id))return false;seen.add(id);return true});
     $('#pointsCount').textContent=points.length;
@@ -662,8 +694,11 @@
     const direct=qs.get('marker');if(direct){const p=points.find(x=>String(x.id)===direct);if(p)setTimeout(()=>selectPoint(p),350)}
   }
   async function loadPointsWithRetry(){
-    for(let attempt=0;attempt<3;attempt++){try{await loadPoints();return}catch(e){console.warn('points load failed',attempt+1,e);if(attempt<2)await sleep(1200*(attempt+1))}}
-    toast('Карта открыта, точки догружаются…');setTimeout(()=>loadPointsWithRetry(),5000);
+    for(let attempt=0;attempt<5;attempt++){
+      try{await loadPoints();return}
+      catch(e){console.warn('points load failed',attempt+1,e);pointsWarmPromise=null;if(attempt<4)await sleep(700+attempt*850)}
+    }
+    toast('Карта открыта, точки догружаются…');setTimeout(()=>{pointsWarmPromise=null;loadPointsWithRetry()},3500);
   }
   function fitAll(){
     const valid=points.filter(validMapPoint);if(!valid.length)return;
@@ -708,6 +743,11 @@
   $('#panelBackdrop').onclick=closePanels;document.querySelectorAll('[data-panel-close]').forEach(x=>x.onclick=closePanels);
   $('#orderFilter').onclick=e=>{const b=e.target.closest('[data-order-filter]');if(!b)return;orderFilter=b.dataset.orderFilter;document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===b));renderOrdersPanel()};
   $('#ordersPanelList').onclick=e=>{const b=e.target.closest('[data-order-menu]');if(!b)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',b.dataset.orderMenu);u.searchParams.set('establishment',b.dataset.orderEst);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
+  $('#activeOrderBadge').onclick=()=>{
+    orderFilter='active';
+    document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x.dataset.orderFilter==='active'));
+    openPanel('orders');renderOrdersPanel();tg?.HapticFeedback?.selectionChanged?.();
+  };
   $('#favoritesPanelList').onclick=async e=>{
     const order=e.target.closest('[data-fav-order]');
     if(order){
@@ -732,6 +772,7 @@
   };
 
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
-  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();loadFavorites()}});
+  warmPoints().catch(e=>console.warn('points warmup failed',e));
+  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

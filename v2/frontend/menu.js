@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),pendingItem=null,itemChoiceState={},builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   let cinema=null,builderStep=0,building=false,buildAttempt=0;
   const cinemaForType=()=>ctx?.venue?.config?.builder_cinema?.find(x=>x.type_id===builderState.type);
@@ -516,12 +516,91 @@
     $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }
 
-  function add(id){
-    const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
-    const x=cart.find(x=>String(x.id)===String(id));if(x)x.q++;else cart.push({id:String(src.id),n:String(src.n||src.name),p:Number(src.p??src.price)||0,q:1});
+  function activeChoiceGroups(src){
+    return (Array.isArray(src?.choice_groups)?src.choice_groups:[]).filter(g=>g&&g.active!==false&&Array.isArray(g.options)&&g.options.some(o=>o&&o.active!==false));
+  }
+  function choicePrice(src,state={}){
+    let total=Number(src?.p??src?.price)||0;
+    for(const group of activeChoiceGroups(src)){
+      const selected=Array.isArray(state[group.id])?state[group.id]:[];
+      for(const option of group.options||[])if(option?.active!==false&&selected.includes(String(option.id)))total+=Number(option.price_delta)||0;
+    }
+    return Math.max(0,Math.round(total));
+  }
+  function choiceDetail(src,state={}){
+    const parts=[];
+    for(const group of activeChoiceGroups(src)){
+      const selected=Array.isArray(state[group.id])?state[group.id]:[];
+      const names=(group.options||[]).filter(o=>o?.active!==false&&selected.includes(String(o.id))).map(o=>String(o.name||'Вариант'));
+      if(names.length)parts.push(String(group.name||'Выбор')+': '+names.join(', '));
+    }
+    return parts.join(' · ');
+  }
+  function cartIdentity(id,state={}){
+    const stable=Object.keys(state).sort().map(k=>k+':'+(Array.isArray(state[k])?[...state[k]].sort().join(','):'')).join('|');
+    return String(id)+'::'+stable;
+  }
+  function addConfigured(src,state={}){
+    if(!src||src.available===false){toast('Позиция временно недоступна');return}
+    const normalized={};
+    for(const group of activeChoiceGroups(src)){
+      const ids=Array.isArray(state[group.id])?[...new Set(state[group.id].map(String))]:[];
+      if(ids.length)normalized[String(group.id)]=ids;
+    }
+    const key=cartIdentity(src.id,normalized),minQty=Math.max(1,Number(src.min_qty)||1),maxQty=Math.max(minQty,Number(src.max_qty)||50);
+    const x=cart.find(x=>String(x.cart_key||x.id)===key);
+    if(x){
+      if(x.q>=maxQty){toast('Максимум '+maxQty+' шт.');return}
+      x.q++;
+    }else cart.push({cart_key:key,id:String(src.id),n:String(src.n||src.name),p:choicePrice(src,normalized),q:minQty,min_qty:minQty,max_qty:maxQty,choices:normalized,detail:choiceDetail(src,normalized)});
     save();
     const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
     tg?.HapticFeedback?.impactOccurred?.('light');
+  }
+  function renderItemOptions(){
+    const src=pendingItem;if(!src)return;
+    const groups=activeChoiceGroups(src);
+    $('#itemOptionsTitle').textContent=String(src.n||src.name||'Позиция');
+    $('#itemOptionsDescription').textContent=String(src.d||src.description||'');
+    $('#itemOptionsBasePrice').textContent=money(Number(src.p??src.price)||0);
+    $('#itemOptionGroups').innerHTML=groups.map(group=>{
+      const selected=Array.isArray(itemChoiceState[group.id])?itemChoiceState[group.id]:[];
+      const min=Math.max(group.required?1:0,Number(group.min)||0),max=group.type==='single'?1:Math.max(min,Number(group.max)||group.options.length);
+      const hint=group.type==='single'?'Выберите один вариант':(min?'Минимум '+min+', максимум '+max:'Можно выбрать до '+max);
+      return '<section class="itemOptionGroup" data-choice-group="'+esc(group.id)+'"><header><div><b>'+esc(group.name||'Выбор')+'</b><small>'+esc(hint)+'</small></div>'+(group.required||min?'<em>обязательно</em>':'')+'</header><div class="itemOptionButtons">'+
+        (group.options||[]).filter(o=>o?.active!==false).map(option=>{
+          const on=selected.includes(String(option.id)),delta=Number(option.price_delta)||0;
+          return '<button type="button" class="'+(on?'active':'')+'" data-choice-option="'+esc(option.id)+'" data-group="'+esc(group.id)+'"><span>'+esc(option.name||'Вариант')+'</span><small>'+(delta?(delta>0?'+':'')+money(delta):'без доплаты')+'</small></button>';
+        }).join('')+'</div></section>';
+    }).join('');
+    $('#itemOptionsTotal').textContent=money(choicePrice(src,itemChoiceState));
+  }
+  function openItemOptions(src){
+    pendingItem=src;itemChoiceState={};
+    for(const group of activeChoiceGroups(src)){
+      const active=(group.options||[]).filter(o=>o?.active!==false),max=group.type==='single'?1:Math.max(1,Number(group.max)||active.length);
+      let defaults=active.filter(o=>o.default===true).slice(0,max).map(o=>String(o.id));
+      const min=Math.max(group.required?1:0,Number(group.min)||0);
+      if(defaults.length<min)defaults=[...defaults,...active.filter(o=>!defaults.includes(String(o.id))).slice(0,min-defaults.length).map(o=>String(o.id))];
+      itemChoiceState[group.id]=defaults;
+    }
+    renderItemOptions();openSheet('itemOptionsSheet');
+  }
+  function confirmItemOptions(){
+    const src=pendingItem;if(!src)return;
+    for(const group of activeChoiceGroups(src)){
+      const selected=Array.isArray(itemChoiceState[group.id])?itemChoiceState[group.id]:[];
+      const min=Math.max(group.required?1:0,Number(group.min)||0),max=group.type==='single'?1:Math.max(min,Number(group.max)||group.options.length);
+      if(selected.length<min){toast('Выберите: '+String(group.name||'вариант'));return}
+      if(selected.length>max){toast('Слишком много вариантов: '+String(group.name||''));return}
+    }
+    addConfigured(src,itemChoiceState);pendingItem=null;itemChoiceState={};closeSheets();
+  }
+  function add(id){
+    const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
+    if(src.available===false){toast('Позиция временно недоступна');return}
+    if(activeChoiceGroups(src).length)return openItemOptions(src);
+    addConfigured(src,{});
   }
   function runQuickFavoriteOrder(){
     const itemId=String(qs.get('quick_item')||'');

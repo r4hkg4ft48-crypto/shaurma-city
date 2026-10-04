@@ -99,10 +99,12 @@ const GENERATED_MENU_PHOTOS={
   ...require('./generated-menu/coffee_tea_desserts.json')
 };
 const DEFAULT_ITEM_IMAGE_COUNTS={shawarma_doner:8,burgers_sandwiches:8,bakery_hotdogs:8,pizza_rolls_quesadilla:8,snacks:8,salads_plates:8,sauces_addons:10,cold_drinks:10,coffee_tea_desserts:10};
+const GENERATED_MENU_PHOTO_BASE=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/$/,'');
+function generatedMenuPhotoBase64(fileName){return String(GENERATED_MENU_PHOTOS[String(fileName||'')]||'')}
 function defaultItemImage(category,index=1){
   const max=DEFAULT_ITEM_IMAGE_COUNTS[category]||1,n=Math.max(1,Math.min(max,Number(index)||1));
-  const key=category+'_'+String(n).padStart(2,'0')+'.jpg',b64=GENERATED_MENU_PHOTOS[key]||'';
-  return b64?'data:image/jpeg;base64,'+b64:'';
+  const key=category+'_'+String(n).padStart(2,'0')+'.jpg';
+  return GENERATED_MENU_PHOTOS[key]?GENERATED_MENU_PHOTO_BASE+'/api/v2/menu-photo/'+key:'';
 }
 function defaultOptionImage(group,name,category='shawarma_doner'){
   const n=String(name||'').toLowerCase();
@@ -487,4 +489,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,defaultItemImage,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,defaultItemImage,generatedMenuPhotoBase64,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

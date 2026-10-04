@@ -216,6 +216,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   async function sendOwnerBotMessage(chatId,text,extra={}){
     return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',disable_web_page_preview:true,...extra});
   }
+  async function sendOwnerPlainMessage(chatId,text,extra={}){
+    const plain=String(text||'').replace(/<\/?(?:b|code)>/gi,'');
+    return botApi('sendMessage',{chat_id:chatId,text:plain,disable_web_page_preview:true,...extra});
+  }
   function ownerAppUrl(establishmentId='',tab='profile'){
     const u=new URL(OWNER_APP_URL);
     if(establishmentId)u.searchParams.set('establishment',String(establishmentId));
@@ -623,7 +627,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
 
       const assistantResult=await commandBus.handle({user,text});
       if(assistantResult?.handled){
-        await sendOwnerBotMessage(msg.chat.id,assistantResult.text);
+        await sendOwnerPlainMessage(msg.chat.id,assistantResult.text);
         return;
       }
 

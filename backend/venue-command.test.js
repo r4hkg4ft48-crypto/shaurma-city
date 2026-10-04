@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {parseCommand,findNamed}=require('./venue-command');
+const {parseCommand,findNamed,venueShortKey}=require('./venue-command');
 
 test('parses menu commands',()=>{
   assert.deepEqual(parseCommand('цена Классическая шаурма 390'),{intent:'menu_price',item:'Классическая шаурма',price:390});
@@ -37,4 +37,12 @@ test('supports venue selection and fuzzy unique lookup',()=>{
   assert.equal(findNamed(list,'айран',x=>x.n).item.n,'Айран');
   assert.equal(findNamed(list,'сырная',x=>x.n).item.n,'Шаурма сырная');
   assert.equal(findNamed(list,'шаурма',x=>x.n).item,null);
+});
+
+
+test('selects venue by short key syntax',()=>{
+  assert.equal(venueShortKey('SC-MSK-5E435A0F67'),'5E435A');
+  assert.deepEqual(parseCommand('/use 5E435A'),{intent:'venue_select',query:'5E435A'});
+  assert.deepEqual(parseCommand('5E435A'),{intent:'venue_select',query:'5E435A'});
+  assert.deepEqual(parseCommand('выбери точку Лепёшка'),{intent:'venue_select',query:'Лепёшка'});
 });

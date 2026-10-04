@@ -692,11 +692,11 @@
     const btn=$('#placeOrder');btn.disabled=true;
     const {total}=cartStats();
     try{
-      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.builderData?{builder:x.builderData}:{}),...(x.selection?{selection:x.selection}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
+      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.builderData?{builder:x.builderData}:{}),...(x.selection?{selection:x.selection}:{}),...(x.choices?{choices:x.choices}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
       if(!session&&tg?.initData)body.telegram_init_data=tg.initData;
       const headers={'Content-Type':'application/json'};if(session)headers.Authorization='Bearer '+session;
       const r=await fetch(api+'/orders',{method:'POST',headers,body:JSON.stringify(body)}),j=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(j.error==='phone_required'?'Укажите телефон':j.error==='address_required'?'Укажите адрес':j.error||'Не удалось оформить заказ');
+      if(!r.ok)throw new Error(j.error==='phone_required'?'Укажите телефон':j.error==='address_required'?'Укажите адрес':j.error==='item_unavailable'?'Одна из позиций уже закончилась':j.error==='insufficient_stock'?'Недостаточно товара в наличии':j.error==='invalid_choice_count'||j.error==='invalid_choice'||j.error==='invalid_item_selection'?'Проверьте выбранные параметры позиции':j.error||'Не удалось оформить заказ');
       $('#successNumber').textContent=j.order_number||'Заказ принят';
       $('#successVenue').textContent=(ctx?.venue?.name||'Заведение')+(ctx?.marker?.address?' · '+ctx.marker.address:'');
       $('#successTotal').textContent=money(j.total??total);
@@ -735,9 +735,27 @@
     const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
     const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
   };
+  $('#itemOptionGroups').onclick=e=>{
+    const b=e.target.closest('[data-choice-option]');if(!b||!pendingItem)return;
+    const spec=itemChoiceSpecs(pendingItem).find(s=>s.kind===b.dataset.choiceKind&&String(s.id)===String(b.dataset.group));if(!spec)return;
+    const store=spec.kind==='selection'?itemOptionState.selection:itemOptionState.choices;
+    const raw=store[spec.id],current=Array.isArray(raw)?raw.map(String):(raw?[String(raw)]:[]),id=String(b.dataset.choiceOption);
+    if(spec.type==='single')store[spec.id]=current.includes(id)?'':id;
+    else if(current.includes(id))store[spec.id]=current.filter(x=>x!==id);
+    else if(current.length>=Number(spec.max||1))toast('Можно выбрать максимум '+spec.max);
+    else store[spec.id]=[...current,id];
+    renderItemOptions();
+  };
+  $('#confirmItemOptions').onclick=confirmItemOptions;
   $('#cartItems').onclick=e=>{
-    let b=e.target.closest('[data-plus]');if(b){const x=cart.find(x=>x.id===b.dataset.plus);if(x){x.q++;save()}return}
-    b=e.target.closest('[data-minus]');if(b){const x=cart.find(x=>x.id===b.dataset.minus);if(x&&--x.q<=0)cart=cart.filter(v=>v!==x);save()}
+    let b=e.target.closest('[data-plus]');if(b){
+      const x=cart.find(x=>String(x.cart_key||x.id)===b.dataset.plus);
+      if(x){const max=Math.max(Number(x.min_qty)||1,Number(x.max_qty)||50);if(x.q>=max)toast('Максимум '+max+' шт.');else{x.q++;save()}}return
+    }
+    b=e.target.closest('[data-minus]');if(b){
+      const x=cart.find(x=>String(x.cart_key||x.id)===b.dataset.minus);
+      if(x){const min=Math.max(1,Number(x.min_qty)||1);if(x.q<=min)cart=cart.filter(v=>v!==x);else x.q--;save()}
+    }
   };
   $('#openBuilder').onclick=()=>openBuilder('custom');
   $('#openSignatureBuilder').onclick=()=>openBuilder('signature');

@@ -1,5 +1,6 @@
 'use strict';
 const db=require('./db');
+const D=require('./domain');
 
 async function ensureSchema(){
   if(!db.configured)return;
@@ -232,6 +233,25 @@ async function ensureSchema(){
   FROM assigned a
   WHERE v.venue_id=a.venue_id;
   `);
+  const migrationKey='default_menu_catalog_v1';
+  const applied=await db.query('SELECT migration_key FROM shaurma_migrations WHERE migration_key=$1',[migrationKey]);
+  if(!applied.rows[0]){
+    const seed=D.defaultMenuSeed();
+    await db.tx(async client=>{
+      await client.query(
+        "UPDATE shaurma_venues SET menu=$1::jsonb,updated_at=NOW() WHERE (menu IS NULL OR menu='[]'::jsonb)",
+        [JSON.stringify(seed.menu)]
+      );
+      await client.query(
+        "UPDATE shaurma_venues SET config=jsonb_set(COALESCE(config,'{}'::jsonb),'{menu_sections}',$1::jsonb,TRUE),updated_at=NOW() WHERE NOT (COALESCE(config,'{}'::jsonb) ? 'menu_sections') OR jsonb_array_length(COALESCE(config->'menu_sections','[]'::jsonb))=0",
+        [JSON.stringify(seed.sections)]
+      );
+      await client.query(
+        "INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb) ON CONFLICT(migration_key) DO NOTHING",
+        [migrationKey,JSON.stringify({categories:seed.sections.length,items:seed.menu.length,mode:'empty-menu-only'})]
+      );
+    });
+  }
   await require('./realcity-studio').ensureSchema(db);
 }
 module.exports={ensureSchema};

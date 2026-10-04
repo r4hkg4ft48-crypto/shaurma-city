@@ -95,7 +95,7 @@ function normalizeChoiceGroups(input){
       active:g?.active!==false,
       options
     };
-  }).filter(g=>g.id&&g.name&&g.options.length);
+  }).filter(g=>g.id&&g.name);
 }
 function normalizeMenu(input){
   if(!Array.isArray(input))return [];

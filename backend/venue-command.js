@@ -6,7 +6,7 @@ const rt=require('../v2/backend/src/realtime');
 const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
 const PERMISSION_BY_INTENT={
   menu_show:'menu',menu_price:'menu',menu_price_context:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
-  menu_item_select:'menu',menu_item_show:'menu',menu_available:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',menu_image_remove:'menu',menu_image_fit:'menu',
+  menu_item_select:'menu',menu_item_show:'menu',menu_available:'menu',menu_stock:'menu',menu_weight:'menu',menu_sku:'menu',menu_composition:'menu',menu_tags:'menu',menu_recommended:'menu',menu_schedule:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',menu_image_remove:'menu',menu_image_fit:'menu',menu_gallery_clear:'menu',
   menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
   choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_rename:'menu',choice_group_toggle:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
@@ -39,6 +39,21 @@ function boolWord(v){
   if(/^(вкл|включи|включить|включено|да|on|1)$/.test(s))return true;
   if(/^(выкл|выключи|выключить|выключено|нет|off|0)$/.test(s))return false;
   return null;
+}
+function parseSchedule(v){
+  const s=norm(v),dayMap={вс:0,воскресенье:0,пн:1,понедельник:1,вт:2,вторник:2,ср:3,среда:3,чт:4,четверг:4,пт:5,пятница:5,сб:6,суббота:6};
+  if(/^(выкл|выключи|выключить|без расписания)$/.test(s))return {enabled:false,days:[],from:'',to:''};
+  let days=[];
+  if(/каждый день|ежедневно/.test(s))days=[0,1,2,3,4,5,6];
+  else if(/будни|по будням/.test(s))days=[1,2,3,4,5];
+  else if(/выходн/.test(s))days=[0,6];
+  else for(const [name,num] of Object.entries(dayMap))if(new RegExp('(?:^|\\s)'+name+'(?:\\s|$)').test(s))days.push(num);
+  days=[...new Set(days)];
+  const tm=s.match(/(\d{1,2}):([0-5]\d)\s*(?:-|–|—|до)\s*(\d{1,2}):([0-5]\d)/);
+  if(!tm)return null;
+  const hh=n=>String(Math.max(0,Math.min(23,Number(n)))).padStart(2,'0');
+  if(!days.length)days=[0,1,2,3,4,5,6];
+  return {enabled:true,days,from:hh(tm[1])+':'+tm[2],to:hh(tm[3])+':'+tm[4]};
 }
 function statusWord(v){
   const s=norm(v);
@@ -85,6 +100,24 @@ function parseCommand(text){
   m=raw.match(/^(?:цена|поставь цену|измени цену|поменяй цену)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);
   if(m)return {intent:'menu_price_context',price:money(m[1])};
 
+  m=raw.match(/^(?:остаток|в наличии)\s+(\d+)\s*(?:шт|штук)?$/i);
+  if(m)return {intent:'menu_stock',stock:Math.max(0,Math.min(1000000,Number(m[1])))};
+  if(/^(?:остаток без лимита|безлимитный остаток|неограниченный остаток)$/i.test(raw))return {intent:'menu_stock',stock:null};
+
+  m=raw.match(/^(?:вес|объ[её]м)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_weight',value:clean(m[1])};
+  m=raw.match(/^sku\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_sku',value:clean(m[1])};
+  m=raw.match(/^состав\s*(?:=|:)?\s*([\s\S]+)$/i);
+  if(m)return {intent:'menu_composition',value:clean(m[1])};
+  m=raw.match(/^теги?\s*(?:=|:)?\s*([\s\S]+)$/i);
+  if(m)return {intent:'menu_tags',tags:clean(m[1]).split(/[,;]+/).map(x=>clean(x)).filter(Boolean).slice(0,20)};
+  if(/^(?:сделай\s+)?рекомендуем(?:ой|ая)$/i.test(raw))return {intent:'menu_recommended',enabled:true};
+  if(/^(?:убери|сними)\s+(?:из\s+)?рекомендуем(?:ых|ой)$/i.test(raw))return {intent:'menu_recommended',enabled:false};
+
+  m=raw.match(/^расписание\s+([\s\S]+)$/i);
+  if(m){const schedule=parseSchedule(m[1]);if(schedule)return {intent:'menu_schedule',schedule};}
+
   m=raw.match(/^(?:бейдж|метка|ярлык)\s*(?:=|:)?\s*(.+)$/i);
   if(m)return {intent:'menu_badge',value:clean(m[1])};
   if(/^(?:убери|удали|очисти)\s+(?:бейдж|метку|ярлык)$/i.test(raw))return {intent:'menu_badge',value:''};
@@ -95,6 +128,7 @@ function parseCommand(text){
   m=raw.match(/^(?:вид|отображение|карточка)\s+(главная|крупная|компактная|обычная|авто)$/i);
   if(m)return {intent:'menu_display',display:/главн|крупн/i.test(m[1])?'main':/компакт/i.test(m[1])?'compact':'auto'};
   if(/^(?:убери|удали|очисти)\s+фото$/i.test(raw))return {intent:'menu_image_remove'};
+  if(/^(?:очисти|удали)\s+(?:всю\s+)?галерею$/i.test(raw))return {intent:'menu_gallery_clear'};
   if(/^(?:фото|изображение)\s+(?:вписать|целиком|contain)$/i.test(raw))return {intent:'menu_image_fit',image_fit:'contain'};
   if(/^(?:фото|изображение)\s+(?:обрезать|заполнить|cover)$/i.test(raw))return {intent:'menu_image_fit',image_fit:'cover'};
 

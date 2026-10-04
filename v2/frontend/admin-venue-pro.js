@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const {api,tg,esc,money}=window.SHAURMEG||{};
+const {api,telegram:tg,esc,money}=window.SHAURMEG||{};
 const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const clone=x=>JSON.parse(JSON.stringify(x??null));

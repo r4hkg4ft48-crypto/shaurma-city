@@ -517,7 +517,11 @@
   }
 
   function activeChoiceGroups(src){
-    return (Array.isArray(src?.choice_groups)?src.choice_groups:[]).filter(g=>g&&g.active!==false&&Array.isArray(g.options)&&g.options.some(o=>o&&o.active!==false));
+    return (Array.isArray(src?.choice_groups)?src.choice_groups:[]).filter(g=>{
+      if(!g||g.active===false)return false;
+      const hasOptions=Array.isArray(g.options)&&g.options.some(o=>o&&o.active!==false);
+      return hasOptions||g.required===true||Number(g.min||0)>0;
+    });
   }
   function choicePrice(src,state={}){
     let total=Number(src?.p??src?.price)||0;

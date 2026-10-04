@@ -644,9 +644,11 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         }catch{
           await sendOwnerBotMessage(msg.chat.id,'Ключ не подошёл. Нужен действующий <code>OWN-XXXXXXXXXX</code>, который ещё не использован для подключения кабинета.');
         }
+        return;
       }
 
-      await sendOwnerPlainMessage(msg.chat.id,'Не распознал команду. Напишите /assistant — покажу доступные команды управления заведением.');    }catch(e){console.error('Venue owner bot update:',e.message)}
+      await sendOwnerPlainMessage(msg.chat.id,'Не распознал команду. Напишите /assistant — покажу доступные команды управления заведением.');
+    }catch(e){console.error('Venue owner bot update:',e.message)}
   });
 
   app.get('/venue-owner',(req,res)=>{

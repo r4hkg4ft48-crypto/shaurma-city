@@ -128,7 +128,7 @@ function renderItems(){
   $('#itemsGrid').innerHTML=rows.map(({x,index})=>'<article class="itemCard"><div class="itemCardPhoto">'+(imageOf(x)?'<img src="'+esc(imageOf(x))+'">':'')+(x.featured?'<span class="itemBadge">ГЛАВНАЯ</span>':'')+'</div><div class="itemCardBody"><h3>'+esc(x.n)+'</h3><p>'+esc(x.d||'Без описания')+'</p><div class="itemMeta">'+[x.weight,...(x.tags||[]).slice(0,2)].filter(Boolean).map(v=>'<span>'+esc(v)+'</span>').join('')+'</div><div class="itemBottom"><b>'+money(x.p)+'</b><button class="itemEdit" data-edit-item="'+index+'">›</button></div></div></article>').join('')||'<div class="designPanel">В категории пока нет позиций.</div>'
 }
 function defaultOptions(cat){
-  const s=sectionOf(cat),out={required_groups:[]};for(const g of GROUPS)out[g]=(s?.settings?.[g]||[]).map((name,i)=>({id:slug(name),name,price:0,active:true,default:i===0,image:matchedOptionImage(s,g,name)}));return out
+  const s=sectionOf(cat),out={required_groups:[]};for(const g of GROUPS)out[g]=(s?.settings?.[g]||[]).map((name,i)=>({id:slug(name),name,price:0,active:true,default:i===0,image:''}));return out
 }
 function slug(v){return String(v||'option').toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,48)||('opt_'+Date.now())}
 function newItem(){
@@ -159,7 +159,7 @@ function syncItemDraft(){
   itemDraft.n=$('#iName')?.value.trim()||itemDraft.n;itemDraft.d=$('#iDesc')?.value.trim()||'';itemDraft.c=$('#iCat')?.value||itemDraft.c;itemDraft.p=Math.max(0,Number($('#iPrice')?.value)||0);itemDraft.weight=$('#iWeight')?.value.trim()||'';itemDraft.sku=$('#iSku')?.value.trim()||'';itemDraft.composition=$('#iComposition')?.value.trim()||'';itemDraft.tags=String($('#iTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const stock=$('#iStock')?.value;itemDraft.stock=stock===''||stock===undefined?null:Math.max(0,Number(stock)||0);itemDraft.card_color=$('#iCardColor')?.value||'#FFFFFF';itemDraft.featured=!!$('#iFeatured')?.checked;itemDraft.recommended=!!$('#iRecommended')?.checked;itemDraft.schedule={...(itemDraft.schedule||{}),enabled:!!($('#iFrom')?.value||$('#iTo')?.value),from:$('#iFrom')?.value||'',to:$('#iTo')?.value||''};
   itemDraft.options=itemDraft.options||{};const required=[];for(const g of GROUPS){const root=document.querySelector('[data-group="'+g+'"]'),arr=[];root?.querySelectorAll('[data-option-card]').forEach((card,i)=>{const name=card.querySelector('[data-opt-name]')?.value.trim();if(!name)return;const old=itemDraft.options[g]?.[i]||{};arr.push({...old,id:slug(name),name,price:Number(card.querySelector('[data-opt-price]')?.value)||0,active:true})});itemDraft.options[g]=arr;if(root?.querySelector('[data-required="'+g+'"]')?.checked)required.push(g)}itemDraft.options.required_groups=required
 }
-function addOption(g){syncItemDraft();itemDraft.options[g]=itemDraft.options[g]||[];itemDraft.options[g].push({id:'opt_'+Date.now().toString(36),name:'Новый вариант',price:0,active:true,default:false,image:imageOf(itemDraft)});renderItemEditor()}
+function addOption(g){syncItemDraft();itemDraft.options[g]=itemDraft.options[g]||[];itemDraft.options[g].push({id:'opt_'+Date.now().toString(36),name:'Новый вариант',price:0,active:true,default:false,image:''});renderItemEditor()}
 function removeOption(g,i){syncItemDraft();itemDraft.options[g]?.splice(i,1);renderItemEditor()}
 function defaultOption(g,i){syncItemDraft();(itemDraft.options[g]||[]).forEach((o,k)=>o.default=k===i);renderItemEditor()}
 async function saveItem(){

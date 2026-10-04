@@ -635,7 +635,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       return {handled:true,text:itemSettingsText(found.item,sections)};
     }
 
-    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_image_remove'||command.intent==='menu_image_fit'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'){
+    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_stock'||command.intent==='menu_weight'||command.intent==='menu_sku'||command.intent==='menu_composition'||command.intent==='menu_tags'||command.intent==='menu_recommended'||command.intent==='menu_schedule'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_image_remove'||command.intent==='menu_image_fit'||command.intent==='menu_gallery_clear'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'){
       const found=resolveItem(command.item);
       if(!found.item)return itemMissing(command.item,found.matches);
       const item=found.item,index=menu.indexOf(item);
@@ -650,6 +650,41 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         item.stock=command.available?null:0;
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_available',{item_id:item.id,stock:item.stock});
         return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.available?'снова в наличии':'добавлено в стоп-лист. В Mini App останется видно, но заказать нельзя.')};
+      }
+      if(command.intent==='menu_stock'){
+        item.stock=command.stock===null?null:Math.max(0,Math.min(1000000,Math.floor(Number(command.stock)||0)));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_stock',{item_id:item.id,stock:item.stock});
+        return {handled:true,text:'✅ Остаток '+String(item.n||item.name)+': '+(item.stock===null?'без лимита':item.stock+' шт.')};
+      }
+      if(command.intent==='menu_weight'){
+        item.weight=String(command.value||'').slice(0,40);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_weight',{item_id:item.id,weight:item.weight});
+        return {handled:true,text:'✅ Вес / объём: '+(item.weight||'убран')};
+      }
+      if(command.intent==='menu_sku'){
+        item.sku=String(command.value||'').slice(0,80);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_sku',{item_id:item.id,sku:item.sku});
+        return {handled:true,text:'✅ SKU: '+(item.sku||'убран')};
+      }
+      if(command.intent==='menu_composition'){
+        item.composition=String(command.value||'').slice(0,1200);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_composition',{item_id:item.id});
+        return {handled:true,text:'✅ Состав позиции обновлён.'};
+      }
+      if(command.intent==='menu_tags'){
+        item.tags=Array.isArray(command.tags)?command.tags.slice(0,20):[];
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_tags',{item_id:item.id,tags:item.tags});
+        return {handled:true,text:'✅ Теги: '+(item.tags.length?item.tags.join(', '):'убраны')};
+      }
+      if(command.intent==='menu_recommended'){
+        item.recommended=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_recommended',{item_id:item.id,recommended:item.recommended});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(item.recommended?'рекомендуемая позиция':'убрана из рекомендуемых')};
+      }
+      if(command.intent==='menu_schedule'){
+        item.schedule=command.schedule;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_schedule',{item_id:item.id,schedule:item.schedule});
+        return {handled:true,text:'✅ Расписание: '+(item.schedule.enabled?(item.schedule.days.join(', ')+' · '+item.schedule.from+'–'+item.schedule.to):'выключено')};
       }
       if(command.intent==='menu_badge'){
         item.badge=String(command.value||'').slice(0,40);
@@ -676,6 +711,11 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         item.image_fit=command.image_fit;
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_image_fit',{item_id:item.id,image_fit:item.image_fit});
         return {handled:true,text:'✅ Отображение фото: '+(item.image_fit==='contain'?'вписать целиком':'заполнять карточку')+'.'};
+      }
+      if(command.intent==='menu_gallery_clear'){
+        item.gallery=[];
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_gallery_clear',{item_id:item.id});
+        return {handled:true,text:'✅ Галерея позиции очищена.'};
       }
       if(command.intent==='menu_category_move'){
         let category=findNamed(sections,command.category,x=>x.name||x.id).item;

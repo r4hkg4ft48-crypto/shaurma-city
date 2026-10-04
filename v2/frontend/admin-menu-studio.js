@@ -181,7 +181,16 @@ async function saveItem(){
 async function deleteItem(){if(editingIndex<0){closeItemEditor();return}if(!confirm('Удалить позицию из меню?'))return;menu.splice(editingIndex,1);editingIndex=-1;await saveMenu('Позиция удалена ✓');closeItemEditor()}
 function readFile(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result||''));r.onerror=rej;r.readAsDataURL(f)})}
 async function compress(file,max=1400,q=.84){
-  const raw=await readFile(file),img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=raw});const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),w=Math.round(img.naturalWidth*scale),h=Math.round(img.naturalHeight*scale),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{alpha:false});x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);return c.toDataURL('image/jpeg',q)
+  const raw=await readFile(file),img=new Image();await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=raw});
+  const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));let w=Math.max(220,Math.round(img.naturalWidth*scale)),h=Math.max(160,Math.round(img.naturalHeight*scale));
+  const limit=max<=800?260000:620000,qualities=[q,.76,.68,.60,.52,.45];
+  for(const quality of qualities){
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const x=canvas.getContext('2d',{alpha:false});if(!x)throw new Error('Не удалось обработать фото');
+    x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
+    const out=canvas.toDataURL('image/jpeg',quality);if(out.length<=limit)return out;
+    w=Math.max(220,Math.round(w*.82));h=Math.max(160,Math.round(h*.82));
+  }
+  throw new Error('Фото слишком тяжёлое — выберите другое изображение');
 }
 async function catPhoto(file){const s=sectionOf(currentCategory);if(!s)return;s.cover=await compress(file);renderCategoryEditor(currentCategory);hydrateHeader();toast('Фото подготовлено · сохраните категорию')}
 async function catGallery(files){const s=sectionOf(currentCategory);if(!s)return;s.gallery=Array.isArray(s.gallery)?s.gallery:[];for(const f of [...files].slice(0,6)){if(s.gallery.length>=12)break;s.gallery.push(await compress(f,1100,.8))}renderCategoryEditor(currentCategory)}

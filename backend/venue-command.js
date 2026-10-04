@@ -76,7 +76,8 @@ function parseCommand(text){
 
   m=raw.match(/^(?:нет в наличии|закончил(?:ся|ась|ось)|стоп)\s*(?:позиция|блюдо|товар)?\s*(.*)$/i);
   if(m)return {intent:'menu_available',item:clean(m[1]),available:false};
-  m=raw.match(/^(?:верни|вернуть|есть)\s*(?:позицию|блюдо|товар)?\s*(.*?)\s*(?:в наличие|в продажу|в меню)?$/i);
+  m=raw.match(/^(?:верни|вернуть)\s*(?:позицию|блюдо|товар)?\s*(.+?)\s+(?:в наличие|в продажу)$/i)||
+    raw.match(/^есть\s+(?:позиция|блюдо|товар)?\s*(.+)$/i);
   if(m&&clean(m[1]))return {intent:'menu_available',item:clean(m[1]),available:true};
   if(/^(?:верни в наличие|снова в наличии|есть в наличии)$/i.test(raw))return {intent:'menu_available',available:true};
 
@@ -274,6 +275,29 @@ function findNamed(list,query,getName=x=>x?.name||x?.n||''){
   if(partial.length===1)return {item:partial[0],matches:partial};
   return {item:null,matches:(exact.length?exact:partial).slice(0,8)};
 }
+function itemSettingsText(item,sections=[]){
+  if(!item)return '';
+  const section=sections.find(x=>String(x.id)===String(item.c||item.category||'')),groups=Array.isArray(item.choice_groups)?item.choice_groups:[];
+  const lines=[
+    '🍽 '+String(item.n||item.name||'Позиция'),
+    'ID: '+String(item.id),
+    'Категория: '+String(section?.name||item.c||item.category||'—'),
+    'Цена: '+Number(item.p??item.price??0)+' ₽',
+    'В меню: '+(item.active===false?'нет':'да'),
+    'В наличии: '+(item.available===false?'нет':'да'),
+    'Карточка: '+String(item.display||'auto'),
+    'Главная: '+(item.featured===true?'да':'нет'),
+    'Бейдж: '+String(item.badge||'—'),
+    'Количество: '+Math.max(1,Number(item.min_qty)||1)+'–'+Math.max(1,Number(item.max_qty)||50),
+    'Групп выбора: '+groups.length
+  ];
+  if(item.d||item.description)lines.push('Описание: '+String(item.d||item.description));
+  for(const g of groups){
+    const opts=Array.isArray(g.options)?g.options:[];
+    lines.push('• '+String(g.name||'Выбор')+' · '+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
+  }
+  return lines.join('\n');
+}
 
 function menuLine(x){
   return (x.active===false?'○ ':'● ')+String(x.n||x.name||'Позиция')+' · '+Number(x.p??x.price??0)+' ₽ · '+String(x.c||x.category||'');
@@ -301,9 +325,22 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return clean(q.rows[0]?.establishment_id);
   }
   async function setContext(userId,est){
-    await DB.query('INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,updated_at) VALUES($1,$2,NOW()) '+
-      'ON CONFLICT(telegram_user_id) DO UPDATE SET establishment_id=EXCLUDED.establishment_id,updated_at=NOW()',
+    await DB.query('INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,selected_item_id,selected_group_id,updated_at) VALUES($1,$2,NULL,NULL,NOW()) '+
+      'ON CONFLICT(telegram_user_id) DO UPDATE SET '+
+      'selected_item_id=CASE WHEN shaurma_owner_command_context.establishment_id=EXCLUDED.establishment_id THEN shaurma_owner_command_context.selected_item_id ELSE NULL END,'+
+      'selected_group_id=CASE WHEN shaurma_owner_command_context.establishment_id=EXCLUDED.establishment_id THEN shaurma_owner_command_context.selected_group_id ELSE NULL END,'+
+      'establishment_id=EXCLUDED.establishment_id,updated_at=NOW()',
       [String(userId),est]);
+  }
+  async function editorContext(userId){
+    const q=await DB.query('SELECT establishment_id,selected_item_id,selected_group_id FROM shaurma_owner_command_context WHERE telegram_user_id=$1',[String(userId)]);
+    return q.rows[0]||{};
+  }
+  async function selectItemContext(userId,itemId){
+    await DB.query('UPDATE shaurma_owner_command_context SET selected_item_id=$2,selected_group_id=NULL,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),String(itemId||'')]);
+  }
+  async function selectGroupContext(userId,groupId){
+    await DB.query('UPDATE shaurma_owner_command_context SET selected_group_id=$2,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),String(groupId||'')]);
   }
 
   function chooseByQuery(accesses,query){

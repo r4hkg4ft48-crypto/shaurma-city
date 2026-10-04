@@ -117,6 +117,44 @@ function normalizeMenu(input){
     choice_groups:normalizeChoiceGroups(x.choice_groups||x.options||[])
   })).map(x=>({...x,max_qty:Math.max(x.min_qty,x.max_qty)})).filter(x=>x.id&&x.n);
 }
+function priceMenuItem(src,payload={}){
+  if(!src||typeof src!=='object')return {error:'item_not_in_menu'};
+  if(src.available===false)return {error:'item_unavailable',item_id:String(src.id||'')};
+  const q=Math.floor(Number(payload.q)||1);
+  const minQty=Math.max(1,Math.min(50,Math.floor(Number(src.min_qty)||1)));
+  const maxQty=Math.max(minQty,Math.min(50,Math.floor(Number(src.max_qty)||50)));
+  if(q<minQty||q>maxQty)return {error:'invalid_quantity',item_id:String(src.id||''),min_qty:minQty,max_qty:maxQty};
+  const base=Number(src.p??src.price);
+  if(!Number.isFinite(base)||base<0)return {error:'invalid_price',item_id:String(src.id||'')};
+  let price=base;
+  const details=[];
+  const rawChoices=payload.choices&&typeof payload.choices==='object'&&!Array.isArray(payload.choices)?payload.choices:{};
+  const choices={};
+  const groups=normalizeChoiceGroups(src.choice_groups||src.options||[]).filter(g=>g.active!==false);
+  for(const group of groups){
+    const options=(group.options||[]).filter(o=>o&&o.active!==false);
+    const optionMap=new Map(options.map(o=>[String(o.id),o]));
+    let selected=rawChoices[String(group.id)];
+    selected=Array.isArray(selected)?selected:(selected?[selected]:[]);
+    selected=[...new Set(selected.map(String))];
+    if(group.type==='single'&&selected.length>1)return {error:'too_many_choices',item_id:String(src.id||''),group_id:group.id};
+    const min=Math.max(group.required?1:0,Math.floor(Number(group.min)||0));
+    const max=group.type==='single'?1:Math.max(min,Math.floor(Number(group.max)||Math.max(1,options.length)));
+    if(selected.length<min||selected.length>max)return {error:'invalid_choice_count',item_id:String(src.id||''),group_id:group.id,min,max};
+    const picked=[];
+    for(const optionId of selected){
+      const option=optionMap.get(optionId);
+      if(!option)return {error:'invalid_choice',item_id:String(src.id||''),group_id:group.id,option_id:optionId};
+      price+=Number(option.price_delta)||0;
+      picked.push(option);
+    }
+    if(selected.length)choices[String(group.id)]=selected;
+    if(picked.length)details.push(String(group.name||'Выбор')+': '+picked.map(o=>String(o.name)+(Number(o.price_delta)?' ('+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽)':'')).join(', '));
+  }
+  if(!Number.isFinite(price)||price<0)return {error:'invalid_price',item_id:String(src.id||'')};
+  return {item:{id:String(src.id),n:String(src.n||src.name||'Позиция'),p:Math.round(price),q,detail:details.join(' · ').slice(0,500),choices}};
+}
+
 const LEGACY_LEPESH_BUILDER={
   title:'Собери свою шаурму',
   subtitle:'Выбери основу, лаваш, мясо, соусы и добавки',
@@ -255,4 +293,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeChoiceGroups,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeChoiceGroups,normalizeMenu,priceMenuItem,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

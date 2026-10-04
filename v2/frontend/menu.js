@@ -608,12 +608,12 @@
     const src=(ctx?.venue?.menu||[]).find(x=>x.active!==false&&String(x.id)===itemId);
     if(!src){toast('Эта позиция больше недоступна');return}
     const needsChoices=activeChoiceGroups(src).length>0;
-    add(itemId);
-    if(needsChoices)return;
     try{
       const u=new URL(location.href);u.searchParams.delete('quick_item');u.searchParams.delete('quick_checkout');
       history.replaceState({},'',u.toString());
     }catch{}
+    add(itemId);
+    if(needsChoices)return;
     openSheet('checkoutSheet');
     tg?.HapticFeedback?.notificationOccurred?.('success');
   }

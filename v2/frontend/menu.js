@@ -447,14 +447,14 @@
     };
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
-      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
-      const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
-      return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
-        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
+      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||''),available=x.available!==false;
+      const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther',hasChoices=activeChoiceGroups(x).length>0;
+      return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+(available?'':' unavailable')+'">'+
+        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(!available?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
           '<p>'+esc(description)+'</p>'+
-          '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
+          '<div class="foodRow"><b>'+(hasChoices?'от ':'')+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'" '+(available?'':'disabled')+'>'+(available?(hasChoices?'Выбрать':'+'):'×')+'</button></div>'+
         '</div></article>';
     };
 
@@ -480,7 +480,7 @@
             '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
             '<h3>'+esc(featureName)+'</h3>'+
             '<p>'+esc(featureDesc)+'</p>'+
-            '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
+            '<div class="menuFeatureBottom"><b>'+(activeChoiceGroups(feature).length?'от ':'')+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'" '+(feature.available===false?'disabled':'')+'>'+(feature.available===false?'Нет в наличии':'Добавить <span>＋</span>')+'</button></div>'+
           '</div>'+
           '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
         '</article>';
@@ -511,7 +511,7 @@
     $('#checkoutBtn').disabled=!count;$('#placeOrder').disabled=!count;
     $('#cartItems').innerHTML=count?cart.map(x=>'<div class="cartItem"><div class="cartItemCopy"><b>'+esc(x.n)+'</b>'+
       (x.detail?'<small>'+esc(x.detail)+'</small>':'<small>'+money(x.p)+' за шт.</small>')+
-      '</div><div class="qty"><button data-minus="'+esc(x.id)+'">−</button><b>'+x.q+'</b><button data-plus="'+esc(x.id)+'">+</button></div></div>').join('')
+      '</div><div class="qty"><button data-minus="'+esc(x.cart_key||x.id)+'">−</button><b>'+x.q+'</b><button data-plus="'+esc(x.cart_key||x.id)+'">+</button></div></div>').join('')
       :'<div class="empty">Корзина пуста</div>';
     $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }
@@ -667,7 +667,7 @@
     const btn=$('#placeOrder');btn.disabled=true;
     const {total}=cartStats();
     try{
-      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.builderData?{builder:x.builderData}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
+      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.choices?{choices:x.choices}:{}),...(x.builderData?{builder:x.builderData}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
       if(!session&&tg?.initData)body.telegram_init_data=tg.initData;
       const headers={'Content-Type':'application/json'};if(session)headers.Authorization='Bearer '+session;
       const r=await fetch(api+'/orders',{method:'POST',headers,body:JSON.stringify(body)}),j=await r.json().catch(()=>({}));

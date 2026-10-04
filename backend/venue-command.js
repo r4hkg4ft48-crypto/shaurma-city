@@ -363,6 +363,16 @@ function menuLine(x){
 function orderLine(o){
   return '• #'+o.id+' · '+String(o.order_number||'')+' · '+(STATUS_LABELS[o.status]||o.status)+' · '+Number(o.total||0)+' ₽';
 }
+function builderGroupKey(v){
+  const s=norm(v);
+  if(/формат|тип/.test(s))return 'types';
+  if(/лаваш/.test(s))return 'breads';
+  if(/мяс/.test(s))return 'meats';
+  if(/соус/.test(s))return 'sauces';
+  if(/добав/.test(s))return 'extras';
+  return '';
+}
+function builderGroupLabel(key){return ({types:'Форматы',breads:'Лаваш',meats:'Мясо',sauces:'Соусы',extras:'Добавки'})[key]||key}
 
 function createVenueCommandBus({DB,publishVenue,pushOwner}){
   async function accessesFor(userId){
@@ -456,6 +466,15 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     if(q.rows[0])publishVenue(q.rows[0]);
     await audit(access.establishment_id,userId,action,payload);
     return q.rows[0];
+  }
+  async function saveBuilder(access,userId,config,builder,action,payload={}){
+    const normalized=D.normalizeBuilderConfig(builder||{});
+    const next={...(config||{}),builder:normalized};
+    const q=await DB.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
+      [access.establishment_id,JSON.stringify(next)]);
+    if(q.rows[0])publishVenue(q.rows[0]);
+    await audit(access.establishment_id,userId,action,payload);
+    return {row:q.rows[0],builder:normalized,config:next};
   }
 
   async function handle({user,text}){
@@ -794,6 +813,55 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       if(q.rows[0])publishVenue(q.rows[0]);
       await audit(access.establishment_id,user.id,'assistant_builder_toggle',{enabled:command.enabled});
       return {handled:true,text:'✅ Конструктор — '+(command.enabled?'включён':'выключен')+'.'};
+    }
+
+    if(['builder_show','builder_option_add','builder_option_delete','builder_option_price','builder_option_rename','builder_limit','builder_title','builder_subtitle'].includes(command.intent)){
+      let builder=D.normalizeBuilderConfig(config.builder||{});
+      if(command.intent==='builder_show'){
+        const lines=['🧩 Конструктор · '+(config.builder_enabled===true?'включён':'выключен'),'Название: '+builder.title,'Описание: '+builder.subtitle];
+        for(const key of ['types','breads','meats','sauces','extras']){
+          lines.push('',builderGroupLabel(key)+':');
+          lines.push(...((builder[key]||[]).map(o=>'• '+o.name+' · '+Number(o.price||0)+' ₽')||[]));
+        }
+        lines.push('','Соусы: '+builder.min_sauces+'–'+builder.max_sauces,'Добавки: до '+builder.max_extras);
+        return {handled:true,text:lines.join('\n').slice(0,3900)};
+      }
+
+      if(command.intent==='builder_title'||command.intent==='builder_subtitle'){
+        builder={...builder,[command.intent==='builder_title'?'title':'subtitle']:command.value};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_'+command.intent,{value:command.value});
+        return {handled:true,text:'✅ '+(command.intent==='builder_title'?'Название':'Описание')+' конструктора обновлено: '+(command.value||'')};
+      }
+
+      if(command.intent==='builder_limit'){
+        builder={...builder,[command.field]:Math.max(0,Math.floor(Number(command.value)||0))};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_builder_limit',{field:command.field,value:command.value});
+        const b=saved.builder;
+        return {handled:true,text:'✅ Лимиты конструктора: соусы '+b.min_sauces+'–'+b.max_sauces+', добавки до '+b.max_extras};
+      }
+
+      const key=builderGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял раздел конструктора. Используйте: формат, лаваш, мясо, соус или добавка.'};
+      const list=Array.isArray(builder[key])?builder[key].map(x=>({...x})):[];
+      if(command.intent==='builder_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        list.push({id,name:command.name,price:Math.max(0,Math.min(100000,Math.round(Number(command.price)||0)))});
+        builder={...builder,[key]:list};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_builder_option_add',{group:key,option_id:id,name:command.name,price:command.price});
+        return {handled:true,text:'✅ '+builderGroupLabel(key)+': добавлено «'+command.name+'» · '+Number(command.price||0)+' ₽'};
+      }
+      const found=findNamed(list,command.option,x=>x.name);
+      if(!found.item){
+        const hint=found.matches.length?'\nВозможно:\n'+found.matches.map(x=>'• '+x.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл «'+command.option+'» в разделе '+builderGroupLabel(key)+'.'+hint};
+      }
+      const option=found.item;
+      if(command.intent==='builder_option_delete')builder={...builder,[key]:list.filter(x=>String(x.id)!==String(option.id))};
+      if(command.intent==='builder_option_price'){option.price=Math.max(0,Math.min(100000,Math.round(Number(command.price)||0)));builder={...builder,[key]:list}}
+      if(command.intent==='builder_option_rename'){option.name=command.name;builder={...builder,[key]:list}}
+      const saved=await saveBuilder(access,user.id,config,builder,'assistant_'+command.intent,{group:key,option_id:option.id});
+      const label=command.intent==='builder_option_delete'?'удалено':command.intent==='builder_option_price'?'цена '+option.price+' ₽':'переименовано в '+option.name;
+      return {handled:true,text:'✅ '+builderGroupLabel(key)+': «'+String(option.name)+'» — '+label+'.'};
     }
 
     if(['venue_name','venue_address','venue_hours','venue_description','venue_phone','venue_website','delivery_toggle','pickup_toggle'].includes(command.intent)){

@@ -5,7 +5,11 @@ const rt=require('../v2/backend/src/realtime');
 
 const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
 const PERMISSION_BY_INTENT={
-  menu_show:'menu',menu_price:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
+  menu_show:'menu',menu_price:'menu',menu_price_context:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
+  menu_item_select:'menu',menu_item_show:'menu',menu_available:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',
+  menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
+  choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
+  choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
   category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',builder_toggle:'menu',
   venue_show:'profile',venue_name:'profile',venue_address:'profile',venue_hours:'profile',venue_description:'profile',
   venue_phone:'profile',venue_website:'profile',delivery_toggle:'profile',pickup_toggle:'profile',
@@ -61,6 +65,82 @@ function parseCommand(text){
   if(/^(?:покажи|дай)\s+(?:настройки|точку|заведение)$/i.test(raw)||/^(?:настройки точки|информация о точке)$/i.test(raw))return {intent:'venue_show'};
   if(/^(?:покажи|дай)\s+(?:активные\s+)?заказы$/i.test(raw)||/^(?:активные )?заказы$/i.test(raw))return {intent:'orders_show'};
   if(/^(?:покажи|дай)\s+статистику$/i.test(raw)||/^статистика$/i.test(raw))return {intent:'stats_show'};
+
+  m=raw.match(/^\/item\s+(.+)$/i)||
+    raw.match(/^(?:работаем с|работать с|настрой|настраиваем|редактируй|редактируем|открой)\s+(?:позицию|блюдо|товар)?\s*(.+)$/i);
+  if(m)return {intent:'menu_item_select',item:clean(m[1])};
+
+  m=raw.match(/^(?:покажи|дай)\s+(?:настройки\s+)?(?:позиции|блюда|товара)\s+(.+)$/i);
+  if(m)return {intent:'menu_item_show',item:clean(m[1])};
+  if(/^(?:покажи|дай)\s+(?:настройки\s+)?(?:позиции|блюда|товара)$/i.test(raw)||/^(?:что у позиции|настройки позиции)$/i.test(raw))return {intent:'menu_item_show'};
+
+  m=raw.match(/^(?:нет в наличии|закончил(?:ся|ась|ось)|стоп)\s*(?:позиция|блюдо|товар)?\s*(.*)$/i);
+  if(m)return {intent:'menu_available',item:clean(m[1]),available:false};
+  m=raw.match(/^(?:верни|вернуть|есть)\s*(?:позицию|блюдо|товар)?\s*(.*?)\s*(?:в наличие|в продажу|в меню)?$/i);
+  if(m&&clean(m[1]))return {intent:'menu_available',item:clean(m[1]),available:true};
+  if(/^(?:верни в наличие|снова в наличии|есть в наличии)$/i.test(raw))return {intent:'menu_available',available:true};
+
+  m=raw.match(/^(?:цена|поставь цену|измени цену|поменяй цену)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);
+  if(m)return {intent:'menu_price_context',price:money(m[1])};
+
+  m=raw.match(/^(?:бейдж|метка|ярлык)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_badge',value:clean(m[1])};
+  if(/^(?:убери|удали|очисти)\s+(?:бейдж|метку|ярлык)$/i.test(raw))return {intent:'menu_badge',value:''};
+
+  if(/^(?:сделай|поставь)\s+(?:ее|его|позицию)?\s*(?:главной|главным|в главное)$/i.test(s)||/^главная позиция$/i.test(raw))return {intent:'menu_featured',enabled:true};
+  if(/^(?:убери|сними)\s+(?:ее|его|позицию)?\s*(?:из главных|с главной)$/i.test(s))return {intent:'menu_featured',enabled:false};
+
+  m=raw.match(/^(?:вид|отображение|карточка)\s+(главная|крупная|компактная|обычная|авто)$/i);
+  if(m)return {intent:'menu_display',display:/главн|крупн/i.test(m[1])?'main':/компакт/i.test(m[1])?'compact':'auto'};
+
+  m=raw.match(/^перенеси\s+(.+?)\s+в\s+(?:категори[юя]\s+)?(.+)$/i);
+  if(m)return {intent:'menu_category_move',item:clean(m[1]),category:clean(m[2])};
+  m=raw.match(/^(?:перенеси|перемести)\s+(?:в\s+)?(?:категори[юя]\s+)?(.+)$/i);
+  if(m)return {intent:'menu_category_move',category:clean(m[1])};
+
+  m=raw.match(/^(?:удали|удалить)\s+(?:позицию|блюдо|товар)\s+(.+)$/i);
+  if(m)return {intent:'menu_delete',item:clean(m[1])};
+  if(/^(?:удали|удалить)\s+(?:эту\s+)?(?:позицию|блюдо|товар)$/i.test(raw))return {intent:'menu_delete'};
+
+  m=raw.match(/^(?:дублируй|дублировать|скопируй|копия)\s+(?:позицию|блюдо|товар)?\s*(.*)$/i);
+  if(m)return {intent:'menu_duplicate',item:clean(m[1])};
+
+  m=raw.match(/^(?:минимум|min)\s+(?:по\s+)?(\d+)\s*(?:шт|штук)?$/i);
+  if(m)return {intent:'menu_qty',field:'min_qty',value:Number(m[1])};
+  m=raw.match(/^(?:максимум|max)\s+(?:по\s+)?(\d+)\s*(?:шт|штук)?$/i);
+  if(m)return {intent:'menu_qty',field:'max_qty',value:Number(m[1])};
+
+  m=raw.match(/^(?:добавь|создай)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_add',name:clean(m[1])};
+  m=raw.match(/^(?:работаем с|открой|выбери)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_select',group:clean(m[1])};
+  m=raw.match(/^(?:удали|убери)\s+(?:выбор|группу|параметр)\s*(.*)$/i);
+  if(m)return {intent:'choice_group_delete',group:clean(m[1])};
+
+  if(/^(?:сделай\s+)?(?:выбор\s+)?обязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:true};
+  if(/^(?:сделай\s+)?(?:выбор\s+)?необязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:false};
+  if(/^(?:один вариант|только один|одиночный выбор)$/i.test(raw))return {intent:'choice_group_type',type:'single'};
+  if(/^(?:можно несколько|несколько вариантов|множественный выбор)$/i.test(raw))return {intent:'choice_group_type',type:'multiple'};
+  m=raw.match(/^(?:можно выбрать|максимум)\s+(?:до\s+)?(\d+)$/i);
+  if(m)return {intent:'choice_group_limit',field:'max',value:Number(m[1])};
+  m=raw.match(/^(?:нужно выбрать|минимум)\s+(?:хотя бы\s+)?(\d+)$/i);
+  if(m)return {intent:'choice_group_limit',field:'min',value:Number(m[1])};
+
+  m=raw.match(/^(?:добавь|создай)\s+(?:вариант|опцию)\s+(.+?)(?:\s+([+-]\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?)?$/i);
+  if(m)return {intent:'choice_option_add',name:clean(m[1]),price_delta:m[2]?Number(String(m[2]).replace(',','.')):0};
+  m=raw.match(/^(?:цена|доплата)\s+(?:варианта|опции)\s+(.+?)\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  if(m)return {intent:'choice_option_price',option:clean(m[1]),price_delta:Number(String(m[2]).replace(',','.'))};
+  m=raw.match(/^(?:выключи|скрой|стоп)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_toggle',option:clean(m[1]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_toggle',option:clean(m[1]),enabled:true};
+  m=raw.match(/^(?:удали|убери)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_delete',option:clean(m[1])};
+  m=raw.match(/^переименуй\s+(?:вариант|опцию)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'choice_option_rename',option:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:сделай|поставь)\s+(?:вариант|опцию)\s+(.+?)\s+(?:по умолчанию|дефолтной)$/i);
+  if(m)return {intent:'choice_option_default',option:clean(m[1])};
+
 
   m=raw.match(/^(?:поставь\s+)?цен[ау]\s+(?:на\s+)?(.+?)\s+(?:в\s+|на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i)||
     raw.match(/^(?:измени|поменяй|установи)\s+цен[ау]\s+(?:на\s+)?(.+?)\s+(?:на|до)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);

@@ -736,6 +736,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'Не нашёл позицию «'+command.item+'».'+hint};
       }
       const item=found.item;
+      await selectItemContext(user.id,item.id);
       if(command.intent==='menu_price'){
         const old=Number(item.p??item.price??0);item.p=command.price;
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_price',{item_id:item.id,old_price:old,new_price:command.price});
@@ -768,7 +769,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       const id=slug(command.name)+'_'+Date.now().toString(36).slice(-5);
       menu.push({id,n:command.name,c:category.id,d:command.description||'',p:command.price,image:'',badge:'',featured:false,display:'auto',image_fit:'cover',active:true});
       await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_add',{item_id:id,name:command.name,category:category.id,price:command.price});
-      return {handled:true,text:'✅ Добавлено: <b>'+command.name+'</b>\nКатегория: '+category.name+'\nЦена: '+command.price+' ₽'};
+      await selectItemContext(user.id,id);
+      return {handled:true,text:'✅ Добавлено: <b>'+command.name+'</b>\nКатегория: '+category.name+'\nЦена: '+command.price+' ₽\nТеперь работаем с этой позицией.'};
     }
 
     if(command.intent==='category_add'){

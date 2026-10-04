@@ -252,6 +252,50 @@ async function ensureSchema(){
       );
     });
   }
+  const generatedPhotoMigration='default_menu_generated_photos_v1';
+  const photoApplied=await db.query('SELECT migration_key FROM shaurma_migrations WHERE migration_key=$1',[generatedPhotoMigration]);
+  if(!photoApplied.rows[0]){
+    const seed=D.defaultMenuSeed(),seedItems=new Map(seed.menu.map(x=>[String(x.id),x])),seedSections=new Map(seed.sections.map(x=>[String(x.id),x]));
+    await db.tx(async client=>{
+      const venues=await client.query('SELECT establishment_id,menu,config FROM shaurma_venues');
+      for(const row of venues.rows){
+        let changed=false;
+        const nextMenu=(Array.isArray(row.menu)?row.menu:[]).map(item=>{
+          const ref=seedItems.get(String(item?.id||''));if(!ref)return item;
+          const next={...item};
+          const currentImage=String(next.image||'');
+          if(!currentImage||currentImage.includes('images.unsplash.com')){next.image=ref.image;changed=true}
+          if(!Array.isArray(next.gallery)||!next.gallery.length){next.gallery=ref.gallery;changed=true}
+          if(next.options&&ref.options){
+            next.options={...next.options};
+            for(const group of ['meats','sizes','bases','sauces','extras']){
+              if(!Array.isArray(next.options[group])||!Array.isArray(ref.options[group]))continue;
+              next.options[group]=next.options[group].map(opt=>{
+                const ro=ref.options[group].find(x=>String(x.id)===String(opt?.id)||String(x.name).toLowerCase()===String(opt?.name||'').toLowerCase());
+                if(!ro||String(opt?.image||''))return opt;changed=true;return {...opt,image:ro.image};
+              });
+            }
+          }
+          return next;
+        });
+        const cfg=row.config&&typeof row.config==='object'?{...row.config}:{};
+        const rawSections=Array.isArray(cfg.menu_sections)?cfg.menu_sections:[];
+        const nextSections=rawSections.map(section=>{
+          const ref=seedSections.get(String(section?.id||''));if(!ref)return section;
+          const next={...section},cover=String(next.cover||'');
+          if(!cover||cover.includes('images.unsplash.com')){next.cover=ref.cover;changed=true}
+          if(!Array.isArray(next.gallery)||!next.gallery.length){next.gallery=ref.gallery;changed=true}
+          if(next.inherit_template===undefined){next.inherit_template=true;changed=true}
+          return next;
+        });
+        if(changed){
+          cfg.menu_sections=nextSections;
+          await client.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1',[row.establishment_id,JSON.stringify(nextMenu),JSON.stringify(cfg)]);
+        }
+      }
+      await client.query("INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb) ON CONFLICT(migration_key) DO NOTHING",[generatedPhotoMigration,JSON.stringify({mode:'preserve-custom-photos',assets:'generated-menu-crops'})]);
+    });
+  }
   await require('./realcity-studio').ensureSchema(db);
 }
 module.exports={ensureSchema};

@@ -271,9 +271,10 @@ async function handleKitchenMenuPhoto(msg){
   const chatId=msg?.chat?.id,user=msg?.from;if(!chatId||!user?.id)return;
   try{
     const caption=String(msg.caption||'').trim();
-    const m=caption.match(/(?:фото|картинк[ау]|изображение)\s+(?:для|на)\s+(.+)/i);
+    const galleryMode=/галере/i.test(caption);
+    const m=caption.match(/(?:фото|картинк[ау]|изображение)(?:\s+в\s+галерею)?\s+(?:для|на)\s+(.+)/i);
     const image=await downloadKitchenMenuPhoto(msg);
-    const result=await venueCommandBus.setItemImage({user,itemQuery:m?String(m[1]||'').trim():'',image});
+    const result=await venueCommandBus.setItemImage({user,itemQuery:m?String(m[1]||'').trim():'',image,galleryMode});
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:String(result?.text||'Фото обработано.').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900)});
   }catch(e){
     console.error('kitchen menu photo',e.message);

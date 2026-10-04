@@ -607,7 +607,9 @@
     if(!itemId||qs.get('quick_checkout')!=='1')return;
     const src=(ctx?.venue?.menu||[]).find(x=>x.active!==false&&String(x.id)===itemId);
     if(!src){toast('Эта позиция больше недоступна');return}
+    const needsChoices=activeChoiceGroups(src).length>0;
     add(itemId);
+    if(needsChoices)return;
     try{
       const u=new URL(location.href);u.searchParams.delete('quick_item');u.searchParams.delete('quick_checkout');
       history.replaceState({},'',u.toString());
@@ -671,7 +673,7 @@
       if(!session&&tg?.initData)body.telegram_init_data=tg.initData;
       const headers={'Content-Type':'application/json'};if(session)headers.Authorization='Bearer '+session;
       const r=await fetch(api+'/orders',{method:'POST',headers,body:JSON.stringify(body)}),j=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(j.error==='phone_required'?'Укажите телефон':j.error==='address_required'?'Укажите адрес':j.error||'Не удалось оформить заказ');
+      if(!r.ok)throw new Error(j.error==='phone_required'?'Укажите телефон':j.error==='address_required'?'Укажите адрес':j.error==='item_unavailable'?'Одна из позиций уже закончилась':j.error==='invalid_choice_count'||j.error==='invalid_choice'?'Проверьте выбранные параметры позиции':j.error||'Не удалось оформить заказ');
       $('#successNumber').textContent=j.order_number||'Заказ принят';
       $('#successVenue').textContent=(ctx?.venue?.name||'Заведение')+(ctx?.marker?.address?' · '+ctx.marker.address:'');
       $('#successTotal').textContent=money(j.total??total);
@@ -710,9 +712,26 @@
     const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
     const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
   };
+  $('#itemOptionGroups').onclick=e=>{
+    const b=e.target.closest('[data-choice-option]');if(!b||!pendingItem)return;
+    const group=activeChoiceGroups(pendingItem).find(g=>String(g.id)===String(b.dataset.group));if(!group)return;
+    const id=String(b.dataset.choiceOption),current=Array.isArray(itemChoiceState[group.id])?[...itemChoiceState[group.id]]:[];
+    const max=group.type==='single'?1:Math.max(1,Number(group.max)||group.options.length);
+    if(group.type==='single')itemChoiceState[group.id]=current.includes(id)?[]:[id];
+    else if(current.includes(id))itemChoiceState[group.id]=current.filter(x=>x!==id);
+    else if(current.length>=max)toast('Можно выбрать максимум '+max);else itemChoiceState[group.id]=[...current,id];
+    renderItemOptions();
+  };
+  $('#confirmItemOptions').onclick=confirmItemOptions;
   $('#cartItems').onclick=e=>{
-    let b=e.target.closest('[data-plus]');if(b){const x=cart.find(x=>x.id===b.dataset.plus);if(x){x.q++;save()}return}
-    b=e.target.closest('[data-minus]');if(b){const x=cart.find(x=>x.id===b.dataset.minus);if(x&&--x.q<=0)cart=cart.filter(v=>v!==x);save()}
+    let b=e.target.closest('[data-plus]');if(b){
+      const x=cart.find(x=>String(x.cart_key||x.id)===b.dataset.plus);
+      if(x){const max=Math.max(Number(x.min_qty)||1,Number(x.max_qty)||50);if(x.q>=max)toast('Максимум '+max+' шт.');else{x.q++;save()}}return
+    }
+    b=e.target.closest('[data-minus]');if(b){
+      const x=cart.find(x=>String(x.cart_key||x.id)===b.dataset.minus);
+      if(x){const min=Math.max(1,Number(x.min_qty)||1);if(x.q<=min)cart=cart.filter(v=>v!==x);else x.q--;save()}
+    }
   };
   $('#openBuilder').onclick=()=>openBuilder('custom');
   $('#openSignatureBuilder').onclick=()=>openBuilder('signature');

@@ -232,7 +232,7 @@ function menuOptionList(input,limit=40){
 function defaultMenuCategories(){
   return MENU_CATEGORY_DEFAULTS.map((x,i)=>({
     id:x.id,name:x.name,emoji:x.emoji,subtitle:'',active:true,order:i,cover:defaultItemImage(x.id,1),
-    gallery:Array.from({length:Math.min(5,DEFAULT_ITEM_IMAGE_COUNTS[x.id]||1)},(_,j)=>defaultItemImage(x.id,j+1)),
+    gallery:[],
     color:'#0B2945',accent:'#FF463D',inherit_template:true,manual_sort:true,
     settings:{...x.settings}
   }));
@@ -289,9 +289,9 @@ function defaultMenuSeed(){
   const menu=MENU_ITEM_DEFAULTS.map((row,i)=>{
     const [c,n,d,p]=row,countersN=(counters[c]=(counters[c]||0)+1),section=sectionMap.get(c);
     const settings=section?.settings||{};
-    const mk=(list,group)=>menuOptionList((list||[]).map((name,j)=>({name,price:0,default:j===0,image:defaultOptionImage(group,name,c)})));
+    const mk=(list,group)=>menuOptionList((list||[]).map((name,j)=>({name,price:0,default:j===0,image:''})));
     return {
-      id:c+'_'+String(countersN).padStart(2,'0'),n,c,d,p,image:defaultItemImage(c,countersN),gallery:[defaultItemImage(c,countersN)],badge:'',
+      id:c+'_'+String(countersN).padStart(2,'0'),n,c,d,p,image:defaultItemImage(c,countersN),gallery:[],badge:'',
       featured:countersN===1,display:countersN===1?'main':'auto',image_fit:'cover',active:true,weight:'',
       sku:(c.slice(0,3)+'-'+String(countersN).padStart(3,'0')).toUpperCase(),stock:null,schedule:{enabled:false,days:[],from:'',to:''},
       tags:[section?.name||c],card_color:'#FFFFFF',recommended:countersN===1,

@@ -358,45 +358,19 @@ router.post('/orders',async(req,res)=>{
     const menu=new Map(ctx.venue.menu.filter(x=>x.active!==false).map(x=>[String(x.id),x]));
     const normalized=[];
     for(const i of items){
-      let q=Math.max(1,Math.min(50,Math.floor(Number(i.q)||1)));
+      const q=Math.max(1,Math.min(50,Math.floor(Number(i.q)||1)));
       if(i.builder){
         const built=D.priceBuilder(ctx.venue.config,i.builder);
         if(!built)return res.status(400).json({error:'invalid_builder_selection'});
         normalized.push({...built,q});continue;
       }
       const src=menu.get(String(i.id));if(!src)return res.status(400).json({error:'item_not_in_menu',item_id:i.id});
-      if(src.available===false)return res.status(409).json({error:'item_unavailable',item_id:i.id});
-      const minQty=Math.max(1,Math.min(50,Math.floor(Number(src.min_qty)||1)));
-      const maxQty=Math.max(minQty,Math.min(50,Math.floor(Number(src.max_qty)||50)));
-      if(q<minQty||q>maxQty)return res.status(400).json({error:'invalid_quantity',item_id:i.id,min_qty:minQty,max_qty:maxQty});
-      const base=Number(src.p??src.price);
-      if(!Number.isFinite(base)||base<0)return res.status(400).json({error:'invalid_price'});
-      let p=base;
-      const details=[];
-      const choicePayload=i.choices&&typeof i.choices==='object'&&!Array.isArray(i.choices)?i.choices:{};
-      const groups=Array.isArray(src.choice_groups)?src.choice_groups.filter(g=>g&&g.active!==false):[];
-      for(const group of groups){
-        const options=Array.isArray(group.options)?group.options.filter(o=>o&&o.active!==false):[];
-        const optionMap=new Map(options.map(o=>[String(o.id),o]));
-        let selected=choicePayload[String(group.id)];
-        selected=Array.isArray(selected)?selected:[...(selected? [selected]:[])];
-        selected=[...new Set(selected.map(String))];
-        if(group.type==='single'&&selected.length>1)return res.status(400).json({error:'too_many_choices',item_id:i.id,group_id:group.id});
-        const min=Math.max(group.required?1:0,Math.floor(Number(group.min)||0));
-        const max=group.type==='single'?1:Math.max(min,Math.floor(Number(group.max)||Math.max(1,options.length)));
-        if(selected.length<min||selected.length>max)return res.status(400).json({error:'invalid_choice_count',item_id:i.id,group_id:group.id,min,max});
-        const picked=[];
-        for(const optionId of selected){
-          const option=optionMap.get(optionId);
-          if(!option)return res.status(400).json({error:'invalid_choice',item_id:i.id,group_id:group.id,option_id:optionId});
-          const delta=Number(option.price_delta)||0;p+=delta;picked.push(option);
-        }
-        if(picked.length){
-          details.push(String(group.name||'Выбор')+': '+picked.map(o=>String(o.name)+(Number(o.price_delta)?' ('+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽)':'')).join(', '));
-        }
+      const priced=D.priceMenuItem(src,{q:i.q,choices:i.choices});
+      if(priced.error){
+        const status=priced.error==='item_unavailable'?409:400;
+        return res.status(status).json(priced);
       }
-      if(!Number.isFinite(p)||p<0)return res.status(400).json({error:'invalid_price'});
-      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p:Math.round(p),q,detail:details.join(' · ').slice(0,500),choices:choicePayload});
+      normalized.push(priced.item);
     }
     const fulfillment=req.body?.fulfillment_type==='cafe'?'cafe':'delivery';
     if(fulfillment==='delivery'&&!String(req.body?.phone||'').trim())return res.status(400).json({error:'phone_required'});

@@ -10,7 +10,7 @@ const PERMISSION_BY_INTENT={
   menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
   choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
-  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',
+  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',
   builder_toggle:'menu',builder_show:'menu',builder_option_add:'menu',builder_option_delete:'menu',builder_option_price:'menu',builder_option_rename:'menu',builder_limit:'menu',builder_title:'menu',builder_subtitle:'menu',
   venue_show:'profile',venue_name:'profile',venue_address:'profile',venue_hours:'profile',venue_description:'profile',
   venue_phone:'profile',venue_website:'profile',delivery_toggle:'profile',pickup_toggle:'profile',
@@ -199,6 +199,13 @@ function parseCommand(text){
   if(m)return {intent:'category_toggle',category:clean(m[1]),enabled:true};
   m=raw.match(/^переименуй\s+категори[юя]\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
   if(m)return {intent:'category_rename',category:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:удали|удалить)\s+категори[юя]\s+(.+)$/i);
+  if(m)return {intent:'category_delete',category:clean(m[1])};
+  m=raw.match(/^(?:эмодзи|иконка)\s+категории\s+(.+?)\s+(.+)$/i);
+  if(m)return {intent:'category_emoji',category:clean(m[1]),emoji:clean(m[2])};
+  m=raw.match(/^категория\s+(.+?)\s+(?:номер|позиция)\s+(\d+)$/i);
+  if(m)return {intent:'category_order',category:clean(m[1]),order:Number(m[2])};
+
 
   m=raw.match(/^(?:конструктор|сборка своей шаурмы)\s+(вкл|выкл|включи|выключи|включить|выключить)$/i);
   if(m)return {intent:'builder_toggle',enabled:boolWord(m[1])};
@@ -796,6 +803,28 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       sections.push(section);
       await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_add',{category_id:section.id,name:section.name});
       return {handled:true,text:'✅ Категория <b>'+section.name+'</b> добавлена.'};
+    }
+
+    if(command.intent==='category_delete'||command.intent==='category_emoji'||command.intent==='category_order'){
+      const found=findNamed(sections,command.category,x=>x.name||x.id);
+      if(!found.item)return {handled:true,text:'Не нашёл категорию «'+command.category+'».'};
+      const section=found.item;
+      if(command.intent==='category_delete'){
+        const used=menu.filter(x=>String(x.c||x.category||'')===String(section.id));
+        if(used.length)return {handled:true,text:'Категория «'+section.name+'» содержит '+used.length+' позиций. Сначала перенесите их в другую категорию или скройте категорию.'};
+        const nextSections=sections.filter(x=>String(x.id)!==String(section.id)).map((x,i)=>({...x,order:i}));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:nextSections},'assistant_category_delete',{category_id:section.id});
+        return {handled:true,text:'✅ Категория «'+section.name+'» удалена.'};
+      }
+      if(command.intent==='category_emoji'){
+        section.emoji=String(command.emoji||'').trim().slice(0,8);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_emoji',{category_id:section.id,emoji:section.emoji});
+        return {handled:true,text:'✅ Категория «'+section.name+'»: иконка '+(section.emoji||'убрана')};
+      }
+      const target=Math.max(1,Math.min(sections.length,Math.floor(Number(command.order)||1)))-1;
+      const current=sections.indexOf(section);sections.splice(current,1);sections.splice(target,0,section);sections.forEach((x,i)=>x.order=i);
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_order',{category_id:section.id,order:target});
+      return {handled:true,text:'✅ Категория «'+section.name+'» теперь №'+(target+1)+'.'};
     }
 
     if(command.intent==='category_toggle'||command.intent==='category_rename'){

@@ -76,3 +76,28 @@ test('matches Russian inflections and word order',()=>{
   assert.equal(findNamed(list,'айраном',x=>x.n).item.n,'Айран');
   assert.equal(findNamed(list,'шаурма',x=>x.n).item,null);
 });
+
+
+test('parses builder editing commands',()=>{
+  assert.deepEqual(parseCommand('покажи конструктор'),{intent:'builder_show'});
+  assert.deepEqual(parseCommand('добавь соус Сырный +30'),{intent:'builder_option_add',group:'соус',name:'Сырный',price:30});
+  assert.deepEqual(parseCommand('добавь мясо Говядина +100'),{intent:'builder_option_add',group:'мясо',name:'Говядина',price:100});
+  assert.deepEqual(parseCommand('цена соуса Сырный 50'),{intent:'builder_option_price',group:'соуса',option:'Сырный',price:50});
+  assert.deepEqual(parseCommand('максимум соусов 2'),{intent:'builder_limit',field:'max_sauces',value:2});
+  assert.deepEqual(parseCommand('максимум добавок 3'),{intent:'builder_limit',field:'max_extras',value:3});
+});
+
+test('parses category and media controls',()=>{
+  assert.deepEqual(parseCommand('удали категорию Десерты'),{intent:'category_delete',category:'Десерты'});
+  assert.deepEqual(parseCommand('эмодзи категории Напитки 🥤'),{intent:'category_emoji',category:'Напитки',emoji:'🥤'});
+  assert.deepEqual(parseCommand('категория Напитки номер 2'),{intent:'category_order',category:'Напитки',order:2});
+  assert.deepEqual(parseCommand('убери фото'),{intent:'menu_image_remove'});
+  assert.deepEqual(parseCommand('фото вписать'),{intent:'menu_image_fit',image_fit:'contain'});
+  assert.deepEqual(parseCommand('фото обрезать'),{intent:'menu_image_fit',image_fit:'cover'});
+});
+
+test('parses option group lifecycle',()=>{
+  assert.deepEqual(parseCommand('переименуй выбор Размер -> Размер порции'),{intent:'choice_group_rename',group:'Размер',name:'Размер порции'});
+  assert.deepEqual(parseCommand('выключи выбор Размер'),{intent:'choice_group_toggle',group:'Размер',enabled:false});
+  assert.deepEqual(parseCommand('включи выбор Размер'),{intent:'choice_group_toggle',group:'Размер',enabled:true});
+});

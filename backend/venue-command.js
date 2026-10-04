@@ -10,7 +10,7 @@ const PERMISSION_BY_INTENT={
   menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
   choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_rename:'menu',choice_group_toggle:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
-  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',
+  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',category_color:'menu',
   builder_toggle:'menu',builder_show:'menu',builder_option_add:'menu',builder_option_delete:'menu',builder_option_price:'menu',builder_option_rename:'menu',builder_limit:'menu',builder_title:'menu',builder_subtitle:'menu',
   venue_show:'profile',venue_name:'profile',venue_address:'profile',venue_hours:'profile',venue_description:'profile',
   venue_phone:'profile',venue_website:'profile',delivery_toggle:'profile',pickup_toggle:'profile',
@@ -261,6 +261,9 @@ function parseCommand(text){
   if(m)return {intent:'category_emoji',category:clean(m[1]),emoji:clean(m[2])};
   m=raw.match(/^категория\s+(.+?)\s+(?:номер|позиция)\s+(\d+)$/i);
   if(m)return {intent:'category_order',category:clean(m[1]),order:Number(m[2])};
+  m=raw.match(/^(цвет|акцент)\s+категории\s+(.+?)\s+(#[0-9A-Fa-f]{6})$/i);
+  if(m)return {intent:'category_color',field:/акцент/i.test(m[1])?'accent':'color',category:clean(m[2]),value:m[3].toUpperCase()};
+
 
 
   m=raw.match(/^(?:конструктор|сборка своей шаурмы)\s+(вкл|выкл|включи|выключи|включить|выключить)$/i);
@@ -935,7 +938,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       return {handled:true,text:'✅ Категория <b>'+section.name+'</b> добавлена.'};
     }
 
-    if(command.intent==='category_delete'||command.intent==='category_emoji'||command.intent==='category_order'){
+    if(command.intent==='category_delete'||command.intent==='category_emoji'||command.intent==='category_order'||command.intent==='category_color'){
       const found=findNamed(sections,command.category,x=>x.name||x.id);
       if(!found.item)return {handled:true,text:'Не нашёл категорию «'+command.category+'».'};
       const section=found.item;
@@ -950,6 +953,11 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         section.emoji=String(command.emoji||'').trim().slice(0,8);
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_emoji',{category_id:section.id,emoji:section.emoji});
         return {handled:true,text:'✅ Категория «'+section.name+'»: иконка '+(section.emoji||'убрана')};
+      }
+      if(command.intent==='category_color'){
+        section[command.field]=String(command.value||'').toUpperCase();
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_color',{category_id:section.id,field:command.field,value:section[command.field]});
+        return {handled:true,text:'✅ Категория «'+section.name+'»: '+(command.field==='accent'?'акцент':'цвет')+' '+section[command.field]};
       }
       const target=Math.max(1,Math.min(sections.length,Math.floor(Number(command.order)||1)))-1;
       const current=sections.indexOf(section);sections.splice(current,1);sections.splice(target,0,section);sections.forEach((x,i)=>x.order=i);
@@ -1180,7 +1188,22 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {handled:true,text:galleryMode?'✅ Фото добавлено в галерею «'+String(found.item.n||found.item.name)+'».':'✅ Главное фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
   }
 
-  return {handle,setItemImage};
+  async function setCategoryImage({user,categoryQuery,image}){
+    const resolved=await resolveAccess(user.id,{intent:'category_show'});
+    if(resolved.error)return {handled:true,text:resolved.error};
+    const access=resolved.access;
+    if(!canUse(access,'menu'))return {handled:true,text:'⛔️ У вас нет права menu для этой точки.'};
+    const venue=await loadVenue(access.establishment_id);if(!venue)return {handled:true,text:'Точка не найдена.'};
+    const menu=Array.isArray(venue.menu)?venue.menu.map(x=>({...x})):[];
+    const config=venue.config&&typeof venue.config==='object'?{...venue.config}:{};
+    const sections=sectionsFrom(config,menu),found=findNamed(sections,categoryQuery,x=>x.name||x.id);
+    if(!found.item)return {handled:true,text:'Не нашёл категорию «'+categoryQuery+'».'};
+    found.item.cover=String(image||'').slice(0,700000);
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_cover',{category_id:found.item.id});
+    return {handled:true,text:'✅ Обложка категории «'+found.item.name+'» обновлена.'};
+  }
+
+  return {handle,setItemImage,setCategoryImage};
 }
 
 module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

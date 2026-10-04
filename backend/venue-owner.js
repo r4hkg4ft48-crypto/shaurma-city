@@ -217,7 +217,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',disable_web_page_preview:true,...extra});
   }
   async function sendOwnerPlainMessage(chatId,text,extra={}){
-    const plain=String(text||'').replace(/<\/?(?:b|code)>/gi,'');
+    const plain=String(text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);
     return botApi('sendMessage',{chat_id:chatId,text:plain,disable_web_page_preview:true,...extra});
   }
   function ownerAppUrl(establishmentId='',tab='profile'){
@@ -645,7 +645,8 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
           await sendOwnerBotMessage(msg.chat.id,'Ключ не подошёл. Нужен действующий <code>OWN-XXXXXXXXXX</code>, который ещё не использован для подключения кабинета.');
         }
       }
-    }catch(e){console.error('Venue owner bot update:',e.message)}
+
+      await sendOwnerPlainMessage(msg.chat.id,'Не распознал команду. Напишите /assistant — покажу доступные команды управления заведением.');    }catch(e){console.error('Venue owner bot update:',e.message)}
   });
 
   app.get('/venue-owner',(req,res)=>{

@@ -67,26 +67,65 @@ function markerStyle(value={}){
 }
 
 const MENU_CATEGORY_DEFAULTS=[
-  {id:'shawarma_doner',name:'Шаурма и донеры',emoji:'🥙',cover:'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=1200&q=85',
+  {id:'shawarma_doner',name:'Шаурма и донеры',emoji:'🥙',cover:'assets/menu/defaults/shawarma_doner_01.jpg',
     settings:{meats:['Курица','Говядина','Баранина','Индейка','Фалафель'],sizes:['S','M','L'],bases:['Лаваш','Пита','Тарелка'],sauces:['Чесночный','Сырный','BBQ','Острый','Гранатовый'],extras:['Сыр','Двойное мясо','Халапеньо','Маринованный лук','Картофель фри'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
-  {id:'burgers_sandwiches',name:'Бургеры и сэндвичи',emoji:'🍔',cover:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85',
+  {id:'burgers_sandwiches',name:'Бургеры и сэндвичи',emoji:'🍔',cover:'assets/menu/defaults/burgers_sandwiches_01.jpg',
     settings:{meats:['Говядина','Курица','Индейка','Вегетарианская котлета'],sizes:['S','M','L'],bases:['Булочка бриошь','Классическая булочка','Тостовый хлеб','Панини'],sauces:['Бургер-соус','Сырный','BBQ','Острый','Чесночный'],extras:['Сыр','Бекон','Халапеньо','Лук','Доп. котлета'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
-  {id:'bakery_hotdogs',name:'Выпечка и хот-доги',emoji:'🥐',cover:'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=85',
+  {id:'bakery_hotdogs',name:'Выпечка и хот-доги',emoji:'🥐',cover:'assets/menu/defaults/bakery_hotdogs_01.jpg',
     settings:{meats:['Курица','Говядина','Сосиска','Без мяса'],sizes:['S','M','L'],bases:['Слоёное тесто','Дрожжевое тесто','Булочка'],sauces:['Кетчуп','Горчица','Сырный','BBQ'],extras:['Сыр','Халапеньо','Лук','Зелень'],required_fields:['Фото','Вес','Описание','Начинка','Цена']}},
-  {id:'pizza_rolls_quesadilla',name:'Пицца, роллы и кесадильи',emoji:'🍕',cover:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=1200&q=85',
+  {id:'pizza_rolls_quesadilla',name:'Пицца, роллы и кесадильи',emoji:'🍕',cover:'assets/menu/defaults/pizza_rolls_quesadilla_01.jpg',
     settings:{meats:['Курица','Говядина','Пепперони','Без мяса'],sizes:['25 см','30 см','35 см'],bases:['Тонкое тесто','Классическое тесто','Тортилья','Рис'],sauces:['Томатный','Сырный','Терияки','BBQ'],extras:['Сыр','Грибы','Халапеньо','Овощи'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
-  {id:'snacks',name:'Закуски',emoji:'🍟',cover:'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=1200&q=85',
+  {id:'snacks',name:'Закуски',emoji:'🍟',cover:'assets/menu/defaults/snacks_01.jpg',
     settings:{meats:['Курица','Без мяса'],sizes:['S','M','L'],bases:['Фри','Панировка','Запечённое'],sauces:['Кетчуп','Сырный','BBQ','Чесночный'],extras:['Сыр','Специи','Халапеньо'],required_fields:['Фото','Вес','Описание','Цена']}},
-  {id:'salads_plates',name:'Салаты и тарелки',emoji:'🥗',cover:'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=1200&q=85',
+  {id:'salads_plates',name:'Салаты и тарелки',emoji:'🥗',cover:'assets/menu/defaults/salads_plates_01.jpg',
     settings:{meats:['Курица','Говядина','Фалафель','Без мяса'],sizes:['S','M','L'],bases:['Салат','Рис','Картофель','Пита'],sauces:['Цезарь','Чесночный','Йогуртовый','Оливковое масло'],extras:['Сыр','Овощи','Оливки','Халапеньо'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
-  {id:'sauces_addons',name:'Соусы и добавки',emoji:'🥫',cover:'https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=1200&q=85',
+  {id:'sauces_addons',name:'Соусы и добавки',emoji:'🥫',cover:'assets/menu/defaults/sauces_addons_01.jpg',
     settings:{meats:[],sizes:['30 мл','50 мл','100 мл'],bases:['Соус','Добавка'],sauces:['Чесночный','Сырный','BBQ','Кетчуп','Острый','Гранатовый'],extras:['Сыр','Двойное мясо','Халапеньо','Маринованный лук'],required_fields:['Фото','Объём','Описание','Цена']}},
-  {id:'cold_drinks',name:'Холодные напитки',emoji:'🥤',cover:'https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=1200&q=85',
+  {id:'cold_drinks',name:'Холодные напитки',emoji:'🥤',cover:'assets/menu/defaults/cold_drinks_01.jpg',
     settings:{meats:[],sizes:['0.3 л','0.5 л','1 л'],bases:['Лимонад','Морс','Сок','Вода','Молочный напиток'],sauces:[],extras:['Лёд','Лимон','Мята','Сироп'],required_fields:['Фото','Объём','Описание','Цена']}},
-  {id:'coffee_tea_desserts',name:'Кофе, чай и десерты',emoji:'☕',cover:'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=85',
+  {id:'coffee_tea_desserts',name:'Кофе, чай и десерты',emoji:'☕',cover:'assets/menu/defaults/coffee_tea_desserts_01.jpg',
     settings:{meats:[],sizes:['S','M','L'],bases:['Кофе','Чай','Десерт'],sauces:[],extras:['Сироп','Молоко','Сливки','Топпинг'],required_fields:['Фото','Объём / вес','Описание','Цена']}}
 ];
 const DEFAULT_CATEGORY_IMAGE=Object.fromEntries(MENU_CATEGORY_DEFAULTS.map(x=>[x.id,x.cover]));
+const DEFAULT_ITEM_IMAGE_COUNTS={shawarma_doner:8,burgers_sandwiches:8,bakery_hotdogs:8,pizza_rolls_quesadilla:8,snacks:8,salads_plates:8,sauces_addons:10,cold_drinks:10,coffee_tea_desserts:10};
+function defaultItemImage(category,index=1){
+  const max=DEFAULT_ITEM_IMAGE_COUNTS[category]||1,n=Math.max(1,Math.min(max,Number(index)||1));
+  return 'assets/menu/defaults/'+category+'_'+String(n).padStart(2,'0')+'.jpg';
+}
+function defaultOptionImage(group,name,category='shawarma_doner'){
+  const n=String(name||'').toLowerCase();
+  if(group==='meats'){
+    if(/говяд/.test(n))return defaultItemImage('burgers_sandwiches',1);
+    if(/баран/.test(n))return defaultItemImage('burgers_sandwiches',3);
+    if(/индей/.test(n))return defaultItemImage('shawarma_doner',4);
+    if(/фалаф/.test(n))return defaultItemImage('snacks',8);
+    return defaultItemImage('shawarma_doner',1);
+  }
+  if(group==='bases'){
+    if(/пит/.test(n))return defaultItemImage('shawarma_doner',6);
+    if(/тарел|рис/.test(n))return defaultItemImage('salads_plates',4);
+    if(/булоч|бриош|панини|тост/.test(n))return defaultItemImage('burgers_sandwiches',1);
+    if(/тесто|тортил/.test(n))return defaultItemImage('pizza_rolls_quesadilla',4);
+    return defaultItemImage(category,1);
+  }
+  if(group==='sauces'){
+    if(/сыр/.test(n))return defaultItemImage('sauces_addons',2);
+    if(/bbq|барбек/.test(n))return defaultItemImage('sauces_addons',3);
+    if(/кетч|томат/.test(n))return defaultItemImage('sauces_addons',4);
+    if(/остр/.test(n))return defaultItemImage('sauces_addons',5);
+    if(/гранат/.test(n))return defaultItemImage('sauces_addons',6);
+    return defaultItemImage('sauces_addons',1);
+  }
+  if(group==='extras'){
+    if(/сыр/.test(n))return defaultItemImage('snacks',6);
+    if(/двойн.*мяс/.test(n))return defaultItemImage('shawarma_doner',5);
+    if(/халап/.test(n))return defaultItemImage('shawarma_doner',3);
+    if(/лук/.test(n))return defaultItemImage('shawarma_doner',2);
+    if(/фри|карто/.test(n))return defaultItemImage('snacks',1);
+    return defaultItemImage(category,1);
+  }
+  return defaultItemImage(category,1);
+}
 const MENU_ITEM_DEFAULTS=[
   ['shawarma_doner','Шаурма классическая','Курица, овощи, чесночный соус',259],
   ['shawarma_doner','Шаурма сырная','Курица, сыр, овощи и сливочный соус',289],
@@ -180,8 +219,9 @@ function menuOptionList(input,limit=40){
 }
 function defaultMenuCategories(){
   return MENU_CATEGORY_DEFAULTS.map((x,i)=>({
-    id:x.id,name:x.name,emoji:x.emoji,active:true,order:i,cover:x.cover,
-    color:'#0B2945',accent:'#FF463D',manual_sort:true,
+    id:x.id,name:x.name,emoji:x.emoji,subtitle:'',active:true,order:i,cover:x.cover,
+    gallery:Array.from({length:Math.min(5,DEFAULT_ITEM_IMAGE_COUNTS[x.id]||1)},(_,j)=>defaultItemImage(x.id,j+1)),
+    color:'#0B2945',accent:'#FF463D',inherit_template:true,manual_sort:true,
     settings:{...x.settings}
   }));
 }
@@ -196,10 +236,12 @@ function normalizeMenuSections(input,menu=[],fallbackToDefaults=true){
       const settings=v.settings&&typeof v.settings==='object'&&!Array.isArray(v.settings)?v.settings:{};
       out.push({
         id,name:String(v.name||d.name||id).trim().slice(0,100),emoji:String(v.emoji||d.emoji||'').slice(0,8),
+        subtitle:String(v.subtitle||d.subtitle||'').trim().slice(0,180),
         active:v.active!==false,order:Number.isFinite(Number(v.order))?Number(v.order):i,
         cover:String(v.cover||d.cover||'').trim().slice(0,700000),
+        gallery:(Array.isArray(v.gallery)?v.gallery:(Array.isArray(d.gallery)?d.gallery:[])).map(x=>String(x||'').trim().slice(0,700000)).filter(Boolean).slice(0,12),
         color:hex(v.color||d.color,'#0B2945'),accent:hex(v.accent||d.accent,'#FF463D'),
-        manual_sort:v.manual_sort!==false,
+        inherit_template:v.inherit_template!==false,manual_sort:v.manual_sort!==false,
         settings:{
           meats:(Array.isArray(settings.meats)?settings.meats:d.settings?.meats||[]).map(String).slice(0,30),
           sizes:(Array.isArray(settings.sizes)?settings.sizes:d.settings?.sizes||[]).map(String).slice(0,30),
@@ -235,13 +277,13 @@ function defaultMenuSeed(){
   const menu=MENU_ITEM_DEFAULTS.map((row,i)=>{
     const [c,n,d,p]=row,countersN=(counters[c]=(counters[c]||0)+1),section=sectionMap.get(c);
     const settings=section?.settings||{};
-    const mk=list=>menuOptionList((list||[]).map((name,j)=>({name,price:0,default:j===0})));
+    const mk=(list,group)=>menuOptionList((list||[]).map((name,j)=>({name,price:0,default:j===0,image:defaultOptionImage(group,name,c)})));
     return {
-      id:c+'_'+String(countersN).padStart(2,'0'),n,c,d,p,image:DEFAULT_CATEGORY_IMAGE[c]||'',gallery:[],badge:'',
+      id:c+'_'+String(countersN).padStart(2,'0'),n,c,d,p,image:defaultItemImage(c,countersN),gallery:[defaultItemImage(c,countersN)],badge:'',
       featured:countersN===1,display:countersN===1?'main':'auto',image_fit:'cover',active:true,weight:'',
       sku:(c.slice(0,3)+'-'+String(countersN).padStart(3,'0')).toUpperCase(),stock:null,schedule:{enabled:false,days:[],from:'',to:''},
       tags:[section?.name||c],card_color:'#FFFFFF',recommended:countersN===1,
-      options:{meats:mk(settings.meats),sizes:mk(settings.sizes),bases:mk(settings.bases),sauces:mk(settings.sauces),extras:mk(settings.extras),required_groups:[]}
+      options:{meats:mk(settings.meats,'meats'),sizes:mk(settings.sizes,'sizes'),bases:mk(settings.bases,'bases'),sauces:mk(settings.sauces,'sauces'),extras:mk(settings.extras,'extras'),required_groups:[]}
     };
   });
   return {sections,menu};
@@ -433,4 +475,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,defaultItemImage,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

@@ -35,6 +35,8 @@ test('mobile photo builder: selection, layers, cart, cancellation, owner upload'
   await page.locator('[data-bextra="onion"]').click();
   await page.waitForFunction(()=>document.querySelectorAll('.foodLayer').length===3);
   await page.locator('[data-bextra="cheese"]').click();
+  await page.waitForFunction(()=>document.querySelectorAll('.foodLayer').length===4);
+  await page.waitForTimeout(750);
   const out=path.resolve(__dirname,'../../../test-artifacts');fs.mkdirSync(out,{recursive:true});
   await page.screenshot({path:path.join(out,'cinema-mobile.png')});
   const fits=await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);assert.ok(fits,'no horizontal overflow');

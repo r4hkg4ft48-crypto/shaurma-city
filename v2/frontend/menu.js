@@ -324,6 +324,7 @@
     const signatureButton=document.querySelector('#builderModeSwitch [data-builder-mode="signature"]');if(signatureButton)signatureButton.disabled=!signatureItems.length;
     $('#builderStage').hidden=false;$('#builderStage').classList.remove('builderCollapsing');$('#builderResult').hidden=true;
     renderBuilder();openSheet('builderSheet');setBuilderMode(startMode==='signature'&&signatureItems.length?'signature':'custom');
+    $('#builderSheet').scrollTo({top:0,behavior:'instant'});
   }
   function toggleBuilder(list,id,max){id=String(id);const i=list.indexOf(id);if(i>=0)list.splice(i,1);else if(list.length<max)list.push(id);else toast('Достигнут максимум');renderBuilder()}
   function builtPayload(){

@@ -12,6 +12,8 @@ test('default catalog has all configured categories and a populated menu',()=>{
   assert.ok(seed.sections.every(x=>Array.isArray(x.gallery)));
   assert.ok(seed.menu.every(x=>String(x.image||'').includes('/api/v2/menu-photo/')));
   assert.equal(new Set(seed.menu.map(x=>x.image)).size,78);
+  const photo=Buffer.from(D.generatedMenuPhotoBase64('shawarma_doner_01.jpg'),'base64');
+  assert.equal(photo[0],0xFF);assert.equal(photo[1],0xD8);assert.ok(photo.length>5000);
   for(const section of seed.sections){
     assert.ok(seed.menu.some(x=>x.c===section.id),'missing items for '+section.id);
     assert.ok(Array.isArray(section.settings.required_fields));

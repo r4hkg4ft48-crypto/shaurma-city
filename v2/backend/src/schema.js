@@ -201,8 +201,12 @@ async function ensureSchema(){
   CREATE TABLE IF NOT EXISTS shaurma_owner_command_context(
     telegram_user_id TEXT PRIMARY KEY,
     establishment_id TEXT NOT NULL,
+    selected_item_id TEXT,
+    selected_group_id TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_item_id TEXT;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_group_id TEXT;
   CREATE INDEX IF NOT EXISTS idx_v2_owner_command_context_est ON shaurma_owner_command_context(establishment_id);
 
   CREATE TABLE IF NOT EXISTS shaurma_venue_audit(

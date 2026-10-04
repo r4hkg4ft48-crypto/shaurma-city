@@ -453,6 +453,205 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       ].join('\n')};
     }
 
+
+    const editor=await editorContext(user.id);
+    const contextItem=menu.find(x=>String(x.id)===String(editor.selected_item_id||''));
+    const resolveItem=(query)=>{
+      if(clean(query)){
+        const found=findNamed(menu,query,x=>x.n||x.name);
+        return {item:found.item,matches:found.matches||[]};
+      }
+      return {item:contextItem||null,matches:[]};
+    };
+    const itemMissing=(query,matches=[])=>{
+      const hint=matches.length?'\nВозможно:\n'+matches.map(x=>'• '+String(x.n||x.name)).join('\n'):'';
+      return {handled:true,text:clean(query)?'Не нашёл позицию «'+query+'».'+hint:'Сначала выберите позицию: «работаем с сырной шаурмой».'};
+    };
+    const resolveGroup=(item,query)=>{
+      const groups=Array.isArray(item?.choice_groups)?item.choice_groups:[];
+      if(clean(query)){
+        const found=findNamed(groups,query,x=>x.name);
+        return {group:found.item,matches:found.matches||[]};
+      }
+      const selected=groups.find(g=>String(g.id)===String(editor.selected_group_id||''));
+      if(selected)return {group:selected,matches:[]};
+      if(groups.length===1)return {group:groups[0],matches:[]};
+      return {group:null,matches:groups};
+    };
+
+    if(command.intent==='menu_item_select'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      await selectItemContext(user.id,found.item.id);
+      return {handled:true,text:'✅ Работаем с: '+String(found.item.n||found.item.name)+'\n\n'+itemSettingsText(found.item,sections)+'\n\nТеперь можно писать коротко: «цена 420», «нет в наличии», «добавь выбор Размер».'};
+    }
+
+    if(command.intent==='menu_item_show'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      await selectItemContext(user.id,found.item.id);
+      return {handled:true,text:itemSettingsText(found.item,sections)};
+    }
+
+    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      const item=found.item,index=menu.indexOf(item);
+      await selectItemContext(user.id,item.id);
+
+      if(command.intent==='menu_price_context'){
+        const old=Number(item.p??item.price??0);item.p=command.price;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_price',{item_id:item.id,old_price:old,new_price:command.price});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+': '+old+' ₽ → '+command.price+' ₽'};
+      }
+      if(command.intent==='menu_available'){
+        item.available=command.available;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_available',{item_id:item.id,available:command.available});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.available?'снова в наличии':'добавлено в стоп-лист. В Mini App останется видно, но заказать нельзя.')};
+      }
+      if(command.intent==='menu_badge'){
+        item.badge=String(command.value||'').slice(0,40);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_badge',{item_id:item.id,badge:item.badge});
+        return {handled:true,text:'✅ Метка '+String(item.n||item.name)+': '+(item.badge||'убрана')};
+      }
+      if(command.intent==='menu_featured'){
+        if(command.enabled)for(const x of menu)x.featured=false;
+        item.featured=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_featured',{item_id:item.id,featured:command.enabled});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.enabled?'главная позиция меню':'убрана из главной позиции')};
+      }
+      if(command.intent==='menu_display'){
+        item.display=command.display;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_display',{item_id:item.id,display:command.display});
+        return {handled:true,text:'✅ Вид карточки: '+command.display};
+      }
+      if(command.intent==='menu_category_move'){
+        let category=findNamed(sections,command.category,x=>x.name||x.id).item;
+        if(!category){
+          category={id:slug(command.category),name:command.category,emoji:'',active:true,order:sections.length};
+          sections.push(category);
+        }
+        item.c=category.id;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_category_move',{item_id:item.id,category_id:category.id});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' → категория «'+category.name+'»'};
+      }
+      if(command.intent==='menu_delete'){
+        const name=String(item.n||item.name);
+        menu.splice(index,1);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_delete',{item_id:item.id,name});
+        await selectItemContext(user.id,'');
+        return {handled:true,text:'✅ Позиция «'+name+'» удалена из меню.'};
+      }
+      if(command.intent==='menu_duplicate'){
+        const copy={...item,id:slug(item.n||item.name)+'_'+Date.now().toString(36).slice(-6),n:String(item.n||item.name)+' — копия',featured:false,choice_groups:JSON.parse(JSON.stringify(item.choice_groups||[]))};
+        menu.splice(index+1,0,copy);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_duplicate',{source_item_id:item.id,item_id:copy.id});
+        await selectItemContext(user.id,copy.id);
+        return {handled:true,text:'✅ Создана копия: '+copy.n+'\nТеперь работаем с ней.'};
+      }
+      if(command.intent==='menu_qty'){
+        const value=Math.max(1,Math.min(50,Math.floor(Number(command.value)||1)));
+        item[command.field]=value;
+        const min=Math.max(1,Number(item.min_qty)||1),max=Math.max(min,Number(item.max_qty)||50);
+        item.min_qty=min;item.max_qty=max;
+        if(command.field==='min_qty'&&item.max_qty<value)item.max_qty=value;
+        if(command.field==='max_qty'&&item.min_qty>value)item.min_qty=value;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_qty',{item_id:item.id,min_qty:item.min_qty,max_qty:item.max_qty});
+        return {handled:true,text:'✅ Количество для '+String(item.n||item.name)+': '+item.min_qty+'–'+item.max_qty+' шт.'};
+      }
+    }
+
+    if(command.intent==='choice_group_add'||command.intent==='choice_group_select'||command.intent==='choice_group_delete'||command.intent==='choice_group_required'||command.intent==='choice_group_type'||command.intent==='choice_group_limit'||command.intent==='choice_option_add'||command.intent==='choice_option_price'||command.intent==='choice_option_toggle'||command.intent==='choice_option_delete'||command.intent==='choice_option_rename'||command.intent==='choice_option_default'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      const item=found.item;
+      await selectItemContext(user.id,item.id);
+      item.choice_groups=Array.isArray(item.choice_groups)?item.choice_groups.map(g=>({...g,options:Array.isArray(g.options)?g.options.map(o=>({...o})):[]})):[];
+      let selectedGroup=resolveGroup(item,command.group);
+
+      if(command.intent==='choice_group_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        const group={id,name:command.name,type:'single',required:false,min:0,max:1,active:true,options:[]};
+        item.choice_groups.push(group);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_add',{item_id:item.id,group_id:id,name:command.name});
+        await selectGroupContext(user.id,id);
+        return {handled:true,text:'✅ Добавлен выбор «'+command.name+'» для '+String(item.n||item.name)+'.\nПо умолчанию: один вариант, необязательно.\nТеперь можно: «сделай обязательным», «можно несколько», «добавь вариант Большая +80».'};
+      }
+
+      if(command.intent==='choice_group_select'){
+        if(!selectedGroup.group){
+          const hint=selectedGroup.matches.length?'\n'+selectedGroup.matches.map(g=>'• '+g.name).join('\n'):'';
+          return {handled:true,text:'Не нашёл группу «'+command.group+'».'+hint};
+        }
+        await selectGroupContext(user.id,selectedGroup.group.id);
+        return {handled:true,text:'✅ Работаем с выбором «'+selectedGroup.group.name+'».\nВарианты:\n'+((selectedGroup.group.options||[]).map(o=>'• '+o.name+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')).join('\n')||'пока нет вариантов')};
+      }
+
+      if(!selectedGroup.group){
+        return {handled:true,text:'Сначала выберите группу параметров. Например: «открой выбор Размер». Доступно:\n'+(selectedGroup.matches.map(g=>'• '+g.name).join('\n')||'групп пока нет')};
+      }
+      const group=selectedGroup.group;
+      await selectGroupContext(user.id,group.id);
+
+      if(command.intent==='choice_group_delete'){
+        item.choice_groups=item.choice_groups.filter(g=>String(g.id)!==String(group.id));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_delete',{item_id:item.id,group_id:group.id});
+        await selectGroupContext(user.id,'');
+        return {handled:true,text:'✅ Выбор «'+group.name+'» удалён.'};
+      }
+      if(command.intent==='choice_group_required'){
+        group.required=command.required;
+        if(command.required&&Number(group.min||0)<1)group.min=1;
+        if(!command.required&&Number(group.min||0)===1)group.min=0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_required',{item_id:item.id,group_id:group.id,required:group.required});
+        return {handled:true,text:'✅ «'+group.name+'» — '+(group.required?'обязательный выбор':'необязательный выбор')};
+      }
+      if(command.intent==='choice_group_type'){
+        group.type=command.type;
+        if(command.type==='single')group.max=1;
+        else group.max=Math.max(1,Number(group.max)||Math.max(1,(group.options||[]).length));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_type',{item_id:item.id,group_id:group.id,type:group.type});
+        return {handled:true,text:'✅ «'+group.name+'»: '+(group.type==='multiple'?'можно выбирать несколько':'можно выбрать один вариант')};
+      }
+      if(command.intent==='choice_group_limit'){
+        const value=Math.max(0,Math.min(60,Math.floor(Number(command.value)||0)));
+        group[command.field]=value;
+        if(group.type==='single')group.max=1;
+        if(Number(group.max||1)<Number(group.min||0))group.max=group.min;
+        group.required=Number(group.min||0)>0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_limit',{item_id:item.id,group_id:group.id,min:group.min,max:group.max});
+        return {handled:true,text:'✅ «'+group.name+'»: выбрать '+Number(group.min||0)+'–'+Number(group.max||1)};
+      }
+
+      const options=group.options||[];
+      if(command.intent==='choice_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        options.push({id,name:command.name,price_delta:Number(command.price_delta)||0,active:true,default:false});
+        group.options=options;
+        if(group.type==='multiple'&&Number(group.max||0)<1)group.max=options.length;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_option_add',{item_id:item.id,group_id:group.id,option_id:id,name:command.name,price_delta:Number(command.price_delta)||0});
+        return {handled:true,text:'✅ В «'+group.name+'» добавлен вариант «'+command.name+'»'+(Number(command.price_delta)?' '+(Number(command.price_delta)>0?'+':'')+Number(command.price_delta)+' ₽':'')};
+      }
+
+      const optionFound=findNamed(options,command.option,x=>x.name);
+      const option=optionFound.item;
+      if(!option){
+        const hint=optionFound.matches.length?'\n'+optionFound.matches.map(o=>'• '+o.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл вариант «'+String(command.option||'')+'» в «'+group.name+'».'+hint};
+      }
+      if(command.intent==='choice_option_price')option.price_delta=Math.max(-100000,Math.min(100000,Math.round(Number(command.price_delta)||0)));
+      if(command.intent==='choice_option_toggle')option.active=command.enabled;
+      if(command.intent==='choice_option_delete')group.options=options.filter(o=>String(o.id)!==String(option.id));
+      if(command.intent==='choice_option_rename')option.name=command.name;
+      if(command.intent==='choice_option_default'){
+        if(group.type==='single')for(const o of options)o.default=false;
+        option.default=true;
+      }
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_option_update',{item_id:item.id,group_id:group.id,option_id:option.id,intent:command.intent});
+      const label=command.intent==='choice_option_delete'?'удалён':command.intent==='choice_option_toggle'?(command.enabled?'включён':'выключен'):command.intent==='choice_option_price'?'доплата '+option.price_delta+' ₽':command.intent==='choice_option_rename'?'переименован в '+option.name:'по умолчанию';
+      return {handled:true,text:'✅ Вариант «'+String(option.name)+'» — '+label+'.'};
+    }
+
     if(command.intent==='menu_price'||command.intent==='menu_toggle'||command.intent==='menu_rename'||command.intent==='menu_description'){
       const found=findNamed(menu,command.item,x=>x.n||x.name);
       if(!found.item){

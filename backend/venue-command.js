@@ -435,6 +435,16 @@ function builderGroupKey(v){
   if(/добав/.test(s))return 'extras';
   return '';
 }
+function itemOptionGroupKey(v){
+  const s=norm(v);
+  if(/размер|формат|тип/.test(s))return 'sizes';
+  if(/основ|лаваш|пита|хлеб/.test(s))return 'bases';
+  if(/мяс/.test(s))return 'meats';
+  if(/соус/.test(s))return 'sauces';
+  if(/добав|доп/.test(s))return 'extras';
+  return '';
+}
+function itemOptionGroupLabel(key){return ({meats:'Мясо',sizes:'Размер',bases:'Основа',sauces:'Соусы',extras:'Добавки'})[key]||key}
 function builderGroupLabel(key){return ({types:'Форматы',breads:'Лаваш',meats:'Мясо',sauces:'Соусы',extras:'Добавки'})[key]||key}
 
 function createVenueCommandBus({DB,publishVenue,pushOwner}){
@@ -955,6 +965,35 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       return {handled:true,text:'✅ Категория «'+old+'» → <b>'+command.name+'</b>'};
     }
 
+    if(['builder_option_add','builder_option_delete','builder_option_price','builder_option_rename'].includes(command.intent)&&contextItem){
+      const key=itemOptionGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял тип варианта. Для блюда поддерживаются: мясо, размер, основа, соус, добавка.'};
+      const item=contextItem;
+      item.options=item.options&&typeof item.options==='object'?JSON.parse(JSON.stringify(item.options)):{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_groups:[]};
+      item.options[key]=Array.isArray(item.options[key])?item.options[key]:[];
+      const list=item.options[key];
+
+      if(command.intent==='builder_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        list.push({id,name:command.name,price:Math.max(-100000,Math.min(100000,Math.round(Number(command.price)||0))),active:true,default:list.length===0});
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_option_add',{item_id:item.id,group:key,option_id:id,name:command.name,price:command.price});
+        return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+' для «'+String(item.n||item.name)+'»: добавлено «'+command.name+'»'+(Number(command.price)?' '+(Number(command.price)>0?'+':'')+Number(command.price)+' ₽':'')};
+      }
+
+      const found=findNamed(list,command.option,x=>x.name);
+      if(!found.item){
+        const hint=found.matches.length?'\nВозможно:\n'+found.matches.map(x=>'• '+x.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл «'+command.option+'» в '+itemOptionGroupLabel(key)+'.'+hint};
+      }
+      const option=found.item;
+      if(command.intent==='builder_option_delete')item.options[key]=list.filter(x=>String(x.id)!==String(option.id));
+      if(command.intent==='builder_option_price')option.price=Math.max(-100000,Math.min(100000,Math.round(Number(command.price)||0)));
+      if(command.intent==='builder_option_rename')option.name=command.name;
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_option_update',{item_id:item.id,group:key,option_id:option.id,intent:command.intent});
+      const label=command.intent==='builder_option_delete'?'удалено':command.intent==='builder_option_price'?'цена '+option.price+' ₽':'переименовано в '+option.name;
+      return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+': «'+String(option.name)+'» — '+label+'.'};
+    }
+
     if(command.intent==='builder_toggle'){
       config.builder_enabled=command.enabled;
       const q=await DB.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
@@ -967,6 +1006,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     if(['builder_show','builder_option_add','builder_option_delete','builder_option_price','builder_option_rename','builder_limit','builder_title','builder_subtitle'].includes(command.intent)){
       let builder=D.normalizeBuilderConfig(config.builder||{});
       if(command.intent==='builder_show'){
+        await selectItemContext(user.id,'');
         const lines=['🧩 Конструктор · '+(config.builder_enabled===true?'включён':'выключен'),'Название: '+builder.title,'Описание: '+builder.subtitle];
         for(const key of ['types','breads','meats','sauces','extras']){
           lines.push('',builderGroupLabel(key)+':');

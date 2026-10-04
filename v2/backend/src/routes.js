@@ -196,6 +196,20 @@ async function menuContext(marker,est){
   };
 }
 
+router.get('/menu-photo/:fileName',async(req,res)=>{
+  try{
+    const fileName=String(req.params.fileName||'');
+    if(!/^[a-z0-9_]+_\\d{2}\\.jpg$/i.test(fileName))return res.sendStatus(404);
+    const b64=D.generatedMenuPhotoBase64(fileName);if(!b64)return res.sendStatus(404);
+    const body=Buffer.from(b64,'base64');
+    res.setHeader('Content-Type','image/jpeg');
+    res.setHeader('Content-Length',String(body.length));
+    res.setHeader('Cache-Control','public, max-age=31536000, immutable');
+    res.setHeader('ETag','"menu-photo-'+fileName+'"');
+    res.send(body);
+  }catch(e){fail(res,e,'menu_photo_failed')}
+});
+
 router.get('/health',(req,res)=>res.json({ok:true,version:config.BUILD,database:db.configured,architecture:'clean-v2'}));
 
 router.get('/map/points',async(req,res)=>{

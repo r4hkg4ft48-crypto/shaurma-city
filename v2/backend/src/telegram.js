@@ -458,11 +458,14 @@ async function handleKitchenVoice(msg){
   }catch(e){
     console.error('kitchen voice',e.message);
     const tooLarge=e.message==='voice_file_too_large';
+    const noCredits=/no credits remaining|insufficient_quota|billing/i.test(String(e.message||''));
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
       text:tooLarge
         ? 'Голосовое слишком большое. Отправьте более короткое сообщение.'
-        : 'Не удалось обработать голосовую команду. Попробуйте ещё раз или используйте /voice.'
+        : noCredits
+          ? '🎙 Голосовой помощник временно недоступен: на OpenAI API закончились кредиты. Пополните баланс API-проекта и отправьте голосовое ещё раз.'
+          : 'Не удалось обработать голосовую команду. Попробуйте ещё раз или используйте /voice.'
     });
   }
 }

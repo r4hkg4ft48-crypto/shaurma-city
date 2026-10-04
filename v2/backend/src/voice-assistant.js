@@ -26,8 +26,8 @@ function orderReference(text){
 function localStatus(text){
   const s=normalizeText(text);
   if(/(выполнен|выполнено|выдан|выдано|отдан|отдано|закрыт|закрыто|завершен|завершено)/.test(s))return 'done';
-  if(/(готов|готово|готовый|приготовлен|приготовлено)/.test(s)&&!/\bготов(ить|ится|им|ьте)\b/.test(s))return 'ready';
   if(/(готовится|готовить|готовим|начинай готовить|начать готовить|в работу|на кухню|делаем)/.test(s))return 'cooking';
+  if(/(готов|готово|готовый|приготовлен|приготовлено)/.test(s))return 'ready';
   if(/(принят|принято|прими|принять)/.test(s))return 'new';
   return '';
 }

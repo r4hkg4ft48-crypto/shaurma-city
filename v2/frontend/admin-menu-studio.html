@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071f3a">
+<title>Шаурмег · редактор меню</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="admin-menu-studio.css?v=20261005">
+</head>
+<body>
+<div class="studio" id="studio">
+  <header class="studioHero" id="studioHero">
+    <div class="heroShade"></div>
+    <div class="heroTop">
+      <button class="backBtn" id="studioBack" aria-label="Назад">←</button>
+      <div class="heroTopTitle">Админка заведения</div>
+      <select id="venueSelect" class="venueSelect"></select>
+    </div>
+    <div class="heroMeta">
+      <span id="estChip">—</span>
+      <span class="venueChip" id="venueChip">Заведение</span>
+    </div>
+    <div class="heroCopy">
+      <div>
+        <h1>Меню заведения</h1>
+        <p>Управляйте включёнными категориями и содержимым меню</p>
+      </div>
+      <div class="syncCard" id="syncCard"><i></i><div><b>Синхронизировано</b><small id="syncTime">сейчас</small></div></div>
+    </div>
+    <nav class="studioTabs" id="studioTabs">
+      <button class="active" data-view="categories"><span class="tabIcon">⌗</span>Категории</button>
+      <button data-view="items"><span class="tabIcon">▤</span>Позиции</button>
+      <button data-view="design"><span class="tabIcon">◉</span>Дизайн</button>
+    </nav>
+  </header>
+
+  <main class="studioMain">
+    <section class="view" id="view-categories">
+      <div class="topFilters">
+        <label class="searchBox"><span>⌕</span><input id="categorySearch" placeholder="Поиск по категориям..."></label>
+        <button class="filterBtn" type="button">Все категории⌄</button>
+      </div>
+      <div class="categoryList" id="categoryList"></div>
+      <div id="categoryEditor"></div>
+    </section>
+
+    <section class="view hidden" id="view-items">
+      <div class="itemsTop">
+        <div>
+          <small>ПОЗИЦИИ МЕНЮ</small>
+          <h2>Блюда и напитки</h2>
+        </div>
+        <button class="redBtn" id="newItemBtn">＋ Новая позиция</button>
+      </div>
+      <div class="topFilters">
+        <label class="searchBox"><span>⌕</span><input id="itemSearch" placeholder="Поиск позиции..."></label>
+        <select id="itemCategoryFilter" class="filterSelect"></select>
+      </div>
+      <div class="itemsSummary" id="itemsSummary"></div>
+      <div class="itemsGrid" id="itemsGrid"></div>
+    </section>
+
+    <section class="view hidden" id="view-design">
+      <div class="designPanel">
+        <div class="designHead"><div><small>ДИЗАЙН MINI APP</small><h2>Внешний вид меню</h2><p>Настройки применяются к гостевому меню выбранного заведения.</p></div><span class="liveBadge"><i></i>LIVE</span></div>
+        <div class="themePresets" id="themePresets">
+          <button data-primary="#0B2945" data-secondary="#071C31"><span style="background:#0B2945"></span>Midnight Blue</button>
+          <button data-primary="#FF463D" data-secondary="#0B2945"><span style="background:#FF463D"></span>Warm Red</button>
+          <button data-primary="#313A46" data-secondary="#171B22"><span style="background:#313A46"></span>Graphite</button>
+          <button data-primary="#F7F8FA" data-secondary="#E9EDF2"><span style="background:#F7F8FA"></span>Light</button>
+        </div>
+        <div class="designGrid">
+          <label><b>Основной цвет</b><div class="colorInput"><input id="themePrimary" type="color"><input id="themePrimaryHex"></div></label>
+          <label><b>Дополнительный цвет</b><div class="colorInput"><input id="themeSecondary" type="color"><input id="themeSecondaryHex"></div></label>
+          <label><b>Общий тон</b><select id="themeTone"><option value="balanced">Смешанный</option><option value="dark">Тёмный</option><option value="light">Светлый</option></select></label>
+          <label><b>Раскладка меню</b><select id="siteLayout"><option value="hero-2-3">Hero + 2 / 3</option><option value="hero-2">Hero + 2</option><option value="uniform-2">2 колонки</option><option value="uniform-3">3 колонки</option></select></label>
+        </div>
+        <div class="guestPreview" id="guestPreview"></div>
+        <button class="saveBar" id="saveDesignBtn"><span>♛</span>Опубликовать дизайн</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="itemEditor hidden" id="itemEditor">
+  <div class="itemEditorTop">
+    <button class="backBtn dark" id="itemEditorBack">←</button>
+    <h2>Редактор позиции</h2>
+    <button class="deleteLink" id="deleteItemBtn">Удалить</button>
+  </div>
+  <div id="itemEditorBody"></div>
+</div>
+
+<div class="gate" id="gate">
+  <div class="gateCard">
+    <small>SHAURMEG PARTNER</small>
+    <h1>Редактор меню</h1>
+    <p id="gateText">Проверяем Telegram-доступ…</p>
+    <input id="claimCode" placeholder="OWN-XXXXXXXXXX">
+    <button class="redBtn" id="claimBtn">Подключить заведение</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="config.js?v=20261005"></script>
+<script src="admin-menu-studio.js?v=20261005"></script>
+</body>
+</html>

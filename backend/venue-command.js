@@ -115,7 +115,7 @@ function parseCommand(text){
 
   m=raw.match(/^(?:добавь|создай)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
   if(m)return {intent:'choice_group_add',name:clean(m[1])};
-  m=raw.match(/^(?:работаем с|открой|выбери)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  m=raw.match(/^(?:работаем с|открой|выбери)\s+(?:выбор|выбором|группу|группой|параметр|параметром)\s+(.+)$/i);
   if(m)return {intent:'choice_group_select',group:clean(m[1])};
   m=raw.match(/^(?:удали|убери)\s+(?:выбор|группу|параметр)\s*(.*)$/i);
   if(m)return {intent:'choice_group_delete',group:clean(m[1])};
@@ -285,6 +285,11 @@ function sectionsFrom(config={},menu=[]){
   return out.map((x,i)=>({...x,order:i}));
 }
 
+function looseWords(v){
+  return norm(v).split(/[^a-z0-9а-я]+/i).filter(Boolean)
+    .filter(x=>!['с','со','и','в','во','на','для','из','по'].includes(x))
+    .map(x=>x.length>=5?x.slice(0,4):x);
+}
 function findNamed(list,query,getName=x=>x?.name||x?.n||''){
   const q=norm(query);
   if(!q)return {item:null,matches:[]};
@@ -292,6 +297,18 @@ function findNamed(list,query,getName=x=>x?.name||x?.n||''){
   if(exact.length===1)return {item:exact[0],matches:exact};
   const partial=list.filter(x=>norm(getName(x)).includes(q)||q.includes(norm(getName(x))));
   if(partial.length===1)return {item:partial[0],matches:partial};
+  const qWords=[...new Set(looseWords(q))];
+  if(qWords.length){
+    const scored=list.map(x=>{
+      const words=new Set(looseWords(getName(x)));
+      const hits=qWords.filter(w=>words.has(w)).length;
+      return {x,hits,ratio:hits/qWords.length};
+    }).filter(r=>r.hits>0).sort((a,b)=>b.ratio-a.ratio||b.hits-a.hits);
+    if(scored.length&&scored[0].ratio===1&&(scored.length===1||scored[1].ratio<1))return {item:scored[0].x,matches:[scored[0].x]};
+    const best=scored.filter(r=>r.ratio===scored[0]?.ratio&&r.hits===scored[0]?.hits).map(r=>r.x);
+    if(best.length===1&&scored[0].ratio>=.67)return {item:best[0],matches:best};
+    if(best.length)return {item:null,matches:best.slice(0,8)};
+  }
   return {item:null,matches:(exact.length?exact:partial).slice(0,8)};
 }
 function itemSettingsText(item,sections=[]){
@@ -816,4 +833,4 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
   return {handle};
 }
 
-module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey};
+module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

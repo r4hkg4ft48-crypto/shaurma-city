@@ -516,11 +516,36 @@
     $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }
 
+  function defaultItemSelection(src){
+    const opts=src?.options&&typeof src.options==='object'?src.options:{},required=new Set(Array.isArray(opts.required_groups)?opts.required_groups:[]),selection={};
+    for(const group of ['meats','sizes','bases','sauces','extras']){
+      const list=Array.isArray(opts[group])?opts[group].filter(x=>x?.active!==false):[];
+      if(!list.length)continue;
+      if(required.has(group)){
+        const chosen=list.find(x=>x.default===true)||list[0];
+        selection[group]=group==='extras'||group==='sauces'?[String(chosen.id)]:String(chosen.id);
+      }
+    }
+    return selection;
+  }
+  function localSelectionPrice(src,selection={}){
+    const opts=src?.options&&typeof src.options==='object'?src.options:{};
+    let price=Number(src?.p??src?.price)||0;const detail=[];
+    for(const group of ['meats','sizes','bases','sauces','extras']){
+      const list=Array.isArray(opts[group])?opts[group]:[],raw=selection[group],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      for(const id of ids){const o=list.find(x=>String(x.id)===String(id)&&x.active!==false);if(o){price+=Number(o.price)||0;detail.push(String(o.name||''))}}
+    }
+    return {price:Math.max(0,price),detail:detail.filter(Boolean).join(' · ')};
+  }
   function add(id){
     const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
-    const x=cart.find(x=>String(x.id)===String(id));if(x)x.q++;else cart.push({id:String(src.id),n:String(src.n||src.name),p:Number(src.p??src.price)||0,q:1});
+    const selection=defaultItemSelection(src),priced=localSelectionPrice(src,selection);
+    const signature=JSON.stringify(selection),x=cart.find(x=>String(x.id)===String(id)&&JSON.stringify(x.selection||{})===signature);
+    if(x)x.q++;else cart.push({id:String(src.id),n:String(src.n||src.name),p:priced.price,q:1,selection,detail:priced.detail});
     save();
     const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
+    const name=String(src.n||src.name||'Позиция');toast(name+' добавлена в корзину');
+    document.querySelectorAll('[data-add="'+CSS.escape(String(id))+'"]').forEach(btn=>{const prev=btn.innerHTML;btn.classList.add('justAdded');btn.innerHTML='✓';clearTimeout(btn._addedTimer);btn._addedTimer=setTimeout(()=>{btn.classList.remove('justAdded');btn.innerHTML=prev},650)});
     tg?.HapticFeedback?.impactOccurred?.('light');
   }
   function runQuickFavoriteOrder(){
@@ -588,7 +613,7 @@
     const btn=$('#placeOrder');btn.disabled=true;
     const {total}=cartStats();
     try{
-      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.builderData?{builder:x.builderData}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
+      const body={items:cart.map(x=>({id:x.id,q:x.q,...(x.builderData?{builder:x.builderData}:{}),...(x.selection?{selection:x.selection}:{})})),marker_id:marker,establishment_id:est,venue_id:ctx.venue.venue_id,fulfillment_type:fulfillment,customer_name:$('#customer').value.trim(),phone:$('#phone').value.trim(),address:$('#address').value.trim(),comment:$('#comment').value.trim(),payment_method:'on_receipt'};
       if(!session&&tg?.initData)body.telegram_init_data=tg.initData;
       const headers={'Content-Type':'application/json'};if(session)headers.Authorization='Bearer '+session;
       const r=await fetch(api+'/orders',{method:'POST',headers,body:JSON.stringify(body)}),j=await r.json().catch(()=>({}));

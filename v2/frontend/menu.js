@@ -414,7 +414,7 @@
     if(category==='all')applyTheme(ctx?.venue?.config||{});
     else{
       const sectionTheme=sectionById.get(String(category))||{},root=document.documentElement;
-      const accent=safeHex(sectionTheme.accent,'#8FE0A9'),hero=safeHex(sectionTheme.color,'#152A3A');
+      const accent=cleanHex(sectionTheme.accent,'#8FE0A9'),hero=cleanHex(sectionTheme.color,'#152A3A');
       root.style.setProperty('--venue-accent',accent);root.style.setProperty('--accent',accent);
       root.style.setProperty('--venue-hero',hero);root.style.setProperty('--venue-glow',rgba(accent,.27));root.style.setProperty('--venue-ink',contrastText(accent));
     }

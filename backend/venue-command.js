@@ -10,7 +10,8 @@ const PERMISSION_BY_INTENT={
   menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
   choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
-  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',builder_toggle:'menu',
+  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',
+  builder_toggle:'menu',builder_show:'menu',builder_option_add:'menu',builder_option_delete:'menu',builder_option_price:'menu',builder_option_rename:'menu',builder_limit:'menu',builder_title:'menu',builder_subtitle:'menu',
   venue_show:'profile',venue_name:'profile',venue_address:'profile',venue_hours:'profile',venue_description:'profile',
   venue_phone:'profile',venue_website:'profile',delivery_toggle:'profile',pickup_toggle:'profile',
   orders_show:'orders',order_status:'orders',stats_show:'orders'
@@ -144,6 +145,27 @@ function parseCommand(text){
   m=raw.match(/^(?:сделай|поставь)\s+(?:вариант|опцию)\s+(.+?)\s+(?:по умолчанию|дефолтной)$/i);
   if(m)return {intent:'choice_option_default',option:clean(m[1])};
 
+
+  if(/^(?:покажи|открой|дай)\s+конструктор$/i.test(raw)||/^конструктор настройки$/i.test(raw))return {intent:'builder_show'};
+
+  m=raw.match(/^добавь\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+?)(?:\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?)?$/i);
+  if(m)return {intent:'builder_option_add',group:clean(m[1]),name:clean(m[2]),price:m[3]?Number(String(m[3]).replace(',','.')):0};
+  m=raw.match(/^(?:удали|убери)\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+)$/i);
+  if(m)return {intent:'builder_option_delete',group:clean(m[1]),option:clean(m[2])};
+  m=raw.match(/^(?:цена|доплата)\s+(формата|типа|лаваша|мяса|соуса|добавки)\s+(.+?)\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  if(m)return {intent:'builder_option_price',group:clean(m[1]),option:clean(m[2]),price:Number(String(m[3]).replace(',','.'))};
+  m=raw.match(/^переименуй\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'builder_option_rename',group:clean(m[1]),option:clean(m[2]),name:clean(m[3])};
+
+  m=raw.match(/^(минимум|максимум)\s+соус(?:ов|а)?\s+(\d+)$/i);
+  if(m)return {intent:'builder_limit',field:/минимум/i.test(m[1])?'min_sauces':'max_sauces',value:Number(m[2])};
+  m=raw.match(/^максимум\s+добав(?:ок|ки)\s+(\d+)$/i);
+  if(m)return {intent:'builder_limit',field:'max_extras',value:Number(m[1])};
+
+  m=raw.match(/^название\s+конструктора\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'builder_title',value:clean(m[1])};
+  m=raw.match(/^(?:описание|подзаголовок)\s+конструктора\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'builder_subtitle',value:clean(m[1])};
 
   m=raw.match(/^(?:поставь\s+)?цен[ау]\s+(?:на\s+)?(.+?)\s+(?:в\s+|на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i)||
     raw.match(/^(?:измени|поменяй|установи)\s+цен[ау]\s+(?:на\s+)?(.+?)\s+(?:на|до)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);

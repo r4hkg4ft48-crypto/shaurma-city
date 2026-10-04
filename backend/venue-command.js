@@ -68,7 +68,7 @@ function parseCommand(text){
 
   m=raw.match(/^\/item\s+(.+)$/i)||
     raw.match(/^(?:работаем с|работать с|настрой|настраиваем|редактируй|редактируем|открой)\s+(?:позицию|блюдо|товар)?\s*(.+)$/i);
-  if(m)return {intent:'menu_item_select',item:clean(m[1])};
+  if(m&&!/^(?:выбор|выбором|групп|параметр)/i.test(clean(m[1])))return {intent:'menu_item_select',item:clean(m[1])};
 
   m=raw.match(/^(?:покажи|дай)\s+(?:настройки\s+)?(?:позиции|блюда|товара)\s+(.+)$/i);
   if(m)return {intent:'menu_item_show',item:clean(m[1])};
@@ -106,9 +106,11 @@ function parseCommand(text){
   m=raw.match(/^(?:дублируй|дублировать|скопируй|копия)\s+(?:позицию|блюдо|товар)?\s*(.*)$/i);
   if(m)return {intent:'menu_duplicate',item:clean(m[1])};
 
-  m=raw.match(/^(?:минимум|min)\s+(?:по\s+)?(\d+)\s*(?:шт|штук)?$/i);
+  m=raw.match(/^(?:минимум|min)\s+(?:по\s+)?(\d+)\s*(?:шт|штук|штуки)\s*(?:в заказе)?$/i)||
+    raw.match(/^минимальное количество\s+(\d+)$/i);
   if(m)return {intent:'menu_qty',field:'min_qty',value:Number(m[1])};
-  m=raw.match(/^(?:максимум|max)\s+(?:по\s+)?(\d+)\s*(?:шт|штук)?$/i);
+  m=raw.match(/^(?:максимум|max)\s+(?:по\s+)?(\d+)\s*(?:шт|штук|штуки)\s*(?:в заказе)?$/i)||
+    raw.match(/^максимальное количество\s+(\d+)$/i);
   if(m)return {intent:'menu_qty',field:'max_qty',value:Number(m[1])};
 
   m=raw.match(/^(?:добавь|создай)\s+(?:выбор|группу|параметр)\s+(.+)$/i);

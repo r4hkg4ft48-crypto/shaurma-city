@@ -8,7 +8,7 @@ const PERMISSION_BY_INTENT={
   menu_show:'menu',menu_price:'menu',menu_price_context:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
   menu_item_select:'menu',menu_item_show:'menu',menu_available:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',
   menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
-  choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
+  choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_rename:'menu',choice_group_toggle:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
   category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',
   builder_toggle:'menu',builder_show:'menu',builder_option_add:'menu',builder_option_delete:'menu',builder_option_price:'menu',builder_option_rename:'menu',builder_limit:'menu',builder_title:'menu',builder_subtitle:'menu',
@@ -120,6 +120,13 @@ function parseCommand(text){
   if(m)return {intent:'choice_group_select',group:clean(m[1])};
   m=raw.match(/^(?:удали|убери)\s+(?:выбор|группу|параметр)\s*(.*)$/i);
   if(m)return {intent:'choice_group_delete',group:clean(m[1])};
+  m=raw.match(/^переименуй\s+(?:выбор|группу|параметр)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'choice_group_rename',group:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:выключи|скрой)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_toggle',group:clean(m[1]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_toggle',group:clean(m[1]),enabled:true};
+
 
   if(/^(?:сделай\s+)?(?:выбор\s+)?обязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:true};
   if(/^(?:сделай\s+)?(?:выбор\s+)?необязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:false};
@@ -661,7 +668,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       }
     }
 
-    if(command.intent==='choice_group_add'||command.intent==='choice_group_select'||command.intent==='choice_group_delete'||command.intent==='choice_group_required'||command.intent==='choice_group_type'||command.intent==='choice_group_limit'||command.intent==='choice_option_add'||command.intent==='choice_option_price'||command.intent==='choice_option_toggle'||command.intent==='choice_option_delete'||command.intent==='choice_option_rename'||command.intent==='choice_option_default'){
+    if(command.intent==='choice_group_add'||command.intent==='choice_group_select'||command.intent==='choice_group_delete'||command.intent==='choice_group_rename'||command.intent==='choice_group_toggle'||command.intent==='choice_group_required'||command.intent==='choice_group_type'||command.intent==='choice_group_limit'||command.intent==='choice_option_add'||command.intent==='choice_option_price'||command.intent==='choice_option_toggle'||command.intent==='choice_option_delete'||command.intent==='choice_option_rename'||command.intent==='choice_option_default'){
       const found=resolveItem(command.item);
       if(!found.item)return itemMissing(command.item,found.matches);
       const item=found.item;
@@ -698,6 +705,16 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_delete',{item_id:item.id,group_id:group.id});
         await selectGroupContext(user.id,'');
         return {handled:true,text:'✅ Выбор «'+group.name+'» удалён.'};
+      }
+      if(command.intent==='choice_group_rename'){
+        const old=group.name;group.name=String(command.name||'').slice(0,120);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_rename',{item_id:item.id,group_id:group.id,old_name:old,new_name:group.name});
+        return {handled:true,text:'✅ Выбор «'+old+'» → «'+group.name+'».'};
+      }
+      if(command.intent==='choice_group_toggle'){
+        group.active=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_toggle',{item_id:item.id,group_id:group.id,active:group.active});
+        return {handled:true,text:'✅ Выбор «'+group.name+'» — '+(group.active?'включён':'временно отключён')+'.'};
       }
       if(command.intent==='choice_group_required'){
         group.required=command.required;

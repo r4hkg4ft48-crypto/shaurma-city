@@ -4,7 +4,7 @@
 <title>Шаурмег · меню</title>
 <script>window.__SHAURMEG_ASSET_VERSION__=Date.now().toString(36);document.write('<link rel="stylesheet" href="app.css?v='+window.__SHAURMEG_ASSET_VERSION__+'">');</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head><body class="venuePage">
+<link rel="stylesheet" href="builder-cinema.css?v=20261004"></head><body class="venuePage">
 <header class="topbar glass venueTopbar">
   <button class="iconBtn" id="back" aria-label="Назад">‹</button>
   <div class="brand venueBrand"><span class="venueThemeDot"></span><div><b id="topName">Меню</b><small id="topAddress">ЗАГРУЗКА</small></div></div>
@@ -114,14 +114,16 @@
     </div>
 
     <div id="builderCustomMode">
+      <div id="builderCinema"></div>
+      <div class="builderStepNav"><small id="builderStepLabel">01 / 05 · ФОРМАТ</small><div class="builderStepDots" id="builderStepDots"></div></div>
       <div class="builderBlock"><small>1 · Формат</small><div class="builderOptions" id="builderTypes"></div></div>
       <div class="builderBlock" id="builderBreadBlock"><small>2 · Лаваш</small><div class="builderOptions" id="builderBreads"></div></div>
       <div class="builderBlock" id="builderMeatBlock"><small>3 · Мясо</small><div class="builderOptions" id="builderMeats"></div></div>
       <div class="builderBlock"><small>4 · Соусы</small><div class="builderOptions" id="builderSauces"></div><div class="notice" id="sauceHint">Выбери минимум один соус</div></div>
       <div class="builderBlock" id="builderIngredientsBlock"><small>5 · Ингредиенты</small><div class="builderOptions" id="builderExtras"></div></div>
       <div class="totalRow"><span id="builderSummary">Твоя сборка</span><b id="builderPrice">0 ₽</b></div>
-      <button class="primaryBtn orderCta" id="addBuilder">Собрать шаурму</button>
-      <div class="builderSingularity" id="builderSingularity" aria-hidden="true"><i></i><i></i><i></i><span></span></div>
+      <div class="builderStepActions"><button class="plainBtn" type="button" id="builderStepBack">← Назад</button><button class="primaryBtn" type="button" id="builderStepNext">Далее →</button><button class="primaryBtn orderCta" id="addBuilder" hidden>Посмотреть сборку</button></div>
+
     </div>
 
     <div class="signatureMode" id="builderSignatureMode" hidden>
@@ -166,5 +168,5 @@
 </section>
 
 <div class="toast" id="toast"></div>
-<script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load(entry));})(window.__SHAURMEG_ASSET_VERSION__,'menu.js');</script>
+<script>(function(v,entry){const load=(src,next)=>{const s=document.createElement('script');s.src=src+'?v='+v;s.onload=next||null;document.body.appendChild(s)};load('config.js',()=>load('builder-cinema.js',()=>load(entry)));})(window.__SHAURMEG_ASSET_VERSION__,'menu.js');</script>
 </body></html>

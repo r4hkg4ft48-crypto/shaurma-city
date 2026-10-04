@@ -19,6 +19,9 @@
 .builderVisualEmpty{padding:12px;text-align:center;color:var(--muted);font-size:10px}
 @media(max-width:680px){.builderVisualTop,.builderVisualLimits{grid-template-columns:1fr}.builderVisualRow{grid-template-columns:minmax(0,1fr) 88px}.builderVisualActions{grid-column:1/-1;justify-content:flex-end}}
 </style>
+<link rel="stylesheet" href="/realcity-preview/builder-cinema.css?v=20261004">
+<script src="/realcity-preview/builder-cinema.js?v=20261004"></script>
+<script src="/realcity-preview/builder-cinema-admin.js?v=20261004"></script>
 </head>
 <body>
 <div class="wrap" id="app" hidden>
@@ -82,7 +85,7 @@
         <div class="field full"><label><input id="builderStudioEnabled" type="checkbox" style="width:auto"> Конструктор включён</label></div>
         <div class="field full">
           <label>Ингредиенты конструктора</label>
-          <div class="builderVisualEditor">
+          <div id="cinemaEditor"></div><div class="builderVisualEditor">
             <div class="builderVisualTop">
               <div class="field"><label>Заголовок</label><input id="ownerBuilderTitle" maxlength="100" placeholder="Собери свою шаурму"></div>
               <div class="field"><label>Подпись</label><input id="ownerBuilderSubtitle" maxlength="180" placeholder="Выбери основу, мясо, соусы и добавки"></div>
@@ -196,6 +199,7 @@ async function refreshMe(){
    if(REQUESTED_TAB==='add'&&!MASTER_MODE)openAddVenue();
  }
 }
+const cinemaEditor=new BuilderCinemaEditor($('#cinemaEditor'),{request:(path,opt={})=>api(path,{...opt,body:opt.body?JSON.stringify(opt.body):undefined}),compress:file=>compress(file,1100,1100,.8),base:id=>'/api/venue-owner/establishments/'+encodeURIComponent(id)+'/builder-cinema'});
 async function openVenue(id){
  currentId=id;$('#venueSelect').value=id;
  try{const u=new URL(location.href);u.searchParams.set('establishment',id);history.replaceState(null,'',u.toString())}catch{}
@@ -208,6 +212,7 @@ async function openVenue(id){
  siteBackground=siteCustomization?.design?.background_image||'';
  builderResultImage=siteCustomization?.builder_result?.image||'';
  builderConfigDraft=normalizeOwnerBuilder(venue.config?.builder);
+ cinemaEditor.setContext(currentId,builderConfigDraft);
  $('#topId').textContent=id;$('#venueName').textContent=venue.name;$('#venueAddress').textContent=venue.address||'Адрес не указан';
  $('#establishmentId').value=id;$('#markerId').value=venue.marker_id||'';$('#name').value=venue.name||'';$('#address').value=venue.address||'';$('#description').value=venue.description||'';$('#hours').value=venue.hours||'';$('#priceLabel').value=venue.price_label||'';
  $('#phone').value=venue.config?.phone||'';$('#website').value=venue.config?.website||'';$('#subtitle').value=venue.config?.subtitle||'МЕНЮ И ЗАКАЗ';$('#accent').value=/^#[0-9a-f]{6}$/i.test(venue.config?.accent||'')?venue.config.accent:'#2f6df6';$('#builder').checked=venue.config?.builder_enabled===true;
@@ -309,7 +314,7 @@ async function saveBuilderStudio(){
  try{
    syncOwnerBuilderMeta();
    const j=await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/builder',{method:'PUT',body:JSON.stringify({enabled:$('#builderStudioEnabled').checked,builder:builderConfigDraft})});
-   venue.config={...(venue.config||{}),builder_enabled:j.builder_enabled,builder:j.builder};builderConfigDraft=normalizeOwnerBuilder(j.builder);$('#builder').checked=j.builder_enabled===true;renderOwnerBuilder();toast('Конструктор и ингредиенты сохранены');
+   venue.config={...(venue.config||{}),builder_enabled:j.builder_enabled,builder:j.builder};builderConfigDraft=normalizeOwnerBuilder(j.builder);$('#builder').checked=j.builder_enabled===true;renderOwnerBuilder();cinemaEditor.setContext(currentId,builderConfigDraft);toast('Конструктор и ингредиенты сохранены');
  }catch(e){toast('Не удалось сохранить конструктор')}finally{b.disabled=false}
 }
 function connectOrderStream(){

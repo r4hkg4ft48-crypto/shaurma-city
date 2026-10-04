@@ -3,6 +3,8 @@
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
   let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
+  let cinema=null,builderStep=0,building=false,buildAttempt=0;
+  const cinemaForType=()=>ctx?.venue?.config?.builder_cinema?.find(x=>x.type_id===builderState.type);
   const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
   const THEMES={
     emerald:{accent:'#54d9a0',accent2:'#eafff6',bg:'#120f18',panel:'#1a1420',panel2:'#241a2b',hero:'#25352f',glow:'rgba(84,217,160,.24)',ink:'#143326'},
@@ -117,6 +119,7 @@
     document.querySelectorAll('.sheet').forEach(x=>x.classList.toggle('show',x.id===id));
   }
   function closeSheets(){
+    buildAttempt++;cinema?.cancel();building=false;if($('#addBuilder'))$('#addBuilder').disabled=false;
     $('#backdrop').classList.remove('show');
     document.querySelectorAll('.sheet').forEach(x=>x.classList.remove('show'));
     unlockSheetBackground();
@@ -244,11 +247,12 @@
   }
   function setBuilderMode(mode){
     if(mode==='signature'&&!signatureItems.length){toast('Фирменные позиции пока не настроены');return}
+    if(building)return;
     builderMode=mode==='signature'?'signature':'custom';
     document.querySelectorAll('#builderModeSwitch [data-builder-mode]').forEach(b=>b.classList.toggle('active',b.dataset.builderMode===builderMode));
     $('#builderCustomMode').hidden=builderMode!=='custom';
     $('#builderSignatureMode').hidden=builderMode!=='signature';
-    if(builderMode==='signature'){fillSignatureCard();try{$('#builderSheet').scrollTo({top:0,behavior:'smooth'})}catch{}}
+    if(builderMode==='signature'){cinema?.cancel();fillSignatureCard();try{$('#builderSheet').scrollTo({top:0,behavior:'smooth'})}catch{}}
   }
   function chooseSignature(){
     const src=signatureItems[signatureIndex];if(!src)return;
@@ -270,6 +274,7 @@
       builderState.sauces.reduce((s,id)=>s+optionPrice(builder.sauces,id),0)+builderState.extras.reduce((s,id)=>s+optionPrice(builder.extras,id),0);
   }
   function renderBuilder(){
+    if(building)return;
     if(!builder)return;
     const type=option(builder.types,builderState.type)||builder.types[0];
     if(!builderState.type)builderState.type=String(type?.id||'');
@@ -287,11 +292,31 @@
     $('#builderPrice').textContent=money(builderTotal());
     const bread=optionName(builder.breads,builderState.bread),meat=optionName(builder.meats,builderState.meat);
     $('#builderSummary').textContent=[type?.name,bread,meat].filter(Boolean).join(' · ');
+    renderBuilderStep();
     const min=Math.max(0,Number(builder.min_sauces)||0);
     $('#sauceHint').textContent=builderState.sauces.length?'Соусы: '+builderState.sauces.map(id=>optionName(builder.sauces,id)).join(', '):(min?'Выбери минимум '+min+' соус'+(min===1?'':'а'):'Соус можно не добавлять');
   }
+  function renderBuilderStep(){
+    const blocks=[...document.querySelectorAll('#builderCustomMode .builderBlock')];
+    const labels=['ФОРМАТ','ЛАВАШ','МЯСО','СОУСЫ','ДОБАВКИ'];
+    blocks.forEach((b,i)=>{b.hidden=i!==builderStep;});
+    $('#builderStepLabel').textContent=String(builderStep+1).padStart(2,'0')+' / 05 · '+labels[builderStep];
+    $('#builderStepDots').innerHTML=labels.map((_,i)=>'<i class="'+(i<=builderStep?'active':'')+'"></i>').join('');
+    $('#builderStepNext').hidden=builderStep===4;$('#addBuilder').hidden=builderStep!==4;
+    if(!cinema)cinema=new BuilderCinema.Scene($('#builderCinema'));
+    cinema.update(builder,{...builderState,meat:builderStep>=2?builderState.meat:''},cinemaForType());
+  }
+  function changeBuilderStep(delta){
+    if(building)return;
+    if(delta>0&&builderStep===3&&builderState.sauces.length<builder.min_sauces)return toast('Выберите соусов: минимум '+builder.min_sauces);
+    if(builderStep===0&&delta<0)return closeSheets();
+    do{builderStep=Math.max(0,Math.min(4,builderStep+delta));}
+    while(builderStep>0&&builderStep<4&&!builder[['types','breads','meats','sauces','extras'][builderStep]]?.length);
+    renderBuilderStep();$('#builderSheet').scrollTo({top:0,behavior:'smooth'});
+  }
   function openBuilder(startMode='custom'){
     if(!builder)return;
+    buildAttempt++;building=false;builderStep=0;cinema?.cancel();$('#addBuilder').disabled=false;
     builderState={type:String(builder.types?.[0]?.id||''),bread:String(builder.breads?.[0]?.id||''),meat:String(builder.meats?.[0]?.id||''),sauces:[],extras:[]};
     pendingBuilt=null;builderResultOrigin='custom';signatureIndex=0;signatureItems=signatureCollection();
     const signatureLabel=document.querySelector('#builderModeSwitch [data-builder-mode="signature"] b');
@@ -317,7 +342,7 @@
     const r=siteCustomization?.builder_result||{};
     pendingBuilt=payload;builderResultOrigin=origin;
     const isSignature=origin==='signature'||payload?.signature===true;
-    const img=String(payload?.previewImage||(isSignature?'':r.image)||ctx?.marker?.hero_image||'assets/menu-shawarma.webp');
+    const img=String(payload?.previewImage||(isSignature?'':cinemaForType()?.reference_url||r.image)||ctx?.marker?.hero_image||'assets/menu-shawarma.webp');
     $('#builderResultImg').src=img;
     $('#builderResultTitle').textContent=isSignature?payload.n:(r.title||'Твоя шаурма готова');
     $('#builderResultSubtitle').textContent=isSignature?(payload.detail||'Фирменная шаурма выбрана. Осталось добавить её в корзину.'):(r.subtitle||'Сборка завершена. Осталось добавить её в корзину.');
@@ -326,19 +351,17 @@
     try{$('#builderSheet').scrollTo({top:0,behavior:'smooth'})}catch{}
     tg?.HapticFeedback?.notificationOccurred?.('success');
   }
-  function previewBuilt(){
+  async function previewBuilt(){
+    if(building)return;
     const payload=builtPayload();if(!payload)return;
-    const r=siteCustomization?.builder_result||{};
-    if(r.enabled===false||siteCustomization?.features?.builder_result===false){pendingBuilt=payload;return confirmBuilt()}
-    const stage=$('#builderStage'),sheet=$('#builderSheet'),ingredients=$('#builderIngredientsBlock');
-    try{sheet.scrollTo({top:Math.max(0,(ingredients?.offsetTop||0)-120),behavior:'smooth'})}catch{}
-    if(r.singularity===false){setTimeout(()=>showBuilderResult(payload),220);return}
-    stage.style.setProperty('--singularity-duration',(Number(r.duration_ms)||1050)+'ms');
-    setTimeout(()=>{
-      stage.classList.add('builderCollapsing');
-      tg?.HapticFeedback?.impactOccurred?.('medium');
-      setTimeout(()=>showBuilderResult(payload),Number(r.duration_ms)||1050);
-    },260);
+    const attempt=++buildAttempt;building=true;$('#addBuilder').disabled=true;
+    $('#builderCustomMode').querySelectorAll('.builderChoice').forEach(b=>b.disabled=true);
+    $('#builderSheet').scrollTo({top:0,behavior:'smooth'});
+    const complete=await cinema.play(builder,builderState,cinemaForType(),{finish:true});
+    if(attempt!==buildAttempt)return;
+    building=false;$('#addBuilder').disabled=false;
+    $('#builderCustomMode').querySelectorAll('.builderChoice').forEach(b=>b.disabled=false);
+    if(complete&&$('#builderSheet').classList.contains('show'))showBuilderResult(payload);
   }
   function confirmBuilt(){
     if(!pendingBuilt)return;
@@ -633,13 +656,15 @@
   $('#cartBtn').onclick=()=>openSheet('cartSheet');
   $('#checkoutBtn').onclick=()=>openSheet('checkoutSheet');
   $('#profileBtn').onclick=()=>{openSheet('profileSheet');myOrders()};
+  $('#builderStepNext').onclick=()=>changeBuilderStep(1);
+  $('#builderStepBack').onclick=()=>changeBuilderStep(-1);
   $('#backdrop').onclick=closeSheets;
   document.querySelectorAll('[data-close]').forEach(x=>x.onclick=closeSheets);
   document.addEventListener('touchmove',e=>{
     if(!sheetLocked)return;
     if(!e.target.closest?.('.sheet.show'))e.preventDefault();
   },{passive:false});
-  window.addEventListener('pagehide',()=>{unlockSheetBackground();try{menuStream?.close()}catch{}menuStream=null;try{orderStream?.close()}catch{}orderStream=null});
+  window.addEventListener('pagehide',()=>{cinema?.cancel();unlockSheetBackground();try{menuStream?.close()}catch{}menuStream=null;try{orderStream?.close()}catch{}orderStream=null});
   $('#fulfillment').onclick=e=>{const b=e.target.closest('[data-value]');if(!b)return;fulfillment=b.dataset.value;document.querySelectorAll('#fulfillment button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.delivery').forEach(x=>x.classList.toggle('hidden',fulfillment!=='delivery'))};
   $('#placeOrder').onclick=submitOrder;
   $('#successMenu').onclick=closeSheets;

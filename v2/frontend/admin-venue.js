@@ -1,6 +1,7 @@
 (() => {
  const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
  let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'',accesses=[],est='',data=null,menu=[],builder=null,stream=null;
+ const cinemaEditor=new BuilderCinemaEditor($('#cinemaEditor'),{request:call,compress:compressMenuPhoto,base:id=>'/venue-owner/establishments/'+encodeURIComponent(id)+'/builder-cinema'});
  const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
  const DEFAULT_THEME={primary:'#D94343',secondary:'#13233B',tone:'balanced'};
  const LEGACY_THEME_PRESETS={
@@ -253,7 +254,7 @@
    $('#vMarkerIcon').value=data.marker_style?.icon||'🥙';$('#vMarkerBg').value=data.marker_style?.background||'#D94343';$('#vBuilderEnabled').checked=data.config?.builder_enabled===true;
    syncThemeInputs(themeForConfig(data.config||{}));
    $('#menuVenueLabel').textContent=data.name||'Заведение';$('#menuEstLabel').textContent=est;
-   renderMenu();renderBuilderEditor();await loadOrders();connect();
+   renderMenu();renderBuilderEditor();cinemaEditor.setContext(est,builder);await loadOrders();connect();
  }
  async function saveProfile(){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/profile',{method:'PATCH',body:{name:$('#vName').value,address:$('#vAddress').value,description:$('#vDescription').value,hours:$('#vHours').value,price_label:$('#vPrice').value}});toast('Профиль сохранён ✓');await load()}catch(e){toast(e.message)}}
  async function saveTheme(){

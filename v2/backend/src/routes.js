@@ -10,6 +10,7 @@ const realcity=require('./realcity-service');
 const telegram=require('./telegram');
 
 const router=express.Router();
+const builderCinema=require('./builder-cinema').install(router,{db,access:venueAccess,apiUrl:config.PUBLIC_API_URL});
 
 function fail(res,e,fallback='server_error'){console.error(fallback,e);res.status(e.status||500).json({error:e.message||fallback})}
 function verifyCustomerTelegram(initData){
@@ -258,7 +259,8 @@ router.get('/menu-context',async(req,res)=>{
       if(!/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw))return x;
       return {...x,image:config.PUBLIC_API_URL+'/api/v2/menu-image/'+encodeURIComponent(ctx.venue.establishment_id)+'/'+encodeURIComponent(String(x.id))+'?v='+stamp};
     });
-    res.setHeader('Cache-Control','no-store');res.json({...ctx,venue:{...ctx.venue,menu:publicMenu}});
+    const cinema=await builderCinema.publicScenes(ctx.venue.establishment_id,D.normalizeBuilderConfig(ctx.venue.config?.builder));
+    res.setHeader('Cache-Control','no-store');res.json({...ctx,venue:{...ctx.venue,menu:publicMenu,config:{...ctx.venue.config,builder_cinema:cinema}}});
   }catch(e){fail(res,e,'menu_context_failed')}
 });
 

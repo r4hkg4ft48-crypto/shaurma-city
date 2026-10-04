@@ -101,7 +101,7 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 .menuSection{margin-top:26px}.venuePage .sectionHead h2{font-size:28px}.venuePage .sectionHead>div>small{color:var(--venue-accent);font-weight:900;letter-spacing:.13em}
 .venuePage .chips{gap:8px;padding-bottom:11px}
 .venuePage .chip{min-height:38px;padding:0 14px;background:color-mix(in srgb,var(--venue-panel2) 68%,transparent);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.62);font-weight:800}
-.venuePage .chip.active{color:var(--venue-ink);background:var(--venue-accent);box-shadow:0 8px 24px var(--venue-glow)}
+.venuePage .chip.active{color:var(--venue-ink);background:var(--venue-accent);box-shadow:0 8px 24px var(--venue-glow)}.venuePage .chip{display:inline-flex;align-items:center;gap:7px}.chipPhoto{width:24px;height:24px;border-radius:7px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,.18)}.venuePage .chip.active .chipPhoto{box-shadow:0 0 0 2px color-mix(in srgb,var(--venue-ink) 18%,transparent)}
 .venuePage .menuGrid{gap:12px;align-items:stretch}
 .venuePage .foodCard{
   min-height:292px;border-radius:24px;
@@ -3862,3 +3862,5 @@ body.panelOpen .activeOrderBadge,html.sheetOpen .activeOrderBadge{opacity:.18;po
 @media (max-width:420px){
   .activeOrderBadge{width:64px;height:64px;top:calc(env(safe-area-inset-top,0px) + 78px);right:max(14px,env(safe-area-inset-right,0px))}
 }
+
+.menuCategoryLabel img{width:42px;height:42px;border-radius:12px;object-fit:cover;box-shadow:0 7px 20px rgba(0,0,0,.2)}

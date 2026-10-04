@@ -399,7 +399,7 @@
     const visibleSections=sections.filter(x=>usedCats.has(String(x.id)));
     if(category!=='all'&&!visibleSections.some(x=>String(x.id)===String(category)))category='all';
     $('#menuCount').textContent=menu.length+' позиций';
-    $('#chips').innerHTML='<button class="chip '+(category==='all'?'active':'')+'" data-cat="all"><i>✦</i><span>Все</span></button>'+visibleSections.map(x=>'<button class="chip '+(String(x.id)===String(category)?'active':'')+'" data-cat="'+esc(x.id)+'"><i>'+esc(x.emoji||'•')+'</i><span>'+esc(x.name)+'</span></button>').join('');
+    $('#chips').innerHTML='<button class="chip '+(category==='all'?'active':'')+'" data-cat="all"><span>Все</span></button>'+visibleSections.map(x=>'<button class="chip '+(String(x.id)===String(category)?'active':'')+'" data-cat="'+esc(x.id)+'">'+(x.cover?'<img class="chipPhoto" src="'+esc(x.cover)+'" alt="">':'')+'<span>'+esc(x.name)+'</span></button>').join('');
     if(ctx.marker.hero_image){
       $('#menuSection')?.style.setProperty('--menu-atmosphere','url("'+String(ctx.marker.hero_image).replace(/["\\]/g,'')+'")');
     }
@@ -502,7 +502,7 @@
     let title='';
     if(category!=='all'){
       const meta=sectionById.get(String(category));
-      title=meta?'<div class="menuCategoryLabel"><span>'+esc(meta.emoji||'✦')+'</span><b>'+esc(meta.name||'Раздел')+'</b></div>':'';
+      title=meta?'<div class="menuCategoryLabel">'+(meta.cover?'<img src="'+esc(meta.cover)+'" alt="">':'')+'<b>'+esc(meta.name||'Раздел')+'</b></div>':'';
     }
     const layout=siteCustomization?.menu?.layout||'hero-2-3';
     const firstClass=layout==='uniform-3'?'otherDishGrid':'mainDishGrid';

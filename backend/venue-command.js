@@ -1109,7 +1109,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {handled:false};
   }
 
-  async function setItemImage({user,itemQuery,image}){
+  async function setItemImage({user,itemQuery,image,galleryMode=false}){
     const resolved=await resolveAccess(user.id,{intent:'menu_item_show'});
     if(resolved.error)return {handled:true,text:resolved.error};
     const access=resolved.access;
@@ -1127,10 +1127,13 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       const hint=(found.matches||[]).length?'\nВозможно:\n'+found.matches.map(x=>'• '+String(x.n||x.name)).join('\n'):'';
       return {handled:true,text:clean(itemQuery)?'Не нашёл позицию «'+itemQuery+'».'+hint:'Сначала выберите позицию: «работаем с сырной шаурмой», затем отправьте фото.'};
     }
-    found.item.image=String(image||'').slice(0,700000);
-    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_image',{item_id:found.item.id,has_image:!!found.item.image});
+    if(galleryMode){
+      found.item.gallery=Array.isArray(found.item.gallery)?found.item.gallery.slice(0,11):[];
+      found.item.gallery.push(String(image||'').slice(0,700000));
+    }else found.item.image=String(image||'').slice(0,700000);
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},galleryMode?'assistant_menu_gallery_add':'assistant_menu_image',{item_id:found.item.id,has_image:!!found.item.image,gallery_count:(found.item.gallery||[]).length});
     await selectItemContext(user.id,found.item.id);
-    return {handled:true,text:'✅ Фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
+    return {handled:true,text:galleryMode?'✅ Фото добавлено в галерею «'+String(found.item.n||found.item.name)+'».':'✅ Главное фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
   }
 
   return {handle,setItemImage};

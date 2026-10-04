@@ -324,21 +324,7 @@ function canUse(access,permission){
 }
 
 function sectionsFrom(config={},menu=[]){
-  const raw=Array.isArray(config?.menu_sections)?config.menu_sections:[];
-  const out=raw.map((x,i)=>({
-    id:clean(x?.id||slug(x?.name||('section_'+i))),
-    name:clean(x?.name||x?.title||x?.id||'Раздел'),
-    emoji:clean(x?.emoji||'').slice(0,8),
-    active:x?.active!==false,
-    order:i
-  })).filter(x=>x.id&&x.name);
-  const seen=new Set(out.map(x=>x.id));
-  for(const item of Array.isArray(menu)?menu:[]){
-    const id=clean(item?.c||item?.category||'shawarma');
-    if(!id||seen.has(id))continue;
-    seen.add(id);out.push({id,name:id,emoji:'',active:true,order:out.length});
-  }
-  return out.map((x,i)=>({...x,order:i}));
+  return D.menuSectionsAll(config||{},Array.isArray(menu)?menu:[]);
 }
 
 function looseWords(v){
@@ -376,14 +362,20 @@ function itemSettingsText(item,sections=[]){
     'Категория: '+String(section?.name||item.c||item.category||'—'),
     'Цена: '+Number(item.p??item.price??0)+' ₽',
     'В меню: '+(item.active===false?'нет':'да'),
-    'В наличии: '+(item.available===false?'нет':'да'),
+    'Остаток: '+(item.stock===null||item.stock===undefined?'без лимита':String(item.stock)),
     'Карточка: '+String(item.display||'auto'),
     'Главная: '+(item.featured===true?'да':'нет'),
+    'Рекомендуемая: '+(item.recommended===true?'да':'нет'),
     'Бейдж: '+String(item.badge||'—'),
-    'Количество: '+Math.max(1,Number(item.min_qty)||1)+'–'+Math.max(1,Number(item.max_qty)||50),
+    'Вес / объём: '+String(item.weight||'—'),
+    'SKU: '+String(item.sku||'—'),
+    'Количество в заказе: '+Math.max(1,Number(item.min_qty)||1)+'–'+Math.max(1,Number(item.max_qty)||50),
     'Групп выбора: '+groups.length
   ];
   if(item.d||item.description)lines.push('Описание: '+String(item.d||item.description));
+  if(item.composition)lines.push('Состав: '+String(item.composition));
+  if(Array.isArray(item.tags)&&item.tags.length)lines.push('Теги: '+item.tags.join(', '));
+  if(item.schedule?.enabled)lines.push('Расписание: дни '+(item.schedule.days||[]).join(',')+' · '+String(item.schedule.from||'')+'–'+String(item.schedule.to||''));
   for(const g of groups){
     const opts=Array.isArray(g.options)?g.options:[];
     lines.push('• '+String(g.name||'Выбор')+' · '+(g.active===false?'выкл · ':'')+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
@@ -498,8 +490,10 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
 
   async function saveMenu(access,userId,menu,config,action,payload){
     const normalized=D.normalizeMenu(menu);
+    const base=config&&typeof config==='object'?config:{};
+    const nextConfig={...base,menu_sections:D.normalizeMenuSections(base.menu_sections,normalized,true)};
     const q=await DB.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
-      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(config||{})]);
+      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(nextConfig)]);
     if(q.rows[0])publishVenue(q.rows[0]);
     await audit(access.establishment_id,userId,action,payload);
     return q.rows[0];
@@ -619,8 +613,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'✅ '+String(item.n||item.name)+': '+old+' ₽ → '+command.price+' ₽'};
       }
       if(command.intent==='menu_available'){
-        item.available=command.available;
-        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_available',{item_id:item.id,available:command.available});
+        item.stock=command.available?null:0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_available',{item_id:item.id,stock:item.stock});
         return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.available?'снова в наличии':'добавлено в стоп-лист. В Mini App останется видно, но заказать нельзя.')};
       }
       if(command.intent==='menu_badge'){
@@ -667,7 +661,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'✅ Позиция «'+name+'» удалена из меню.'};
       }
       if(command.intent==='menu_duplicate'){
-        const copy={...item,id:slug(item.n||item.name)+'_'+Date.now().toString(36).slice(-6),n:String(item.n||item.name)+' — копия',featured:false,choice_groups:JSON.parse(JSON.stringify(item.choice_groups||[]))};
+        const copy={...item,id:slug(item.n||item.name)+'_'+Date.now().toString(36).slice(-6),n:String(item.n||item.name)+' — копия',featured:false,recommended:false,gallery:JSON.parse(JSON.stringify(item.gallery||[])),options:JSON.parse(JSON.stringify(item.options||{})),choice_groups:JSON.parse(JSON.stringify(item.choice_groups||[]))};
         menu.splice(index+1,0,copy);
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_duplicate',{source_item_id:item.id,item_id:copy.id});
         await selectItemContext(user.id,copy.id);

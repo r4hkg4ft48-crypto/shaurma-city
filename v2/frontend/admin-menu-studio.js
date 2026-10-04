@@ -2,7 +2,7 @@
 'use strict';
 const S=window.SHAURMEG||{},api=S.api,tg=S.telegram,esc=S.esc||((v)=>String(v??'')),money=S.money||((v)=>Number(v||0)+' ₽');
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clone=x=>JSON.parse(JSON.stringify(x??null));
-let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'',accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,busy=false;
+let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'',accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,busy=false,categoryFilter='all';
 const GROUPS=['meats','sizes','bases','sauces','extras'];
 const GROUP_LABELS={meats:'Варианты мяса',sizes:'Размеры',bases:'Лаваш / основа',sauces:'Соусы',extras:'Дополнения',required_fields:'Обязательные параметры для карточки'};
 const DEFAULT_SITE={design:{mode:'cinematic',background_image:'',ambient_strength:.16,radius:20,panel_opacity:.9,contrast:1},menu:{layout:'hero-2-3',card_style:'photo',image_fit:'cover',show_descriptions:true,hero_label:'НАША ГОРДОСТЬ'},features:{favorites:true,menu_badges:true,builder_result:true}};
@@ -61,7 +61,7 @@ function setView(v){
   if(v==='design')renderGuestPreview()
 }
 function renderCategories(){
-  const q=String($('#categorySearch').value||'').trim().toLowerCase(),rows=sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(s=>!q||String(s.name).toLowerCase().includes(q));
+  const q=String($('#categorySearch').value||'').trim().toLowerCase(),rows=sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(s=>(categoryFilter==='all'||(categoryFilter==='active'&&s.active!==false)||(categoryFilter==='locked'&&s.active===false))&&(!q||String(s.name).toLowerCase().includes(q)));
   $('#categoryList').innerHTML=rows.map(s=>{
     const img=imageOf(s)||imageOf(menu.find(x=>x.c===s.id)),active=s.active!==false;
     return '<article class="categoryRow '+(s.id===currentCategory?'activeSelection ':'')+(active?'':'locked')+'" data-cat="'+esc(s.id)+'">'+
@@ -89,7 +89,7 @@ function renderCategoryEditor(id){
   const s=sectionOf(id);if(!s||s.active===false){$('#categoryEditor').innerHTML='';return}
   currentCategory=id;hydrateHeader();const cover=imageOf(s)||imageOf(menu.find(x=>x.c===id)),gallery=Array.isArray(s.gallery)?s.gallery:[];
   $('#categoryEditor').innerHTML='<section class="categoryEditor">'+
-   '<div class="categoryEditorHero">'+(cover?'<img src="'+esc(cover)+'">':'')+'<div class="catHeroActions"><button class="darkPhotoBtn" data-cat-photo>▣ Изменить фото</button><input id="catPhotoInput" type="file" accept="image/*" hidden></div></div>'+
+   '<div class="categoryEditorHero">'+(cover?'<img src="'+esc(cover)+'">':'')+'<div class="catHeroActions"><button class="darkPhotoBtn" data-cat-move="-1">↑ Выше</button><button class="darkPhotoBtn" data-cat-move="1">↓ Ниже</button><button class="darkPhotoBtn" data-cat-photo>▣ Изменить фото</button><input id="catPhotoInput" type="file" accept="image/*" hidden></div></div>'+
    '<div class="categoryEditorTop"><div class="catMiniPhoto">'+(cover?'<img src="'+esc(cover)+'">':'')+'</div><div><h2>'+esc(s.name)+'</h2><p>Настройте параметры и наполнение категории</p></div><div class="lockedSwitch">Категория активна <span class="switch"></span></div></div>'+
    '<div class="catFields"><div class="fieldGrid"><label class="field"><b>Название категории</b><input id="catName" value="'+esc(s.name)+'"></label><label class="field"><b>Короткая подпись</b><input id="catSubtitle" value="'+esc(s.subtitle||'')+'" placeholder="Например: свежо с гриля"></label></div></div>'+
    '<div class="settingGrid">'+
@@ -109,6 +109,19 @@ function addSetting(key){
   const s=sectionOf(currentCategory);if(!s)return;const v=prompt('Введите новое значение');if(!v?.trim())return;s.settings=s.settings||{};s.settings[key]=Array.isArray(s.settings[key])?s.settings[key]:[];if(!s.settings[key].includes(v.trim()))s.settings[key].push(v.trim());renderCategoryEditor(currentCategory)
 }
 function removeSetting(key,i){const s=sectionOf(currentCategory);if(Array.isArray(s?.settings?.[key]))s.settings[key].splice(i,1);renderCategoryEditor(currentCategory)}
+async function moveCategory(delta){
+  const ordered=sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)),i=ordered.findIndex(x=>x.id===currentCategory),to=i+Number(delta);
+  if(i<0||to<0||to>=ordered.length)return;
+  [ordered[i],ordered[to]]=[ordered[to],ordered[i]];ordered.forEach((x,k)=>x.order=k);sections=ordered;
+  await saveMenu('Порядок категорий сохранён ✓');
+}
+async function moveItem(index,delta){
+  const item=menu[Number(index)];if(!item)return;
+  const peers=menu.map((x,i)=>({x,i})).filter(v=>String(v.x.c)===String(item.c)),p=peers.findIndex(v=>v.i===Number(index)),target=peers[p+Number(delta)];
+  if(p<0||!target)return;
+  [menu[Number(index)],menu[target.i]]=[menu[target.i],menu[Number(index)]];
+  await saveMenu('Порядок позиций сохранён ✓');
+}
 async function saveCategory(){
   const s=sectionOf(currentCategory);if(!s)return;s.name=$('#catName').value.trim()||s.name;s.subtitle=$('#catSubtitle').value.trim();s.manual_sort=$('#catManualSort').checked;s.inherit_template=$('#catInherit').checked;await saveMenu('Категория сохранена ✓')
 }
@@ -125,7 +138,7 @@ function filteredItems(){
 }
 function renderItems(){
   const rows=filteredItems();$('#itemsSummary').innerHTML='<span>Всего: '+menu.length+'</span><span>Активных: '+menu.filter(x=>x.active!==false).length+'</span><span>С фото: '+menu.filter(x=>imageOf(x)).length+'</span>';
-  $('#itemsGrid').innerHTML=rows.map(({x,index})=>'<article class="itemCard"><div class="itemCardPhoto">'+(imageOf(x)?'<img src="'+esc(imageOf(x))+'">':'')+(x.featured?'<span class="itemBadge">ГЛАВНАЯ</span>':'')+'</div><div class="itemCardBody"><h3>'+esc(x.n)+'</h3><p>'+esc(x.d||'Без описания')+'</p><div class="itemMeta">'+[x.weight,...(x.tags||[]).slice(0,2)].filter(Boolean).map(v=>'<span>'+esc(v)+'</span>').join('')+'</div><div class="itemBottom"><b>'+money(x.p)+'</b><button class="itemEdit" data-edit-item="'+index+'">›</button></div></div></article>').join('')||'<div class="designPanel">В категории пока нет позиций.</div>'
+  $('#itemsGrid').innerHTML=rows.map(({x,index})=>'<article class="itemCard"><div class="itemCardPhoto">'+(imageOf(x)?'<img src="'+esc(imageOf(x))+'">':'')+(x.featured?'<span class="itemBadge">ГЛАВНАЯ</span>':'')+'</div><div class="itemCardBody"><h3>'+esc(x.n)+'</h3><p>'+esc(x.d||'Без описания')+'</p><div class="itemMeta">'+[x.weight,...(x.tags||[]).slice(0,2)].filter(Boolean).map(v=>'<span>'+esc(v)+'</span>').join('')+'</div><div class="itemBottom"><b>'+money(x.p)+'</b><div style="margin-left:auto;display:flex;gap:5px"><button class="itemEdit" data-move-item="-1" data-index="'+index+'">↑</button><button class="itemEdit" data-move-item="1" data-index="'+index+'">↓</button><button class="itemEdit" data-edit-item="'+index+'">›</button></div></div></div></article>').join('')||'<div class="designPanel">В категории пока нет позиций.</div>'
 }
 function defaultOptions(cat){
   const s=sectionOf(cat),out={required_groups:[]};for(const g of GROUPS)out[g]=(s?.settings?.[g]||[]).map((name,i)=>({id:slug(name),name,price:0,active:true,default:i===0,image:''}));return out
@@ -188,19 +201,22 @@ function bind(){
   $('#claimBtn').onclick=claim;$('#studioBack').onclick=()=>location.href='admin-venue.html?establishment='+encodeURIComponent(est);
   $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';await load()};
   $('#studioTabs').onclick=e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
-  $('#categorySearch').oninput=renderCategories;
+  $('#categorySearch').oninput=renderCategories;$('#categoryFilterBtn').onclick=()=>{categoryFilter=categoryFilter==='all'?'active':categoryFilter==='active'?'locked':'all';$('#categoryFilterBtn').textContent=categoryFilter==='all'?'Все категории⌄':categoryFilter==='active'?'Только активные⌄':'Отключённые⌄';renderCategories()};
   $('#categoryList').onclick=e=>{const b=e.target.closest('[data-open-cat]');if(!b)return;currentCategory=b.dataset.openCat;renderCategories();setTimeout(()=>$('#categoryEditor').scrollIntoView({behavior:'smooth',block:'start'}),30)};
   $('#categoryEditor').onclick=e=>{
+    let g=e.target.closest('[data-cat-gallery]');if(g){const s=sectionOf(currentCategory);s?.gallery?.splice(Number(g.dataset.catGallery),1);return renderCategoryEditor(currentCategory)}
     let b=e.target.closest('[data-add-setting]');if(b)return addSetting(b.dataset.addSetting);
     b=e.target.closest('[data-remove-setting]');if(b)return removeSetting(b.dataset.removeSetting,Number(b.dataset.index));
     b=e.target.closest('[data-cat-color]');if(b){sectionOf(currentCategory).color=b.dataset.catColor;sectionOf(currentCategory).accent=b.dataset.catColor==='#F7F8FA'?'#FF463D':'#FF463D';return renderCategoryEditor(currentCategory)}
+    b=e.target.closest('[data-cat-move]');if(b)return moveCategory(Number(b.dataset.catMove));
     if(e.target.closest('[data-cat-photo]'))return $('#catPhotoInput').click();
     if(e.target.closest('[data-save-cat]'))return saveCategory();
   };
   $('#categoryEditor').onchange=e=>{if(e.target.id==='catPhotoInput'&&e.target.files?.[0])catPhoto(e.target.files[0]).catch(x=>toast(x.message));if(e.target.id==='catGalleryInput'&&e.target.files?.length)catGallery(e.target.files).catch(x=>toast(x.message))};
-  $('#itemSearch').oninput=renderItems;$('#itemCategoryFilter').onchange=renderItems;$('#newItemBtn').onclick=newItem;$('#itemsGrid').onclick=e=>{const b=e.target.closest('[data-edit-item]');if(b)openEdit(b.dataset.editItem)};
+  $('#itemSearch').oninput=renderItems;$('#itemCategoryFilter').onchange=renderItems;$('#newItemBtn').onclick=newItem;$('#itemsGrid').onclick=e=>{let b=e.target.closest('[data-move-item]');if(b)return moveItem(Number(b.dataset.index),Number(b.dataset.moveItem));b=e.target.closest('[data-edit-item]');if(b)openEdit(b.dataset.editItem)};
   $('#itemEditorBack').onclick=closeItemEditor;$('#deleteItemBtn').onclick=deleteItem;
   $('#itemEditorBody').onclick=e=>{
+    let g=e.target.closest('[data-item-gallery]');if(g){syncItemDraft();itemDraft.gallery?.splice(Number(g.dataset.itemGallery),1);return renderItemEditor()}
     if(e.target.closest('#itemPhotoBtn'))return $('#itemPhotoInput').click();
     let b=e.target.closest('[data-opt-add]');if(b)return addOption(b.dataset.optAdd);
     b=e.target.closest('[data-opt-remove]');if(b)return removeOption(b.dataset.optRemove,Number(b.dataset.index));

@@ -3,6 +3,7 @@ const db=require('./db');
 
 async function ensureSchema(){
   if(!db.configured)return;
+  await require('./builder-cinema').ensureSchema(db);
   await db.query(`
   CREATE TABLE IF NOT EXISTS shaurma_venues(
     venue_id TEXT PRIMARY KEY,

@@ -142,6 +142,21 @@ jobs:
         run: npm install --ignore-scripts
       - name: RealCity spatial and persistence contract
         run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js
+      - name: Photographic builder contract
+        run: node --test v2/backend/test/builder-cinema.test.js
+      - name: Mobile photographic builder
+        working-directory: v2/backend
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node --test test/builder-cinema-browser.cjs
+      - name: Builder visual checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: builder-visual-checks
+          path: test-artifacts/
+          if-no-files-found: ignore
       - name: Load production adapter modules
         working-directory: backend
         run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/routes')"

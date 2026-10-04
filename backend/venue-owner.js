@@ -319,6 +319,13 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     }catch(e){res.status(400).json({error:e.message||'claim_failed'})}
   });
 
+  // Reuse v2 photo processing with the existing owner/master session checks.
+  require('../v2/backend/src/builder-cinema').install(app,{
+    db:require('../v2/backend/src/db'),apiUrl:BASE_URL,publicImages:false,
+    base:'/api/venue-owner/establishments/:establishmentId/builder-cinema',
+    access:async(req,res,permission)=>{const a=await requireAccess(req,res,req.params.establishmentId,permission);return a?{est:req.params.establishmentId,s:a.session}:null;}
+  });
+
   app.get('/api/venue-owner/me',async(req,res)=>{
     const sess=readSession(req);if(!sess)return res.sendStatus(401);
     res.json({user:{id:String(sess.sub),username:sess.username||'',first_name:sess.first_name||''},master:sess.master===true,establishments:await sessionAccesses(sess)});

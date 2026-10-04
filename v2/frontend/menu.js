@@ -411,6 +411,13 @@
     const visible=all.filter(x=>category==='all'||String(x.c||x.category)===category);
     const sections=Array.isArray(ctx?.venue?.sections)?ctx.venue.sections:[];
     const sectionById=new Map(sections.map(x=>[String(x.id),x]));
+    if(category==='all')applyTheme(ctx?.venue?.config||{});
+    else{
+      const sectionTheme=sectionById.get(String(category))||{},root=document.documentElement;
+      const accent=safeHex(sectionTheme.accent,'#8FE0A9'),hero=safeHex(sectionTheme.color,'#152A3A');
+      root.style.setProperty('--venue-accent',accent);root.style.setProperty('--accent',accent);
+      root.style.setProperty('--venue-hero',hero);root.style.setProperty('--venue-glow',rgba(accent,.27));root.style.setProperty('--venue-ink',contrastText(accent));
+    }
 
     const kindFor=x=>{
       const name=String(x.n||x.name||'').toLowerCase();
@@ -448,12 +455,14 @@
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
+      const meta=[String(x.weight||'').trim(),...(Array.isArray(x.tags)?x.tags.slice(0,2):[])].filter(Boolean);
       const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
       return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
         '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
           '<p>'+esc(description)+'</p>'+
+          (meta.length?'<div class="foodMeta">'+meta.map(v=>'<span>'+esc(v)+'</span>').join('')+'</div>':'')+
           '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
         '</div></article>';
     };

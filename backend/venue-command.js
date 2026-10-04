@@ -185,7 +185,7 @@ function findNamed(list,query,getName=x=>x?.name||x?.n||''){
 }
 
 function menuLine(x){
-  return (x.active===false?'○ ':'● ')+String(x.n||x.name||'Позиция')+' · '+Number(x.p??x.price||0)+' ₽ · '+String(x.c||x.category||'');
+  return (x.active===false?'○ ':'● ')+String(x.n||x.name||'Позиция')+' · '+Number(x.p??x.price??0)+' ₽ · '+String(x.c||x.category||'');
 }
 function orderLine(o){
   return '• #'+o.id+' · '+String(o.order_number||'')+' · '+(STATUS_LABELS[o.status]||o.status)+' · '+Number(o.total||0)+' ₽';
@@ -324,7 +324,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       }
       const item=found.item;
       if(command.intent==='menu_price'){
-        const old=Number(item.p??item.price||0);item.p=command.price;
+        const old=Number(item.p??item.price??0);item.p=command.price;
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_price',{item_id:item.id,old_price:old,new_price:command.price});
         return {handled:true,text:'✅ '+(item.n||item.name)+': '+old+' ₽ → <b>'+command.price+' ₽</b>'};
       }

@@ -25,10 +25,10 @@ function orderReference(text){
 
 function localStatus(text){
   const s=normalizeText(text);
-  if(/\b(выполнен|выполнено|выдан|выдано|отдан|отдано|закрыт|закрыто|завершен|завершено)\b/.test(s))return 'done';
-  if(/\b(готов|готово|готовый|приготовлен|приготовлено)\b/.test(s)&&!/\bготов(ить|ится|им|ьте)\b/.test(s))return 'ready';
-  if(/\b(готовится|готовить|готовим|начинай готовить|начать готовить|в работу|на кухню|делаем)\b/.test(s))return 'cooking';
-  if(/\b(принят|принято|прими|принять)\b/.test(s))return 'new';
+  if(/(выполнен|выполнено|выдан|выдано|отдан|отдано|закрыт|закрыто|завершен|завершено)/.test(s))return 'done';
+  if(/(готов|готово|готовый|приготовлен|приготовлено)/.test(s)&&!/\bготов(ить|ится|им|ьте)\b/.test(s))return 'ready';
+  if(/(готовится|готовить|готовим|начинай готовить|начать готовить|в работу|на кухню|делаем)/.test(s))return 'cooking';
+  if(/(принят|принято|прими|принять)/.test(s))return 'new';
   return '';
 }
 
@@ -36,24 +36,24 @@ function parseLocalIntent(text){
   const s=normalizeText(text);
   if(!s)return {intent:'unknown',target:'latest',order_ref:'',status:''};
 
-  if(/\b(помощь|что умеешь|команды|как пользоваться|голосовые команды)\b/.test(s)){
+  if(/(помощь|что умеешь|команды|как пользоваться|голосовые команды)/.test(s)){
     return {intent:'help',target:'latest',order_ref:'',status:''};
   }
 
-  if(/\b(сколько|какие|покажи|список|очередь|активные)\b/.test(s)&&/\b(заказ|заказы|заказов|очередь)\b/.test(s)){
+  if(/(сколько|какие|покажи|список|очередь|активные)/.test(s)&&/(заказ|заказы|заказов|очередь)/.test(s)){
     return {intent:'list_active',target:'latest',order_ref:'',status:''};
   }
 
   const status=localStatus(s);
-  if(status&&(/\bзаказ/.test(s)||/\b(последний|старый|первый|его|этот)\b/.test(s)||s.split(' ').length<=5)){
+  if(status&&(/заказ/.test(s)||/(последний|старый|первый|его|этот)/.test(s)||s.split(' ').length<=5)){
     return {intent:'set_status',...orderReference(text),status};
   }
 
-  if(/\b(повтори|прочитай|расскажи|что в|состав|детали|какой статус|статус)\b/.test(s)&&/\bзаказ/.test(s)){
+  if(/(повтори|прочитай|расскажи|что в|состав|детали|какой статус|статус)/.test(s)&&/заказ/.test(s)){
     return {intent:'read_order',...orderReference(text),status:''};
   }
 
-  if(/\b(последний|текущий|старый|первый)\s+заказ\b/.test(s)){
+  if(/(последний|текущий|старый|первый)\s+заказ/.test(s)){
     return {intent:'read_order',...orderReference(text),status:''};
   }
 

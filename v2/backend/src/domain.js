@@ -328,7 +328,12 @@ function priceMenuItem(item,payload={}){
   const maxQty=Math.max(minQty,Math.min(50,Math.floor(Number(src.max_qty)||50)));
   if(q<minQty||q>maxQty)return {error:'invalid_quantity',item_id:String(src.id||''),min_qty:minQty,max_qty:maxQty};
   if(Number.isFinite(Number(src.stock))&&src.stock!==null&&q>Number(src.stock))return {error:'insufficient_stock',item_id:String(src.id||''),stock:Number(src.stock)};
-  const fixed=menuSelectionPrice(src,payload.selection||{});
+  const rawSelection=payload.selection&&typeof payload.selection==='object'&&!Array.isArray(payload.selection)?payload.selection:{};
+  for(const group of ['meats','sizes','bases']){
+    const raw=rawSelection[group],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
+    if(ids.length>1)return {error:'too_many_choices',item_id:String(src.id||''),group_id:group};
+  }
+  const fixed=menuSelectionPrice(src,rawSelection);
   if(!fixed)return {error:'invalid_item_selection',item_id:String(src.id||'')};
   let price=Number(fixed.price)||0;
   const details=fixed.detail?[fixed.detail]:[];
@@ -351,7 +356,7 @@ function priceMenuItem(item,payload={}){
     if(selected.length)choices[group.id]=selected;
     if(picked.length)details.push(String(group.name||'Выбор')+': '+picked.map(o=>String(o.name)+(Number(o.price_delta)?' ('+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽)':'')).join(', '));
   }
-  return {item:{id:String(src.id),n:String(src.n||src.name||'Позиция'),p:clamp(Math.round(price),0,100000),q,detail:details.filter(Boolean).join(' · ').slice(0,500),selection:payload.selection||{},choices}};
+  return {item:{id:String(src.id),n:String(src.n||src.name||'Позиция'),p:clamp(Math.round(price),0,100000),q,detail:details.filter(Boolean).join(' · ').slice(0,500),selection:rawSelection,choices}};
 }
 
 const LEGACY_LEPESH_BUILDER={

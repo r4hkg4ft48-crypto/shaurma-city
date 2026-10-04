@@ -224,5 +224,6 @@ async function ensureSchema(){
   FROM assigned a
   WHERE v.venue_id=a.venue_id;
   `);
+  await require('./realcity-studio').ensureSchema(db);
 }
 module.exports={ensureSchema};

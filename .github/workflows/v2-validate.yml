@@ -22,6 +22,7 @@ jobs:
         run: |
           find v2 -name '*.js' -print0 | xargs -0 -n1 node --check
           node --check backend/server.js
+          node --check backend/realcity-studio-ui.js
           node --check backend/venue-owner.js
       - name: Inline JS · Master Admin
         run: |
@@ -140,7 +141,7 @@ jobs:
         working-directory: backend
         run: npm install --ignore-scripts
       - name: RealCity spatial and persistence contract
-        run: node --test v2/backend/test/realcity-astra.test.js
+        run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js
       - name: Load production adapter modules
         working-directory: backend
         run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/routes')"

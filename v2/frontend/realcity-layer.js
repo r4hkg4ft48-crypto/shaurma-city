@@ -20,6 +20,7 @@ void main(){
   const FS=`#extension GL_OES_standard_derivatives : enable
 precision highp float;
 uniform sampler2D u_atlas; uniform highp sampler2D u_shadow; uniform vec3 u_camera;
+uniform sampler2D u_photos; uniform vec4 u_photo_params[12];
 uniform mat4 u_light; uniform float u_shadow_ready; uniform float u_ground_radius;
 varying vec3 v_color; varying vec2 v_uv; varying float v_texture; varying float v_visible;
 varying vec3 v_world; varying vec3 v_normal;
@@ -47,8 +48,12 @@ void main(){
  float kind=floor(v_texture+.1);vec2 uv=v_uv;
  if((kind==8.||kind==19.)&&length(v_world.xy)>u_ground_radius)discard;
  if(kind>=10.&&kind<=17.){float slot=kind-10.;uv=vec2(mod(slot,4.),floor(slot/4.))*.25+vec2(.001)+abs(fract(v_uv*.5)*2.-1.)*.248;}
- vec4 texel=texture2D(u_atlas,uv);
- bool textured=kind==1.||kind==4.||kind==9.||(kind>=10.&&kind<=17.);
+ bool photo=(kind>=20.&&kind<32.)||(kind>=40.&&kind<52.);
+ vec4 params=vec4(.85,0.,.35,0.);
+ float photoIndex=kind>=40.?kind-40.:kind-20.;
+ for(int i=0;i<12;i++){if(abs(float(i)-photoIndex)<.1)params=u_photo_params[i];}
+ vec4 texel=photo?texture2D(u_photos,uv):texture2D(u_atlas,uv);
+ bool textured=photo||kind==1.||kind==4.||kind==9.||(kind>=10.&&kind<=17.);
  vec3 c=textured?texel.rgb*v_color:v_color;
  float a=kind==5.?v_uv.x:(textured?texel.a:1.);
  if(kind==4.){if(a<.3)discard;a=smoothstep(.3,.75,a);}
@@ -66,19 +71,29 @@ void main(){
   c*=.88+.14*grain+.07*noise(v_world.xy*.53);
   if(kind==6.)c*=.94+.06*smoothstep(.01,.035,min(fract(v_world.x*.8),fract(v_world.y*.25)));
  }
- bool glass=kind==3.||kind==9.;
+ bool glass=kind==3.||kind==9.||(photo&&kind>=40.);
  float ndl=max(0.,dot(n,sun)),ndv=max(.01,abs(dot(n,view)));
  vec3 linear=pow(max(c,vec3(0.)),vec3(2.2));
  vec3 hemi=mix(vec3(.27,.29,.25),vec3(.54,.61,.72),n.z*.5+.5);
  float sunlit=visibility(v_world,normalize(v_normal));
  vec3 lit=linear*(hemi+vec3(.7,.66,.57)*ndl*sunlit);
  lit*=.8+.2*smoothstep(0.,1.1,v_world.z);
+ // Capture lighting is already in an ordinary photograph. Apply controlled
+ // relighting rather than baking a second strong shadow into every facade.
+ if(photo){
+  lit=mix(linear,lit,params.z);
+  vec3 halfVector=normalize(view+sun);float nh=max(0.,dot(n,halfVector));
+  float roughness=max(.08,params.x),a2=pow(roughness,4.);
+  float distribution=a2/(3.14159*pow(nh*nh*(a2-1.)+1.,2.));
+  vec3 f0=mix(vec3(.04),linear,params.y);
+  lit+=f0*min(.5,distribution*.015)*ndl*sunlit*params.z;
+ }
  if(glass){
   float fresnel=.04+.96*pow(1.-ndv,5.);
   vec3 reflected=pow(sky(reflect(-view,n)),vec3(2.2));
   lit=mix(lit,reflected,clamp(.14+fresnel*.75,0.,.85));
   vec3 halfVector=normalize(view+sun);float nh=max(0.,dot(n,halfVector));
-  float roughness=.18,a2=pow(roughness,4.);float d=a2/(3.14159*pow(nh*nh*(a2-1.)+1.,2.));
+  float roughness=photo?params.x:.18,a2=pow(roughness,4.);float d=a2/(3.14159*pow(nh*nh*(a2-1.)+1.,2.));
   lit+=vec3(1.,.94,.82)*min(.24,d*.002)*ndl*sunlit;
  }
  if(kind==4.)lit=linear*(.38+.62*abs(dot(n,sun))*sunlit);
@@ -96,7 +111,7 @@ void main(){
   }
   function shadowProgram(gl){
     let vs=`precision highp float;attribute vec3 a_position;attribute vec2 a_uv;attribute float a_texture;uniform mat4 u_light;varying vec2 v_uv;varying float v_kind;void main(){v_uv=a_uv;v_kind=a_texture;gl_Position=u_light*vec4(a_position,1.);}`;
-    let fs=`precision highp float;uniform sampler2D u_atlas;varying vec2 v_uv;varying float v_kind;void main(){if(v_kind>4.5&&v_kind<5.5)discard;if(v_kind>3.5&&v_kind<4.5&&texture2D(u_atlas,v_uv).a<.48)discard;vec4 c=fract(gl_FragCoord.z*vec4(1.,255.,65025.,16581375.));c-=c.yzww*vec4(1./255.,1./255.,1./255.,0.);gl_FragColor=c;}`;
+    let fs=`precision highp float;uniform sampler2D u_atlas;uniform sampler2D u_photos;varying vec2 v_uv;varying float v_kind;void main(){if(v_kind>4.5&&v_kind<5.5)discard;if(v_kind>3.5&&v_kind<4.5&&texture2D(u_atlas,v_uv).a<.48)discard;if(v_kind>=20.&&texture2D(u_photos,v_uv).a<.1)discard;vec4 c=fract(gl_FragCoord.z*vec4(1.,255.,65025.,16581375.));c-=c.yzww*vec4(1./255.,1./255.,1./255.,0.);gl_FragColor=c;}`;
     if(typeof gl.texStorage2D==='function'){
       vs='#version 300 es\n'+vs.replace(/attribute /g,'in ').replace(/varying /g,'out ');
       fs='#version 300 es\n'+fs.replace('precision highp float;','precision highp float;out vec4 shadowDepth;').replace(/varying /g,'in ').replace(/texture2D\(/g,'texture(').replace('gl_FragColor','shadowDepth');
@@ -133,8 +148,9 @@ void main(){
     const slots=new Map(),jobs=[];let materialSlot=0,signSlot=0;
     const reserve=(id,material=false)=>{if(slots.has(id))return slots.get(id);if(material?materialSlot>=8:signSlot>=32)return null;const slot=material?materialSlot++:signSlot++,cell=material?512:256,columns=2048/cell,x=slot%columns*cell,y=Math.floor(slot/columns)*cell+(material?0:1024);const r={x,y,cell,u0:(x+2)/2048,v0:(y+2)/2048,u1:(x+cell-2)/2048,v1:(y+cell-2)/2048};slots.set(id,r);return r;};
     for(const [index,m] of (astra.materials||[]).entries()){
+      if(m.mode==='facade')continue;
       const r=reserve(m.id,true);if(!r)continue;
-      r.repeat=m.repeat_m;r.repeatTexture=10+index;
+      r.repeat=m.repeat_m;r.repeatTexture=10+materialSlot-1;
       jobs.push(new Promise(resolve=>{const img=new Image();img.onload=()=>{ctx.drawImage(img,r.x+2,r.y+2,r.cell-4,r.cell-4);resolve()};img.onerror=resolve;img.src=m.data_url}));
     }
     for(const parent of astra.buildings)for(const b of parent.parts||[parent])for(const f of b.facades)for(const m of f.modules){
@@ -162,7 +178,50 @@ void main(){
         }
       }
     }
-    return {canvas,slots,ready:Promise.all(jobs)};
+    const photos=makePhotoAtlas(astra);
+    for(const [id,slot] of photos.slots)slots.set(id,slot);
+    return {canvas,slots,photos,ready:Promise.all([...jobs,photos.ready])};
+  }
+  function makePhotoAtlas(astra){
+    const materials=(astra.materials||[]).filter(m=>m.mode==='facade'),canvas=document.createElement('canvas');
+    const size=materials.length?4096:1;canvas.width=canvas.height=size;
+    const slots=new Map(),params=new Float32Array(48),ctx=canvas.getContext('2d');
+    let placement=[],scale=1;
+    for(let attempt=0;attempt<12;attempt++){
+      let x=0,y=0,row=0;placement=[];
+      for(const [index,m] of materials.entries()){
+        const w=Math.max(32,Math.floor(m.width*scale)),h=Math.max(32,Math.floor(m.height*scale));
+        if(x+w+32>size){x=0;y+=row;row=0;}
+        placement.push({m,index,x:x+16,y:y+16,w,h});x+=w+32;row=Math.max(row,h+32);
+      }
+      if(!placement.length||placement.every(p=>p.y+p.h+16<=size))break;
+      scale*=.8;
+    }
+    const jobs=placement.map(({m,index,x,y,w,h})=>{
+      slots.set(m.id,{u0:(x+.5)/size,v0:(y+.5)/size,u1:(x+w-.5)/size,v1:(y+h-.5)/size,texture:20+index,oriented:true});
+      params.set([m.roughness??.85,m.metalness??0,m.lighting_mix??.35,0],index*4);
+      return new Promise(resolve=>{const img=new Image();img.onload=()=>{
+        ctx.drawImage(img,x,y,w,h);
+        // 16px gutters prevent neighboring facades leaking into oblique mipmaps.
+        ctx.drawImage(img,0,0,1,img.height,x-16,y,16,h);ctx.drawImage(img,img.width-1,0,1,img.height,x+w,y,16,h);
+        ctx.drawImage(canvas,x-16,y,w+32,1,x-16,y-16,w+32,16);ctx.drawImage(canvas,x-16,y+h-1,w+32,1,x-16,y+h,w+32,16);
+        resolve();};img.onerror=()=>resolve();img.src=m.data_url;});
+    });
+    return {canvas,slots,params,scale,ready:Promise.all(jobs)};
+  }
+  function subtractRectangles(rect,holes){
+    let parts=[rect];
+    for(const h of holes){
+      const next=[];
+      for(const p of parts){
+        const x0=Math.max(p[0],h[0]),y0=Math.max(p[1],h[1]),x1=Math.min(p[0]+p[2],h[0]+h[2]),y1=Math.min(p[1]+p[3],h[1]+h[3]);
+        if(x1<=x0||y1<=y0){next.push(p);continue;}
+        if(y0>p[1])next.push([p[0],p[1],p[2],y0-p[1]]);
+        if(y1<p[1]+p[3])next.push([p[0],y1,p[2],p[1]+p[3]-y1]);
+        if(x0>p[0])next.push([p[0],y0,x0-p[0],y1-y0]);
+        if(x1<p[0]+p[2])next.push([x1,y0,p[0]+p[2]-x1,y1-y0]);
+      }parts=next;
+    }return parts;
   }
   function buildMesh(marker,scene,astra,atlas,{compact=false}={}){
     const coordinateFrame=S.frame([Number(marker.lon),Number(marker.lat)]),lodCounts=[0,0];
@@ -184,7 +243,7 @@ void main(){
     };
     const material=(id,w,h,glass=false)=>{
       const r=atlas.slots.get(id);if(!r)return null;
-      if(glass)return {...r,texture:9};
+      if(glass)return {...r,texture:r.texture>=20?r.texture+20:9};
       return r.repeat?{u0:0,u1:w/r.repeat[0],v0:0,v1:h/r.repeat[1],texture:r.repeatTexture}:r;
     };
     if(astra.materials?.length&&astra.environment?.roads?.length){
@@ -206,7 +265,7 @@ void main(){
         const plane=(u,z,w,h,d,col,slot,lod=0)=>{
           // Photo crops and lettering read left-to-right from outside, even
           // when OSM stores a clockwise polygon. Module u still follows edge.
-          const uv=slot&&edge.normal[0]*edge.tangent[1]-edge.normal[1]*edge.tangent[0]<0?{...slot,u0:slot.u1,u1:slot.u0}:slot;
+          const uv=slot&&!slot.oriented&&edge.normal[0]*edge.tangent[1]-edge.normal[1]*edge.tangent[0]<0?{...slot,u0:slot.u1,u1:slot.u0}:slot;
           quad([point(u,z,d),point(u+w,z,d),point(u+w,z+h,d),point(u,z+h,d)],n,rgb(col),uv,lod,order);
         };
         const box=(u,z,w,h,d,col,lod=0)=>{
@@ -217,10 +276,32 @@ void main(){
           quad([point(u,z,0),point(u+w,z,0),point(u+w,z,d),point(u,z,d)],[0,0,-1],c,null,lod,order);
         };
         const facadeTexture=material(f?.material_id,edge.length,height-b.base_m),ribbed=f?.wall?.finish==='ribbed';
-        plane(0,b.base_m,edge.length,height-b.base_m,0,facadeTexture?'#ffffff':f?.wall?.color||base.palette?.wall,facadeTexture||(ribbed?{u0:0,u1:edge.length/f.wall.module_m,v0:1,v1:0,texture:2}:null));
+        const surfaces=f?.surfaces||[];
+        if(!surfaces.length)plane(0,b.base_m,edge.length,height-b.base_m,0,facadeTexture?'#ffffff':f?.wall?.color||base.palette?.wall,facadeTexture||(ribbed?{u0:0,u1:edge.length/f.wall.module_m,v0:1,v1:0,texture:2}:null));
+        else{
+          for(const p of subtractRectangles([0,b.base_m,edge.length,height-b.base_m],surfaces.map(s=>[s.u_m,s.z_m,s.width_m,s.height_m])))plane(...p,0,f.wall.color,null);
+          for(const s of surfaces){
+            const slot=atlas.slots.get(s.material_id),w=s.width_m,h=s.height_m,d=s.depth_m,openings=s.openings||[];
+            if(!slot){plane(s.u_m,s.z_m,w,h,d,f.wall.color,null);continue;}
+            const patch=(x,z,pw,ph,depth,glass=false)=>{
+              const u=q=>slot.u0+(slot.u1-slot.u0)*(s.flip_u?1-q:q),v=q=>slot.v1-(slot.v1-slot.v0)*q;
+              plane(s.u_m+x,s.z_m+z,pw,ph,depth-.002,f.wall.color,null);
+              plane(s.u_m+x,s.z_m+z,pw,ph,depth,'#ffffff',{...slot,u0:u(x/w),u1:u((x+pw)/w),v0:v((z+ph)/h),v1:v(z/h),texture:slot.texture+(glass?20:0),oriented:true});
+            };
+            for(const p of subtractRectangles([0,0,w,h],openings.map(o=>[o.u_m,o.z_m,o.width_m,o.height_m])))patch(...p,d);
+            for(const o of openings){
+              patch(o.u_m,o.z_m,o.width_m,o.height_m,d-o.depth_m,o.glass);
+              const u=s.u_m+o.u_m,z=s.z_m+o.z_m,ow=o.width_m,oh=o.height_m,c=rgb(o.reveal_color),back=d-o.depth_m;
+              quad([point(u,z,d),point(u,z,back),point(u,z+oh,back),point(u,z+oh,d)],t,c,null,0,order);
+              quad([point(u+ow,z,back),point(u+ow,z,d),point(u+ow,z+oh,d),point(u+ow,z+oh,back)],t.map(v=>-v),c,null,0,order);
+              quad([point(u,z,d),point(u+ow,z,d),point(u+ow,z,back),point(u,z,back)],[0,0,1],c,null,0,order);
+              quad([point(u,z+oh,back),point(u+ow,z+oh,back),point(u+ow,z+oh,d),point(u,z+oh,d)],[0,0,-1],c,null,0,order);
+            }
+          }
+        }
         if(f){
           // Joints describe a measured material; they do not invent openings.
-          if(['panel','metal','stone','brick'].includes(f.wall.finish)){
+          if(!surfaces.length&&['panel','metal','stone','brick'].includes(f.wall.finish)){
             const step=f.wall.module_m,joint=f.wall.finish==='brick'?.008:.018,max=Math.min(100,Math.floor(edge.length/step));
             for(let i=1;i<=max;i++)plane(i*step,b.base_m,joint,height-b.base_m,.004,f.wall.joint_color,null,1);
             const dz=f.wall.finish==='brick'?.09:3;
@@ -372,7 +453,7 @@ void main(){
     }));
     if(mesh.triangles>180000){onError(new Error('astra_geometry_budget'));return null;}
     const layer={id:'realcity-astra-facades',type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
-      stats:{buildings:astra.buildings.length,triangles:mesh.triangles,bytes:mesh.vertices.byteLength},
+      stats:{buildings:astra.buildings.length,triangles:mesh.triangles,bytes:mesh.vertices.byteLength,photo_atlas_scale:atlas.photos.scale,photo_materials:atlas.photos.slots.size},
       onAdd(map,gl){
         this.map=map;this.gl=gl;
         if(!this.contextLost){
@@ -390,17 +471,30 @@ void main(){
             this.attributes.push({loc,size,offset});gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,STRIDE*4,offset*4);
           }
           if(this.vao)gl.bindVertexArray(null);
-          this.uniforms={};for(const n of ['u_matrix','u_progress','u_zoom','u_atlas','u_camera','u_shadow','u_light','u_shadow_ready','u_ground_radius'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
+          this.uniforms={};for(const n of ['u_matrix','u_progress','u_zoom','u_atlas','u_camera','u_shadow','u_light','u_shadow_ready','u_ground_radius','u_photos','u_photo_params[0]'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
           this.texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.texture);
           gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
           if(typeof gl.texStorage2D==='function')gl.texParameterf(gl.TEXTURE_2D,gl.TEXTURE_MAX_LOD,4);
           gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+          this.photoTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.photoTexture);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+          if(typeof gl.texStorage2D==='function')gl.texParameterf(gl.TEXTURE_2D,gl.TEXTURE_MAX_LOD,4);
+          const anisotropy=gl.getExtension('EXT_texture_filter_anisotropic');
+          if(anisotropy)gl.texParameterf(gl.TEXTURE_2D,anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
           this.uploadAtlas();this.ready=true;this.light=lightMatrix();
           if(astra.materials?.length)this.setupShadow();
           atlas.ready.then(()=>{if(!this.disposed){this.uploadAtlas();map.triggerRepaint()}});
         }catch(e){this.onRemove(map,gl);onError(e);}
       },
-      uploadAtlas(){const gl=this.gl;gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,atlas.canvas);gl.generateMipmap(gl.TEXTURE_2D);},
+      uploadAtlas(){
+        const gl=this.gl;gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+        for(const [texture,original] of [[this.texture,atlas.canvas],[this.photoTexture,atlas.photos.canvas]]){
+          let canvas=original;const max=gl.getParameter(gl.MAX_TEXTURE_SIZE);
+          if(canvas.width>max){canvas=document.createElement('canvas');canvas.width=canvas.height=Math.min(2048,max);canvas.getContext('2d').drawImage(original,0,0,canvas.width,canvas.height);}
+          gl.bindTexture(gl.TEXTURE_2D,texture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,canvas);gl.generateMipmap(gl.TEXTURE_2D);
+        }this.shadowDrawn=false;
+      },
       setupShadow(){
         const gl=this.gl,framebuffer=gl.getParameter(gl.FRAMEBUFFER_BINDING),renderbuffer=gl.getParameter(gl.RENDERBUFFER_BINDING);
         try{
@@ -425,6 +519,7 @@ void main(){
           const locations=[];
           for(const [name,size,offset] of [['a_position',3,0],['a_uv',2,9],['a_texture',1,11]]){const loc=gl.getAttribLocation(this.shadowProgram,name);if(loc>=0){locations.push(loc);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,STRIDE*4,offset*4);}}
           gl.uniformMatrix4fv(gl.getUniformLocation(this.shadowProgram,'u_light'),false,this.light);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.uniform1i(gl.getUniformLocation(this.shadowProgram,'u_atlas'),0);
+          gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,this.photoTexture);gl.uniform1i(gl.getUniformLocation(this.shadowProgram,'u_photos'),2);
           gl.drawArrays(gl.TRIANGLES,0,mesh.vertices.length/STRIDE);for(const loc of locations)gl.disableVertexAttribArray(loc);this.shadowDrawn=true;
         }finally{gl.bindFramebuffer(gl.FRAMEBUFFER,framebuffer);gl.viewport(...viewport);gl.clearColor(...clear);gl.depthRange(...depthRange);gl.clearDepth(clearDepth);if(scissor)gl.enable(gl.SCISSOR_TEST);if(dither)gl.enable(gl.DITHER);}
       },
@@ -451,15 +546,16 @@ void main(){
         gl.uniform3fv(this.uniforms.u_camera,cameraFromMatrix(this.lastMatrix));
         gl.uniformMatrix4fv(this.uniforms.u_light,false,this.light);gl.uniform1f(this.uniforms.u_shadow_ready,this.shadowDrawn&&this.progress>.99?1:0);
         gl.uniform1f(this.uniforms.u_ground_radius,Math.min(280,Math.max(100,Number(profile.scene.radius_m)||244)));
+        gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,this.photoTexture);gl.uniform1i(this.uniforms.u_photos,2);gl.uniform4fv(this.uniforms['u_photo_params[0]'],atlas.photos.params);
         gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,this.shadowTexture||this.texture);gl.uniform1i(this.uniforms.u_shadow,1);
         gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.uniform1i(this.uniforms.u_atlas,0);
         gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.drawArrays(gl.TRIANGLES,0,mesh.vertices.length/STRIDE);
         if(this.vao)gl.bindVertexArray(null);
       },
-      onRemove(map,gl){this.disposed=true;this.ready=false;map.getCanvas().removeEventListener('webglcontextlost',this.contextLost);map.getCanvas().removeEventListener('webglcontextrestored',this.contextRestored);if(this.buffer)gl.deleteBuffer(this.buffer);if(this.texture)gl.deleteTexture(this.texture);if(this.program)gl.deleteProgram(this.program);if(this.vao)gl.deleteVertexArray(this.vao);if(this.shadowTexture)gl.deleteTexture(this.shadowTexture);if(this.shadowDepth)gl.deleteRenderbuffer(this.shadowDepth);if(this.shadowFramebuffer)gl.deleteFramebuffer(this.shadowFramebuffer);if(this.shadowProgram)gl.deleteProgram(this.shadowProgram);}
+      onRemove(map,gl){this.disposed=true;this.ready=false;map.getCanvas().removeEventListener('webglcontextlost',this.contextLost);map.getCanvas().removeEventListener('webglcontextrestored',this.contextRestored);if(this.buffer)gl.deleteBuffer(this.buffer);if(this.texture)gl.deleteTexture(this.texture);if(this.photoTexture)gl.deleteTexture(this.photoTexture);if(this.program)gl.deleteProgram(this.program);if(this.vao)gl.deleteVertexArray(this.vao);if(this.shadowTexture)gl.deleteTexture(this.shadowTexture);if(this.shadowDepth)gl.deleteRenderbuffer(this.shadowDepth);if(this.shadowFramebuffer)gl.deleteFramebuffer(this.shadowFramebuffer);if(this.shadowProgram)gl.deleteProgram(this.shadowProgram);}
     };
     return layer;
   }
-  root.RealCityLayer={create,buildMesh,localMatrix,cameraFromMatrix};
+  root.RealCityLayer={create,buildMesh,localMatrix,cameraFromMatrix,subtractRectangles,makePhotoAtlas};
 })(globalThis);

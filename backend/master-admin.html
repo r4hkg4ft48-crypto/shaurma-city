@@ -88,7 +88,7 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
     <div class="astraDataset">
       <section class="astraDatasetBlock">
         <div class="astraDatasetHead"><div><b>1 · Главное здание и вход</b><small>Точная цифровая копия фасада заведения: вход, вывеска, двери, окна, отделка, боковые стены и архитектурные детали.</small></div><span class="astraBadge" id="astraMainCount">0 фото</span></div>
-        <label class="astraUpload"><div><strong>＋</strong><b>Добавить фото здания</b><small>несколько ракурсов · фото автоматически сожмутся</small></div><input id="astraMainFiles" type="file" accept="image/*" multiple></label>
+        <label class="astraUpload"><div><strong>＋</strong><b>Добавить фото здания</b><small>оригиналы без уменьшения · до 16 МБ на фото</small></div><input id="astraMainFiles" type="file" accept="image/*" multiple></label>
         <div class="astraUrlRow"><input id="astraMainUrl" placeholder="https://… ссылка на большой файл / видео / панораму"><button class="btn" id="addAstraMainUrl" type="button">Добавить ссылку</button></div>
         <div class="astraAssetList" id="astraMainList"></div>
       </section>
@@ -102,15 +102,32 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
     </div>
 
     <div class="astraReadiness">
-      <div class="astraScore"><div><b id="astraScore">0%</b><small>ПОКРЫТИЕ</small></div></div>
+      <div class="astraScore"><div><b id="astraScore">0%</b><small>КОМПЛЕКТНОСТЬ</small></div></div>
       <div class="astraChecks" id="astraChecks"></div>
     </div>
 
+    <div class="panel">
+      <b>Фасады из оригинальных фотографий</b>
+      <p class="muted">После загрузки сохраняем оригинал и проверяем резкость, размер и экспозицию. Astra сопоставляет стороны дома и готовит развёртки стен. Обработка сохраняет индивидуальные окна, вывески и отделку. Глубина задаётся геометрией по наблюдениям.</p>
+      <p id="astraPhotoQuality" role="status"></p>
+      <div class="astraActions">
+        <button class="btn" id="astraAccess" type="button">Дать Astra доступ к этой точке</button>
+        <button class="btn" id="astraRevoke" type="button">Отозвать доступ</button>
+      </div>
+      <div id="astraAccessResult" hidden><p>Ссылка действует 7 дней. Отправьте её Astra в этом чате: доступны фото, инструкции и подготовка черновика. Публикация остаётся здесь.</p><textarea id="astraAccessLink" readonly aria-label="Ссылка для Astra"></textarea><button class="btn" id="astraCopyAccess" type="button">Скопировать ссылку</button></div>
+      <div class="astraActions">
+        <button class="btn" id="astraRecipe" type="button">Обработать рецепт Astra</button>
+        <button class="btn" id="astraPreview" type="button" disabled>Проверить на карте</button>
+        <button class="btn primary" id="astraPublish" type="button" disabled>Опубликовать проверенный фасад</button>
+        <input id="astraRecipeFile" type="file" accept="application/json,.json" hidden>
+      </div>
+      <p id="astraDraftStatus" role="status">Черновик ещё не подготовлен.</p>
+    </div>
     <div class="astraActions">
       <button class="btn primary" id="saveAstra" type="button">Сохранить пакет Astra</button>
       
       <button class="btn" id="copyAstraManifest" type="button">Скопировать Astra manifest</button>
-      <button class="btn" id="exportAstraPackage" type="button">Скачать пакет с фото</button>
+      <button class="btn" id="exportAstraPackage" type="button">Скачать задание</button>
       <button class="btn" id="importAstraOutput" type="button">Загрузить реконструкцию Astra</button>
       <input id="astraOutputFile" type="file" accept="application/json,.json" hidden>
     </div>
@@ -170,7 +187,7 @@ const labels={master_admin:'Master Admin',legacy_admin:'Legacy Admin',access_key
 function toast(v){const e=$('#toast');e.textContent=v;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),1600)}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function api(path,opt={}){
- opt.headers={...(opt.headers||{}),'Content-Type':'application/json'};
+ opt.headers={'Content-Type':'application/json',...(opt.headers||{})};
  if(adminSession)opt.headers.Authorization='Bearer '+adminSession;else if(ownerToken)opt.headers['X-Owner-Token']=ownerToken;
  if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}
  const r=await fetch(API+path,opt),j=await r.json().catch(()=>({}));
@@ -237,13 +254,6 @@ async function loadOwnerAdmins(){
   $('#ownerAdminList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>@Shefofbotsbot · Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'подключён':'отключён')+'</span></div>').join(''):'<div class="empty">К этой точке ещё не подключён владелец через @Shefofbotsbot</div>'
  }catch{$('#ownerAdminList').innerHTML='<div class="empty">Не удалось загрузить владельцев</div>'}
 }
-async function compressAstraImage(file,maxW=1600,maxH=1200,q=.74){
- return new Promise((resolve,reject)=>{
-  const img=new Image(),url=URL.createObjectURL(file);
-  img.onload=()=>{const k=Math.min(1,maxW/img.width,maxH/img.height),w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',q))};
-  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image_read_failed'))};img.src=url;
- });
-}
 function astraSubtypeOptions(category,current){
  const rows=category==='main_building'
   ?[['main_facade','Главный фасад'],['entrance','Вход в заведение'],['signage','Вывеска'],['left_facade','Левая сторона'],['right_facade','Правая сторона'],['rear_facade','Задняя сторона'],['detail','Архитектурная деталь']]
@@ -264,6 +274,7 @@ function astraAssetCard(x){
    '<select data-astra-field="priority"><option value="5" '+(Number(x.priority)===5?'selected':'')+'>Приоритет 5 · критично</option><option value="4" '+(Number(x.priority)===4?'selected':'')+'>Приоритет 4</option><option value="3" '+(Number(x.priority)===3?'selected':'')+'>Приоритет 3</option><option value="2" '+(Number(x.priority)===2?'selected':'')+'>Приоритет 2</option><option value="1" '+(Number(x.priority)===1?'selected':'')+'>Приоритет 1</option></select>'+
    '<input data-astra-field="direction_deg" type="number" min="0" max="359" value="'+(x.direction_deg??'')+'" placeholder="Направление °">'+
    '<textarea class="full" data-astra-field="notes" placeholder="Что Astra должна увидеть именно на этом кадре">'+esc(x.notes||'')+'</textarea>'+
+   (x.metadata?'<small class="full">Оригинал '+Number(x.metadata.width)+' × '+Number(x.metadata.height)+' · '+(Number(x.metadata.bytes)/1048576).toFixed(1)+' МБ'+(x.metadata.warnings?.length?' · проверьте качество':'')+'</small>':'')+
    '<div class="astraAssetTools"><label class="astraPrimary"><input type="checkbox" data-astra-primary '+(x.primary?'checked':'')+'> Главное фото в группе</label><button class="astraRemove" type="button" data-astra-remove>Удалить</button></div>'+
   '</div></article>';
 }
@@ -290,6 +301,7 @@ function applyAstraState(j){
  renderAstraAssets();renderAstraReadiness(j.readiness||{});$('#astraManifest').textContent=JSON.stringify(j.manifest||{},null,2);
  const output=j.output;
  $('#astraOutputStatus').textContent=output?.version===2&&output.status==='ready'&&Array.isArray(output.buildings)?'На карте: '+output.buildings.length+' зданий · '+(output.coverage?.observed_edges||0)+' фасадов по фото':output?.status==='stale'?'Материалы изменились. Обновите реконструкцию Astra.':'Реконструкция ещё не загружена.';
+ window.RealCityStudio?.refresh(j);
 }
 function renderAstraReadiness(r){
  const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.ready?'готово для Astra':'сбор материалов';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
@@ -310,20 +322,25 @@ async function loadAstraStudio(){
  }catch(e){$('#astraManifest').textContent='Не удалось загрузить Astra-пакет: '+(e.body?.error||e.message)}
 }
 async function addAstraImages(category,files){
- const left=Math.max(0,24-astraAssets.length),arr=[...files].slice(0,left);if(!arr.length)return toast('Лимит: 24 материала на точку');
+ if(!astraState||!await saveAstraStudio())return;
+ const left=Math.max(0,120-astraAssets.length),arr=[...files].slice(0,left);if(!arr.length)return toast('Лимит: 120 материалов на точку');
+ const est=astraState.establishment_id,marker=astraState.marker_id;
+ $('#astraMainFiles').disabled=true;$('#astraPanoFiles').disabled=true;$('#astraVenue').disabled=true;$('#astraMarker').disabled=true;
+ try{
  for(const file of arr){
   try{
-   toast('Обрабатываю фото…');const src=await compressAstraImage(file);
-   const subtype=category==='main_building'?(astraAssets.some(x=>x.category==='main_building')?'detail':'main_facade'):'district';
-   astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype,role:category==='main_building'?'hero_facade':'environment',src,kind:'image',filename:file.name||'',label:'',notes:'',angle:category==='panorama'?'panorama':'unknown',direction_deg:null,priority:3,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});
-  }catch{toast('Не удалось обработать одно из фото')}
+   if(file.size>16*1024*1024)throw new Error('Файл больше 16 МБ');
+   $('#astraPhotoQuality').textContent='Загрузка оригинала: '+file.name;
+   const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est)+'/assets?marker_id='+marker+'&category='+category+'&filename='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
+   applyAstraState({...astraState,...j,markers:astraState.markers});
+  }catch(e){$('#astraPhotoQuality').textContent='Не удалось загрузить '+file.name+': '+(window.RealCityStudio?.message(e)||e.message);break;}
  }
- renderAstraAssets();
+ }finally{$('#astraMainFiles').disabled=false;$('#astraPanoFiles').disabled=false;$('#astraVenue').disabled=false;$('#astraMarker').disabled=false;}
 }
 function addAstraUrl(category){
  const input=$(category==='main_building'?'#astraMainUrl':'#astraPanoUrl'),url=input.value.trim();
  if(!/^https:\/\//i.test(url))return toast('Нужна https-ссылка');
- if(astraAssets.length>=24)return toast('Лимит: 24 материала на точку');
+ if(astraAssets.length>=120)return toast('Лимит: 120 материалов на точку');
  astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype:category==='main_building'?'detail':'district',role:category==='main_building'?'hero_facade':'environment',src:url,kind:'external_file',filename:'',label:'',notes:'',angle:'unknown',direction_deg:null,priority:3,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});input.value='';renderAstraAssets();
 }
 function updateAstraAsset(target){
@@ -336,10 +353,10 @@ function updateAstraAsset(target){
 async function saveAstraStudio(){
  const est=$('#astraVenue').value;if(!est||!astraState)return;const b=$('#saveAstra');b.disabled=true;
  try{
-  const body={marker_id:astraState.marker_id,config:readAstraConfig(),assets:astraAssets};
+  const body={marker_id:astraState.marker_id,expected_revision:astraState.manifest?.geometry?.revision,config:readAstraConfig(),assets:astraAssets};
   const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est),{method:'PUT',body:JSON.stringify(body)});
   astraState={...astraState,...j,markers:astraState.markers};applyAstraState(astraState);toast('Astra-пакет сохранён ✓');return true;
- }catch(e){toast('Не удалось сохранить Astra-пакет');return false}finally{b.disabled=false}
+ }catch(e){toast(e.status===409?'Пакет изменился. Обновите данные точки.':'Не удалось сохранить Astra-пакет');return false}finally{b.disabled=false}
 }
 async function copyAstraManifest(){
  const value=$('#astraManifest').textContent||'';try{await navigator.clipboard.writeText(value);toast('Astra manifest скопирован')}catch{prompt('Astra manifest',value)}
@@ -349,7 +366,7 @@ async function exportAstraPackage(){
  // Save the visible inputs before downloading so the package and revision agree.
  if(!await saveAstraStudio())return;
  if(!astraState.manifest?.geometry?.revision)return toast('Сначала обновите страницу Astra');
- const payload={schema:'shaurmeg.astra.package.v2',manifest:astraState.manifest,assets:astraAssets,output:astraState.output||null};
+ const payload={schema:'shaurmeg.astra.package.v3',manifest:astraState.manifest,assets:astraAssets.map(({src,...a})=>a),note:'Private originals are available through the scoped Astra access link.',output:astraState.output||null};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=url;a.download='Astra-'+astraState.establishment_id+'-'+astraState.marker_id+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
@@ -428,5 +445,6 @@ $('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#access
  $('#loginText').textContent='Откройте Master Admin через Telegram. Для аварийного входа в браузере доступен пароль владельца.';$('#browserLogin').hidden=false
 })();
 </script>
+<script src="/realcity-studio-ui.js?v=3"></script>
 </body>
 </html>

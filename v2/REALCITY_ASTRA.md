@@ -1,5 +1,15 @@
 # Shaurmeg RealCity — Astra 6 handoff contract
 
+## Current photo method (v3)
+
+Read `REALCITY_PHOTO_PIPELINE.md` before processing new Studio uploads. The live
+manifest includes the method under `processing`. Originals are preserved privately;
+the scoped Astra link provides direct read access and recipe-to-draft processing.
+Follow per-location notes, register each plane to its exact map edge, preserve
+unique facade texture and explicit depth, then compare a draft on the existing map.
+Upload screening is automatic; semantic registration needs Astra. Do not claim an
+unconfigured autonomous vision/photogrammetry service is running.
+
 ## Trigger phrase
 
 **делаем realcity**

@@ -65,28 +65,236 @@ function markerStyle(value={}){
     label_visible:v.label_visible!==false
   };
 }
+
+const MENU_CATEGORY_DEFAULTS=[
+  {id:'shawarma_doner',name:'Шаурма и донеры',emoji:'🥙',cover:'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Курица','Говядина','Баранина','Индейка','Фалафель'],sizes:['S','M','L'],bases:['Лаваш','Пита','Тарелка'],sauces:['Чесночный','Сырный','BBQ','Острый','Гранатовый'],extras:['Сыр','Двойное мясо','Халапеньо','Маринованный лук','Картофель фри'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
+  {id:'burgers_sandwiches',name:'Бургеры и сэндвичи',emoji:'🍔',cover:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Говядина','Курица','Индейка','Вегетарианская котлета'],sizes:['S','M','L'],bases:['Булочка бриошь','Классическая булочка','Тостовый хлеб','Панини'],sauces:['Бургер-соус','Сырный','BBQ','Острый','Чесночный'],extras:['Сыр','Бекон','Халапеньо','Лук','Доп. котлета'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
+  {id:'bakery_hotdogs',name:'Выпечка и хот-доги',emoji:'🥐',cover:'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Курица','Говядина','Сосиска','Без мяса'],sizes:['S','M','L'],bases:['Слоёное тесто','Дрожжевое тесто','Булочка'],sauces:['Кетчуп','Горчица','Сырный','BBQ'],extras:['Сыр','Халапеньо','Лук','Зелень'],required_fields:['Фото','Вес','Описание','Начинка','Цена']}},
+  {id:'pizza_rolls_quesadilla',name:'Пицца, роллы и кесадильи',emoji:'🍕',cover:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Курица','Говядина','Пепперони','Без мяса'],sizes:['25 см','30 см','35 см'],bases:['Тонкое тесто','Классическое тесто','Тортилья','Рис'],sauces:['Томатный','Сырный','Терияки','BBQ'],extras:['Сыр','Грибы','Халапеньо','Овощи'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
+  {id:'snacks',name:'Закуски',emoji:'🍟',cover:'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Курица','Без мяса'],sizes:['S','M','L'],bases:['Фри','Панировка','Запечённое'],sauces:['Кетчуп','Сырный','BBQ','Чесночный'],extras:['Сыр','Специи','Халапеньо'],required_fields:['Фото','Вес','Описание','Цена']}},
+  {id:'salads_plates',name:'Салаты и тарелки',emoji:'🥗',cover:'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:['Курица','Говядина','Фалафель','Без мяса'],sizes:['S','M','L'],bases:['Салат','Рис','Картофель','Пита'],sauces:['Цезарь','Чесночный','Йогуртовый','Оливковое масло'],extras:['Сыр','Овощи','Оливки','Халапеньо'],required_fields:['Фото','Вес','Описание','Состав','Цена']}},
+  {id:'sauces_addons',name:'Соусы и добавки',emoji:'🥫',cover:'https://images.unsplash.com/photo-1472476443507-c7a5948772fc?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:[],sizes:['30 мл','50 мл','100 мл'],bases:['Соус','Добавка'],sauces:['Чесночный','Сырный','BBQ','Кетчуп','Острый','Гранатовый'],extras:['Сыр','Двойное мясо','Халапеньо','Маринованный лук'],required_fields:['Фото','Объём','Описание','Цена']}},
+  {id:'cold_drinks',name:'Холодные напитки',emoji:'🥤',cover:'https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:[],sizes:['0.3 л','0.5 л','1 л'],bases:['Лимонад','Морс','Сок','Вода','Молочный напиток'],sauces:[],extras:['Лёд','Лимон','Мята','Сироп'],required_fields:['Фото','Объём','Описание','Цена']}},
+  {id:'coffee_tea_desserts',name:'Кофе, чай и десерты',emoji:'☕',cover:'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=85',
+    settings:{meats:[],sizes:['S','M','L'],bases:['Кофе','Чай','Десерт'],sauces:[],extras:['Сироп','Молоко','Сливки','Топпинг'],required_fields:['Фото','Объём / вес','Описание','Цена']}}
+];
+const DEFAULT_CATEGORY_IMAGE=Object.fromEntries(MENU_CATEGORY_DEFAULTS.map(x=>[x.id,x.cover]));
+const MENU_ITEM_DEFAULTS=[
+  ['shawarma_doner','Шаурма классическая','Курица, овощи, чесночный соус',259],
+  ['shawarma_doner','Шаурма сырная','Курица, сыр, овощи и сливочный соус',289],
+  ['shawarma_doner','Шаурма острая','Курица, халапеньо, овощи и острый соус',279],
+  ['shawarma_doner','Шаурма BBQ','Курица, овощи и соус BBQ',289],
+  ['shawarma_doner','Фирменная шаурма','Двойное мясо, свежие овощи и фирменный соус',329],
+  ['shawarma_doner','Донер в пите','Мясо на гриле, овощи и соус в пите',299],
+  ['shawarma_doner','Шаурма в тарелке','Мясо, овощи, фри и соус',349],
+  ['shawarma_doner','Фалафель-ролл','Фалафель, овощи и тахини',269],
+  ['burgers_sandwiches','Классический бургер','Говяжья котлета, овощи и соус',289],
+  ['burgers_sandwiches','Чизбургер','Говяжья котлета, сыр, овощи и соус',309],
+  ['burgers_sandwiches','Двойной бургер','Две котлеты, сыр, овощи и фирменный соус',389],
+  ['burgers_sandwiches','Куриный бургер','Хрустящая курица, овощи и соус',299],
+  ['burgers_sandwiches','Острый бургер','Котлета, халапеньо, сыр и острый соус',319],
+  ['burgers_sandwiches','Клаб-сэндвич','Курица, бекон, овощи и соус',289],
+  ['burgers_sandwiches','Панини с курицей','Курица, сыр, томаты и соус',279],
+  ['burgers_sandwiches','Сэндвич с ветчиной и сыром','Ветчина, сыр, овощи и соус',249],
+  ['bakery_hotdogs','Самса с курицей','Слоёное тесто и сочная куриная начинка',159],
+  ['bakery_hotdogs','Самса с говядиной','Слоёное тесто и говяжья начинка',179],
+  ['bakery_hotdogs','Чебурек','Хрустящее тесто и мясная начинка',169],
+  ['bakery_hotdogs','Беляш','Жареное тесто и мясная начинка',159],
+  ['bakery_hotdogs','Хачапури','Сыр, тесто и яйцо',299],
+  ['bakery_hotdogs','Сосиска в тесте','Сосиска и румяное тесто',149],
+  ['bakery_hotdogs','Хот-дог классический','Сосиска, булочка, кетчуп и горчица',229],
+  ['bakery_hotdogs','Хот-дог сырный','Сосиска, сырный соус и хрустящий лук',249],
+  ['pizza_rolls_quesadilla','Пицца Маргарита','Томаты, моцарелла и базилик',399],
+  ['pizza_rolls_quesadilla','Пицца Пепперони','Пепперони, сыр и томатный соус',449],
+  ['pizza_rolls_quesadilla','Пицца 4 сыра','Смесь четырёх сыров',479],
+  ['pizza_rolls_quesadilla','Кесадилья с курицей','Курица, сыр, овощи и тортилья',329],
+  ['pizza_rolls_quesadilla','Кесадилья с говядиной','Говядина, сыр, овощи и тортилья',349],
+  ['pizza_rolls_quesadilla','Ролл Цезарь','Курица, рис, салат и соус Цезарь',329],
+  ['pizza_rolls_quesadilla','Ролл с курицей терияки','Курица терияки, рис и овощи',349],
+  ['pizza_rolls_quesadilla','Тортилья овощная','Овощи, зелень и соус',269],
+  ['snacks','Картофель фри','Золотистый хрустящий картофель',149],
+  ['snacks','Картофель по-деревенски','Картофельные дольки со специями',169],
+  ['snacks','Наггетсы','Куриное филе в хрустящей панировке',199],
+  ['snacks','Куриные стрипсы','Куриное филе в панировке',229],
+  ['snacks','Крылышки BBQ','Куриные крылышки в соусе BBQ',279],
+  ['snacks','Сырные палочки','Сыр в хрустящей панировке',239],
+  ['snacks','Луковые кольца','Луковые кольца в панировке',189],
+  ['snacks','Фалафель','Фалафель с соусом',219],
+  ['salads_plates','Цезарь с курицей','Курица, салат, томаты, сыр и соус Цезарь',299],
+  ['salads_plates','Греческий салат','Овощи, фета и оливки',279],
+  ['salads_plates','Овощной салат','Свежие овощи и зелень',229],
+  ['salads_plates','Донер-тарелка','Мясо, фри, овощи, пита и соус',379],
+  ['salads_plates','Шаурма-тарелка','Курица, овощи, фри и соус',369],
+  ['salads_plates','Рис с курицей','Рис, курица и овощи',329],
+  ['salads_plates','Плов с говядиной','Рис, говядина, морковь и специи',349],
+  ['salads_plates','Чечевичный суп','Чечевица, овощи и специи',249],
+  ['sauces_addons','Чесночный соус','Сливочно-чесночный соус',59],
+  ['sauces_addons','Сырный соус','Насыщенный сырный соус',69],
+  ['sauces_addons','Барбекю','Классический соус BBQ',59],
+  ['sauces_addons','Кетчуп','Томатный кетчуп',49],
+  ['sauces_addons','Острый соус','Острый перечный соус',59],
+  ['sauces_addons','Гранатовый соус','Кисло-сладкий гранатовый соус',69],
+  ['sauces_addons','Двойное мясо','Дополнительная порция мяса',109],
+  ['sauces_addons','Сыр','Дополнительный сыр',59],
+  ['sauces_addons','Халапеньо','Острый перец халапеньо',49],
+  ['sauces_addons','Маринованный лук','Маринованный красный лук',39],
+  ['cold_drinks','Лимонад классический','Лимон, мята и лёд',129],
+  ['cold_drinks','Лимонад ягодный','Ягоды, цитрус и лёд',149],
+  ['cold_drinks','Айран','Освежающий кисломолочный напиток',109],
+  ['cold_drinks','Морс','Ягодный морс',119],
+  ['cold_drinks','Компот','Домашний компот',109],
+  ['cold_drinks','Сок апельсиновый','Апельсиновый сок',139],
+  ['cold_drinks','Вода без газа','Питьевая вода',89],
+  ['cold_drinks','Газированная вода','Газированная вода',89],
+  ['cold_drinks','Холодный чай','Чай со льдом и лимоном',129],
+  ['cold_drinks','Молочный коктейль','Молочный коктейль',199],
+  ['coffee_tea_desserts','Эспрессо','Классический эспрессо',119],
+  ['coffee_tea_desserts','Американо','Чёрный кофе',129],
+  ['coffee_tea_desserts','Капучино','Эспрессо и молочная пена',169],
+  ['coffee_tea_desserts','Латте','Эспрессо и молоко',189],
+  ['coffee_tea_desserts','Чай черный','Чёрный листовой чай',119],
+  ['coffee_tea_desserts','Чай зеленый','Зелёный листовой чай',119],
+  ['coffee_tea_desserts','Чизкейк','Сливочный чизкейк',229],
+  ['coffee_tea_desserts','Медовик','Медовые коржи и нежный крем',229],
+  ['coffee_tea_desserts','Пахлава','Слоёное тесто, орехи и мёд',199],
+  ['coffee_tea_desserts','Маффин','Мягкий маффин с шоколадом',169]
+];
+function slugMenu(v,fallback='item'){
+  const s=String(v||'').trim().toLowerCase().replace(/ё/g,'e').replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'');
+  return (s||fallback).slice(0,64);
+}
+function menuOptionList(input,limit=40){
+  return (Array.isArray(input)?input:[]).slice(0,limit).map((x,i)=>{
+    if(typeof x==='string')return {id:slugMenu(x,'opt_'+i),name:String(x).trim().slice(0,100),price:0,active:true,default:i===0};
+    const v=x&&typeof x==='object'?x:{};
+    return {id:slugMenu(v.id||v.name,'opt_'+i),name:String(v.name||v.n||v.id||'Опция').trim().slice(0,100),price:clamp(Number(v.price??v.price_delta)||0,-100000,100000),active:v.active!==false,default:v.default===true,image:String(v.image||'').trim().slice(0,300000)};
+  }).filter(x=>x.name);
+}
+function defaultMenuCategories(){
+  return MENU_CATEGORY_DEFAULTS.map((x,i)=>({
+    id:x.id,name:x.name,emoji:x.emoji,active:true,order:i,cover:x.cover,
+    color:'#0B2945',accent:'#FF463D',manual_sort:true,
+    settings:{...x.settings}
+  }));
+}
+function normalizeMenuSections(input,menu=[],fallbackToDefaults=true){
+  const defaults=defaultMenuCategories(),base=new Map(defaults.map(x=>[x.id,x]));
+  const raw=Array.isArray(input)?input:[];
+  const out=[];
+  if(raw.length){
+    for(let i=0;i<raw.length&&out.length<60;i++){
+      const v=raw[i]&&typeof raw[i]==='object'?raw[i]:{},id=slugMenu(v.id||v.name,'section_'+i);
+      const d=base.get(id)||{};
+      const settings=v.settings&&typeof v.settings==='object'&&!Array.isArray(v.settings)?v.settings:{};
+      out.push({
+        id,name:String(v.name||d.name||id).trim().slice(0,100),emoji:String(v.emoji||d.emoji||'').slice(0,8),
+        active:v.active!==false,order:Number.isFinite(Number(v.order))?Number(v.order):i,
+        cover:String(v.cover||d.cover||'').trim().slice(0,700000),
+        color:hex(v.color||d.color,'#0B2945'),accent:hex(v.accent||d.accent,'#FF463D'),
+        manual_sort:v.manual_sort!==false,
+        settings:{
+          meats:(Array.isArray(settings.meats)?settings.meats:d.settings?.meats||[]).map(String).slice(0,30),
+          sizes:(Array.isArray(settings.sizes)?settings.sizes:d.settings?.sizes||[]).map(String).slice(0,30),
+          bases:(Array.isArray(settings.bases)?settings.bases:d.settings?.bases||[]).map(String).slice(0,30),
+          sauces:(Array.isArray(settings.sauces)?settings.sauces:d.settings?.sauces||[]).map(String).slice(0,40),
+          extras:(Array.isArray(settings.extras)?settings.extras:d.settings?.extras||[]).map(String).slice(0,60),
+          required_fields:(Array.isArray(settings.required_fields)?settings.required_fields:d.settings?.required_fields||[]).map(String).slice(0,30)
+        }
+      });
+    }
+  }else if(fallbackToDefaults){
+    out.push(...defaults);
+  }
+  const seen=new Set(out.map(x=>x.id));
+  for(const item of (Array.isArray(menu)?menu:[])){
+    const id=slugMenu(item?.c||item?.category||'shawarma_doner','shawarma_doner');
+    if(seen.has(id))continue;seen.add(id);
+    const d=base.get(id);
+    out.push(d?{...d,order:out.length}:{id,name:id,emoji:'',active:true,order:out.length,cover:'',color:'#0B2945',accent:'#FF463D',manual_sort:true,settings:{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_fields:['Фото','Описание','Цена']}});
+  }
+  return out.sort((a,b)=>Number(a.order)-Number(b.order)).map((x,i)=>({...x,order:i}));
+}
 function menuSections(config={},menu=[]){
-  const raw=Array.isArray(config.menu_sections)?config.menu_sections:[];
-  if(raw.length)return raw.filter(x=>x&&x.active!==false).map((x,i)=>({id:String(x.id||'section_'+i),name:String(x.name||x.id||'Раздел'),emoji:String(x.emoji||''),order:i}));
-  const ids=[...new Set((Array.isArray(menu)?menu:[]).map(x=>String(x.c||x.category||'shawarma')))];
-  return ids.map((id,i)=>({id,name:id==='shawarma'?'Шаурма':id==='drinks'?'Напитки':id==='extras'?'Допы':id==='bakery'?'Выпечка':id,emoji:'',order:i}));
+  return normalizeMenuSections(config.menu_sections,menu,true).filter(x=>x.active!==false);
+}
+function menuSectionsAll(config={},menu=[]){
+  return normalizeMenuSections(config.menu_sections,menu,true);
+}
+function defaultMenuSeed(){
+  const sections=defaultMenuCategories();
+  const sectionMap=new Map(sections.map(x=>[x.id,x]));
+  const counters={};
+  const menu=MENU_ITEM_DEFAULTS.map((row,i)=>{
+    const [c,n,d,p]=row,countersN=(counters[c]=(counters[c]||0)+1),section=sectionMap.get(c);
+    const settings=section?.settings||{};
+    const mk=list=>menuOptionList((list||[]).map((name,j)=>({name,price:0,default:j===0})));
+    return {
+      id:c+'_'+String(countersN).padStart(2,'0'),n,c,d,p,image:DEFAULT_CATEGORY_IMAGE[c]||'',gallery:[],badge:'',
+      featured:countersN===1,display:countersN===1?'main':'auto',image_fit:'cover',active:true,weight:'',
+      sku:(c.slice(0,3)+'-'+String(countersN).padStart(3,'0')).toUpperCase(),stock:null,schedule:{enabled:false,days:[],from:'',to:''},
+      tags:[section?.name||c],card_color:'#FFFFFF',recommended:countersN===1,
+      options:{meats:mk(settings.meats),sizes:mk(settings.sizes),bases:mk(settings.bases),sauces:mk(settings.sauces),extras:mk(settings.extras),required_groups:[]}
+    };
+  });
+  return {sections,menu};
 }
 function normalizeMenu(input){
   if(!Array.isArray(input))return [];
-  return input.slice(0,250).map((x,i)=>({
-    id:String(x.id||'item_'+i).trim().slice(0,100),
-    n:String(x.n||x.name||'Позиция').trim().slice(0,160),
-    c:String(x.c||x.category||'shawarma').trim().toLowerCase().replace(/[^a-z0-9а-я_-]+/gi,'_').slice(0,64)||'shawarma',
-    d:String(x.d||x.description||'').trim().slice(0,700),
-    p:clamp(Number(x.p??x.price)||0,0,100000),
-    image:String(x.image||x.i||'').trim().slice(0,700000),
-    badge:String(x.badge||x.tag||'').trim().slice(0,40),
-    featured:x.featured===true,
-    display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
-    image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
-    active:x.active!==false
-  })).filter(x=>x.id&&x.n);
+  return input.slice(0,400).map((x,i)=>{
+    const c=slugMenu(x.c||x.category||'shawarma_doner','shawarma_doner');
+    const opts=x.options&&typeof x.options==='object'&&!Array.isArray(x.options)?x.options:{};
+    const schedule=x.schedule&&typeof x.schedule==='object'&&!Array.isArray(x.schedule)?x.schedule:{};
+    return {
+      id:String(x.id||'item_'+i).trim().slice(0,100),
+      n:String(x.n||x.name||'Позиция').trim().slice(0,160),
+      c,d:String(x.d||x.description||'').trim().slice(0,900),
+      p:clamp(Number(x.p??x.price)||0,0,100000),
+      image:String(x.image||x.i||'').trim().slice(0,700000),
+      gallery:(Array.isArray(x.gallery)?x.gallery:[]).map(v=>String(v||'').trim().slice(0,700000)).filter(Boolean).slice(0,12),
+      badge:String(x.badge||x.tag||'').trim().slice(0,40),
+      featured:x.featured===true,recommended:x.recommended===true,
+      display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
+      image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
+      active:x.active!==false,
+      weight:String(x.weight||'').trim().slice(0,40),
+      sku:String(x.sku||'').trim().slice(0,80),
+      stock:x.stock===null||x.stock===''||x.stock===undefined?null:clamp(Math.floor(Number(x.stock)||0),0,1000000),
+      tags:(Array.isArray(x.tags)?x.tags:[]).map(v=>String(v).trim().slice(0,40)).filter(Boolean).slice(0,20),
+      card_color:hex(x.card_color||'#FFFFFF','#FFFFFF'),
+      composition:String(x.composition||x.ingredients||'').trim().slice(0,1200),
+      schedule:{enabled:schedule.enabled===true,days:(Array.isArray(schedule.days)?schedule.days:[]).map(Number).filter(v=>v>=0&&v<=6).slice(0,7),from:String(schedule.from||'').slice(0,5),to:String(schedule.to||'').slice(0,5)},
+      options:{
+        meats:menuOptionList(opts.meats),sizes:menuOptionList(opts.sizes),bases:menuOptionList(opts.bases),sauces:menuOptionList(opts.sauces),extras:menuOptionList(opts.extras,60),
+        required_groups:(Array.isArray(opts.required_groups)?opts.required_groups:[]).map(v=>String(v)).filter(v=>['meats','sizes','bases','sauces','extras'].includes(v)).slice(0,5)
+      }
+    };
+  }).filter(x=>x.id&&x.n);
 }
+function menuSelectionPrice(item,selection={}){
+  const src=normalizeMenu([item])[0];if(!src)return null;
+  const sel=selection&&typeof selection==='object'&&!Array.isArray(selection)?selection:{};
+  let total=Number(src.p)||0;const details=[];
+  for(const group of ['meats','sizes','bases','sauces','extras']){
+    const list=src.options[group]||[],raw=sel[group],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
+    const chosen=ids.map(id=>list.find(x=>x.active!==false&&x.id===id)).filter(Boolean);
+    if(chosen.length!==ids.length)return null;
+    if(src.options.required_groups.includes(group)&&!chosen.length){
+      const def=list.find(x=>x.active!==false&&x.default)||list.find(x=>x.active!==false);
+      if(!def)return null;chosen.push(def);
+    }
+    for(const opt of chosen){total+=Number(opt.price)||0;details.push(opt.name)}
+  }
+  return {price:clamp(total,0,100000),detail:details.join(' · ')};
+}
+
 const LEGACY_LEPESH_BUILDER={
   title:'Собери свою шаурму',
   subtitle:'Выбери основу, лаваш, мясо, соусы и добавки',
@@ -225,4 +433,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

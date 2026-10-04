@@ -29,3 +29,11 @@ test('provider edit request carries the uploaded photo and returns a transparent
 test('provider failure is sanitized and never includes credential or provider body',async()=>{
  await assert.rejects(C.render('data:image/png;base64,YWJj',C.plan(b,'wrap'),{key:'test-secret',fetcher:async()=>({ok:false,status:500})}),e=>e.status===502&&!e.message.includes('test-secret'));
 });
+test('switching venue during upload refresh cannot start generation for another venue',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),context={window:{}};
+ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../../frontend/builder-cinema-admin.js'),'utf8'),context);
+ let generated=0;
+ const editor={serial:1,available:true,el:k=>({value:k==='type'?'wrap':'',textContent:''}),endpoint:()=>'/original-venue/wrap',busy:()=>{},compress:async()=> 'reference',request:async()=>{},load:async()=>{editor.serial=2;},generate:async()=>{generated++;}};
+ await context.window.BuilderCinemaEditor.prototype.upload.call(editor,{});
+ assert.equal(generated,0);
+});

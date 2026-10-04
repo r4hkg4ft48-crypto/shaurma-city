@@ -188,9 +188,11 @@ async function menuContext(marker,est){
     LIMIT 1`,[markerId,establishment]);
   const r=q.rows[0];if(!r)return null;
   const menu=Array.isArray(r.menu)?r.menu:[];
+  const sections=D.menuSections(r.config||{},menu),activeCategories=new Set(sections.map(x=>String(x.id)));
+  const visibleMenu=menu.filter(x=>x?.active!==false&&activeCategories.has(String(x.c||x.category||'')));
   return {
     marker:{id:r.marker_id,establishment_id:r.establishment_id,venue_id:r.venue_id,name:r.marker_name,address:r.address,description:r.description||'',lat:r.lat,lon:r.lon,hero_image:r.hero_image||'',gallery:Array.isArray(r.gallery)?r.gallery:[],hours:r.hours||'',price_label:r.price_label||'',marker_avatar:r.marker_avatar||'',marker_style:D.markerStyle(r.marker_style),realcity_profile:r.realcity_profile||{},realcity_quality:r.realcity_quality||'heuristic',updated_at:r.marker_updated_at},
-    venue:{establishment_id:r.establishment_id,venue_id:r.venue_id,slug:r.slug,name:r.venue_name,config:r.config||{},menu,sections:D.menuSections(r.config||{},menu),updated_at:r.updated_at}
+    venue:{establishment_id:r.establishment_id,venue_id:r.venue_id,slug:r.slug,name:r.venue_name,config:r.config||{},menu:visibleMenu,sections,updated_at:r.updated_at}
   };
 }
 
@@ -365,9 +367,9 @@ router.post('/orders',async(req,res)=>{
         normalized.push({...built,q});continue;
       }
       const src=menu.get(String(i.id));if(!src)return res.status(400).json({error:'item_not_in_menu',item_id:i.id});
-      const p=Number(src.p??src.price);
-      if(!Number.isFinite(p)||p<0)return res.status(400).json({error:'invalid_price'});
-      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p,q,detail:String(i.detail||'').slice(0,500)});
+      const priced=D.menuSelectionPrice(src,i.selection||{});
+      if(!priced||!Number.isFinite(priced.price)||priced.price<0)return res.status(400).json({error:'invalid_item_selection',item_id:i.id});
+      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p:priced.price,q,detail:String(priced.detail||i.detail||'').slice(0,500),selection:i.selection||{}});
     }
     const fulfillment=req.body?.fulfillment_type==='cafe'?'cafe':'delivery';
     if(fulfillment==='delivery'&&!String(req.body?.phone||'').trim())return res.status(400).json({error:'phone_required'});
@@ -465,7 +467,9 @@ router.post('/admin/markers',auth.requireOwner,async(req,res)=>{
         ORDER BY COALESCE(used.used_count,0),themes.ord
         LIMIT 1`,[D.VENUE_THEME_KEYS]);
       const theme=tq.rows[0]?.theme_key||D.venueThemeKey(est);
-      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify({subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:theme,theme:D.DEFAULT_VENUE_THEME}),est]);
+      const seed=D.defaultMenuSeed();
+      const initialConfig={subtitle:'МЕНЮ ЗАВЕДЕНИЯ',builder_enabled:false,theme_key:theme,theme:D.DEFAULT_VENUE_THEME,menu_sections:seed.sections,menu_revision:1};
+      await c.query(`INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id) VALUES($1,$1,$2,TRUE,$3::jsonb,$4::jsonb,$5) ON CONFLICT(venue_id) DO UPDATE SET name=EXCLUDED.name,establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),updated_at=NOW()`,[vId,name,JSON.stringify(initialConfig),JSON.stringify(seed.menu),est]);
       const q=await c.query(`INSERT INTO shaurmeg_markers(venue_id,establishment_id,name,address,description,lat,lon,hero_image,gallery,hours,price_label,marker_avatar,marker_style,category,is_active,position_locked,metadata_locked) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,TRUE,TRUE,TRUE) RETURNING *`,[vId,est,name,String(b.address||''),String(b.description||''),lat,lon,String(b.hero_image||''),JSON.stringify(Array.isArray(b.gallery)?b.gallery:[]),String(b.hours||''),String(b.price_label||''),String(b.marker_avatar||''),JSON.stringify(D.markerStyle(b.marker_style)),String(b.category||'shawarma')]);
       return q.rows[0];
     });res.status(201).json(row);
@@ -486,10 +490,16 @@ router.put('/admin/venues/:establishmentId/menu',auth.requireOwner,async(req,res
   try{
     const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
     const menu=D.normalizeMenu(req.body?.menu),configPatch=req.body?.config&&typeof req.body.config==='object'?req.body.config:{};
-    const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[est]);if(!current.rows[0])return res.sendStatus(404);
-    const cfg={...(current.rows[0].config||{}),...configPatch};
+    const current=await db.query('SELECT config,menu FROM shaurma_venues WHERE establishment_id=$1',[est]);if(!current.rows[0])return res.sendStatus(404);
+    const currentConfig=current.rows[0].config||{};
+    const sections=D.normalizeMenuSections(
+      Array.isArray(req.body?.sections)?req.body.sections:(Array.isArray(configPatch.menu_sections)?configPatch.menu_sections:currentConfig.menu_sections),
+      menu,true
+    );
+    const cfg={...currentConfig,...configPatch,menu_sections:sections,menu_revision:(Number(currentConfig.menu_revision)||0)+1};
     const q=await db.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[est,JSON.stringify(menu),JSON.stringify(cfg)]);
-    rt.pushVenue(est,'venue',q.rows[0]);res.json(q.rows[0]);
+    rt.pushVenue(est,'menu_changed',{establishment_id:est,revision:cfg.menu_revision});
+    rt.pushVenue(est,'venue',q.rows[0]);res.json({...q.rows[0],sections_all:D.menuSectionsAll(cfg,menu),sections:D.menuSections(cfg,menu)});
   }catch(e){fail(res,e,'menu_update_failed')}
 });
 router.put('/admin/venues/:establishmentId/site',auth.requireOwner,async(req,res)=>{
@@ -558,13 +568,25 @@ async function venueAccess(req,res,permission){
 }
 router.get('/venue-owner/establishments/:establishmentId',async(req,res)=>{
   const a=await venueAccess(req,res,'profile');if(!a)return;
-  try{const q=await db.query(`SELECT v.*,m.id marker_id,m.address,m.description,m.lat,m.lon,m.hero_image,m.gallery,m.hours,m.price_label,m.marker_avatar,m.marker_style FROM shaurma_venues v LEFT JOIN LATERAL(SELECT * FROM shaurmeg_markers WHERE establishment_id=v.establishment_id ORDER BY id LIMIT 1)m ON TRUE WHERE v.establishment_id=$1`,[a.est]);if(!q.rows[0])return res.sendStatus(404);res.json({...q.rows[0],marker_style:D.markerStyle(q.rows[0].marker_style),sections:D.menuSections(q.rows[0].config,q.rows[0].menu)})}
+  try{const q=await db.query(`SELECT v.*,m.id marker_id,m.address,m.description,m.lat,m.lon,m.hero_image,m.gallery,m.hours,m.price_label,m.marker_avatar,m.marker_style FROM shaurma_venues v LEFT JOIN LATERAL(SELECT * FROM shaurmeg_markers WHERE establishment_id=v.establishment_id ORDER BY id LIMIT 1)m ON TRUE WHERE v.establishment_id=$1`,[a.est]);if(!q.rows[0])return res.sendStatus(404);res.json({...q.rows[0],marker_style:D.markerStyle(q.rows[0].marker_style),sections:D.menuSections(q.rows[0].config,q.rows[0].menu),sections_all:D.menuSectionsAll(q.rows[0].config,q.rows[0].menu)})}
   catch(e){fail(res,e,'venue_owner_read_failed')}
 });
 router.put('/venue-owner/establishments/:establishmentId/menu',async(req,res)=>{
   const a=await venueAccess(req,res,'menu');if(!a)return;
-  try{const menu=D.normalizeMenu(req.body?.menu);const cur=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);const cfg={...(cur.rows[0]?.config||{}),menu_sections:Array.isArray(req.body?.sections)?req.body.sections:cur.rows[0]?.config?.menu_sections};const q=await db.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(menu),JSON.stringify(cfg)]);await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'menu_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({items:menu.length})]);rt.pushVenue(a.est,'venue',q.rows[0]);res.json(q.rows[0])}
-  catch(e){fail(res,e,'venue_owner_menu_failed')}
+  try{
+    const menu=D.normalizeMenu(req.body?.menu);
+    const cur=await db.query('SELECT config,menu FROM shaurma_venues WHERE establishment_id=$1',[a.est]);if(!cur.rows[0])return res.sendStatus(404);
+    const currentConfig=cur.rows[0].config||{},currentSections=D.menuSectionsAll(currentConfig,cur.rows[0].menu||[]);
+    const activeMap=new Map(currentSections.map(x=>[String(x.id),x.active!==false]));
+    const requested=D.normalizeMenuSections(Array.isArray(req.body?.sections)?req.body.sections:currentSections,menu,true);
+    const sections=requested.map(x=>({...x,active:activeMap.has(String(x.id))?activeMap.get(String(x.id)):false}));
+    const cfg={...currentConfig,menu_sections:sections,menu_revision:(Number(currentConfig.menu_revision)||0)+1};
+    const q=await db.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(menu),JSON.stringify(cfg)]);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'menu_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({items:menu.length,revision:cfg.menu_revision})]);
+    rt.pushVenue(a.est,'menu_changed',{establishment_id:a.est,revision:cfg.menu_revision});
+    rt.pushVenue(a.est,'venue',q.rows[0]);
+    res.json({...q.rows[0],sections:D.menuSections(cfg,menu),sections_all:D.menuSectionsAll(cfg,menu)});
+  }catch(e){fail(res,e,'venue_owner_menu_failed')}
 });
 router.put('/venue-owner/establishments/:establishmentId/builder',async(req,res)=>{
   const a=await venueAccess(req,res,'menu');if(!a)return;

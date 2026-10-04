@@ -143,6 +143,8 @@ jobs:
         run: npm install --ignore-scripts
       - name: RealCity spatial and persistence contract
         run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js
+      - name: Menu catalog and deep editor contract
+        run: node --test v2/backend/test/menu-domain.test.js
       - name: Photographic builder contract
         run: node --test v2/backend/test/builder-cinema.test.js
       - name: Voice assistant contract

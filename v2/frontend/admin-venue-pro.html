@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071c31">
+<title>Шаурмег · админка заведения</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="admin-venue-pro.css?v=20261005">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="hero">
+    <div class="topline">
+      <button class="iconBtn" id="backBtn" aria-label="Назад">←</button>
+      <div class="heroTitle"><small>ШАУРМЕГ · ПАРТНЁР</small><b>Админка заведения</b></div>
+      <select id="venueSelect" class="venueSelect" aria-label="Заведение"></select>
+    </div>
+    <div class="heroBody">
+      <div>
+        <div class="venueMeta"><span id="establishmentChip">—</span><span class="syncBadge" id="syncBadge"><i></i> Синхронизировано</span></div>
+        <h1 id="venueNameHero">Меню заведения</h1>
+        <p>Управляйте меню, фотографиями, вариантами блюд и дизайном. Изменения доходят до клиентского Mini App через единый сервер.</p>
+      </div>
+      <div class="heroPhoto" id="heroPhoto"><span>🥙</span></div>
+    </div>
+  </header>
+
+  <nav class="mainTabs" id="mainTabs">
+    <button data-view="categories" class="active">Категории</button>
+    <button data-view="items">Позиции</button>
+    <button data-view="design">Дизайн</button>
+    <button data-view="profile">Профиль</button>
+    <button data-view="orders">Заказы</button>
+  </nav>
+
+  <main>
+    <section class="view" id="view-categories">
+      <div class="toolbar">
+        <label class="search"><span>⌕</span><input id="categorySearch" placeholder="Поиск по категориям"></label>
+        <span class="pill">Включает суперадмин</span>
+      </div>
+      <div class="categoryList" id="categoryList"></div>
+      <div class="editorShell hidden" id="categoryEditor"></div>
+    </section>
+
+    <section class="view hidden" id="view-items">
+      <div class="toolbar">
+        <label class="search"><span>⌕</span><input id="itemSearch" placeholder="Поиск позиции"></label>
+        <select id="itemCategoryFilter"></select>
+        <button class="primary compact" id="newItemBtn">＋ Новая позиция</button>
+      </div>
+      <div class="itemSummary" id="itemSummary"></div>
+      <div class="itemGrid" id="itemGrid"></div>
+    </section>
+
+    <section class="view hidden" id="view-design">
+      <div class="split">
+        <div class="panel">
+          <div class="sectionHead"><div><small>ДИЗАЙН MINI APP</small><h2>Тема и отображение</h2></div><span class="syncBadge"><i></i> LIVE</span></div>
+          <div class="segmented" id="themePresets">
+            <button data-primary="#0B2945" data-secondary="#071C31">Midnight Blue</button>
+            <button data-primary="#FF463D" data-secondary="#0B2945">Warm Red</button>
+            <button data-primary="#313A46" data-secondary="#171B22">Graphite</button>
+            <button data-primary="#F7F8FA" data-secondary="#E9EDF2">Light</button>
+          </div>
+          <div class="formGrid two">
+            <label class="field"><span>Основной цвет</span><div class="colorRow"><input id="themePrimary" type="color"><input id="themePrimaryHex"></div></label>
+            <label class="field"><span>Вторичный цвет</span><div class="colorRow"><input id="themeSecondary" type="color"><input id="themeSecondaryHex"></div></label>
+            <label class="field"><span>Общий тон</span><select id="themeTone"><option value="balanced">Смешанный</option><option value="dark">Тёмный</option><option value="light">Светлый</option></select></label>
+            <label class="field"><span>Стиль карточек</span><select id="siteCardStyle"><option value="photo">Фото</option><option value="glass">Glass</option><option value="solid">Solid</option></select></label>
+            <label class="field"><span>Раскладка меню</span><select id="siteLayout"><option value="hero-2-3">Hero + 2/3</option><option value="hero-2">Hero + 2</option><option value="uniform-2">2 колонки</option><option value="uniform-3">3 колонки</option></select></label>
+            <label class="field"><span>Скругление карточек</span><input id="siteRadius" type="range" min="10" max="34" step="1"><b id="siteRadiusValue">20 px</b></label>
+          </div>
+          <label class="toggleLine"><span><b>Показывать описания</b><small>Текст под названием блюда</small></span><input id="showDescriptions" type="checkbox"></label>
+          <div class="actions"><button class="secondary" id="previewDesignBtn">Предпросмотр</button><button class="primary" id="saveDesignBtn">Опубликовать изменения</button></div>
+        </div>
+        <div class="panel previewPanel"><div class="sectionHead"><div><small>LIVE PREVIEW</small><h2>Как видит гость</h2></div></div><div id="livePreview"></div></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-profile">
+      <div class="panel">
+        <div class="sectionHead"><div><small>ТОЧКА</small><h2>Профиль заведения</h2></div></div>
+        <div class="formGrid two">
+          <label class="field"><span>Название</span><input id="profileName"></label>
+          <label class="field"><span>Адрес</span><input id="profileAddress"></label>
+          <label class="field wide"><span>Описание</span><textarea id="profileDescription" rows="4"></textarea></label>
+          <label class="field"><span>Часы работы</span><input id="profileHours"></label>
+          <label class="field"><span>Ценовой диапазон</span><input id="profilePrice"></label>
+          <label class="field wide"><span>Hero-фото URL</span><input id="profileHero"></label>
+        </div>
+        <div class="actions"><button class="primary" id="saveProfileBtn">Сохранить профиль</button></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-orders">
+      <div class="panel">
+        <div class="sectionHead"><div><small>LIVE</small><h2>Заказы</h2></div><button class="secondary compact" id="refreshOrders">Обновить</button></div>
+        <div class="orders" id="ordersList"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="drawerBackdrop hidden" id="drawerBackdrop"></div>
+<aside class="drawer hidden" id="itemDrawer">
+  <div class="drawerTop"><button class="iconBtn" id="closeItemDrawer">←</button><div><small>РЕДАКТОР ПОЗИЦИИ</small><h2 id="itemDrawerTitle">Позиция</h2></div><button class="dangerText" id="deleteItemBtn">Удалить</button></div>
+  <div id="itemEditorBody"></div>
+  <div class="drawerActions"><button class="secondary" id="itemPreviewBtn">Предпросмотр</button><button class="primary" id="saveItemBtn">Сохранить позицию</button></div>
+</aside>
+
+<div class="gate" id="gate">
+  <div class="gateCard"><span class="eyebrow">SHAURMEG PARTNER</span><h1>Кабинет владельца</h1><p id="gateText">Проверяем доступ через Telegram…</p><div class="claim"><input id="claimCode" placeholder="OWN-XXXXXXXXXX"><button class="primary" id="claimBtn">Подключить заведение</button></div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="config.js?v=20261005"></script>
+<script src="admin-venue-pro.js?v=20261005"></script>
+</body>
+</html>

@@ -178,6 +178,29 @@ function menuOptionList(input,limit=40){
     return {id:slugMenu(v.id||v.name,'opt_'+i),name:String(v.name||v.n||v.id||'Опция').trim().slice(0,100),price:clamp(Number(v.price??v.price_delta)||0,-100000,100000),active:v.active!==false,default:v.default===true,image:String(v.image||'').trim().slice(0,300000)};
   }).filter(x=>x.name);
 }
+function normalizeChoiceGroups(input){
+  if(!Array.isArray(input))return [];
+  return input.slice(0,20).map((g,gi)=>{
+    const options=(Array.isArray(g?.options)?g.options:[]).slice(0,60).map((o,oi)=>({
+      id:slugMenu(o?.id||o?.name,'option_'+oi),
+      name:String(o?.name||o?.n||'Вариант').trim().slice(0,120),
+      price_delta:clamp(Number(o?.price_delta??o?.price??0)||0,-100000,100000),
+      active:o?.active!==false,
+      default:o?.default===true,
+      image:String(o?.image||'').trim().slice(0,300000)
+    })).filter(o=>o.id&&o.name);
+    const type=String(g?.type||'single')==='multiple'?'multiple':'single';
+    const min=clamp(Math.floor(Number(g?.min)||0),0,60);
+    const max=type==='single'?1:clamp(Math.floor(Number(g?.max)||Math.max(1,options.length)),Math.max(1,min),60);
+    return {
+      id:slugMenu(g?.id||g?.name,'group_'+gi),
+      name:String(g?.name||g?.n||'Выбор').trim().slice(0,120),
+      type,required:g?.required===true||min>0,
+      min:g?.required===true&&min===0?1:min,max,
+      active:g?.active!==false,options
+    };
+  }).filter(g=>g.id&&g.name);
+}
 function defaultMenuCategories(){
   return MENU_CATEGORY_DEFAULTS.map((x,i)=>({
     id:x.id,name:x.name,emoji:x.emoji,active:true,order:i,cover:x.cover,
@@ -274,9 +297,12 @@ function normalizeMenu(input){
       options:{
         meats:menuOptionList(opts.meats),sizes:menuOptionList(opts.sizes),bases:menuOptionList(opts.bases),sauces:menuOptionList(opts.sauces),extras:menuOptionList(opts.extras,60),
         required_groups:(Array.isArray(opts.required_groups)?opts.required_groups:[]).map(v=>String(v)).filter(v=>['meats','sizes','bases','sauces','extras'].includes(v)).slice(0,5)
-      }
+      },
+      min_qty:clamp(Math.floor(Number(x.min_qty)||1),1,50),
+      max_qty:clamp(Math.floor(Number(x.max_qty)||50),1,50),
+      choice_groups:normalizeChoiceGroups(x.choice_groups||[])
     };
-  }).filter(x=>x.id&&x.n);
+  }).map(x=>({...x,max_qty:Math.max(x.min_qty,x.max_qty)})).filter(x=>x.id&&x.n);
 }
 function menuSelectionPrice(item,selection={}){
   const src=normalizeMenu([item])[0];if(!src)return null;
@@ -293,6 +319,44 @@ function menuSelectionPrice(item,selection={}){
     for(const opt of chosen){total+=Number(opt.price)||0;details.push(opt.name)}
   }
   return {price:clamp(total,0,100000),detail:details.join(' · ')};
+}
+function priceMenuItem(item,payload={}){
+  const src=normalizeMenu([item])[0];if(!src)return {error:'item_not_in_menu'};
+  if(src.stock===0)return {error:'item_unavailable',item_id:String(src.id||'')};
+  const q=Math.floor(Number(payload.q)||1);
+  const minQty=Math.max(1,Math.min(50,Math.floor(Number(src.min_qty)||1)));
+  const maxQty=Math.max(minQty,Math.min(50,Math.floor(Number(src.max_qty)||50)));
+  if(q<minQty||q>maxQty)return {error:'invalid_quantity',item_id:String(src.id||''),min_qty:minQty,max_qty:maxQty};
+  if(Number.isFinite(Number(src.stock))&&src.stock!==null&&q>Number(src.stock))return {error:'insufficient_stock',item_id:String(src.id||''),stock:Number(src.stock)};
+  const rawSelection=payload.selection&&typeof payload.selection==='object'&&!Array.isArray(payload.selection)?payload.selection:{};
+  for(const group of ['meats','sizes','bases']){
+    const raw=rawSelection[group],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
+    if(ids.length>1)return {error:'too_many_choices',item_id:String(src.id||''),group_id:group};
+  }
+  const fixed=menuSelectionPrice(src,rawSelection);
+  if(!fixed)return {error:'invalid_item_selection',item_id:String(src.id||'')};
+  let price=Number(fixed.price)||0;
+  const details=fixed.detail?[fixed.detail]:[];
+  const rawChoices=payload.choices&&typeof payload.choices==='object'&&!Array.isArray(payload.choices)?payload.choices:{};
+  const choices={};
+  for(const group of (src.choice_groups||[]).filter(g=>g.active!==false)){
+    const options=(group.options||[]).filter(o=>o.active!==false),map=new Map(options.map(o=>[String(o.id),o]));
+    let selected=rawChoices[String(group.id)];
+    selected=Array.isArray(selected)?selected:(selected?[selected]:[]);
+    selected=[...new Set(selected.map(String))];
+    const min=Math.max(group.required?1:0,Math.floor(Number(group.min)||0));
+    const max=group.type==='single'?1:Math.max(min,Math.floor(Number(group.max)||Math.max(1,options.length)));
+    if(group.type==='single'&&selected.length>1)return {error:'too_many_choices',item_id:src.id,group_id:group.id};
+    if(selected.length<min||selected.length>max)return {error:'invalid_choice_count',item_id:src.id,group_id:group.id,min,max};
+    const picked=[];
+    for(const id of selected){
+      const opt=map.get(id);if(!opt)return {error:'invalid_choice',item_id:src.id,group_id:group.id,option_id:id};
+      price+=Number(opt.price_delta)||0;picked.push(opt);
+    }
+    if(selected.length)choices[group.id]=selected;
+    if(picked.length)details.push(String(group.name||'Выбор')+': '+picked.map(o=>String(o.name)+(Number(o.price_delta)?' ('+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽)':'')).join(', '));
+  }
+  return {item:{id:String(src.id),n:String(src.n||src.name||'Позиция'),p:clamp(Math.round(price),0,100000),q,detail:details.filter(Boolean).join(' · ').slice(0,500),selection:rawSelection,choices}};
 }
 
 const LEGACY_LEPESH_BUILDER={
@@ -433,4 +497,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,normalizeChoiceGroups,normalizeMenu,menuSelectionPrice,priceMenuItem,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

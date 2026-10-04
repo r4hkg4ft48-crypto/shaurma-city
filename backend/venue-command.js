@@ -5,8 +5,13 @@ const rt=require('../v2/backend/src/realtime');
 
 const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
 const PERMISSION_BY_INTENT={
-  menu_show:'menu',menu_price:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
-  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',builder_toggle:'menu',
+  menu_show:'menu',menu_price:'menu',menu_price_context:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
+  menu_item_select:'menu',menu_item_show:'menu',item_standard_required:'menu',item_standard_toggle:'menu',item_standard_default:'menu',menu_available:'menu',menu_stock:'menu',menu_weight:'menu',menu_sku:'menu',menu_composition:'menu',menu_tags:'menu',menu_recommended:'menu',menu_schedule:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',menu_image_remove:'menu',menu_image_fit:'menu',menu_gallery_clear:'menu',
+  menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
+  choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_rename:'menu',choice_group_toggle:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
+  choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
+  category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',category_color:'menu',
+  builder_toggle:'menu',builder_show:'menu',builder_option_add:'menu',builder_option_delete:'menu',builder_option_price:'menu',builder_option_rename:'menu',builder_limit:'menu',builder_title:'menu',builder_subtitle:'menu',
   venue_show:'profile',venue_name:'profile',venue_address:'profile',venue_hours:'profile',venue_description:'profile',
   venue_phone:'profile',venue_website:'profile',delivery_toggle:'profile',pickup_toggle:'profile',
   orders_show:'orders',order_status:'orders',stats_show:'orders'
@@ -35,6 +40,21 @@ function boolWord(v){
   if(/^(выкл|выключи|выключить|выключено|нет|off|0)$/.test(s))return false;
   return null;
 }
+function parseSchedule(v){
+  const s=norm(v),dayMap={вс:0,воскресенье:0,пн:1,понедельник:1,вт:2,вторник:2,ср:3,среда:3,чт:4,четверг:4,пт:5,пятница:5,сб:6,суббота:6};
+  if(/^(выкл|выключи|выключить|без расписания)$/.test(s))return {enabled:false,days:[],from:'',to:''};
+  let days=[];
+  if(/каждый день|ежедневно/.test(s))days=[0,1,2,3,4,5,6];
+  else if(/будни|по будням/.test(s))days=[1,2,3,4,5];
+  else if(/выходн/.test(s))days=[0,6];
+  else for(const [name,num] of Object.entries(dayMap))if(new RegExp('(?:^|\\s)'+name+'(?:\\s|$)').test(s))days.push(num);
+  days=[...new Set(days)];
+  const tm=s.match(/(\d{1,2}):([0-5]\d)\s*(?:-|–|—|до)\s*(\d{1,2}):([0-5]\d)/);
+  if(!tm)return null;
+  const hh=n=>String(Math.max(0,Math.min(23,Number(n)))).padStart(2,'0');
+  if(!days.length)days=[0,1,2,3,4,5,6];
+  return {enabled:true,days,from:hh(tm[1])+':'+tm[2],to:hh(tm[3])+':'+tm[4]};
+}
 function statusWord(v){
   const s=norm(v);
   if(/^(принят|принято)$/.test(s))return 'new';
@@ -61,6 +81,147 @@ function parseCommand(text){
   if(/^(?:покажи|дай)\s+(?:настройки|точку|заведение)$/i.test(raw)||/^(?:настройки точки|информация о точке)$/i.test(raw))return {intent:'venue_show'};
   if(/^(?:покажи|дай)\s+(?:активные\s+)?заказы$/i.test(raw)||/^(?:активные )?заказы$/i.test(raw))return {intent:'orders_show'};
   if(/^(?:покажи|дай)\s+статистику$/i.test(raw)||/^статистика$/i.test(raw))return {intent:'stats_show'};
+
+  m=raw.match(/^\/item\s+(.+)$/i)||
+    raw.match(/^(?:работаем с|работать с|настрой|настраиваем|редактируй|редактируем|открой)\s+(?:позицию|блюдо|товар)?\s*(.+)$/i);
+  if(m&&!/^(?:выбор|выбором|групп|параметр)/i.test(clean(m[1])))return {intent:'menu_item_select',item:clean(m[1])};
+
+  m=raw.match(/^(?:покажи|дай)\s+(?:настройки\s+)?(?:позиции|блюда|товара)\s+(.+)$/i);
+  if(m)return {intent:'menu_item_show',item:clean(m[1])};
+  if(/^(?:покажи|дай)\s+(?:настройки\s+)?(?:позиции|блюда|товара)$/i.test(raw)||/^(?:что у позиции|настройки позиции)$/i.test(raw))return {intent:'menu_item_show'};
+
+  m=raw.match(/^(?:нет в наличии|закончил(?:ся|ась|ось)|стоп)\s*(?:позиция|блюдо|товар)?\s*(.*)$/i);
+  if(m)return {intent:'menu_available',item:clean(m[1]),available:false};
+  m=raw.match(/^(?:верни|вернуть)\s*(?:позицию|блюдо|товар)?\s*(.+?)\s+(?:в наличие|в продажу)$/i)||
+    raw.match(/^есть\s+(?:позиция|блюдо|товар)?\s*(.+)$/i);
+  if(m&&clean(m[1]))return {intent:'menu_available',item:clean(m[1]),available:true};
+  if(/^(?:верни в наличие|снова в наличии|есть в наличии)$/i.test(raw))return {intent:'menu_available',available:true};
+
+  m=raw.match(/^(?:цена|поставь цену|измени цену|поменяй цену)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);
+  if(m)return {intent:'menu_price_context',price:money(m[1])};
+
+  m=raw.match(/^(?:остаток|в наличии)\s+(\d+)\s*(?:шт|штук)?$/i);
+  if(m)return {intent:'menu_stock',stock:Math.max(0,Math.min(1000000,Number(m[1])))};
+  if(/^(?:остаток без лимита|безлимитный остаток|неограниченный остаток)$/i.test(raw))return {intent:'menu_stock',stock:null};
+
+  m=raw.match(/^(?:вес|объ[её]м)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_weight',value:clean(m[1])};
+  m=raw.match(/^sku\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_sku',value:clean(m[1])};
+  m=raw.match(/^состав\s*(?:=|:)?\s*([\s\S]+)$/i);
+  if(m)return {intent:'menu_composition',value:clean(m[1])};
+  m=raw.match(/^теги?\s*(?:=|:)?\s*([\s\S]+)$/i);
+  if(m)return {intent:'menu_tags',tags:clean(m[1]).split(/[,;]+/).map(x=>clean(x)).filter(Boolean).slice(0,20)};
+  if(/^(?:сделай\s+)?рекомендуем(?:ой|ая)$/i.test(raw))return {intent:'menu_recommended',enabled:true};
+  if(/^(?:убери|сними)\s+(?:из\s+)?рекомендуем(?:ых|ой)$/i.test(raw))return {intent:'menu_recommended',enabled:false};
+
+  m=raw.match(/^расписание\s+([\s\S]+)$/i);
+  if(m){const schedule=parseSchedule(m[1]);if(schedule)return {intent:'menu_schedule',schedule};}
+
+  m=raw.match(/^(?:бейдж|метка|ярлык)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_badge',value:clean(m[1])};
+  if(/^(?:убери|удали|очисти)\s+(?:бейдж|метку|ярлык)$/i.test(raw))return {intent:'menu_badge',value:''};
+
+  if(/^(?:сделай|поставь)\s+(?:ее|его|позицию)?\s*(?:главной|главным|в главное)$/i.test(s)||/^главная позиция$/i.test(raw))return {intent:'menu_featured',enabled:true};
+  if(/^(?:убери|сними)\s+(?:ее|его|позицию)?\s*(?:из главных|с главной)$/i.test(s))return {intent:'menu_featured',enabled:false};
+
+  m=raw.match(/^(?:вид|отображение|карточка)\s+(главная|крупная|компактная|обычная|авто)$/i);
+  if(m)return {intent:'menu_display',display:/главн|крупн/i.test(m[1])?'main':/компакт/i.test(m[1])?'compact':'auto'};
+  if(/^(?:убери|удали|очисти)\s+фото$/i.test(raw))return {intent:'menu_image_remove'};
+  if(/^(?:очисти|удали)\s+(?:всю\s+)?галерею$/i.test(raw))return {intent:'menu_gallery_clear'};
+  if(/^(?:фото|изображение)\s+(?:вписать|целиком|contain)$/i.test(raw))return {intent:'menu_image_fit',image_fit:'contain'};
+  if(/^(?:фото|изображение)\s+(?:обрезать|заполнить|cover)$/i.test(raw))return {intent:'menu_image_fit',image_fit:'cover'};
+
+
+  m=raw.match(/^перенеси\s+(.+?)\s+в\s+(?:категори[юя]\s+)?(.+)$/i);
+  if(m)return {intent:'menu_category_move',item:clean(m[1]),category:clean(m[2])};
+  m=raw.match(/^(?:перенеси|перемести)\s+(?:в\s+)?(?:категори[юя]\s+)?(.+)$/i);
+  if(m)return {intent:'menu_category_move',category:clean(m[1])};
+
+  m=raw.match(/^(?:удали|удалить)\s+(?:позицию|блюдо|товар)\s+(.+)$/i);
+  if(m)return {intent:'menu_delete',item:clean(m[1])};
+  if(/^(?:удали|удалить)\s+(?:эту\s+)?(?:позицию|блюдо|товар)$/i.test(raw))return {intent:'menu_delete'};
+
+  m=raw.match(/^(?:дублируй|дублировать|скопируй|копия)\s+(?:позицию|блюдо|товар)?\s*(.*)$/i);
+  if(m)return {intent:'menu_duplicate',item:clean(m[1])};
+
+  m=raw.match(/^(?:минимум|min)\s+(?:по\s+)?(\d+)\s*(?:шт|штук|штуки)\s*(?:в заказе)?$/i)||
+    raw.match(/^минимальное количество\s+(\d+)$/i);
+  if(m)return {intent:'menu_qty',field:'min_qty',value:Number(m[1])};
+  m=raw.match(/^(?:максимум|max)\s+(?:по\s+)?(\d+)\s*(?:шт|штук|штуки)\s*(?:в заказе)?$/i)||
+    raw.match(/^максимальное количество\s+(\d+)$/i);
+  if(m)return {intent:'menu_qty',field:'max_qty',value:Number(m[1])};
+
+  m=raw.match(/^(?:добавь|создай)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_add',name:clean(m[1])};
+  m=raw.match(/^(?:работаем с|открой|выбери)\s+(?:выбор|выбором|группу|группой|параметр|параметром)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_select',group:clean(m[1])};
+  m=raw.match(/^(?:удали|убери)\s+(?:выбор|группу|параметр)\s*(.*)$/i);
+  if(m)return {intent:'choice_group_delete',group:clean(m[1])};
+  m=raw.match(/^переименуй\s+(?:выбор|группу|параметр)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'choice_group_rename',group:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:выключи|скрой)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_toggle',group:clean(m[1]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
+  if(m)return {intent:'choice_group_toggle',group:clean(m[1]),enabled:true};
+
+
+  if(/^(?:сделай\s+)?(?:выбор\s+)?обязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:true};
+  if(/^(?:сделай\s+)?(?:выбор\s+)?необязательн(?:ым|ый)$/i.test(raw))return {intent:'choice_group_required',required:false};
+  if(/^(?:один вариант|только один|одиночный выбор)$/i.test(raw))return {intent:'choice_group_type',type:'single'};
+  if(/^(?:можно несколько|несколько вариантов|множественный выбор)$/i.test(raw))return {intent:'choice_group_type',type:'multiple'};
+  m=raw.match(/^(?:можно выбрать|максимум)\s+(?:до\s+)?(\d+)$/i);
+  if(m)return {intent:'choice_group_limit',field:'max',value:Number(m[1])};
+  m=raw.match(/^(?:нужно выбрать|минимум)\s+(?:хотя бы\s+)?(\d+)$/i);
+  if(m)return {intent:'choice_group_limit',field:'min',value:Number(m[1])};
+
+  m=raw.match(/^(?:добавь|создай)\s+(?:вариант|опцию)\s+(.+?)(?:\s+([+-]\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?)?$/i);
+  if(m)return {intent:'choice_option_add',name:clean(m[1]),price_delta:m[2]?Number(String(m[2]).replace(',','.')):0};
+  m=raw.match(/^(?:цена|доплата)\s+(?:варианта|опции)\s+(.+?)\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  if(m)return {intent:'choice_option_price',option:clean(m[1]),price_delta:Number(String(m[2]).replace(',','.'))};
+  m=raw.match(/^(?:выключи|скрой|стоп)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_toggle',option:clean(m[1]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_toggle',option:clean(m[1]),enabled:true};
+  m=raw.match(/^(?:удали|убери)\s+(?:вариант|опцию)\s+(.+)$/i);
+  if(m)return {intent:'choice_option_delete',option:clean(m[1])};
+  m=raw.match(/^переименуй\s+(?:вариант|опцию)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'choice_option_rename',option:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:сделай|поставь)\s+(?:вариант|опцию)\s+(.+?)\s+(?:по умолчанию|дефолтной)$/i);
+  if(m)return {intent:'choice_option_default',option:clean(m[1])};
+
+
+  m=raw.match(/^(мясо|размер|основа|лаваш|соусы?|добавки?)\s+(обязательно|обязателен|обязательна|обязательные)$/i);
+  if(m)return {intent:'item_standard_required',group:clean(m[1]),required:true};
+  m=raw.match(/^(мясо|размер|основа|лаваш|соусы?|добавки?)\s+(необязательно|не обязателен|не обязательна|необязательные)$/i);
+  if(m)return {intent:'item_standard_required',group:clean(m[1]),required:false};
+  m=raw.match(/^(?:выключи|скрой)\s+(мясо|размер|основу|лаваш|соус|добавку)\s+(.+)$/i);
+  if(m)return {intent:'item_standard_toggle',group:clean(m[1]),option:clean(m[2]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(мясо|размер|основу|лаваш|соус|добавку)\s+(.+)$/i);
+  if(m)return {intent:'item_standard_toggle',group:clean(m[1]),option:clean(m[2]),enabled:true};
+  m=raw.match(/^(мясо|размер|основа|лаваш|соус|добавка)\s+(.+?)\s+(?:по умолчанию|дефолт)$/i);
+  if(m)return {intent:'item_standard_default',group:clean(m[1]),option:clean(m[2])};
+
+  if(/^(?:покажи|открой|дай)\s+конструктор$/i.test(raw)||/^конструктор настройки$/i.test(raw))return {intent:'builder_show'};
+
+  m=raw.match(/^добавь\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+?)(?:\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?)?$/i);
+  if(m)return {intent:'builder_option_add',group:clean(m[1]),name:clean(m[2]),price:m[3]?Number(String(m[3]).replace(',','.')):0};
+  m=raw.match(/^(?:удали|убери)\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+)$/i);
+  if(m)return {intent:'builder_option_delete',group:clean(m[1]),option:clean(m[2])};
+  m=raw.match(/^(?:цена|доплата)\s+(формата|типа|лаваша|мяса|соуса|добавки)\s+(.+?)\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  if(m)return {intent:'builder_option_price',group:clean(m[1]),option:clean(m[2]),price:Number(String(m[3]).replace(',','.'))};
+  m=raw.match(/^переименуй\s+(формат|тип|лаваш|мясо|соус|добавку|добавка)\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
+  if(m)return {intent:'builder_option_rename',group:clean(m[1]),option:clean(m[2]),name:clean(m[3])};
+
+  m=raw.match(/^(минимум|максимум)\s+соус(?:ов|а)?\s+(\d+)$/i);
+  if(m)return {intent:'builder_limit',field:/минимум/i.test(m[1])?'min_sauces':'max_sauces',value:Number(m[2])};
+  m=raw.match(/^максимум\s+добав(?:ок|ки)\s+(\d+)$/i);
+  if(m)return {intent:'builder_limit',field:'max_extras',value:Number(m[1])};
+
+  m=raw.match(/^название\s+конструктора\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'builder_title',value:clean(m[1])};
+  m=raw.match(/^(?:описание|подзаголовок)\s+конструктора\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'builder_subtitle',value:clean(m[1])};
 
   m=raw.match(/^(?:поставь\s+)?цен[ау]\s+(?:на\s+)?(.+?)\s+(?:в\s+|на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i)||
     raw.match(/^(?:измени|поменяй|установи)\s+цен[ау]\s+(?:на\s+)?(.+?)\s+(?:на|до)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб(?:лей|ля)?)?$/i);
@@ -94,6 +255,16 @@ function parseCommand(text){
   if(m)return {intent:'category_toggle',category:clean(m[1]),enabled:true};
   m=raw.match(/^переименуй\s+категори[юя]\s+(.+?)\s*(?:->|→|в)\s*(.+)$/i);
   if(m)return {intent:'category_rename',category:clean(m[1]),name:clean(m[2])};
+  m=raw.match(/^(?:удали|удалить)\s+категори[юя]\s+(.+)$/i);
+  if(m)return {intent:'category_delete',category:clean(m[1])};
+  m=raw.match(/^(?:эмодзи|иконка)\s+категории\s+(.+?)\s+(.+)$/i);
+  if(m)return {intent:'category_emoji',category:clean(m[1]),emoji:clean(m[2])};
+  m=raw.match(/^категория\s+(.+?)\s+(?:номер|позиция)\s+(\d+)$/i);
+  if(m)return {intent:'category_order',category:clean(m[1]),order:Number(m[2])};
+  m=raw.match(/^(цвет|акцент)\s+категории\s+(.+?)\s+(#[0-9A-Fa-f]{6})$/i);
+  if(m)return {intent:'category_color',field:/акцент/i.test(m[1])?'accent':'color',category:clean(m[2]),value:m[3].toUpperCase()};
+
+
 
   m=raw.match(/^(?:конструктор|сборка своей шаурмы)\s+(вкл|выкл|включи|выключи|включить|выключить)$/i);
   if(m)return {intent:'builder_toggle',enabled:boolWord(m[1])};
@@ -125,39 +296,72 @@ function parseCommand(text){
 
 function helpText(){
   return [
-    '🤖 <b>Ассистент управления заведением</b>',
+    '🤖 Ассистент меню Shaurmeg',
     '',
-    '<b>Меню</b>',
-    '• <code>покажи меню</code>',
-    '• <code>цена Классическая шаурма 390</code>',
-    '• <code>выключи блюдо Айран</code>',
-    '• <code>включи блюдо Айран</code>',
-    '• <code>добавь блюдо Айран | Напитки | 150 | Домашний айран</code>',
-    '• <code>переименуй блюдо Айран -> Тан</code>',
-    '• <code>описание блюда Тан = Холодный кисломолочный напиток</code>',
+    'Можно писать обычными фразами. Сначала выберите точку и при желании позицию.',
     '',
-    '<b>Категории</b>',
-    '• <code>покажи категории</code>',
-    '• <code>добавь категорию Десерты</code>',
-    '• <code>выключи категорию Выпечка</code>',
-    '• <code>переименуй категорию Напитки -> Бар</code>',
+    'ТОЧКА',
+    '• мои заведения',
+    '• /use 5E435A',
+    '• выбери точку Лепёшка',
     '',
-    '<b>Точка</b>',
-    '• <code>покажи настройки</code>',
-    '• <code>название точки Лепёшка 24</code>',
-    '• <code>адрес ул. Примерная, 10</code>',
-    '• <code>режим работы 10:00–23:00</code>',
-    '• <code>телефон +7...</code>',
-    '• <code>доставка вкл</code> / <code>доставка выкл</code>',
-    '• <code>самовывоз вкл</code>',
-    '• <code>конструктор вкл</code>',
+    'ПОЗИЦИЯ',
+    '• работаем с сырной шаурмой',
+    '• покажи настройки позиции Айран',
+    '• цена 420',
+    '• нет в наличии',
+    '• верни в наличие',
+    '• скрой блюдо Айран / верни Айран в меню',
+    '• бейдж Хит / убери бейдж',
+    '• сделай главной',
+    '• карточка компактная',
+    '• перенеси в категорию Напитки',
+    '• минимум 1 шт / максимум 5 шт',
+    '• дублируй позицию',
+    '• удали позицию',
     '',
-    '<b>Заказы</b>',
-    '• <code>покажи активные заказы</code>',
-    '• <code>заказ 42 готов</code>',
-    '• <code>покажи статистику</code>',
+    'НОВАЯ ПОЗИЦИЯ',
+    '• добавь Морс в Напитки за 170',
+    '• добавь блюдо Айран | Напитки | 150 | Домашний айран',
     '',
-    'Если заведений несколько: <code>/use Лепёшка</code>, <code>/use 5E435A</code> или просто отправьте короткий ключ <code>5E435A</code>.'
+    'КАТЕГОРИИ',
+    '• покажи категории',
+    '• добавь категорию Десерты',
+    '• выключи категорию Выпечка',
+    '• переименуй категорию Напитки -> Бар',
+    '',
+    'КНОПКИ И ВЫБОРЫ ВНУТРИ БЛЮДА',
+    '• добавь выбор Размер',
+    '• сделай обязательным',
+    '• можно несколько',
+    '• можно выбрать до 2',
+    '• нужно выбрать минимум 1',
+    '• добавь вариант Маленькая',
+    '• добавь вариант Большая +80',
+    '• доплата варианта Большая 100',
+    '• выключи вариант Большая',
+    '• переименуй вариант Большая -> XL',
+    '• сделай вариант Средняя по умолчанию',
+    '• удали вариант XL',
+    '• удали выбор Размер',
+    '',
+    'ФОТО',
+    '• выберите позицию и просто отправьте фото',
+    '• или подпишите фото: «фото для Айран»',
+    '',
+    'КОНСТРУКТОР «СОБЕРИ СВОЮ»',
+    '• покажи конструктор',
+    '• конструктор вкл / конструктор выкл',
+    '• добавь формат Большая 450',
+    '• добавь мясо Говядина +100',
+    '• добавь соус Сырный +30',
+    '• добавь добавку Халапеньо +40',
+    '• цена соуса Сырный 50',
+    '• удали соус Барбекю',
+    '• минимум соусов 1 / максимум соусов 2',
+    '• максимум добавок 4',
+    '',
+    'Все изменения сразу идут в общее меню и Mini App. Для изменения меню нужны права владельца/менеджера.'
   ].join('\n');
 }
 
@@ -168,23 +372,14 @@ function canUse(access,permission){
 }
 
 function sectionsFrom(config={},menu=[]){
-  const raw=Array.isArray(config?.menu_sections)?config.menu_sections:[];
-  const out=raw.map((x,i)=>({
-    id:clean(x?.id||slug(x?.name||('section_'+i))),
-    name:clean(x?.name||x?.title||x?.id||'Раздел'),
-    emoji:clean(x?.emoji||'').slice(0,8),
-    active:x?.active!==false,
-    order:i
-  })).filter(x=>x.id&&x.name);
-  const seen=new Set(out.map(x=>x.id));
-  for(const item of Array.isArray(menu)?menu:[]){
-    const id=clean(item?.c||item?.category||'shawarma');
-    if(!id||seen.has(id))continue;
-    seen.add(id);out.push({id,name:id,emoji:'',active:true,order:out.length});
-  }
-  return out.map((x,i)=>({...x,order:i}));
+  return D.menuSectionsAll(config||{},Array.isArray(menu)?menu:[]);
 }
 
+function looseWords(v){
+  return norm(v).split(/[^a-z0-9а-я]+/i).filter(Boolean)
+    .filter(x=>!['с','со','и','в','во','на','для','из','по'].includes(x))
+    .map(x=>x.length>=5?x.slice(0,4):x);
+}
 function findNamed(list,query,getName=x=>x?.name||x?.n||''){
   const q=norm(query);
   if(!q)return {item:null,matches:[]};
@@ -192,7 +387,58 @@ function findNamed(list,query,getName=x=>x?.name||x?.n||''){
   if(exact.length===1)return {item:exact[0],matches:exact};
   const partial=list.filter(x=>norm(getName(x)).includes(q)||q.includes(norm(getName(x))));
   if(partial.length===1)return {item:partial[0],matches:partial};
+  const qWords=[...new Set(looseWords(q))];
+  if(qWords.length){
+    const scored=list.map(x=>{
+      const words=new Set(looseWords(getName(x)));
+      const hits=qWords.filter(w=>words.has(w)).length;
+      return {x,hits,ratio:hits/qWords.length};
+    }).filter(r=>r.hits>0).sort((a,b)=>b.ratio-a.ratio||b.hits-a.hits);
+    if(scored.length&&scored[0].ratio===1&&(scored.length===1||scored[1].ratio<1))return {item:scored[0].x,matches:[scored[0].x]};
+    const best=scored.filter(r=>r.ratio===scored[0]?.ratio&&r.hits===scored[0]?.hits).map(r=>r.x);
+    if(best.length===1&&scored[0].ratio>=.67)return {item:best[0],matches:best};
+    if(best.length)return {item:null,matches:best.slice(0,8)};
+  }
   return {item:null,matches:(exact.length?exact:partial).slice(0,8)};
+}
+function itemSettingsText(item,sections=[]){
+  if(!item)return '';
+  const section=sections.find(x=>String(x.id)===String(item.c||item.category||'')),groups=Array.isArray(item.choice_groups)?item.choice_groups:[];
+  const lines=[
+    '🍽 '+String(item.n||item.name||'Позиция'),
+    'ID: '+String(item.id),
+    'Категория: '+String(section?.name||item.c||item.category||'—'),
+    'Цена: '+Number(item.p??item.price??0)+' ₽',
+    'В меню: '+(item.active===false?'нет':'да'),
+    'Остаток: '+(item.stock===null||item.stock===undefined?'без лимита':String(item.stock)),
+    'Карточка: '+String(item.display||'auto'),
+    'Главная: '+(item.featured===true?'да':'нет'),
+    'Рекомендуемая: '+(item.recommended===true?'да':'нет'),
+    'Бейдж: '+String(item.badge||'—'),
+    'Вес / объём: '+String(item.weight||'—'),
+    'SKU: '+String(item.sku||'—'),
+    'Количество в заказе: '+Math.max(1,Number(item.min_qty)||1)+'–'+Math.max(1,Number(item.max_qty)||50),
+    'Групп выбора: '+groups.length
+  ];
+  if(item.d||item.description)lines.push('Описание: '+String(item.d||item.description));
+  if(item.composition)lines.push('Состав: '+String(item.composition));
+  if(Array.isArray(item.tags)&&item.tags.length)lines.push('Теги: '+item.tags.join(', '));
+  if(item.schedule?.enabled)lines.push('Расписание: дни '+(item.schedule.days||[]).join(',')+' · '+String(item.schedule.from||'')+'–'+String(item.schedule.to||''));
+  const std=item.options&&typeof item.options==='object'?item.options:{},required=new Set(Array.isArray(std.required_groups)?std.required_groups:[]);
+  const stdLabels={meats:'Мясо',sizes:'Размер',bases:'Основа',sauces:'Соусы',extras:'Добавки'};
+  for(const key of Object.keys(stdLabels)){
+    const opts=Array.isArray(std[key])?std[key]:[];if(!opts.length)continue;
+    lines.push(stdLabels[key]+(required.has(key)?' · обязательно':'')+':');
+    for(const o of opts)lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price)?' '+(Number(o.price)>0?'+':'')+Number(o.price)+' ₽':'')+(o.default===true?' · по умолчанию':''));
+  }
+  for(const g of groups){
+    const opts=Array.isArray(g.options)?g.options:[];
+    lines.push('• '+String(g.name||'Выбор')+' · '+(g.active===false?'выкл · ':'')+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
+    for(const o of opts){
+      lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')+(o.default===true?' · по умолчанию':''));
+    }
+  }
+  return lines.join('\n');
 }
 
 function menuLine(x){
@@ -201,6 +447,26 @@ function menuLine(x){
 function orderLine(o){
   return '• #'+o.id+' · '+String(o.order_number||'')+' · '+(STATUS_LABELS[o.status]||o.status)+' · '+Number(o.total||0)+' ₽';
 }
+function builderGroupKey(v){
+  const s=norm(v);
+  if(/формат|тип/.test(s))return 'types';
+  if(/лаваш/.test(s))return 'breads';
+  if(/мяс/.test(s))return 'meats';
+  if(/соус/.test(s))return 'sauces';
+  if(/добав/.test(s))return 'extras';
+  return '';
+}
+function itemOptionGroupKey(v){
+  const s=norm(v);
+  if(/размер|формат|тип/.test(s))return 'sizes';
+  if(/основ|лаваш|пита|хлеб/.test(s))return 'bases';
+  if(/мяс/.test(s))return 'meats';
+  if(/соус/.test(s))return 'sauces';
+  if(/добав|доп/.test(s))return 'extras';
+  return '';
+}
+function itemOptionGroupLabel(key){return ({meats:'Мясо',sizes:'Размер',bases:'Основа',sauces:'Соусы',extras:'Добавки'})[key]||key}
+function builderGroupLabel(key){return ({types:'Форматы',breads:'Лаваш',meats:'Мясо',sauces:'Соусы',extras:'Добавки'})[key]||key}
 
 function createVenueCommandBus({DB,publishVenue,pushOwner}){
   async function accessesFor(userId){
@@ -221,9 +487,22 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return clean(q.rows[0]?.establishment_id);
   }
   async function setContext(userId,est){
-    await DB.query('INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,updated_at) VALUES($1,$2,NOW()) '+
-      'ON CONFLICT(telegram_user_id) DO UPDATE SET establishment_id=EXCLUDED.establishment_id,updated_at=NOW()',
+    await DB.query('INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,selected_item_id,selected_group_id,updated_at) VALUES($1,$2,NULL,NULL,NOW()) '+
+      'ON CONFLICT(telegram_user_id) DO UPDATE SET '+
+      'selected_item_id=CASE WHEN shaurma_owner_command_context.establishment_id=EXCLUDED.establishment_id THEN shaurma_owner_command_context.selected_item_id ELSE NULL END,'+
+      'selected_group_id=CASE WHEN shaurma_owner_command_context.establishment_id=EXCLUDED.establishment_id THEN shaurma_owner_command_context.selected_group_id ELSE NULL END,'+
+      'establishment_id=EXCLUDED.establishment_id,updated_at=NOW()',
       [String(userId),est]);
+  }
+  async function editorContext(userId){
+    const q=await DB.query('SELECT establishment_id,selected_item_id,selected_group_id FROM shaurma_owner_command_context WHERE telegram_user_id=$1',[String(userId)]);
+    return q.rows[0]||{};
+  }
+  async function selectItemContext(userId,itemId){
+    await DB.query('UPDATE shaurma_owner_command_context SET selected_item_id=$2,selected_group_id=NULL,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),String(itemId||'')]);
+  }
+  async function selectGroupContext(userId,groupId){
+    await DB.query('UPDATE shaurma_owner_command_context SET selected_group_id=$2,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),String(groupId||'')]);
   }
 
   function chooseByQuery(accesses,query){
@@ -276,11 +555,22 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
 
   async function saveMenu(access,userId,menu,config,action,payload){
     const normalized=D.normalizeMenu(menu);
+    const base=config&&typeof config==='object'?config:{};
+    const nextConfig={...base,menu_sections:D.normalizeMenuSections(base.menu_sections,normalized,true)};
     const q=await DB.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
-      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(config||{})]);
+      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(nextConfig)]);
     if(q.rows[0])publishVenue(q.rows[0]);
     await audit(access.establishment_id,userId,action,payload);
     return q.rows[0];
+  }
+  async function saveBuilder(access,userId,config,builder,action,payload={}){
+    const normalized=D.normalizeBuilderConfig(builder||{});
+    const next={...(config||{}),builder:normalized};
+    const q=await DB.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
+      [access.establishment_id,JSON.stringify(next)]);
+    if(q.rows[0])publishVenue(q.rows[0]);
+    await audit(access.establishment_id,userId,action,payload);
+    return {row:q.rows[0],builder:normalized,config:next};
   }
 
   async function handle({user,text}){
@@ -336,6 +626,265 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       ].join('\n')};
     }
 
+
+    const editor=await editorContext(user.id);
+    const contextItem=menu.find(x=>String(x.id)===String(editor.selected_item_id||''));
+    const resolveItem=(query)=>{
+      if(clean(query)){
+        const found=findNamed(menu,query,x=>x.n||x.name);
+        return {item:found.item,matches:found.matches||[]};
+      }
+      return {item:contextItem||null,matches:[]};
+    };
+    const itemMissing=(query,matches=[])=>{
+      const hint=matches.length?'\nВозможно:\n'+matches.map(x=>'• '+String(x.n||x.name)).join('\n'):'';
+      return {handled:true,text:clean(query)?'Не нашёл позицию «'+query+'».'+hint:'Сначала выберите позицию: «работаем с сырной шаурмой».'};
+    };
+    const resolveGroup=(item,query)=>{
+      const groups=Array.isArray(item?.choice_groups)?item.choice_groups:[];
+      if(clean(query)){
+        const found=findNamed(groups,query,x=>x.name);
+        return {group:found.item,matches:found.matches||[]};
+      }
+      const selected=groups.find(g=>String(g.id)===String(editor.selected_group_id||''));
+      if(selected)return {group:selected,matches:[]};
+      if(groups.length===1)return {group:groups[0],matches:[]};
+      return {group:null,matches:groups};
+    };
+
+    if(command.intent==='menu_item_select'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      await selectItemContext(user.id,found.item.id);
+      return {handled:true,text:'✅ Работаем с: '+String(found.item.n||found.item.name)+'\n\n'+itemSettingsText(found.item,sections)+'\n\nТеперь можно писать коротко: «цена 420», «нет в наличии», «добавь выбор Размер».'};
+    }
+
+    if(command.intent==='menu_item_show'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      await selectItemContext(user.id,found.item.id);
+      return {handled:true,text:itemSettingsText(found.item,sections)};
+    }
+
+    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_stock'||command.intent==='menu_weight'||command.intent==='menu_sku'||command.intent==='menu_composition'||command.intent==='menu_tags'||command.intent==='menu_recommended'||command.intent==='menu_schedule'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_image_remove'||command.intent==='menu_image_fit'||command.intent==='menu_gallery_clear'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      const item=found.item,index=menu.indexOf(item);
+      await selectItemContext(user.id,item.id);
+
+      if(command.intent==='menu_price_context'){
+        const old=Number(item.p??item.price??0);item.p=command.price;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_price',{item_id:item.id,old_price:old,new_price:command.price});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+': '+old+' ₽ → '+command.price+' ₽'};
+      }
+      if(command.intent==='menu_available'){
+        item.stock=command.available?null:0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_available',{item_id:item.id,stock:item.stock});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.available?'снова в наличии':'добавлено в стоп-лист. В Mini App останется видно, но заказать нельзя.')};
+      }
+      if(command.intent==='menu_stock'){
+        item.stock=command.stock===null?null:Math.max(0,Math.min(1000000,Math.floor(Number(command.stock)||0)));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_stock',{item_id:item.id,stock:item.stock});
+        return {handled:true,text:'✅ Остаток '+String(item.n||item.name)+': '+(item.stock===null?'без лимита':item.stock+' шт.')};
+      }
+      if(command.intent==='menu_weight'){
+        item.weight=String(command.value||'').slice(0,40);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_weight',{item_id:item.id,weight:item.weight});
+        return {handled:true,text:'✅ Вес / объём: '+(item.weight||'убран')};
+      }
+      if(command.intent==='menu_sku'){
+        item.sku=String(command.value||'').slice(0,80);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_sku',{item_id:item.id,sku:item.sku});
+        return {handled:true,text:'✅ SKU: '+(item.sku||'убран')};
+      }
+      if(command.intent==='menu_composition'){
+        item.composition=String(command.value||'').slice(0,1200);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_composition',{item_id:item.id});
+        return {handled:true,text:'✅ Состав позиции обновлён.'};
+      }
+      if(command.intent==='menu_tags'){
+        item.tags=Array.isArray(command.tags)?command.tags.slice(0,20):[];
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_tags',{item_id:item.id,tags:item.tags});
+        return {handled:true,text:'✅ Теги: '+(item.tags.length?item.tags.join(', '):'убраны')};
+      }
+      if(command.intent==='menu_recommended'){
+        item.recommended=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_recommended',{item_id:item.id,recommended:item.recommended});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(item.recommended?'рекомендуемая позиция':'убрана из рекомендуемых')};
+      }
+      if(command.intent==='menu_schedule'){
+        item.schedule=command.schedule;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_schedule',{item_id:item.id,schedule:item.schedule});
+        return {handled:true,text:'✅ Расписание: '+(item.schedule.enabled?(item.schedule.days.join(', ')+' · '+item.schedule.from+'–'+item.schedule.to):'выключено')};
+      }
+      if(command.intent==='menu_badge'){
+        item.badge=String(command.value||'').slice(0,40);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_badge',{item_id:item.id,badge:item.badge});
+        return {handled:true,text:'✅ Метка '+String(item.n||item.name)+': '+(item.badge||'убрана')};
+      }
+      if(command.intent==='menu_featured'){
+        if(command.enabled)for(const x of menu)x.featured=false;
+        item.featured=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_featured',{item_id:item.id,featured:command.enabled});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(command.enabled?'главная позиция меню':'убрана из главной позиции')};
+      }
+      if(command.intent==='menu_display'){
+        item.display=command.display;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_display',{item_id:item.id,display:command.display});
+        return {handled:true,text:'✅ Вид карточки: '+command.display};
+      }
+      if(command.intent==='menu_image_remove'){
+        item.image='';
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_image_remove',{item_id:item.id});
+        return {handled:true,text:'✅ Фото позиции «'+String(item.n||item.name)+'» удалено.'};
+      }
+      if(command.intent==='menu_image_fit'){
+        item.image_fit=command.image_fit;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_image_fit',{item_id:item.id,image_fit:item.image_fit});
+        return {handled:true,text:'✅ Отображение фото: '+(item.image_fit==='contain'?'вписать целиком':'заполнять карточку')+'.'};
+      }
+      if(command.intent==='menu_gallery_clear'){
+        item.gallery=[];
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_gallery_clear',{item_id:item.id});
+        return {handled:true,text:'✅ Галерея позиции очищена.'};
+      }
+      if(command.intent==='menu_category_move'){
+        let category=findNamed(sections,command.category,x=>x.name||x.id).item;
+        if(!category){
+          category={id:slug(command.category),name:command.category,emoji:'',active:true,order:sections.length};
+          sections.push(category);
+        }
+        item.c=category.id;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_category_move',{item_id:item.id,category_id:category.id});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' → категория «'+category.name+'»'};
+      }
+      if(command.intent==='menu_delete'){
+        const name=String(item.n||item.name);
+        menu.splice(index,1);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_delete',{item_id:item.id,name});
+        await selectItemContext(user.id,'');
+        return {handled:true,text:'✅ Позиция «'+name+'» удалена из меню.'};
+      }
+      if(command.intent==='menu_duplicate'){
+        const copy={...item,id:slug(item.n||item.name)+'_'+Date.now().toString(36).slice(-6),n:String(item.n||item.name)+' — копия',featured:false,recommended:false,gallery:JSON.parse(JSON.stringify(item.gallery||[])),options:JSON.parse(JSON.stringify(item.options||{})),choice_groups:JSON.parse(JSON.stringify(item.choice_groups||[]))};
+        menu.splice(index+1,0,copy);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_duplicate',{source_item_id:item.id,item_id:copy.id});
+        await selectItemContext(user.id,copy.id);
+        return {handled:true,text:'✅ Создана копия: '+copy.n+'\nТеперь работаем с ней.'};
+      }
+      if(command.intent==='menu_qty'){
+        const value=Math.max(1,Math.min(50,Math.floor(Number(command.value)||1)));
+        item[command.field]=value;
+        const min=Math.max(1,Number(item.min_qty)||1),max=Math.max(min,Number(item.max_qty)||50);
+        item.min_qty=min;item.max_qty=max;
+        if(command.field==='min_qty'&&item.max_qty<value)item.max_qty=value;
+        if(command.field==='max_qty'&&item.min_qty>value)item.min_qty=value;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_qty',{item_id:item.id,min_qty:item.min_qty,max_qty:item.max_qty});
+        return {handled:true,text:'✅ Количество для '+String(item.n||item.name)+': '+item.min_qty+'–'+item.max_qty+' шт.'};
+      }
+    }
+
+    if(command.intent==='choice_group_add'||command.intent==='choice_group_select'||command.intent==='choice_group_delete'||command.intent==='choice_group_rename'||command.intent==='choice_group_toggle'||command.intent==='choice_group_required'||command.intent==='choice_group_type'||command.intent==='choice_group_limit'||command.intent==='choice_option_add'||command.intent==='choice_option_price'||command.intent==='choice_option_toggle'||command.intent==='choice_option_delete'||command.intent==='choice_option_rename'||command.intent==='choice_option_default'){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      const item=found.item;
+      await selectItemContext(user.id,item.id);
+      item.choice_groups=Array.isArray(item.choice_groups)?item.choice_groups.map(g=>({...g,options:Array.isArray(g.options)?g.options.map(o=>({...o})):[]})):[];
+      let selectedGroup=resolveGroup(item,command.group);
+
+      if(command.intent==='choice_group_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        const group={id,name:command.name,type:'single',required:false,min:0,max:1,active:true,options:[]};
+        item.choice_groups.push(group);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_add',{item_id:item.id,group_id:id,name:command.name});
+        await selectGroupContext(user.id,id);
+        return {handled:true,text:'✅ Добавлен выбор «'+command.name+'» для '+String(item.n||item.name)+'.\nПо умолчанию: один вариант, необязательно.\nТеперь можно: «сделай обязательным», «можно несколько», «добавь вариант Большая +80».'};
+      }
+
+      if(command.intent==='choice_group_select'){
+        if(!selectedGroup.group){
+          const hint=selectedGroup.matches.length?'\n'+selectedGroup.matches.map(g=>'• '+g.name).join('\n'):'';
+          return {handled:true,text:'Не нашёл группу «'+command.group+'».'+hint};
+        }
+        await selectGroupContext(user.id,selectedGroup.group.id);
+        return {handled:true,text:'✅ Работаем с выбором «'+selectedGroup.group.name+'».\nВарианты:\n'+((selectedGroup.group.options||[]).map(o=>'• '+o.name+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')).join('\n')||'пока нет вариантов')};
+      }
+
+      if(!selectedGroup.group){
+        return {handled:true,text:'Сначала выберите группу параметров. Например: «открой выбор Размер». Доступно:\n'+(selectedGroup.matches.map(g=>'• '+g.name).join('\n')||'групп пока нет')};
+      }
+      const group=selectedGroup.group;
+      await selectGroupContext(user.id,group.id);
+
+      if(command.intent==='choice_group_delete'){
+        item.choice_groups=item.choice_groups.filter(g=>String(g.id)!==String(group.id));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_delete',{item_id:item.id,group_id:group.id});
+        await selectGroupContext(user.id,'');
+        return {handled:true,text:'✅ Выбор «'+group.name+'» удалён.'};
+      }
+      if(command.intent==='choice_group_rename'){
+        const old=group.name;group.name=String(command.name||'').slice(0,120);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_rename',{item_id:item.id,group_id:group.id,old_name:old,new_name:group.name});
+        return {handled:true,text:'✅ Выбор «'+old+'» → «'+group.name+'».'};
+      }
+      if(command.intent==='choice_group_toggle'){
+        group.active=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_toggle',{item_id:item.id,group_id:group.id,active:group.active});
+        return {handled:true,text:'✅ Выбор «'+group.name+'» — '+(group.active?'включён':'временно отключён')+'.'};
+      }
+      if(command.intent==='choice_group_required'){
+        group.required=command.required;
+        if(command.required&&Number(group.min||0)<1)group.min=1;
+        if(!command.required&&Number(group.min||0)===1)group.min=0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_required',{item_id:item.id,group_id:group.id,required:group.required});
+        return {handled:true,text:'✅ «'+group.name+'» — '+(group.required?'обязательный выбор':'необязательный выбор')};
+      }
+      if(command.intent==='choice_group_type'){
+        group.type=command.type;
+        if(command.type==='single')group.max=1;
+        else group.max=Math.max(1,Number(group.max)||Math.max(1,(group.options||[]).length));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_type',{item_id:item.id,group_id:group.id,type:group.type});
+        return {handled:true,text:'✅ «'+group.name+'»: '+(group.type==='multiple'?'можно выбирать несколько':'можно выбрать один вариант')};
+      }
+      if(command.intent==='choice_group_limit'){
+        const value=Math.max(0,Math.min(60,Math.floor(Number(command.value)||0)));
+        group[command.field]=value;
+        if(group.type==='single')group.max=1;
+        if(Number(group.max||1)<Number(group.min||0))group.max=group.min;
+        group.required=Number(group.min||0)>0;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_group_limit',{item_id:item.id,group_id:group.id,min:group.min,max:group.max});
+        return {handled:true,text:'✅ «'+group.name+'»: выбрать '+Number(group.min||0)+'–'+Number(group.max||1)};
+      }
+
+      const options=group.options||[];
+      if(command.intent==='choice_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        options.push({id,name:command.name,price_delta:Number(command.price_delta)||0,active:true,default:false});
+        group.options=options;
+        if(group.type==='multiple'&&Number(group.max||0)<1)group.max=options.length;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_option_add',{item_id:item.id,group_id:group.id,option_id:id,name:command.name,price_delta:Number(command.price_delta)||0});
+        return {handled:true,text:'✅ В «'+group.name+'» добавлен вариант «'+command.name+'»'+(Number(command.price_delta)?' '+(Number(command.price_delta)>0?'+':'')+Number(command.price_delta)+' ₽':'')};
+      }
+
+      const optionFound=findNamed(options,command.option,x=>x.name);
+      const option=optionFound.item;
+      if(!option){
+        const hint=optionFound.matches.length?'\n'+optionFound.matches.map(o=>'• '+o.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл вариант «'+String(command.option||'')+'» в «'+group.name+'».'+hint};
+      }
+      if(command.intent==='choice_option_price')option.price_delta=Math.max(-100000,Math.min(100000,Math.round(Number(command.price_delta)||0)));
+      if(command.intent==='choice_option_toggle')option.active=command.enabled;
+      if(command.intent==='choice_option_delete')group.options=options.filter(o=>String(o.id)!==String(option.id));
+      if(command.intent==='choice_option_rename')option.name=command.name;
+      if(command.intent==='choice_option_default'){
+        if(group.type==='single')for(const o of options)o.default=false;
+        option.default=true;
+      }
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_choice_option_update',{item_id:item.id,group_id:group.id,option_id:option.id,intent:command.intent});
+      const label=command.intent==='choice_option_delete'?'удалён':command.intent==='choice_option_toggle'?(command.enabled?'включён':'выключен'):command.intent==='choice_option_price'?'доплата '+option.price_delta+' ₽':command.intent==='choice_option_rename'?'переименован в '+option.name:'по умолчанию';
+      return {handled:true,text:'✅ Вариант «'+String(option.name)+'» — '+label+'.'};
+    }
+
     if(command.intent==='menu_price'||command.intent==='menu_toggle'||command.intent==='menu_rename'||command.intent==='menu_description'){
       const found=findNamed(menu,command.item,x=>x.n||x.name);
       if(!found.item){
@@ -343,6 +892,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'Не нашёл позицию «'+command.item+'».'+hint};
       }
       const item=found.item;
+      await selectItemContext(user.id,item.id);
       if(command.intent==='menu_price'){
         const old=Number(item.p??item.price??0);item.p=command.price;
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_price',{item_id:item.id,old_price:old,new_price:command.price});
@@ -375,7 +925,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       const id=slug(command.name)+'_'+Date.now().toString(36).slice(-5);
       menu.push({id,n:command.name,c:category.id,d:command.description||'',p:command.price,image:'',badge:'',featured:false,display:'auto',image_fit:'cover',active:true});
       await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_add',{item_id:id,name:command.name,category:category.id,price:command.price});
-      return {handled:true,text:'✅ Добавлено: <b>'+command.name+'</b>\nКатегория: '+category.name+'\nЦена: '+command.price+' ₽'};
+      await selectItemContext(user.id,id);
+      return {handled:true,text:'✅ Добавлено: <b>'+command.name+'</b>\nКатегория: '+category.name+'\nЦена: '+command.price+' ₽\nТеперь работаем с этой позицией.'};
     }
 
     if(command.intent==='category_add'){
@@ -385,6 +936,33 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       sections.push(section);
       await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_add',{category_id:section.id,name:section.name});
       return {handled:true,text:'✅ Категория <b>'+section.name+'</b> добавлена.'};
+    }
+
+    if(command.intent==='category_delete'||command.intent==='category_emoji'||command.intent==='category_order'||command.intent==='category_color'){
+      const found=findNamed(sections,command.category,x=>x.name||x.id);
+      if(!found.item)return {handled:true,text:'Не нашёл категорию «'+command.category+'».'};
+      const section=found.item;
+      if(command.intent==='category_delete'){
+        const used=menu.filter(x=>String(x.c||x.category||'')===String(section.id));
+        if(used.length)return {handled:true,text:'Категория «'+section.name+'» содержит '+used.length+' позиций. Сначала перенесите их в другую категорию или скройте категорию.'};
+        const nextSections=sections.filter(x=>String(x.id)!==String(section.id)).map((x,i)=>({...x,order:i}));
+        await saveMenu(access,user.id,menu,{...config,menu_sections:nextSections},'assistant_category_delete',{category_id:section.id});
+        return {handled:true,text:'✅ Категория «'+section.name+'» удалена.'};
+      }
+      if(command.intent==='category_emoji'){
+        section.emoji=String(command.emoji||'').trim().slice(0,8);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_emoji',{category_id:section.id,emoji:section.emoji});
+        return {handled:true,text:'✅ Категория «'+section.name+'»: иконка '+(section.emoji||'убрана')};
+      }
+      if(command.intent==='category_color'){
+        section[command.field]=String(command.value||'').toUpperCase();
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_color',{category_id:section.id,field:command.field,value:section[command.field]});
+        return {handled:true,text:'✅ Категория «'+section.name+'»: '+(command.field==='accent'?'акцент':'цвет')+' '+section[command.field]};
+      }
+      const target=Math.max(1,Math.min(sections.length,Math.floor(Number(command.order)||1)))-1;
+      const current=sections.indexOf(section);sections.splice(current,1);sections.splice(target,0,section);sections.forEach((x,i)=>x.order=i);
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_order',{category_id:section.id,order:target});
+      return {handled:true,text:'✅ Категория «'+section.name+'» теперь №'+(target+1)+'.'};
     }
 
     if(command.intent==='category_toggle'||command.intent==='category_rename'){
@@ -413,6 +991,61 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       return {handled:true,text:'✅ Категория «'+old+'» → <b>'+command.name+'</b>'};
     }
 
+    if(['item_standard_required','item_standard_toggle','item_standard_default'].includes(command.intent)){
+      if(!contextItem)return {handled:true,text:'Сначала выберите позицию: «работаем с сырной шаурмой».'};
+      const key=itemOptionGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял группу. Поддерживаются: мясо, размер, основа, соусы, добавки.'};
+      const item=contextItem;
+      item.options=item.options&&typeof item.options==='object'?JSON.parse(JSON.stringify(item.options)):{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_groups:[]};
+      item.options.required_groups=Array.isArray(item.options.required_groups)?item.options.required_groups:[];
+      item.options[key]=Array.isArray(item.options[key])?item.options[key]:[];
+      if(command.intent==='item_standard_required'){
+        item.options.required_groups=item.options.required_groups.filter(x=>x!==key);
+        if(command.required)item.options.required_groups.push(key);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_standard_required',{item_id:item.id,group:key,required:command.required});
+        return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+' — '+(command.required?'обязательный выбор':'необязательный выбор')+'.'};
+      }
+      const found=findNamed(item.options[key],command.option,x=>x.name);
+      if(!found.item)return {handled:true,text:'Не нашёл вариант «'+command.option+'» в '+itemOptionGroupLabel(key)+'.'};
+      const option=found.item;
+      if(command.intent==='item_standard_toggle')option.active=command.enabled;
+      if(command.intent==='item_standard_default'){
+        for(const o of item.options[key])o.default=false;
+        option.default=true;
+      }
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_standard_option',{item_id:item.id,group:key,option_id:option.id,intent:command.intent});
+      return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+': «'+option.name+'» — '+(command.intent==='item_standard_default'?'по умолчанию':command.enabled?'включён':'выключен')+'.'};
+    }
+
+    if(['builder_option_add','builder_option_delete','builder_option_price','builder_option_rename'].includes(command.intent)&&contextItem){
+      const key=itemOptionGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял тип варианта. Для блюда поддерживаются: мясо, размер, основа, соус, добавка.'};
+      const item=contextItem;
+      item.options=item.options&&typeof item.options==='object'?JSON.parse(JSON.stringify(item.options)):{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_groups:[]};
+      item.options[key]=Array.isArray(item.options[key])?item.options[key]:[];
+      const list=item.options[key];
+
+      if(command.intent==='builder_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        list.push({id,name:command.name,price:Math.max(-100000,Math.min(100000,Math.round(Number(command.price)||0))),active:true,default:list.length===0});
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_option_add',{item_id:item.id,group:key,option_id:id,name:command.name,price:command.price});
+        return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+' для «'+String(item.n||item.name)+'»: добавлено «'+command.name+'»'+(Number(command.price)?' '+(Number(command.price)>0?'+':'')+Number(command.price)+' ₽':'')};
+      }
+
+      const found=findNamed(list,command.option,x=>x.name);
+      if(!found.item){
+        const hint=found.matches.length?'\nВозможно:\n'+found.matches.map(x=>'• '+x.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл «'+command.option+'» в '+itemOptionGroupLabel(key)+'.'+hint};
+      }
+      const option=found.item;
+      if(command.intent==='builder_option_delete')item.options[key]=list.filter(x=>String(x.id)!==String(option.id));
+      if(command.intent==='builder_option_price')option.price=Math.max(-100000,Math.min(100000,Math.round(Number(command.price)||0)));
+      if(command.intent==='builder_option_rename')option.name=command.name;
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_item_option_update',{item_id:item.id,group:key,option_id:option.id,intent:command.intent});
+      const label=command.intent==='builder_option_delete'?'удалено':command.intent==='builder_option_price'?'цена '+option.price+' ₽':'переименовано в '+option.name;
+      return {handled:true,text:'✅ '+itemOptionGroupLabel(key)+': «'+String(option.name)+'» — '+label+'.'};
+    }
+
     if(command.intent==='builder_toggle'){
       config.builder_enabled=command.enabled;
       const q=await DB.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
@@ -420,6 +1053,56 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       if(q.rows[0])publishVenue(q.rows[0]);
       await audit(access.establishment_id,user.id,'assistant_builder_toggle',{enabled:command.enabled});
       return {handled:true,text:'✅ Конструктор — '+(command.enabled?'включён':'выключен')+'.'};
+    }
+
+    if(['builder_show','builder_option_add','builder_option_delete','builder_option_price','builder_option_rename','builder_limit','builder_title','builder_subtitle'].includes(command.intent)){
+      let builder=D.normalizeBuilderConfig(config.builder||{});
+      if(command.intent==='builder_show'){
+        await selectItemContext(user.id,'');
+        const lines=['🧩 Конструктор · '+(config.builder_enabled===true?'включён':'выключен'),'Название: '+builder.title,'Описание: '+builder.subtitle];
+        for(const key of ['types','breads','meats','sauces','extras']){
+          lines.push('',builderGroupLabel(key)+':');
+          lines.push(...((builder[key]||[]).map(o=>'• '+o.name+' · '+Number(o.price||0)+' ₽')||[]));
+        }
+        lines.push('','Соусы: '+builder.min_sauces+'–'+builder.max_sauces,'Добавки: до '+builder.max_extras);
+        return {handled:true,text:lines.join('\n').slice(0,3900)};
+      }
+
+      if(command.intent==='builder_title'||command.intent==='builder_subtitle'){
+        builder={...builder,[command.intent==='builder_title'?'title':'subtitle']:command.value};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_'+command.intent,{value:command.value});
+        return {handled:true,text:'✅ '+(command.intent==='builder_title'?'Название':'Описание')+' конструктора обновлено: '+(command.value||'')};
+      }
+
+      if(command.intent==='builder_limit'){
+        builder={...builder,[command.field]:Math.max(0,Math.floor(Number(command.value)||0))};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_builder_limit',{field:command.field,value:command.value});
+        const b=saved.builder;
+        return {handled:true,text:'✅ Лимиты конструктора: соусы '+b.min_sauces+'–'+b.max_sauces+', добавки до '+b.max_extras};
+      }
+
+      const key=builderGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял раздел конструктора. Используйте: формат, лаваш, мясо, соус или добавка.'};
+      const list=Array.isArray(builder[key])?builder[key].map(x=>({...x})):[];
+      if(command.intent==='builder_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        list.push({id,name:command.name,price:Math.max(0,Math.min(100000,Math.round(Number(command.price)||0)))});
+        builder={...builder,[key]:list};
+        const saved=await saveBuilder(access,user.id,config,builder,'assistant_builder_option_add',{group:key,option_id:id,name:command.name,price:command.price});
+        return {handled:true,text:'✅ '+builderGroupLabel(key)+': добавлено «'+command.name+'» · '+Number(command.price||0)+' ₽'};
+      }
+      const found=findNamed(list,command.option,x=>x.name);
+      if(!found.item){
+        const hint=found.matches.length?'\nВозможно:\n'+found.matches.map(x=>'• '+x.name).join('\n'):'';
+        return {handled:true,text:'Не нашёл «'+command.option+'» в разделе '+builderGroupLabel(key)+'.'+hint};
+      }
+      const option=found.item;
+      if(command.intent==='builder_option_delete')builder={...builder,[key]:list.filter(x=>String(x.id)!==String(option.id))};
+      if(command.intent==='builder_option_price'){option.price=Math.max(0,Math.min(100000,Math.round(Number(command.price)||0)));builder={...builder,[key]:list}}
+      if(command.intent==='builder_option_rename'){option.name=command.name;builder={...builder,[key]:list}}
+      const saved=await saveBuilder(access,user.id,config,builder,'assistant_'+command.intent,{group:key,option_id:option.id});
+      const label=command.intent==='builder_option_delete'?'удалено':command.intent==='builder_option_price'?'цена '+option.price+' ₽':'переименовано в '+option.name;
+      return {handled:true,text:'✅ '+builderGroupLabel(key)+': «'+String(option.name)+'» — '+label+'.'};
     }
 
     if(['venue_name','venue_address','venue_hours','venue_description','venue_phone','venue_website','delivery_toggle','pickup_toggle'].includes(command.intent)){
@@ -478,7 +1161,49 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {handled:false};
   }
 
-  return {handle};
+  async function setItemImage({user,itemQuery,image,galleryMode=false}){
+    const resolved=await resolveAccess(user.id,{intent:'menu_item_show'});
+    if(resolved.error)return {handled:true,text:resolved.error};
+    const access=resolved.access;
+    if(!canUse(access,'menu'))return {handled:true,text:'⛔️ У вас нет права menu для этой точки.'};
+    const venue=await loadVenue(access.establishment_id);
+    if(!venue)return {handled:true,text:'Точка не найдена.'};
+    const menu=Array.isArray(venue.menu)?venue.menu.map(x=>({...x})):[];
+    const config=venue.config&&typeof venue.config==='object'?{...venue.config}:{};
+    const sections=sectionsFrom(config,menu);
+    const editor=await editorContext(user.id);
+    let found;
+    if(clean(itemQuery))found=findNamed(menu,itemQuery,x=>x.n||x.name);
+    else found={item:menu.find(x=>String(x.id)===String(editor.selected_item_id||'')),matches:[]};
+    if(!found.item){
+      const hint=(found.matches||[]).length?'\nВозможно:\n'+found.matches.map(x=>'• '+String(x.n||x.name)).join('\n'):'';
+      return {handled:true,text:clean(itemQuery)?'Не нашёл позицию «'+itemQuery+'».'+hint:'Сначала выберите позицию: «работаем с сырной шаурмой», затем отправьте фото.'};
+    }
+    if(galleryMode){
+      found.item.gallery=Array.isArray(found.item.gallery)?found.item.gallery.slice(0,11):[];
+      found.item.gallery.push(String(image||'').slice(0,700000));
+    }else found.item.image=String(image||'').slice(0,700000);
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},galleryMode?'assistant_menu_gallery_add':'assistant_menu_image',{item_id:found.item.id,has_image:!!found.item.image,gallery_count:(found.item.gallery||[]).length});
+    await selectItemContext(user.id,found.item.id);
+    return {handled:true,text:galleryMode?'✅ Фото добавлено в галерею «'+String(found.item.n||found.item.name)+'».':'✅ Главное фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
+  }
+
+  async function setCategoryImage({user,categoryQuery,image}){
+    const resolved=await resolveAccess(user.id,{intent:'category_show'});
+    if(resolved.error)return {handled:true,text:resolved.error};
+    const access=resolved.access;
+    if(!canUse(access,'menu'))return {handled:true,text:'⛔️ У вас нет права menu для этой точки.'};
+    const venue=await loadVenue(access.establishment_id);if(!venue)return {handled:true,text:'Точка не найдена.'};
+    const menu=Array.isArray(venue.menu)?venue.menu.map(x=>({...x})):[];
+    const config=venue.config&&typeof venue.config==='object'?{...venue.config}:{};
+    const sections=sectionsFrom(config,menu),found=findNamed(sections,categoryQuery,x=>x.name||x.id);
+    if(!found.item)return {handled:true,text:'Не нашёл категорию «'+categoryQuery+'».'};
+    found.item.cover=String(image||'').slice(0,700000);
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_cover',{category_id:found.item.id});
+    return {handled:true,text:'✅ Обложка категории «'+found.item.name+'» обновлена.'};
+  }
+
+  return {handle,setItemImage,setCategoryImage};
 }
 
-module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey};
+module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

@@ -3862,3 +3862,53 @@ body.panelOpen .activeOrderBadge,html.sheetOpen .activeOrderBadge{opacity:.18;po
 @media (max-width:420px){
   .activeOrderBadge{width:64px;height:64px;top:calc(env(safe-area-inset-top,0px) + 78px);right:max(14px,env(safe-area-inset-right,0px))}
 }
+
+/* configurable menu item choices */
+.venuePage .foodCard.unavailable{filter:saturate(.72);opacity:.82}
+.venuePage .foodCard.unavailable .foodPic img{filter:grayscale(.16) brightness(.82)}
+.venuePage .foodSoldOut{
+  position:absolute;left:10px;bottom:10px;z-index:4;
+  padding:7px 10px;border-radius:999px;
+  background:rgba(30,24,34,.82);color:#fff;font-size:10px;letter-spacing:.04em;
+  backdrop-filter:blur(12px)
+}
+.venuePage .addBtn:disabled,.venuePage .menuFeatureBottom button:disabled{
+  opacity:.52;box-shadow:none;cursor:not-allowed;transform:none
+}
+.venuePage .addBtn:not(:disabled){min-width:43px;width:auto;padding:0 12px}
+.venuePage .itemOptionsSheet{max-height:min(88vh,820px);overflow:auto}
+.venuePage .itemOptionsIntro{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+  margin:0 0 13px;padding:13px 14px;border-radius:18px;
+  background:rgba(255,255,255,.66);border:1px solid rgba(70,46,83,.07)
+}
+.venuePage .itemOptionsIntro p{margin:0;color:#827482;font-size:12px;line-height:1.4}
+.venuePage .itemOptionsIntro strong{white-space:nowrap;color:#2a1e32;font-size:18px}
+.venuePage .itemOptionGroups{display:grid;gap:12px}
+.venuePage .itemOptionGroup{
+  padding:14px;border-radius:20px;background:rgba(255,255,255,.64);
+  border:1px solid rgba(71,46,84,.075)
+}
+.venuePage .itemOptionGroup header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.venuePage .itemOptionGroup header div{display:grid;gap:2px}
+.venuePage .itemOptionGroup header b{font-size:14px;color:#2b2033}
+.venuePage .itemOptionGroup header small{font-size:10px;color:#867988}
+.venuePage .itemOptionGroup header em{
+  font-style:normal;font-size:9px;text-transform:uppercase;letter-spacing:.08em;
+  padding:5px 7px;border-radius:999px;background:color-mix(in srgb,var(--venue-accent) 13%,#fff);
+  color:color-mix(in srgb,var(--venue-accent) 72%,#4c3657)
+}
+.venuePage .itemOptionButtons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.venuePage .itemOptionButtons button{
+  min-height:54px;padding:9px 10px;border-radius:15px;text-align:left;
+  display:grid;gap:2px;background:#f1e9ee;color:#392945;border:1px solid rgba(72,46,84,.07)
+}
+.venuePage .itemOptionButtons button span{font-size:12px;font-weight:800}
+.venuePage .itemOptionButtons button small{font-size:9px;color:#8a7c8c}
+.venuePage .itemOptionButtons button.active{
+  background:linear-gradient(135deg,var(--venue-accent2),var(--venue-accent));
+  color:var(--venue-ink);border-color:transparent;box-shadow:0 8px 22px var(--venue-glow)
+}
+.venuePage .itemOptionButtons button.active small{color:inherit;opacity:.72}
+@media(max-width:390px){.venuePage .itemOptionButtons{grid-template-columns:1fr}}
+

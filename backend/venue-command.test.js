@@ -101,3 +101,27 @@ test('parses option group lifecycle',()=>{
   assert.deepEqual(parseCommand('выключи выбор Размер'),{intent:'choice_group_toggle',group:'Размер',enabled:false});
   assert.deepEqual(parseCommand('включи выбор Размер'),{intent:'choice_group_toggle',group:'Размер',enabled:true});
 });
+
+
+test('parses canonical inventory and metadata commands',()=>{
+  assert.deepEqual(parseCommand('остаток 12'),{intent:'menu_stock',stock:12});
+  assert.deepEqual(parseCommand('остаток без лимита'),{intent:'menu_stock',stock:null});
+  assert.deepEqual(parseCommand('вес 350 г'),{intent:'menu_weight',value:'350 г'});
+  assert.deepEqual(parseCommand('sku SH-001'),{intent:'menu_sku',value:'SH-001'});
+  assert.deepEqual(parseCommand('состав курица, овощи, соус'),{intent:'menu_composition',value:'курица, овощи, соус'});
+  assert.deepEqual(parseCommand('теги хит, острое, новинка'),{intent:'menu_tags',tags:['хит','острое','новинка']});
+  assert.deepEqual(parseCommand('сделай рекомендуемой'),{intent:'menu_recommended',enabled:true});
+});
+
+test('parses item schedule commands',()=>{
+  assert.deepEqual(parseCommand('расписание выкл'),{intent:'menu_schedule',schedule:{enabled:false,days:[],from:'',to:''}});
+  assert.deepEqual(parseCommand('расписание будни 10:00-22:30'),{intent:'menu_schedule',schedule:{enabled:true,days:[1,2,3,4,5],from:'10:00',to:'22:30'}});
+  assert.deepEqual(parseCommand('расписание каждый день 09:00 до 23:00'),{intent:'menu_schedule',schedule:{enabled:true,days:[0,1,2,3,4,5,6],from:'09:00',to:'23:00'}});
+});
+
+test('parses standard item option controls',()=>{
+  assert.deepEqual(parseCommand('размер обязательно'),{intent:'item_standard_required',group:'размер',required:true});
+  assert.deepEqual(parseCommand('соусы необязательно'),{intent:'item_standard_required',group:'соусы',required:false});
+  assert.deepEqual(parseCommand('выключи мясо Говядина'),{intent:'item_standard_toggle',group:'мясо',option:'Говядина',enabled:false});
+  assert.deepEqual(parseCommand('размер Большая по умолчанию'),{intent:'item_standard_default',group:'размер',option:'Большая'});
+});

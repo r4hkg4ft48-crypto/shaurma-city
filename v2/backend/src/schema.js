@@ -266,16 +266,6 @@ async function ensureSchema(){
           const currentImage=String(next.image||'');
           if(!currentImage||currentImage.includes('images.unsplash.com')){next.image=ref.image;changed=true}
           if(!Array.isArray(next.gallery)||!next.gallery.length){next.gallery=ref.gallery;changed=true}
-          if(next.options&&ref.options){
-            next.options={...next.options};
-            for(const group of ['meats','sizes','bases','sauces','extras']){
-              if(!Array.isArray(next.options[group])||!Array.isArray(ref.options[group]))continue;
-              next.options[group]=next.options[group].map(opt=>{
-                const ro=ref.options[group].find(x=>String(x.id)===String(opt?.id)||String(x.name).toLowerCase()===String(opt?.name||'').toLowerCase());
-                if(!ro||String(opt?.image||''))return opt;changed=true;return {...opt,image:ro.image};
-              });
-            }
-          }
           return next;
         });
         const cfg=row.config&&typeof row.config==='object'?{...row.config}:{};

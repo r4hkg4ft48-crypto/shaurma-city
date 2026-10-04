@@ -35,7 +35,7 @@
    if(!type)return;this.busy(true);this.el('status').textContent='Сохраняем фото…';
    try{const reference=await this.compress(file);if(version!==this.serial)return;
     await this.request(url+'/reference',{method:'PUT',body:{reference,filling}});if(version!==this.serial)return;
-    await this.load();if(this.available)await this.generate();
+    await this.load();if(version!==this.serial)return;if(this.available)await this.generate();
    }catch(e){if(version===this.serial)this.el('status').textContent=e.message;}finally{if(version===this.serial){this.busy(false);this.el('file').value='';}}
   }
   async generate(){const version=this.serial,type=this.el('type').value;this.busy(true);this.el('status').textContent='Готовим фотослои по вашему блюду… Обычно несколько минут. Можно вернуться позже и обновить статус.';

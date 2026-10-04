@@ -486,6 +486,16 @@ router.delete('/admin/markers/:id',auth.requireOwner,async(req,res)=>{
   try{const q=await db.query('UPDATE shaurmeg_markers SET is_active=FALSE,source_suppressed=TRUE,updated_at=NOW() WHERE id=$1 RETURNING id,venue_id',[req.params.id]);if(!q.rows[0])return res.sendStatus(404);await db.query('UPDATE shaurma_venues SET is_active=FALSE,updated_at=NOW() WHERE venue_id=$1',[q.rows[0].venue_id]);res.json({ok:true})}
   catch(e){fail(res,e,'marker_delete_failed')}
 });
+router.get('/admin/venues/:establishmentId/menu',auth.requireOwner,async(req,res)=>{
+  try{
+    const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});
+    const q=await db.query('SELECT establishment_id,venue_id,name,config,menu,updated_at FROM shaurma_venues WHERE establishment_id=$1',[est]);
+    const row=q.rows[0];if(!row)return res.sendStatus(404);
+    res.setHeader('Cache-Control','no-store');
+    res.json({...row,sections:D.menuSections(row.config||{},row.menu||[]),sections_all:D.menuSectionsAll(row.config||{},row.menu||[])});
+  }catch(e){fail(res,e,'admin_menu_read_failed')}
+});
+
 router.put('/admin/venues/:establishmentId/menu',auth.requireOwner,async(req,res)=>{
   try{
     const est=D.establishmentId(req.params.establishmentId);if(!est)return res.status(400).json({error:'bad_establishment_id'});

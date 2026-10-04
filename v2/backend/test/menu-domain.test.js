@@ -8,6 +8,11 @@ test('default catalog has all configured categories and a populated menu',()=>{
   assert.equal(seed.sections.length,9);
   assert.ok(seed.sections.every(x=>x.active===true));
   assert.ok(seed.menu.length>=70);
+  assert.ok(seed.sections.every(x=>String(x.cover||'').startsWith('data:image/jpeg;base64,')));
+  assert.ok(seed.sections.every(x=>Array.isArray(x.gallery)&&x.gallery.length>=5));
+  assert.ok(seed.menu.every(x=>String(x.image||'').startsWith('data:image/jpeg;base64,')));
+  assert.equal(new Set(seed.menu.map(x=>x.image)).size,78);
+  assert.ok(seed.menu.some(x=>(x.options?.meats||[]).some(o=>String(o.image||'').startsWith('data:image/jpeg;base64,'))));
   for(const section of seed.sections){
     assert.ok(seed.menu.some(x=>x.c===section.id),'missing items for '+section.id);
     assert.ok(Array.isArray(section.settings.required_fields));

@@ -367,9 +367,12 @@ router.post('/orders',async(req,res)=>{
         normalized.push({...built,q});continue;
       }
       const src=menu.get(String(i.id));if(!src)return res.status(400).json({error:'item_not_in_menu',item_id:i.id});
-      const priced=D.menuSelectionPrice(src,i.selection||{});
-      if(!priced||!Number.isFinite(priced.price)||priced.price<0)return res.status(400).json({error:'invalid_item_selection',item_id:i.id});
-      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p:priced.price,q,detail:String(priced.detail||i.detail||'').slice(0,500),selection:i.selection||{}});
+      const priced=D.priceMenuItem(src,{q:i.q,selection:i.selection||{},choices:i.choices||{}});
+      if(priced.error){
+        const status=['item_unavailable','insufficient_stock'].includes(priced.error)?409:400;
+        return res.status(status).json(priced);
+      }
+      normalized.push(priced.item);
     }
     const fulfillment=req.body?.fulfillment_type==='cafe'?'cafe':'delivery';
     if(fulfillment==='delivery'&&!String(req.body?.phone||'').trim())return res.status(400).json({error:'phone_required'});

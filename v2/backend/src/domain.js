@@ -82,9 +82,9 @@ function normalizeChoiceGroups(input){
       default:o?.default===true
     })).filter(o=>o.id&&o.name):[];
     const type=String(g?.type||'single')==='multiple'?'multiple':'single';
-    const maxDefault=type==='single'?1:Math.max(1,options.length||1);
-    const min=clamp(Math.floor(Number(g?.min)||0),0,maxDefault);
-    const max=clamp(Math.floor(Number(g?.max)||maxDefault),Math.max(min,1),Math.max(1,options.length||1));
+    const maxDefault=type==='single'?1:Math.max(1,Math.floor(Number(g?.max)||0),options.length||1);
+    const min=clamp(Math.floor(Number(g?.min)||0),0,60);
+    const max=type==='single'?1:clamp(Math.floor(Number(g?.max)||maxDefault),Math.max(min,1),60);
     return {
       id:String(g?.id||('group_'+gi)).trim().toLowerCase().replace(/[^a-z0-9а-я_-]+/gi,'_').slice(0,64)||('group_'+gi),
       name:String(g?.name||g?.n||'Выбор').trim().slice(0,120),
@@ -151,7 +151,8 @@ function priceMenuItem(src,payload={}){
     if(selected.length)choices[String(group.id)]=selected;
     if(picked.length)details.push(String(group.name||'Выбор')+': '+picked.map(o=>String(o.name)+(Number(o.price_delta)?' ('+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽)':'')).join(', '));
   }
-  if(!Number.isFinite(price)||price<0)return {error:'invalid_price',item_id:String(src.id||'')};
+  if(!Number.isFinite(price))return {error:'invalid_price',item_id:String(src.id||'')};
+  price=Math.max(0,price);
   return {item:{id:String(src.id),n:String(src.n||src.name||'Позиция'),p:Math.round(price),q,detail:details.join(' · ').slice(0,500),choices}};
 }
 

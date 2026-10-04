@@ -271,9 +271,14 @@ async function handleKitchenMenuPhoto(msg){
   const chatId=msg?.chat?.id,user=msg?.from;if(!chatId||!user?.id)return;
   try{
     const caption=String(msg.caption||'').trim();
+    const image=await downloadKitchenMenuPhoto(msg);
+    const cat=caption.match(/(?:обложк[ау]|фото)\s+категории\s+(.+)/i);
+    if(cat){
+      const result=await venueCommandBus.setCategoryImage({user,categoryQuery:String(cat[1]||'').trim(),image});
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:String(result?.text||'Обложка обновлена.').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900)});
+    }
     const galleryMode=/галере/i.test(caption);
     const m=caption.match(/(?:фото|картинк[ау]|изображение)(?:\s+в\s+галерею)?\s+(?:для|на)\s+(.+)/i);
-    const image=await downloadKitchenMenuPhoto(msg);
     const result=await venueCommandBus.setItemImage({user,itemQuery:m?String(m[1]||'').trim():'',image,galleryMode});
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:String(result?.text||'Фото обработано.').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900)});
   }catch(e){

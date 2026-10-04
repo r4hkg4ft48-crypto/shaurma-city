@@ -36,14 +36,18 @@ function compile(raw,row,partDepth=0){
   };
   let modules=0;
   const materialIds=new Set();
+  let materialBytes=0,photoMaterials=0,patchMaterials=0;
   const materials=(Array.isArray(raw.materials)?raw.materials:[]).map(m=>{
-    if(materialIds.has(m.id)||!/^[a-z0-9_-]{1,60}$/i.test(m.id)||materialIds.size>=8)fail('astra_material_limit');materialIds.add(m.id);
+    const photo=m.mode==='facade';
+    if(materialIds.has(m.id)||!/^[a-z0-9_-]{1,60}$/i.test(m.id)||(photo?++photoMaterials>12:++patchMaterials>8))fail('astra_material_limit');materialIds.add(m.id);
     // Only rectified, cropped architecture patches. Original photos stay private.
-    if(m.rectified!==true||!assetIds.has(m.source_asset_id)||!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(m.data_url||'')||m.data_url.length>900000)fail('astra_rectified_material_required');
+    if(m.rectified!==true||!assetIds.has(m.source_asset_id)||!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(m.data_url||'')||m.data_url.length>(photo?4000000:900000)||(materialBytes+=m.data_url.length)>16000000)fail('astra_rectified_material_required');
     if(!Array.isArray(m.source_quad)||m.source_quad.length!==4||m.source_quad.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1)))fail('astra_material_quad_required');
     let repeat;
     if(m.repeat_m!==undefined){if(!Array.isArray(m.repeat_m)||m.repeat_m.length!==2)fail('astra_material_repeat');repeat=m.repeat_m.map(v=>number(v,.1,30,'material_repeat'));}
-    return {id:m.id,rectified:true,source_asset_id:m.source_asset_id,source_quad:m.source_quad,data_url:m.data_url,...(repeat?{repeat_m:repeat}:{})};
+    const extra=photo?{mode:'facade',width:Math.round(number(m.width,32,2048,'texture_width')),height:Math.round(number(m.height,32,2048,'texture_height')),roughness:number(m.roughness,.04,1,'roughness',.85),metalness:number(m.metalness,0,1,'metalness',0),lighting_mix:number(m.lighting_mix,0,1,'lighting_mix',.35),source_asset_ids:refs(m.source_asset_ids||[m.source_asset_id],true),build_key:/^[a-f0-9]{64}$/.test(m.build_key||'')?m.build_key:null,quality:m.quality?{pixels_per_m:number(m.quality.pixels_per_m,0,1000,'texel_density'),missing_fraction:number(m.quality.missing_fraction,0,1,'missing_fraction'),warnings:(m.quality.warnings||[]).slice(0,8).map(x=>text(x,80)),depth:'explicit_geometry_only',illumination:'photo_contains_capture_lighting'}:null}:{};
+    if(photo){require('./realcity-photo').quad(m.source_quad);if(repeat)fail('astra_unique_facade_cannot_repeat');}
+    return {id:m.id,rectified:true,source_asset_id:m.source_asset_id,source_quad:m.source_quad,data_url:m.data_url,...(repeat?{repeat_m:repeat}:{}),...extra};
   });
   const ids=new Set();
   const buildings=raw.buildings.map(b=>{
@@ -59,6 +63,29 @@ function compile(raw,row,partDepth=0){
       const evidence=f.evidence==='observed'?'observed':'inferred',referenceIds=refs(f.reference_ids,evidence==='observed');
       if(f.material_id&&!materialIds.has(f.material_id))fail('astra_material_not_found');
       const surface={color:color(f.wall?.color,base.palette?.wall),finish:['brick','panel','plaster','metal','stone','ribbed'].includes(f.wall?.finish)?f.wall.finish:'plaster',joint_color:color(f.wall?.joint_color,'#aaa9a3'),module_m:number(f.wall?.module_m,.06,12,'module',f.wall?.finish==='brick'?.25:3)};
+      const surfaces=[];
+      if(f.surfaces!==undefined){
+        if(!Array.isArray(f.surfaces)||f.surfaces.length>16)fail('astra_surface_limit');
+        for(const s of f.surfaces){
+          const mat=materials.find(m=>m.id===s.material_id&&m.mode==='facade');
+          if(!mat||evidence!=='observed'||s.confirmed!==true||!mat.source_asset_ids.every(id=>referenceIds.includes(id)))fail('astra_surface_evidence_required');
+          const u=number(s.u_m,0,edge.length,'surface_u'),z=number(s.z_m,baseM,height,'surface_z'),w=number(s.width_m,.1,edge.length,'surface_width'),h=number(s.height_m,.1,height,'surface_height');
+          if(u+w>edge.length+.005||z+h>height+.005)fail('astra_surface_outside_facade');
+          if(surfaces.some(p=>u<p.u_m+p.width_m-.005&&u+w>p.u_m+.005&&z<p.z_m+p.height_m-.005&&z+h>p.z_m+.005))fail('astra_overlapping_surfaces');
+          if(s.flip_u!==true&&s.flip_u!==false)fail('astra_surface_direction_required');
+          const openings=[];
+          if(s.openings!==undefined){
+            if(!Array.isArray(s.openings)||s.openings.length>120)fail('astra_opening_limit');
+            for(const o of s.openings){
+              if(++modules>MAX_MODULES)fail('astra_module_budget');
+              const ou=number(o.u_m,0,w,'opening_u'),oz=number(o.z_m,0,h,'opening_z'),ow=number(o.width_m,.08,w,'opening_width'),oh=number(o.height_m,.08,h,'opening_height');
+              if(ou+ow>w+.001||oz+oh>h+.001||openings.some(p=>ou<p.u_m+p.width_m&&ou+ow>p.u_m&&oz<p.z_m+p.height_m&&oz+oh>p.z_m))fail('astra_opening_bounds');
+              openings.push({u_m:ou,z_m:oz,width_m:ow,height_m:oh,depth_m:number(o.depth_m,0,.6,'opening_depth',.12),glass:o.glass===true,reveal_color:color(o.reveal_color,surface.color),depth_evidence:o.depth_evidence==='measured'?'measured':'inferred'});
+            }
+          }
+          surfaces.push({material_id:mat.id,u_m:u,z_m:z,width_m:w,height_m:h,depth_m:number(s.depth_m,0,2,'surface_depth',0),flip_u:s.flip_u,confirmed:true,openings});
+        }
+      }
       const parts=[];
       const acceptModule=(m)=>{
         if(++modules>MAX_MODULES)fail('astra_module_budget');
@@ -77,7 +104,7 @@ function compile(raw,row,partDepth=0){
           acceptModule({...grid,u_m:Number(grid.u_m)+i*du,z_m:Number(grid.z_m)+j*dz});
         }
       }
-      facades.push({edge_index:edge.index,edge:edge.coordinates,evidence,reference_ids:referenceIds,confidence:number(f.confidence,0,1,'confidence',evidence==='observed'?.8:.25),wall:surface,material_id:f.material_id||null,modules:parts});
+      facades.push({edge_index:edge.index,edge:edge.coordinates,evidence,reference_ids:referenceIds,confidence:number(f.confidence,0,1,'confidence',evidence==='observed'?.8:.25),wall:surface,material_id:f.material_id||null,modules:parts,...(surfaces.length?{surfaces}:{})});
     }
     if(!facades.length)fail('astra_facades_required');
     const parts=[];
@@ -129,7 +156,7 @@ async function save(client,row,body){
   const output=compile(body.output,row);
   if(output.materials.length){
     const sharp=require('sharp');
-    for(const m of output.materials){const metadata=await sharp(Buffer.from(m.data_url.split(',')[1],'base64'),{limitInputPixels:4194304}).metadata();if(!metadata.width||metadata.width>2048||metadata.height>2048)fail('astra_material_dimensions');}
+    for(const m of output.materials){const metadata=await sharp(Buffer.from(m.data_url.split(',')[1],'base64'),{limitInputPixels:4194304}).metadata();if(!metadata.width||metadata.width>2048||metadata.height>2048||(m.mode==='facade'&&(m.width!==metadata.width||m.height!==metadata.height)))fail('astra_material_dimensions');}
   }
   await client.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{astra}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[row.id,JSON.stringify(output)]);
   return output;

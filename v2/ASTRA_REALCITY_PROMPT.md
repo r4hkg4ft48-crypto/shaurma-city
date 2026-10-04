@@ -1,5 +1,13 @@
 # Astra 6 — Shaurmeg RealCity implementation prompt
 
+Current processing method: read `REALCITY_PHOTO_PIPELINE.md` and the live
+`manifest.processing`. Use the scoped Studio access link to read original bytes,
+location instructions and current geometry. Submit a v3 recipe to its draft
+endpoint. Keep per-plane photographic identity; generic repeated window grids
+must not cover measured unique facade surfaces. Missing or occluded information
+remains documented as uncertain. No original photos or private capability URLs
+belong in the repository. This method supplements the existing rendering contract.
+
 Use this when the user says: **делаем realcity**.
 
 You are continuing the existing production project **Shaurmeg v2** in repository:

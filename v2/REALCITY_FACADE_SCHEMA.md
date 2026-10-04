@@ -1,5 +1,10 @@
 # Astra facade output v2
 
+The additive v3 **processing method** is documented in `REALCITY_PHOTO_PIPELINE.md`.
+The public output remains version 2 for compatibility and adds `facades[].surfaces`
+and `materials[].mode="facade"`. The v3 workflow supersedes the old compressed-photo
+package export, 8-material-only limit and 512px-only atlas described below.
+
 This is the facade layer of the existing Quarter Dive Engine, not a new viewer.
 The MapLibre canvas, camera, depth buffer, controls and GeoJSON sources remain in
 use. The raw WebGL custom layer needs no Three.js runtime. Earcut 2.2.4 (ISC)

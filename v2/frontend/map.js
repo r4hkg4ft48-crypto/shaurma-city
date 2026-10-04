@@ -3,7 +3,7 @@
   const $=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search);
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false,userMarker=null,focusToken=0,markerRenderFrame=0;
-  let astraLayer=null,astraScripts=null,quarterFrame=0;
+  let astraLayer=null,astraScripts=null,quarterFrame=0,previewSignature='';
   const baseBuildingPaint=new Map();
   const baseLabelPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
@@ -358,7 +358,7 @@
   function loadAstraRenderer(){
     if(window.RealCityLayer)return Promise.resolve();
     if(astraScripts)return astraScripts;
-    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-photo-materials-3';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('astra_renderer_unavailable'))};document.head.appendChild(s)});
+    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-facade-pipeline-3';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('astra_renderer_unavailable'))};document.head.appendChild(s)});
     astraScripts=(window.RealCitySpatial?Promise.resolve():load('realcity-spatial.js')).then(()=>load('vendor/earcut.min.js')).then(()=>load('realcity-layer.js')).catch(e=>{astraScripts=null;throw e});
     return astraScripts;
   }
@@ -367,9 +367,16 @@
   }
   async function selectRealCityProfile(p,token){
     try{
-      const r=await fetchWithTimeout(api+'/map/markers/'+encodeURIComponent(p.id)+'/realcity?establishment_id='+encodeURIComponent(p.establishment_id),10000);
-      if(!r.ok)return;
-      const j=await r.json();if(token!==focusToken||String(j.marker_id)!==String(p.id)||j.establishment_id!==p.establishment_id||j.venue_id!==p.venue_id)return;
+      let j,preview;
+      if(location.pathname.startsWith('/realcity-preview/')&&new URLSearchParams(location.search).get('realcity_preview')==='1'){
+        try{preview=window.parent!==window&&window.parent.RealCityStudio?.previewData;}catch{}
+      }
+      if(preview&&String(preview.marker.id)===String(p.id))j={...preview.marker,marker_id:preview.marker.id,profile:preview.profile};
+      else{
+        const r=await fetchWithTimeout(api+'/map/markers/'+encodeURIComponent(p.id)+'/realcity?establishment_id='+encodeURIComponent(p.establishment_id),10000);
+        if(!r.ok)return;j=await r.json();
+      }
+      if(token!==focusToken||String(j.marker_id)!==String(p.id)||j.establishment_id!==p.establishment_id||j.venue_id!==p.venue_id)return;
       p.realcity_profile=j.profile||p.realcity_profile;
       if(j.profile?.astra?.status==='ready'){
         await loadAstraRenderer();if(token!==focusToken)return;
@@ -384,6 +391,7 @@
         const cam=j.profile.astra.camera,offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
         $('#realBadge').textContent='REAL CITY · ASTRA';
+        if(preview&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
         const views=j.profile.astra.camera.views||[],box=$('#realCityViews');
         box.replaceChildren();box.classList.toggle('hidden',!views.length);
         for(const view of views){const button=document.createElement('button');button.textContent=view.label;button.type='button';button.setAttribute('aria-pressed','false');button.onclick=()=>{
@@ -490,6 +498,7 @@
       if(elapsed<duration)quarterFrame=requestAnimationFrame(render);
       else{
         document.body.classList.add('realCitySettled');
+        if(astraLayer&&previewSignature)window.__SHAURMEG_REALCITY_PREVIEW_READY__=previewSignature;
         $('#focusHudState').textContent=astraLayer?'фасады по вашим фото':'геометрия квартала';
         if(astraLayer)setTimeout(()=>{if(token===focusToken)$('#focusHud').classList.remove('show')},1400);
         tg?.HapticFeedback?.impactOccurred?.('light');
@@ -706,6 +715,7 @@
     map.fitBounds(b,{padding:{top:130,bottom:210,left:40,right:40},maxZoom:12.4,duration:700});
   }
   function selectPoint(p){
+    previewSignature='';
     closePanels();selected=p;markers.forEach((m,k)=>m.getElement().classList.toggle('selected',k===String(p.id)));
     $('#venueName').textContent=p.name||'Заведение';$('#venueName').title=p.name||'';$('#venueAddress').textContent=p.address||'';$('#venueAddress').title=p.address||'';$('#venueDescription').textContent=p.description||'';$('#venueDescription').classList.toggle('hidden',!p.description);
     $('#venueHoursQuick').textContent=p.hours||'';$('#venueHoursQuick').classList.toggle('hidden',!p.hours);$('#venuePriceQuick').textContent=p.price_label||'';$('#venuePriceQuick').classList.toggle('hidden',!p.price_label);

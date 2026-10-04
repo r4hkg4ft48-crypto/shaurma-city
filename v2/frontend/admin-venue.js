@@ -313,6 +313,7 @@
    setTimeout(()=>[...document.querySelectorAll('.menuEditCard')].find(x=>String(x.dataset.itemId)===id)?.querySelector('[data-k="n"]')?.focus(),40);
  }
  $('#addItem').onclick=addMenuItem;
+ $('#openMenuStudio').onclick=()=>{location.href='admin-menu-studio.html?establishment='+encodeURIComponent(est)};
  $('#menuEditor').onclick=e=>{
    const emptyAdd=e.target.closest('[data-add-empty]');if(emptyAdd)return addMenuItem();
    const pick=e.target.closest('[data-photo-pick]');if(pick){const id=String(pick.dataset.photoPick||''),row=[...document.querySelectorAll('.menuEditCard')].find(x=>String(x.dataset.itemId)===id);row?.querySelector('[data-photo-input]')?.click();return}

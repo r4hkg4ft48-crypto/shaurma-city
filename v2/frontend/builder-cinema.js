@@ -57,7 +57,9 @@
   }
   async play(builder,state,scene,{finish=false}={}){
    this.cancel();const token=this.token;this.last=[builder,JSON.parse(JSON.stringify(state)),scene];const data=layers(builder,state,scene);
-   if(!await this.load(data.layers[0]?.atlas||stock)||token!==this.token)return false;
+   const loaded=await this.load(data.layers[0]?.atlas||stock);
+   if(token!==this.token)return false;
+   if(!loaded){this.note.textContent='Визуализация недоступна · состав сохранён';return finish;}
    this.clear();this.root.classList.add('foodPlaying');this.root.querySelector('.foodReplay').disabled=true;
    const pause=ms=>new Promise(resolve=>setTimeout(resolve,reduced()?0:ms));
    for(let i=0;i<data.layers.length;i++){if(token!==this.token)return false;this.sync(data.layers.slice(0,i+1));this.title.textContent=data.layers[i].label;await pause(i?500:350);}

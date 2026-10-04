@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),pendingItem=null,itemOptionState={selection:{},choices:{}},builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   let cinema=null,builderStep=0,building=false,buildAttempt=0;
   const cinemaForType=()=>ctx?.venue?.config?.builder_cinema?.find(x=>x.type_id===builderState.type);
@@ -525,37 +525,105 @@
     $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }
 
-  function defaultItemSelection(src){
-    const opts=src?.options&&typeof src.options==='object'?src.options:{},required=new Set(Array.isArray(opts.required_groups)?opts.required_groups:[]),selection={};
-    for(const group of ['meats','sizes','bases','sauces','extras']){
-      const list=Array.isArray(opts[group])?opts[group].filter(x=>x?.active!==false):[];
-      if(!list.length)continue;
-      if(required.has(group)){
-        const chosen=list.find(x=>x.default===true)||list[0];
-        selection[group]=group==='extras'||group==='sauces'?[String(chosen.id)]:String(chosen.id);
-      }
+  const STANDARD_OPTION_META={
+    meats:{name:'Мясо',type:'single'},sizes:{name:'Размер',type:'single'},bases:{name:'Основа',type:'single'},
+    sauces:{name:'Соусы',type:'multiple'},extras:{name:'Добавки',type:'multiple'}
+  };
+  function itemChoiceSpecs(src){
+    const out=[],opts=src?.options&&typeof src.options==='object'?src.options:{},required=new Set(Array.isArray(opts.required_groups)?opts.required_groups:[]);
+    for(const key of Object.keys(STANDARD_OPTION_META)){
+      const options=(Array.isArray(opts[key])?opts[key]:[]).filter(o=>o?.active!==false);
+      if(!options.length)continue;
+      const meta=STANDARD_OPTION_META[key];
+      out.push({kind:'selection',id:key,name:meta.name,type:meta.type,required:required.has(key),min:required.has(key)?1:0,max:meta.type==='single'?1:Math.max(1,options.length),options:options.map(o=>({...o,price_delta:Number(o.price)||0}))});
     }
-    return selection;
+    for(const g of (Array.isArray(src?.choice_groups)?src.choice_groups:[]).filter(g=>g&&g.active!==false)){
+      const options=(Array.isArray(g.options)?g.options:[]).filter(o=>o?.active!==false);
+      if(!options.length&&g.required!==true&&Number(g.min||0)<=0)continue;
+      out.push({kind:'choices',id:String(g.id),name:String(g.name||'Выбор'),type:g.type==='multiple'?'multiple':'single',required:g.required===true,min:Math.max(g.required?1:0,Number(g.min)||0),max:g.type==='single'?1:Math.max(1,Number(g.max)||options.length||1),options});
+    }
+    return out;
   }
-  function localSelectionPrice(src,selection={}){
-    const opts=src?.options&&typeof src.options==='object'?src.options:{};
+  function defaultItemOptionState(src){
+    const state={selection:{},choices:{}};
+    for(const spec of itemChoiceSpecs(src)){
+      const defaults=spec.options.filter(o=>o.default===true).map(o=>String(o.id));
+      const need=Math.max(spec.required?1:0,Number(spec.min)||0),max=spec.type==='single'?1:Number(spec.max)||spec.options.length;
+      let selected=defaults.slice(0,max);
+      if(selected.length<need)selected=[...selected,...spec.options.filter(o=>!selected.includes(String(o.id))).slice(0,need-selected.length).map(o=>String(o.id))];
+      if(spec.kind==='selection'){
+        if(spec.type==='single'&&selected.length)state.selection[spec.id]=selected[0];
+        else if(selected.length)state.selection[spec.id]=selected;
+      }else if(selected.length)state.choices[spec.id]=selected;
+    }
+    return state;
+  }
+  function localItemPrice(src,state={selection:{},choices:{}}){
     let price=Number(src?.p??src?.price)||0;const detail=[];
-    for(const group of ['meats','sizes','bases','sauces','extras']){
-      const list=Array.isArray(opts[group])?opts[group]:[],raw=selection[group],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
-      for(const id of ids){const o=list.find(x=>String(x.id)===String(id)&&x.active!==false);if(o){price+=Number(o.price)||0;detail.push(String(o.name||''))}}
+    for(const spec of itemChoiceSpecs(src)){
+      const store=spec.kind==='selection'?(state.selection||{}):(state.choices||{});
+      const raw=store[spec.id],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      const picked=[];
+      for(const id of ids){const o=spec.options.find(x=>String(x.id)===String(id));if(o){price+=Number(o.price_delta??o.price)||0;picked.push(o)}}
+      if(picked.length)detail.push(spec.name+': '+picked.map(o=>String(o.name||'Вариант')).join(', '));
     }
-    return {price:Math.max(0,price),detail:detail.filter(Boolean).join(' · ')};
+    return {price:Math.max(0,Math.round(price)),detail:detail.join(' · ')};
   }
-  function add(id){
-    const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
-    const selection=defaultItemSelection(src),priced=localSelectionPrice(src,selection);
-    const signature=JSON.stringify(selection),x=cart.find(x=>String(x.id)===String(id)&&JSON.stringify(x.selection||{})===signature);
-    if(x)x.q++;else cart.push({id:String(src.id),n:String(src.n||src.name),p:priced.price,q:1,selection,detail:priced.detail});
+  function optionStateSignature(state){
+    const ordered=o=>Object.fromEntries(Object.keys(o||{}).sort().map(k=>[k,Array.isArray(o[k])?[...o[k]].map(String).sort():String(o[k])]));
+    return JSON.stringify({selection:ordered(state.selection),choices:ordered(state.choices)});
+  }
+  function renderItemOptions(){
+    const src=pendingItem;if(!src)return;
+    const specs=itemChoiceSpecs(src);
+    $('#itemOptionsTitle').textContent=String(src.n||src.name||'Позиция');
+    $('#itemOptionsDescription').textContent=String(src.d||src.description||'');
+    $('#itemOptionsBasePrice').textContent=money(Number(src.p??src.price)||0);
+    $('#itemOptionGroups').innerHTML=specs.map(spec=>{
+      const store=spec.kind==='selection'?(itemOptionState.selection||{}):(itemOptionState.choices||{});
+      const raw=store[spec.id],selected=Array.isArray(raw)?raw.map(String):(raw?[String(raw)]:[]);
+      const hint=spec.type==='single'?'Выберите один вариант':(spec.min?'Минимум '+spec.min+', максимум '+spec.max:'Можно выбрать до '+spec.max);
+      return '<section class="itemOptionGroup"><header><div><b>'+esc(spec.name)+'</b><small>'+esc(hint)+'</small></div>'+(spec.required||spec.min?'<em>обязательно</em>':'')+'</header><div class="itemOptionButtons">'+
+        spec.options.map(o=>{const on=selected.includes(String(o.id)),delta=Number(o.price_delta??o.price)||0;return '<button type="button" class="'+(on?'active':'')+'" data-choice-kind="'+spec.kind+'" data-choice-option="'+esc(o.id)+'" data-group="'+esc(spec.id)+'"><span>'+esc(o.name||'Вариант')+'</span><small>'+(delta?(delta>0?'+':'')+money(delta):'без доплаты')+'</small></button>'}).join('')+
+        '</div></section>';
+    }).join('');
+    $('#itemOptionsTotal').textContent=money(localItemPrice(src,itemOptionState).price);
+  }
+  function openItemOptions(src){
+    if(Number(src?.stock)===0){toast('Позиция временно закончилась');return}
+    pendingItem=src;itemOptionState=defaultItemOptionState(src);renderItemOptions();openSheet('itemOptionsSheet');
+  }
+  function validateItemOptions(){
+    for(const spec of itemChoiceSpecs(pendingItem)){
+      const store=spec.kind==='selection'?(itemOptionState.selection||{}):(itemOptionState.choices||{});
+      const raw=store[spec.id],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
+      if(ids.length<Math.max(spec.required?1:0,Number(spec.min)||0)){toast('Выберите: '+spec.name);return false}
+      if(ids.length>Number(spec.max||1)){toast('Слишком много: '+spec.name);return false}
+    }
+    return true;
+  }
+  function addConfigured(src,state={selection:{},choices:{}}){
+    if(Number(src?.stock)===0){toast('Позиция временно закончилась');return}
+    const priced=localItemPrice(src,state),signature=optionStateSignature(state),key=String(src.id)+'::'+signature;
+    const minQty=Math.max(1,Number(src.min_qty)||1),stock=src.stock===null||src.stock===undefined?Infinity:Math.max(0,Number(src.stock)||0);
+    const maxQty=Math.max(minQty,Math.min(Number(src.max_qty)||50,stock));
+    const x=cart.find(x=>String(x.cart_key||'')===key);
+    if(x){if(x.q>=maxQty){toast('Максимум '+maxQty+' шт.');return}x.q++}
+    else cart.push({cart_key:key,id:String(src.id),n:String(src.n||src.name),p:priced.price,q:minQty,min_qty:minQty,max_qty:maxQty,selection:state.selection||{},choices:state.choices||{},detail:priced.detail});
     save();
     const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
     const name=String(src.n||src.name||'Позиция');toast(name+' добавлена в корзину');
-    document.querySelectorAll('[data-add="'+CSS.escape(String(id))+'"]').forEach(btn=>{const prev=btn.innerHTML;btn.classList.add('justAdded');btn.innerHTML='✓';clearTimeout(btn._addedTimer);btn._addedTimer=setTimeout(()=>{btn.classList.remove('justAdded');btn.innerHTML=prev},650)});
     tg?.HapticFeedback?.impactOccurred?.('light');
+  }
+  function confirmItemOptions(){
+    if(!pendingItem||!validateItemOptions())return;
+    addConfigured(pendingItem,itemOptionState);pendingItem=null;itemOptionState={selection:{},choices:{}};closeSheets();
+  }
+  function add(id){
+    const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));if(!src)return;
+    if(Number(src.stock)===0){toast('Позиция временно закончилась');return}
+    if(itemChoiceSpecs(src).length)return openItemOptions(src);
+    addConfigured(src,{selection:{},choices:{}});
   }
   function runQuickFavoriteOrder(){
     const itemId=String(qs.get('quick_item')||'');

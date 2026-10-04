@@ -256,44 +256,59 @@ async function ensureSchema(){
   const photoApplied=await db.query('SELECT migration_key FROM shaurma_migrations WHERE migration_key=$1',[generatedPhotoMigration]);
   if(!photoApplied.rows[0]){
     const seed=D.defaultMenuSeed(),seedItems=new Map(seed.menu.map(x=>[String(x.id),x])),seedSections=new Map(seed.sections.map(x=>[String(x.id),x]));
-    await db.tx(async client=>{
-      const venues=await client.query('SELECT establishment_id,menu,config FROM shaurma_venues');
-      for(const row of venues.rows){
-        let changed=false;
-        const currentMenu=Array.isArray(row.menu)?row.menu:[];
-        const existingItemIds=new Set(currentMenu.map(item=>String(item?.id||'')));
-        const nextMenu=currentMenu.map(item=>{
-          const ref=seedItems.get(String(item?.id||''));if(!ref)return item;
-          const next={...item};
-          const currentImage=String(next.image||'');
-          if(!currentImage||currentImage.includes('images.unsplash.com')||currentImage.includes('/assets/menu/defaults/')){next.image=ref.image;changed=true}
-          return next;
-        });
-        for(const seedItem of seed.menu){
-          if(existingItemIds.has(String(seedItem.id)))continue;
-          nextMenu.push(seedItem);changed=true;
+    let lastVenueId='';
+    for(;;){
+      const page=await db.query(
+        "SELECT venue_id,menu,config FROM shaurma_venues WHERE venue_id>$1 ORDER BY venue_id ASC LIMIT 8",
+        [lastVenueId]
+      );
+      if(!page.rows.length)break;
+      await db.tx(async client=>{
+        for(const row of page.rows){
+          let changed=false;
+          const currentMenu=Array.isArray(row.menu)?row.menu:[];
+          const existingItemIds=new Set(currentMenu.map(item=>String(item?.id||'')));
+          const nextMenu=currentMenu.map(item=>{
+            const ref=seedItems.get(String(item?.id||''));if(!ref)return item;
+            const next={...item},currentImage=String(next.image||'');
+            if(!currentImage||currentImage.includes('images.unsplash.com')||currentImage.includes('/assets/menu/defaults/')){next.image=ref.image;changed=true}
+            return next;
+          });
+          for(const seedItem of seed.menu){
+            if(existingItemIds.has(String(seedItem.id)))continue;
+            nextMenu.push(seedItem);changed=true;
+          }
+          const cfg=row.config&&typeof row.config==='object'?{...row.config}:{};
+          const rawSections=Array.isArray(cfg.menu_sections)?cfg.menu_sections:[];
+          const existingSectionIds=new Set(rawSections.map(section=>String(section?.id||'')));
+          const nextSections=rawSections.map(section=>{
+            const ref=seedSections.get(String(section?.id||''));if(!ref)return section;
+            const next={...section},cover=String(next.cover||'');
+            if(!cover||cover.includes('images.unsplash.com')||cover.includes('/assets/menu/defaults/')){next.cover=ref.cover;changed=true}
+            if(next.inherit_template===undefined){next.inherit_template=true;changed=true}
+            return next;
+          });
+          for(const seedSection of seed.sections){
+            if(existingSectionIds.has(String(seedSection.id)))continue;
+            nextSections.push(seedSection);changed=true;
+          }
+          if(changed){
+            cfg.menu_sections=nextSections;
+            await client.query(
+              'UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE venue_id=$1',
+              [row.venue_id,JSON.stringify(nextMenu),JSON.stringify(cfg)]
+            );
+          }
         }
-        const cfg=row.config&&typeof row.config==='object'?{...row.config}:{};
-        const rawSections=Array.isArray(cfg.menu_sections)?cfg.menu_sections:[];
-        const existingSectionIds=new Set(rawSections.map(section=>String(section?.id||'')));
-        const nextSections=rawSections.map(section=>{
-          const ref=seedSections.get(String(section?.id||''));if(!ref)return section;
-          const next={...section},cover=String(next.cover||'');
-          if(!cover||cover.includes('images.unsplash.com')||cover.includes('/assets/menu/defaults/')){next.cover=ref.cover;changed=true}
-          if(next.inherit_template===undefined){next.inherit_template=true;changed=true}
-          return next;
-        });
-        for(const seedSection of seed.sections){
-          if(existingSectionIds.has(String(seedSection.id)))continue;
-          nextSections.push(seedSection);changed=true;
-        }
-        if(changed){
-          cfg.menu_sections=nextSections;
-          await client.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1',[row.establishment_id,JSON.stringify(nextMenu),JSON.stringify(cfg)]);
-        }
-      }
-      await client.query("INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb) ON CONFLICT(migration_key) DO NOTHING",[generatedPhotoMigration,JSON.stringify({mode:'merge-generated-catalog-preserve-custom',assets:'generated-menu-crops',items:seed.menu.length,categories:seed.sections.length})]);
-    });
+      });
+      lastVenueId=String(page.rows[page.rows.length-1].venue_id||'');
+      page.rows.length=0;
+      await new Promise(resolve=>setImmediate(resolve));
+    }
+    await db.query(
+      "INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb) ON CONFLICT(migration_key) DO NOTHING",
+      [generatedPhotoMigration,JSON.stringify({mode:'merge-generated-catalog-preserve-custom-batched',batch_size:8,assets:'generated-menu-crops',items:seed.menu.length,categories:seed.sections.length})]
+    );
   }
   await require('./realcity-studio').ensureSchema(db);
 }

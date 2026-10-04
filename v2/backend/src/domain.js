@@ -99,7 +99,7 @@ const GENERATED_MENU_PHOTOS={
   ...require('./generated-menu/coffee_tea_desserts.json')
 };
 const DEFAULT_ITEM_IMAGE_COUNTS={shawarma_doner:8,burgers_sandwiches:8,bakery_hotdogs:8,pizza_rolls_quesadilla:8,snacks:8,salads_plates:8,sauces_addons:10,cold_drinks:10,coffee_tea_desserts:10};
-const GENERATED_MENU_PHOTO_BASE=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/$/,'');
+const GENERATED_MENU_PHOTO_BASE=String(process.env.V2_PUBLIC_API_URL||process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/$/,'');
 function generatedMenuPhotoBase64(fileName){return String(GENERATED_MENU_PHOTOS[String(fileName||'')]||'')}
 function defaultItemImage(category,index=1){
   const max=DEFAULT_ITEM_IMAGE_COUNTS[category]||1,n=Math.max(1,Math.min(max,Number(index)||1));

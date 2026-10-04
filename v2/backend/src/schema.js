@@ -197,6 +197,13 @@ async function ensureSchema(){
   );
   CREATE INDEX IF NOT EXISTS idx_v2_kitchen_messages_est ON shaurma_kitchen_order_messages(establishment_id,order_id);
 
+  CREATE TABLE IF NOT EXISTS shaurma_owner_command_context(
+    telegram_user_id TEXT PRIMARY KEY,
+    establishment_id TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_owner_command_context_est ON shaurma_owner_command_context(establishment_id);
+
   CREATE TABLE IF NOT EXISTS shaurma_venue_audit(
     id BIGSERIAL PRIMARY KEY,
     establishment_id TEXT NOT NULL,

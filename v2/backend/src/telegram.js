@@ -541,9 +541,15 @@ async function handleKitchenMessage(msg){
     if(accesses.length){
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:chatId,
-        text:'👨‍🍳 Бот приёма заказов Shaurmeg подключён.\n\nЗаведения:\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n')+'\n\nНовые заказы будут приходить автоматически.'
+        text:'👨‍🍳 Бот приёма заказов Shaurmeg подключён.\n\nЗаведения:\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n')+'\n\nНовые заказы будут приходить автоматически.\n\nДля управления меню отправьте /assistant.'
       });
     }
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'👨‍🍳 Бот приёма заказов Shaurmeg\n\nОтправьте ключ доступа заведения в формате:\nOWN-XXXXXXXXXX\n\nМожно использовать тот же ключ, который выдан для подключения заведения к кабинету владельца.'
+    });
+  }
+
   if(raw&&user?.id){
     try{
       const result=await venueCommandBus.handle({user,text:raw});
@@ -557,11 +563,11 @@ async function handleKitchenMessage(msg){
     }
   }
 
-    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
-      chat_id:chatId,
-      text:'👨‍🍳 Бот приёма заказов Shaurmeg\n\nОтправьте ключ доступа заведения в формате:\nOWN-XXXXXXXXXX\n\nМожно использовать тот же ключ, который выдан для подключения заведения к кабинету владельца.'
-    });
-  }
+  return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+    chat_id:chatId,
+    text:'Не распознал запрос. Для управления меню напишите /assistant, для состояния подключения — /status.'
+  });
+
 }
 
 async function sync(){

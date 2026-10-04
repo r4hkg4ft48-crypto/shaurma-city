@@ -11,6 +11,10 @@ test('parses menu commands',()=>{
     intent:'menu_add',name:'Айран',category:'Напитки',price:150,description:'Домашний айран'
   });
   assert.deepEqual(parseCommand('переименуй блюдо Айран -> Тан'),{intent:'menu_rename',item:'Айран',name:'Тан'});
+  assert.deepEqual(parseCommand('измени цену на Классическая шаурма до 410'),{intent:'menu_price',item:'Классическая шаурма',price:410});
+  assert.deepEqual(parseCommand('убери Айран из меню'),{intent:'menu_toggle',item:'Айран',enabled:false});
+  assert.deepEqual(parseCommand('верни Айран в меню'),{intent:'menu_toggle',item:'Айран',enabled:true});
+  assert.deepEqual(parseCommand('добавь Морс в Напитки за 170'),{intent:'menu_add',name:'Морс',category:'Напитки',price:170,description:''});
 });
 
 test('parses venue commands',()=>{

@@ -4,10 +4,16 @@ const config=require('./config');
 const db=require('./db');
 const rt=require('./realtime');
 const voice=require('./voice-assistant');
+const {createVenueCommandBus}=require('../../../backend/venue-command');
 
 const TELEGRAM_MAX_RETRIES=3;
 const TELEGRAM_SYNC_DELAY_MS=300;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const venueCommandBus=createVenueCommandBus({
+  DB:db,
+  publishVenue:row=>{if(row?.establishment_id){rt.pushVenue(row.establishment_id,'venue',row);rt.pushOwner('venue',row)}},
+  pushOwner:rt.pushOwner
+});
 
 async function call(token,method,body={},attempt=0){
   if(!token)return null;
@@ -538,6 +544,19 @@ async function handleKitchenMessage(msg){
         text:'👨‍🍳 Бот приёма заказов Shaurmeg подключён.\n\nЗаведения:\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n')+'\n\nНовые заказы будут приходить автоматически.'
       });
     }
+  if(raw&&user?.id){
+    try{
+      const result=await venueCommandBus.handle({user,text:raw});
+      if(result?.handled){
+        const text=String(result.text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text,disable_web_page_preview:true});
+      }
+    }catch(e){
+      console.error('kitchen menu assistant',e.message);
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'Не удалось выполнить изменение меню. Данные не изменены.'});
+    }
+  }
+
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
       text:'👨‍🍳 Бот приёма заказов Shaurmeg\n\nОтправьте ключ доступа заведения в формате:\nOWN-XXXXXXXXXX\n\nМожно использовать тот же ключ, который выдан для подключения заведения к кабинету владельца.'
@@ -575,6 +594,7 @@ async function sync(){
       {command:'start',description:'Подключить приём заказов'},
       {command:'status',description:'Показать подключённые заведения'},
       {command:'voice',description:'Голосовые команды кухни'},
+      {command:'assistant',description:'Управление меню и точкой'},
       {command:'connect',description:'Подключить заведение по ключу'},
       {command:'disconnect',description:'Отключить этот чат от заказов'}
     ]}));

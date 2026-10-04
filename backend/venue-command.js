@@ -830,7 +830,31 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {handled:false};
   }
 
-  return {handle};
+  async function setItemImage({user,itemQuery,image}){
+    const resolved=await resolveAccess(user.id,{intent:'menu_item_show'});
+    if(resolved.error)return {handled:true,text:resolved.error};
+    const access=resolved.access;
+    if(!canUse(access,'menu'))return {handled:true,text:'⛔️ У вас нет права menu для этой точки.'};
+    const venue=await loadVenue(access.establishment_id);
+    if(!venue)return {handled:true,text:'Точка не найдена.'};
+    const menu=Array.isArray(venue.menu)?venue.menu.map(x=>({...x})):[];
+    const config=venue.config&&typeof venue.config==='object'?{...venue.config}:{};
+    const sections=sectionsFrom(config,menu);
+    const editor=await editorContext(user.id);
+    let found;
+    if(clean(itemQuery))found=findNamed(menu,itemQuery,x=>x.n||x.name);
+    else found={item:menu.find(x=>String(x.id)===String(editor.selected_item_id||'')),matches:[]};
+    if(!found.item){
+      const hint=(found.matches||[]).length?'\nВозможно:\n'+found.matches.map(x=>'• '+String(x.n||x.name)).join('\n'):'';
+      return {handled:true,text:clean(itemQuery)?'Не нашёл позицию «'+itemQuery+'».'+hint:'Сначала выберите позицию: «работаем с сырной шаурмой», затем отправьте фото.'};
+    }
+    found.item.image=String(image||'').slice(0,700000);
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_image',{item_id:found.item.id,has_image:!!found.item.image});
+    await selectItemContext(user.id,found.item.id);
+    return {handled:true,text:'✅ Фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
+  }
+
+  return {handle,setItemImage};
 }
 
 module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

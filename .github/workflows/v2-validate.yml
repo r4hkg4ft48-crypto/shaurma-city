@@ -144,6 +144,8 @@ jobs:
         run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js
       - name: Photographic builder contract
         run: node --test v2/backend/test/builder-cinema.test.js
+      - name: Voice assistant contract
+        run: node --test v2/backend/test/voice-assistant.test.js
       - name: Mobile photographic builder
         working-directory: v2/backend
         run: |

@@ -386,7 +386,10 @@ function itemSettingsText(item,sections=[]){
   if(item.d||item.description)lines.push('Описание: '+String(item.d||item.description));
   for(const g of groups){
     const opts=Array.isArray(g.options)?g.options:[];
-    lines.push('• '+String(g.name||'Выбор')+' · '+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
+    lines.push('• '+String(g.name||'Выбор')+' · '+(g.active===false?'выкл · ':'')+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
+    for(const o of opts){
+      lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')+(o.default===true?' · по умолчанию':''));
+    }
   }
   return lines.join('\n');
 }

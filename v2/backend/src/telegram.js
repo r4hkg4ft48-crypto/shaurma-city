@@ -251,6 +251,38 @@ async function downloadKitchenVoice(msg){
   };
 }
 
+async function downloadKitchenMenuPhoto(msg){
+  const photos=Array.isArray(msg?.photo)?msg.photo.filter(x=>x?.file_id):[];
+  if(!photos.length)throw new Error('menu_photo_missing');
+  const underLimit=photos.filter(x=>!Number(x.file_size)||Number(x.file_size)<=480000);
+  const media=(underLimit.length?underLimit:photos).slice().sort((a,b)=>Number(b.file_size||0)-Number(a.file_size||0))[0];
+  if(Number(media.file_size||0)>520000)throw new Error('menu_photo_too_large');
+  const meta=await call(config.KITCHEN_BOT_TOKEN,'getFile',{file_id:media.file_id});
+  if(!meta?.file_path)throw new Error('menu_photo_path_missing');
+  const response=await fetch('https://api.telegram.org/file/bot'+config.KITCHEN_BOT_TOKEN+'/'+meta.file_path);
+  if(!response.ok)throw new Error('menu_photo_download_failed');
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.byteLength>520000)throw new Error('menu_photo_too_large');
+  const ext=String(meta.file_path).toLowerCase(),type=ext.endsWith('.png')?'image/png':ext.endsWith('.webp')?'image/webp':'image/jpeg';
+  return 'data:'+type+';base64,'+bytes.toString('base64');
+}
+
+async function handleKitchenMenuPhoto(msg){
+  const chatId=msg?.chat?.id,user=msg?.from;
+  if(!chatId||!user?.id)return;
+  try{
+    const caption=String(msg.caption||'').trim();
+    const m=caption.match(/(?:фото|картинк[ау]|изображение)\s+(?:для|на)\s+(.+)/i);
+    const itemQuery=m?String(m[1]||'').trim():'';
+    const image=await downloadKitchenMenuPhoto(msg);
+    const result=await venueCommandBus.setItemImage({user,itemQuery,image});
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:String(result?.text||'Фото обработано.').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900)});
+  }catch(e){
+    console.error('kitchen menu photo',e.message);
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:e.message==='menu_photo_too_large'?'Фото слишком большое. Отправьте обычное сжатое фото Telegram, не как файл.':'Не удалось обновить фото позиции.'});
+  }
+}
+
 async function transcribeKitchenVoice(msg){
   if(!config.OPENAI_API_KEY)throw new Error('voice_ai_not_configured');
   const media=await downloadKitchenVoice(msg);
@@ -509,7 +541,8 @@ async function handleKitchenMessage(msg){
   const chatId=msg?.chat?.id,user=msg?.from;
   if(!chatId)return;
   if(msg?.voice||msg?.audio)return handleKitchenVoice(msg);
-  const raw=String(msg.text||'').trim();
+  if(Array.isArray(msg?.photo)&&msg.photo.length)return handleKitchenMenuPhoto(msg);
+  const raw=String(msg.text||msg.caption||'').trim();
   const start=raw.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
   const connect=raw.match(/^\/connect(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
   const code=normalizeInviteCode(start?.[1]||connect?.[1]||raw);

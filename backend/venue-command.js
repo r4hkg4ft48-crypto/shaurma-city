@@ -1,6 +1,7 @@
 'use strict';
 
 const D=require('../v2/backend/src/domain');
+const rt=require('../v2/backend/src/realtime');
 
 const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
 const PERMISSION_BY_INTENT={
@@ -377,8 +378,20 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       const section=found.item;
       if(command.intent==='category_toggle'){
         section.active=command.enabled;
-        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_toggle',{category_id:section.id,active:command.enabled});
-        return {handled:true,text:'✅ Категория '+section.name+' — '+(command.enabled?'включена':'скрыта')+'.'};
+        const states=config.assistant_category_item_state&&typeof config.assistant_category_item_state==='object'
+          ? {...config.assistant_category_item_state}:{};
+        const categoryItems=menu.filter(x=>String(x.c||x.category||'')===String(section.id));
+        if(command.enabled){
+          const saved=states[section.id]&&typeof states[section.id]==='object'?states[section.id]:{};
+          for(const item of categoryItems)item.active=Object.prototype.hasOwnProperty.call(saved,String(item.id))?saved[String(item.id)]!==false:true;
+          delete states[section.id];
+        }else{
+          states[section.id]=Object.fromEntries(categoryItems.map(item=>[String(item.id),item.active!==false]));
+          for(const item of categoryItems)item.active=false;
+        }
+        const nextConfig={...config,menu_sections:sections,assistant_category_item_state:states};
+        await saveMenu(access,user.id,menu,nextConfig,'assistant_category_toggle',{category_id:section.id,active:command.enabled,items:categoryItems.length});
+        return {handled:true,text:'✅ Категория '+section.name+' — '+(command.enabled?'включена':'скрыта вместе с её позициями')+'.'};
       }
       const old=section.name;section.name=command.name;
       await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_category_rename',{category_id:section.id,old_name:old,new_name:command.name});
@@ -438,7 +451,11 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       if(order.status===command.status)return {handled:true,text:'Заказ #'+order.id+' уже имеет статус «'+STATUS_LABELS[order.status]+'».'};
       const upd=await DB.query('UPDATE shaurma_orders SET status=$3,updated_at=NOW() WHERE id=$1 AND establishment_id=$2 RETURNING *',[order.id,access.establishment_id,command.status]);
       const changed=upd.rows[0];
-      if(changed)pushOwner('update',changed);
+      if(changed){
+        pushOwner('update',changed);
+        rt.pushVenue(changed.establishment_id,'update',changed);
+        if(changed.telegram_user_id)rt.pushUser(changed.telegram_user_id,'update',changed);
+      }
       await audit(access.establishment_id,user.id,'assistant_order_status',{order_id:order.id,status:command.status});
       return {handled:true,text:'✅ Заказ #'+order.id+' → <b>'+STATUS_LABELS[command.status]+'</b>'};
     }

@@ -3,6 +3,7 @@
 const crypto=require('crypto');
 const path=require('path');
 const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
+const {createVenueCommandBus}=require('./venue-command');
 
 function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner}){
   const BOT_TOKEN=String(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN||'').trim();
@@ -12,6 +13,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   const SESSION_SECRET=String(process.env.VENUE_OWNER_SESSION_SECRET||process.env.OWNER_API_TOKEN||process.env.ADMIN_TELEGRAM_SESSION_SECRET||'').trim();
   const WEBHOOK_SECRET=BOT_TOKEN&&SESSION_SECRET?crypto.createHash('sha256').update('venue-owner-webhook:'+BOT_TOKEN+':'+SESSION_SECRET).digest('hex').slice(0,32):'';
   let botInfo=null;
+  const commandBus=createVenueCommandBus({DB,publishVenue,pushOwner});
 
   const DEFAULT_PERMISSIONS=['menu','profile','media','appearance','orders'];
   const LEGACY_SECTIONS=[
@@ -213,6 +215,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   }
   async function sendOwnerBotMessage(chatId,text,extra={}){
     return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',disable_web_page_preview:true,...extra});
+  }
+  async function sendOwnerPlainMessage(chatId,text,extra={}){
+    const plain=String(text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);
+    return botApi('sendMessage',{chat_id:chatId,text:plain,disable_web_page_preview:true,...extra});
   }
   function ownerAppUrl(establishmentId='',tab='profile'){
     const u=new URL(OWNER_APP_URL);
@@ -619,6 +625,12 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         return;
       }
 
+      const assistantResult=await commandBus.handle({user,text});
+      if(assistantResult?.handled){
+        await sendOwnerPlainMessage(msg.chat.id,assistantResult.text);
+        return;
+      }
+
       const directCode=normalizeCode(text);
       if(/^SC-MSK-[A-Z0-9]+$/.test(directCode)){
         await sendOwnerBotMessage(msg.chat.id,'Это ID заведения <code>'+String(directCode)+'</code>, а не ключ доступа.\n\nДля подключения нужен ключ <code>OWN-XXXXXXXXXX</code>. Можно вставить целиком сообщение из бота выдачи ключей — я сам найду ключ.');
@@ -632,7 +644,10 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         }catch{
           await sendOwnerBotMessage(msg.chat.id,'Ключ не подошёл. Нужен действующий <code>OWN-XXXXXXXXXX</code>, который ещё не использован для подключения кабинета.');
         }
+        return;
       }
+
+      await sendOwnerPlainMessage(msg.chat.id,'Не распознал команду. Напишите /assistant — покажу доступные команды управления заведением.');
     }catch(e){console.error('Venue owner bot update:',e.message)}
   });
 
@@ -668,7 +683,9 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         {command:'start',description:'Открыть кабинет владельца'},
         {command:'venues',description:'Мои заведения'},
         {command:'menu',description:'Управление меню'},
+        {command:'assistant',description:'Команды управления точкой'},
         {command:'add',description:'Добавить ещё заведение'},
+        {command:'use',description:'Выбрать активное заведение'},
         {command:'id',description:'Показать Telegram ID'}
       ]});
       if(WEBHOOK_SECRET)await botApi('setWebhook',{url:BASE_URL+'/api/venue-owner-bot/webhook/'+WEBHOOK_SECRET,allowed_updates:['message'],drop_pending_updates:false});

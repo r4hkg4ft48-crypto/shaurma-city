@@ -24,6 +24,7 @@ jobs:
           node --check backend/server.js
           node --check backend/realcity-studio-ui.js
           node --check backend/venue-owner.js
+          node --check backend/venue-command.js
       - name: Inline JS · Master Admin
         run: |
           python3 - <<'PY'
@@ -146,6 +147,8 @@ jobs:
         run: node --test v2/backend/test/builder-cinema.test.js
       - name: Voice assistant contract
         run: node --test v2/backend/test/voice-assistant.test.js
+      - name: Venue command assistant contract
+        run: node --test backend/venue-command.test.js
       - name: Mobile photographic builder
         working-directory: v2/backend
         run: |

@@ -233,12 +233,12 @@
    document.querySelectorAll('.menuEditCard').forEach(row=>{
      const id=String(row.dataset.itemId||''),x=menu.find(item=>String(item.id)===id);if(!x)return;
      row.querySelectorAll('[data-k]').forEach(inp=>{const k=inp.dataset.k;x[k]=k==='p'?Math.max(0,Number(inp.value)||0):inp.value});
-     x.id=id;x.c=x.c||'shawarma';x.active=true;
+     x.id=id;x.c=x.c||'shawarma';if(x.active===undefined)x.active=true;
    });
  }
  function menuSectionsForSave(){
    const names={shawarma:'Шаурма',drinks:'Напитки',bakery:'Выпечка',extras:'Допы'},map=new Map();
-   for(const x of (Array.isArray(data?.sections)?data.sections:[])){
+   for(const x of (Array.isArray(data?.sections_all)?data.sections_all:(Array.isArray(data?.sections)?data.sections:[]))){
      const id=String(x?.id||'').trim();if(id&&!map.has(id))map.set(id,{...x,id,name:String(x.name||names[id]||id),active:x.active!==false});
    }
    for(const item of menu){
@@ -309,7 +309,7 @@
  $('#vName').oninput=()=>renderThemePreview();
  function addMenuItem(){
    readMenu();const id='item_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
-   menu.push({id,n:'Новая позиция',d:'',p:0,c:'shawarma',image:'',active:true});renderMenu();
+   menu.push({id,n:'Новая позиция',d:'',p:0,c:String(data?.sections?.[0]?.id||'shawarma'),image:'',active:true});renderMenu();
    setTimeout(()=>[...document.querySelectorAll('.menuEditCard')].find(x=>String(x.dataset.itemId)===id)?.querySelector('[data-k="n"]')?.focus(),40);
  }
  $('#addItem').onclick=addMenuItem;

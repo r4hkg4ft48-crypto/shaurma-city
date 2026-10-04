@@ -3,6 +3,7 @@ const crypto=require('crypto');
 const config=require('./config');
 const db=require('./db');
 const rt=require('./realtime');
+const voice=require('./voice-assistant');
 
 const TELEGRAM_MAX_RETRIES=3;
 const TELEGRAM_SYNC_DELAY_MS=300;
@@ -176,6 +177,296 @@ async function notifyCustomerStatus(order){
   catch(e){console.error('kitchen customer notify',e.message)}
 }
 
+
+function voiceHelpText(){
+  return [
+    '🎙 Голосовой помощник кухни',
+    '',
+    'Можно сказать:',
+    '• «Покажи активные заказы»',
+    '• «Повтори последний заказ»',
+    '• «Начинай готовить последний заказ»',
+    '• «Заказ 42 готов»',
+    '• «Последний заказ выполнен»',
+    '',
+    'Статус меняется только по цепочке:',
+    'Принят → Готовится → Готово → Выполнен.'
+  ].join('\n');
+}
+
+async function transitionKitchenOrder(order,chatId,user,targetStatus,source='button'){
+  if(!order)return {changed:false,missing:true,order:null};
+  const current=String(order.status||'');
+  const target=String(targetStatus||'');
+  if(current===target)return {changed:false,same:true,order};
+  const expected=nextKitchenStatus(current);
+  if(expected!==target)return {changed:false,blocked:true,expected,order};
+
+  const upd=await db.query(
+    'UPDATE shaurma_orders SET status=$3,updated_at=NOW() WHERE id=$1 AND establishment_id=$2 AND status=$4 RETURNING *',
+    [order.id,order.establishment_id,target,current]
+  );
+  const changed=upd.rows[0];
+  if(!changed){
+    const latest=(await db.query('SELECT * FROM shaurma_orders WHERE id=$1',[order.id])).rows[0]||order;
+    return {changed:false,race:true,order:latest};
+  }
+
+  await db.query(
+    "INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'kitchen_order_status_updated',$3::jsonb)",
+    [changed.establishment_id,String(user?.id||''),JSON.stringify({
+      order_id:changed.id,
+      status:changed.status,
+      chat_id:String(chatId),
+      source:String(source||'button')
+    })]
+  );
+  rt.pushOwner('update',changed);
+  rt.pushVenue(changed.establishment_id,'update',changed);
+  if(changed.telegram_user_id)rt.pushUser(changed.telegram_user_id,'update',changed);
+  await Promise.all([refreshKitchenOrderMessages(changed),notifyCustomerStatus(changed)]);
+  return {changed:true,order:changed};
+}
+
+async function downloadKitchenVoice(msg){
+  const media=msg?.voice||msg?.audio;
+  if(!media?.file_id)throw new Error('voice_file_missing');
+  if(Number(media.file_size||0)>20*1024*1024)throw new Error('voice_file_too_large');
+  const meta=await call(config.KITCHEN_BOT_TOKEN,'getFile',{file_id:media.file_id});
+  if(!meta?.file_path)throw new Error('voice_file_path_missing');
+  const r=await fetch('https://api.telegram.org/file/bot'+config.KITCHEN_BOT_TOKEN+'/'+meta.file_path);
+  if(!r.ok)throw new Error('voice_download_failed');
+  const bytes=await r.arrayBuffer();
+  if(bytes.byteLength>20*1024*1024)throw new Error('voice_file_too_large');
+  return {
+    bytes,
+    type:msg?.voice?'audio/ogg':String(media.mime_type||'audio/mpeg'),
+    filename:msg?.voice?'voice.ogg':'voice-audio'
+  };
+}
+
+async function transcribeKitchenVoice(msg){
+  if(!config.OPENAI_API_KEY)throw new Error('voice_ai_not_configured');
+  const media=await downloadKitchenVoice(msg);
+  const form=new FormData();
+  form.append('model',config.VOICE_TRANSCRIBE_MODEL);
+  form.append('language','ru');
+  form.append('prompt','Контекст: кухня ресторана, заказы Shaurmeg, статусы Принят, Готовится, Готово, Выполнен.');
+  form.append('file',new Blob([media.bytes],{type:media.type}),media.filename);
+  const r=await fetch('https://api.openai.com/v1/audio/transcriptions',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+config.OPENAI_API_KEY},
+    body:form
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error('voice_transcription_failed:'+String(j?.error?.message||r.status));
+  const text=String(j?.text||'').trim();
+  if(!text)throw new Error('voice_transcription_empty');
+  return text.slice(0,2000);
+}
+
+async function aiKitchenIntent(transcript){
+  const local=voice.parseLocalIntent(transcript);
+  if(local.intent!=='unknown'||!config.OPENAI_API_KEY)return local;
+
+  const prompt=[
+    'Ты классификатор голосовых команд сотрудника кухни ресторана.',
+    'Никаких действий не выполняй. Верни только JSON без markdown.',
+    'Допустимые intent: list_active, read_order, set_status, help, unknown.',
+    'Допустимые target: latest, oldest, order_number, id.',
+    'Допустимые status только для set_status: new, cooking, ready, done.',
+    'new = принят; cooking = готовится/начать готовить; ready = готов; done = выполнен/выдан.',
+    'Если номер не назван, target=latest и order_ref="".',
+    'Формат: {"intent":"...","target":"...","order_ref":"...","status":"..."}.',
+    'Команда: '+JSON.stringify(String(transcript||''))
+  ].join('\n');
+
+  const r=await fetch('https://api.openai.com/v1/responses',{
+    method:'POST',
+    headers:{
+      Authorization:'Bearer '+config.OPENAI_API_KEY,
+      'Content-Type':'application/json'
+    },
+    body:JSON.stringify({
+      model:config.VOICE_INTENT_MODEL,
+      input:prompt,
+      max_output_tokens:120,
+      store:false
+    })
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){
+    console.error('kitchen voice intent',String(j?.error?.message||r.status));
+    return local;
+  }
+  const parsed=voice.parseJsonObject(voice.extractResponseText(j));
+  return voice.sanitizeAiIntent(parsed);
+}
+
+async function kitchenOrdersForChat(chatId,{activeOnly=true,limit=8,oldestFirst=false}={}){
+  const statusClause=activeOnly?"AND o.status NOT IN ('done','cancelled')":'';
+  const direction=oldestFirst?'ASC':'DESC';
+  const q=await db.query(
+    'SELECT o.* FROM shaurma_orders o '+
+    'JOIN shaurma_kitchen_access k ON k.establishment_id=o.establishment_id AND k.chat_id=$1 AND k.is_active=TRUE '+
+    'WHERE 1=1 '+statusClause+' ORDER BY o.created_at '+direction+' LIMIT $2',
+    [String(chatId),Math.max(1,Math.min(20,Number(limit)||8))]
+  );
+  return q.rows;
+}
+
+async function resolveVoiceOrder(chatId,intent,accesses){
+  if(intent.target==='id'&&/^\d+$/.test(String(intent.order_ref||''))){
+    const q=await db.query(
+      'SELECT o.* FROM shaurma_orders o JOIN shaurma_kitchen_access k ON k.establishment_id=o.establishment_id '+
+      'AND k.chat_id=$2 AND k.is_active=TRUE WHERE o.id=$1 LIMIT 1',
+      [String(intent.order_ref),String(chatId)]
+    );
+    return q.rows[0]||null;
+  }
+
+  if(intent.target==='order_number'&&String(intent.order_ref||'')){
+    const q=await db.query(
+      'SELECT o.* FROM shaurma_orders o JOIN shaurma_kitchen_access k ON k.establishment_id=o.establishment_id '+
+      'AND k.chat_id=$2 AND k.is_active=TRUE WHERE UPPER(o.order_number)=UPPER($1) LIMIT 1',
+      [String(intent.order_ref),String(chatId)]
+    );
+    return q.rows[0]||null;
+  }
+
+  if((accesses||[]).length>1)throw new Error('voice_multiple_venues');
+
+  const activeOnly=intent.intent==='set_status';
+  let rows=await kitchenOrdersForChat(chatId,{
+    activeOnly,
+    limit:1,
+    oldestFirst:intent.target==='oldest'
+  });
+  if(!rows.length&&intent.intent==='read_order'){
+    rows=await kitchenOrdersForChat(chatId,{
+      activeOnly:false,
+      limit:1,
+      oldestFirst:intent.target==='oldest'
+    });
+  }
+  return rows[0]||null;
+}
+
+function voiceOrderSummary(order,multiVenue=false){
+  const items=Array.isArray(order?.items)?order.items:[];
+  return '• '+String(order?.order_number||('#'+order?.id))+
+    (multiVenue?' · '+String(order?.venue_name||''):'')+
+    ' · '+orderStatusLabel(order?.status)+
+    ' · '+items.reduce((n,x)=>n+Math.max(1,Number(x?.q)||1),0)+' поз.'+
+    ' · '+Number(order?.total||0)+' ₽';
+}
+
+async function executeKitchenVoice(msg,transcript,intent){
+  const chatId=msg?.chat?.id,user=msg?.from;
+  const accesses=await kitchenAccesses(chatId);
+  if(!accesses.length){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'Сначала подключите заведение ключом OWN-XXXXXXXXXX.'
+    });
+  }
+
+  const heard='🎙 Услышал: «'+String(transcript||'').slice(0,500)+'»\n\n';
+
+  if(intent.intent==='help'){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+voiceHelpText()});
+  }
+
+  if(intent.intent==='list_active'){
+    const rows=await kitchenOrdersForChat(chatId,{activeOnly:true,limit:8});
+    const body=rows.length
+      ? 'Активные заказы:\n'+rows.map(x=>voiceOrderSummary(x,accesses.length>1)).join('\n')
+      : 'Активных заказов сейчас нет.';
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+body});
+  }
+
+  if(intent.intent==='read_order'){
+    let order;
+    try{order=await resolveVoiceOrder(chatId,intent,accesses)}
+    catch(e){
+      if(e.message==='voice_multiple_venues'){
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+'В этом чате подключено несколько заведений. Назовите номер заказа, чтобы я не выбрал не то.'});
+      }
+      throw e;
+    }
+    if(!order)return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+'Доступный заказ не найден.'});
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+kitchenOrderText(order)});
+  }
+
+  if(intent.intent==='set_status'){
+    let order;
+    try{order=await resolveVoiceOrder(chatId,intent,accesses)}
+    catch(e){
+      if(e.message==='voice_multiple_venues'){
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+'В этом чате подключено несколько заведений. Назовите номер заказа, чтобы изменение было однозначным.'});
+      }
+      throw e;
+    }
+    if(!order)return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:heard+'Активный заказ не найден.'});
+
+    const result=await transitionKitchenOrder(order,chatId,user,intent.status,'voice');
+    if(result.same){
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+        chat_id:chatId,
+        text:heard+'Заказ '+order.order_number+' уже имеет статус «'+orderStatusLabel(order.status)+'».'
+      });
+    }
+    if(result.blocked){
+      const next=result.expected?orderStatusLabel(result.expected):'нет';
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+        chat_id:chatId,
+        text:heard+'Статус не изменён. Сейчас «'+orderStatusLabel(order.status)+'». Следующий допустимый статус: «'+next+'».'
+      });
+    }
+    if(result.race){
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+        chat_id:chatId,
+        text:heard+'Заказ уже успели обновить. Текущий статус: «'+orderStatusLabel(result.order?.status)+'».'
+      });
+    }
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:heard+'✅ Заказ '+result.order.order_number+' → '+orderStatusLabel(result.order.status)
+    });
+  }
+
+  return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+    chat_id:chatId,
+    text:heard+'Команду не распознал.\n\n'+voiceHelpText()
+  });
+}
+
+async function handleKitchenVoice(msg){
+  const chatId=msg?.chat?.id;
+  if(!chatId)return;
+  if(!config.OPENAI_API_KEY){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'🎙 Голосовой помощник подключён в приложении, но на сервере ещё не задан OPENAI_API_KEY для распознавания речи.'
+    });
+  }
+  try{await call(config.KITCHEN_BOT_TOKEN,'sendChatAction',{chat_id:chatId,action:'typing'})}catch{}
+  try{
+    const transcript=await transcribeKitchenVoice(msg);
+    const intent=await aiKitchenIntent(transcript);
+    return executeKitchenVoice(msg,transcript,intent);
+  }catch(e){
+    console.error('kitchen voice',e.message);
+    const tooLarge=e.message==='voice_file_too_large';
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:tooLarge
+        ? 'Голосовое слишком большое. Отправьте более короткое сообщение.'
+        : 'Не удалось обработать голосовую команду. Попробуйте ещё раз или используйте /voice.'
+    });
+  }
+}
+
 async function handleKitchenCallback(query){
   const id=String(query?.id||''),chatId=query?.message?.chat?.id,user=query?.from;
   const m=String(query?.data||'').match(/^ko:(\d+):(cooking|ready|done)$/);
@@ -189,28 +480,16 @@ async function handleKitchenCallback(query){
       await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Нет доступа к этому заказу',show_alert:true});
       return;
     }
-    const expected=nextKitchenStatus(order.status);
-    if(expected!==m[2]){
-      await refreshKitchenOrderMessages(order);
-      await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Статус уже: '+orderStatusLabel(order.status)});
+    const result=await transitionKitchenOrder(order,chatId,user,m[2],'button');
+    if(!result.changed){
+      if(result.order)await refreshKitchenOrderMessages(result.order);
+      await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{
+        callback_query_id:id,
+        text:result.race?'Заказ уже обновлён':'Статус уже: '+orderStatusLabel(result.order?.status||order.status)
+      });
       return;
     }
-    const upd=await db.query('UPDATE shaurma_orders SET status=$3,updated_at=NOW() WHERE id=$1 AND establishment_id=$2 AND status=$4 RETURNING *',
-      [order.id,order.establishment_id,m[2],order.status]);
-    const changed=upd.rows[0];
-    if(!changed){
-      const latest=(await db.query('SELECT * FROM shaurma_orders WHERE id=$1',[order.id])).rows[0];
-      if(latest)await refreshKitchenOrderMessages(latest);
-      await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Заказ уже обновлён'});
-      return;
-    }
-    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'kitchen_order_status_updated',$3::jsonb)",
-      [changed.establishment_id,String(user?.id||''),JSON.stringify({order_id:changed.id,status:changed.status,chat_id:String(chatId)})]);
-    rt.pushOwner('update',changed);
-    rt.pushVenue(changed.establishment_id,'update',changed);
-    if(changed.telegram_user_id)rt.pushUser(changed.telegram_user_id,'update',changed);
-    await Promise.all([refreshKitchenOrderMessages(changed),notifyCustomerStatus(changed)]);
-    await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:orderStatusLabel(changed.status)+' ✓'});
+    await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:orderStatusLabel(result.order.status)+' ✓'});
   }catch(e){
     console.error('kitchen callback',e.message);
     try{await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Не удалось изменить статус',show_alert:true})}catch{}
@@ -220,6 +499,7 @@ async function handleKitchenCallback(query){
 async function handleKitchenMessage(msg){
   const chatId=msg?.chat?.id,user=msg?.from;
   if(!chatId)return;
+  if(msg?.voice||msg?.audio)return handleKitchenVoice(msg);
   const raw=String(msg.text||'').trim();
   const start=raw.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
   const connect=raw.match(/^\/connect(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
@@ -241,6 +521,10 @@ async function handleKitchenMessage(msg){
     }catch(e){
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:e.message==='claim_code_invalid_or_expired'?'Ключ не найден или срок его действия истёк.':'Неверный ключ. Формат: OWN-XXXXXXXXXX'});
     }
+  }
+
+  if(/^\/voice(?:@[A-Za-z0-9_]+)?$/i.test(raw)){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:voiceHelpText()});
   }
 
   if(start||/^\/status(?:@[A-Za-z0-9_]+)?$/i.test(raw)){
@@ -287,6 +571,7 @@ async function sync(){
     add('kitchen.commands',()=>call(config.KITCHEN_BOT_TOKEN,'setMyCommands',{commands:[
       {command:'start',description:'Подключить приём заказов'},
       {command:'status',description:'Показать подключённые заведения'},
+      {command:'voice',description:'Голосовые команды кухни'},
       {command:'connect',description:'Подключить заведение по ключу'},
       {command:'disconnect',description:'Отключить этот чат от заказов'}
     ]}));

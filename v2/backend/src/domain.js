@@ -71,6 +71,32 @@ function menuSections(config={},menu=[]){
   const ids=[...new Set((Array.isArray(menu)?menu:[]).map(x=>String(x.c||x.category||'shawarma')))];
   return ids.map((id,i)=>({id,name:id==='shawarma'?'Шаурма':id==='drinks'?'Напитки':id==='extras'?'Допы':id==='bakery'?'Выпечка':id,emoji:'',order:i}));
 }
+function normalizeChoiceGroups(input){
+  if(!Array.isArray(input))return [];
+  return input.slice(0,20).map((g,gi)=>{
+    const options=Array.isArray(g?.options)?g.options.slice(0,60).map((o,oi)=>({
+      id:String(o?.id||('option_'+oi)).trim().toLowerCase().replace(/[^a-z0-9а-я_-]+/gi,'_').slice(0,64)||('option_'+oi),
+      name:String(o?.name||o?.n||'Вариант').trim().slice(0,120),
+      price_delta:clamp(Number(o?.price_delta??o?.price??0)||0,-100000,100000),
+      active:o?.active!==false,
+      default:o?.default===true
+    })).filter(o=>o.id&&o.name):[];
+    const type=String(g?.type||'single')==='multiple'?'multiple':'single';
+    const maxDefault=type==='single'?1:Math.max(1,options.length||1);
+    const min=clamp(Math.floor(Number(g?.min)||0),0,maxDefault);
+    const max=clamp(Math.floor(Number(g?.max)||maxDefault),Math.max(min,1),Math.max(1,options.length||1));
+    return {
+      id:String(g?.id||('group_'+gi)).trim().toLowerCase().replace(/[^a-z0-9а-я_-]+/gi,'_').slice(0,64)||('group_'+gi),
+      name:String(g?.name||g?.n||'Выбор').trim().slice(0,120),
+      type,
+      required:g?.required===true||min>0,
+      min:g?.required===true&&min===0?1:min,
+      max:type==='single'?1:max,
+      active:g?.active!==false,
+      options
+    };
+  }).filter(g=>g.id&&g.name&&g.options.length);
+}
 function normalizeMenu(input){
   if(!Array.isArray(input))return [];
   return input.slice(0,250).map((x,i)=>({
@@ -84,8 +110,12 @@ function normalizeMenu(input){
     featured:x.featured===true,
     display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
     image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
-    active:x.active!==false
-  })).filter(x=>x.id&&x.n);
+    active:x.active!==false,
+    available:x.available!==false,
+    min_qty:clamp(Math.floor(Number(x.min_qty)||1),1,50),
+    max_qty:clamp(Math.floor(Number(x.max_qty)||50),1,50),
+    choice_groups:normalizeChoiceGroups(x.choice_groups||x.options||[])
+  })).map(x=>({...x,max_qty:Math.max(x.min_qty,x.max_qty)})).filter(x=>x.id&&x.n);
 }
 const LEGACY_LEPESH_BUILDER={
   title:'Собери свою шаурму',
@@ -225,4 +255,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,normalizeChoiceGroups,normalizeMenu,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

@@ -20,6 +20,11 @@ function norm(v){
 function slug(v){
   return norm(v).replace(/[^a-z0-9а-я]+/gi,'_').replace(/^_+|_+$/g,'').slice(0,48)||'section';
 }
+function venueShortKey(establishmentId){
+  const raw=clean(establishmentId).toUpperCase();
+  const tail=(raw.split('-').filter(Boolean).pop()||raw).replace(/[^A-Z0-9]/g,'');
+  return (tail||raw.replace(/[^A-Z0-9]/g,'')).slice(0,6);
+}
 function money(v){
   const n=Number(String(v||'').replace(',','.').replace(/[^\d.]/g,''));
   return Number.isFinite(n)?Math.max(0,Math.min(100000,Math.round(n))):null;
@@ -49,6 +54,7 @@ function parseCommand(text){
 
   let m=raw.match(/^\/use\s+(.+)$/i)||raw.match(/^(?:выбери|выбрать|переключись на|переключить на)\s+(?:точку|заведение)\s+(.+)$/i);
   if(m)return {intent:'venue_select',query:clean(m[1])};
+  if(/^[A-F0-9]{4,10}$/i.test(raw))return {intent:'venue_select',query:raw.toUpperCase()};
 
   if(/^(?:покажи|открой|дай)\s+меню$/i.test(raw)||/^меню$/i.test(raw))return {intent:'menu_show'};
   if(/^(?:покажи|дай)\s+категории$/i.test(raw)||/^категории$/i.test(raw))return {intent:'category_show'};
@@ -151,7 +157,7 @@ function helpText(){
     '• <code>заказ 42 готов</code>',
     '• <code>покажи статистику</code>',
     '',
-    'Если заведений несколько: <code>/use SC-MSK-...</code> или <code>выбери точку Лепёшка</code>.'
+    'Если заведений несколько: <code>/use Лепёшка</code>, <code>/use 5E435A</code> или просто отправьте короткий ключ <code>5E435A</code>.'
   ].join('\n');
 }
 
@@ -223,8 +229,17 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
   function chooseByQuery(accesses,query){
     const q=norm(query);
     if(!q)return null;
-    const est=q.toUpperCase().match(/SC-MSK-[A-F0-9]{10}/)?.[0];
+    const upper=clean(query).toUpperCase();
+    const est=upper.match(/SC-MSK-[A-F0-9]{10}/)?.[0];
     if(est)return accesses.find(x=>x.establishment_id===est)||null;
+
+    const byShort=accesses.filter(x=>{
+      const key=venueShortKey(x.establishment_id);
+      return key===upper||String(x.establishment_id||'').toUpperCase().endsWith('-'+upper);
+    });
+    if(byShort.length===1)return byShort[0];
+    if(byShort.length>1)return null;
+
     const exact=accesses.filter(x=>norm(x.name)===q);
     if(exact.length===1)return exact[0];
     const partial=accesses.filter(x=>norm(x.name).includes(q)||q.includes(norm(x.name)));
@@ -237,7 +252,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
 
     if(command.intent==='venue_select'){
       const selected=chooseByQuery(accesses,command.query);
-      if(!selected)return {error:'Не смог однозначно определить заведение.\n\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n'),accesses};
+      if(!selected)return {error:'Не смог однозначно определить заведение.\n\n'+accesses.map(x=>'• '+x.name+' · ключ '+venueShortKey(x.establishment_id)+' · '+x.establishment_id).join('\n'),accesses};
       await setContext(userId,selected.establishment_id);
       return {access:selected,accesses,selected:true};
     }
@@ -249,7 +264,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     const ctx=await currentContext(userId);
     const chosen=accesses.find(x=>x.establishment_id===ctx);
     if(chosen)return {access:chosen,accesses};
-    return {error:'У вас несколько заведений. Сначала выберите активное:\n\n'+accesses.map(x=>'• <code>/use '+x.establishment_id+'</code> — '+x.name).join('\n'),accesses};
+    return {error:'У вас несколько заведений. Сначала выберите активное:\n\n'+accesses.map(x=>'• /use '+venueShortKey(x.establishment_id)+' — '+x.name).join('\n')+'\n\nМожно также написать название заведения или просто короткий ключ.',accesses};
   }
 
   async function loadVenue(est){
@@ -277,14 +292,14 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       const accesses=await accessesFor(user.id);
       if(!accesses.length)return {handled:true,text:'У вас пока нет подключённых заведений.'};
       const ctx=await currentContext(user.id);
-      return {handled:true,text:'🏪 <b>Ваши заведения</b>\n\n'+accesses.map(x=>(x.establishment_id===ctx?'→ ':'• ')+x.name+' · <code>'+x.establishment_id+'</code>').join('\n')};
+      return {handled:true,text:'🏪 <b>Ваши заведения</b>\n\n'+accesses.map(x=>(x.establishment_id===ctx?'→ ':'• ')+x.name+' · ключ '+venueShortKey(x.establishment_id)+' · '+x.establishment_id).join('\n')};
     }
 
     const resolved=await resolveAccess(user.id,command);
     if(resolved.error)return {handled:true,text:resolved.error};
     const access=resolved.access;
     if(command.intent==='venue_select'){
-      return {handled:true,text:'✅ Активная точка: <b>'+access.name+'</b>\n<code>'+access.establishment_id+'</code>'};
+      return {handled:true,text:'✅ Активная точка: <b>'+access.name+'</b>\nКороткий ключ: '+venueShortKey(access.establishment_id)+'\n'+access.establishment_id};
     }
 
     const permission=PERMISSION_BY_INTENT[command.intent];
@@ -466,4 +481,4 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
   return {handle};
 }
 
-module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed};
+module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey};

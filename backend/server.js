@@ -4,7 +4,8 @@ const fs=require('fs');
 const {Pool}=require('pg');
 const crypto=require('crypto');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
-const {discoverMoscowVenues,appearanceFor}=require('./venue-discovery');
+const {appearanceFor}=require('./marker-appearance');
+const catalogCleanup=require('./venue-catalog-cleanup');
 const {installVenueOwner}=require('./venue-owner');
 const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const v2Realtime=require('../v2/backend/src/realtime');
@@ -24,7 +25,6 @@ app.use('/realcity-preview',express.static(path.join(__dirname,'../v2/frontend')
 require('./realcity')(app);
 
 const PORT=process.env.PORT||3000;
-const VENUE_DISCOVERY_ENABLED=process.env.VENUE_DISCOVERY_ENABLED==='true';
 const DB=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
 const DATA_FILE=path.join('/tmp','shaurma-city-orders.json');
 
@@ -35,7 +35,6 @@ function readMapConfig(){
 const MAP_CONFIG=readMapConfig();
 
 
-let discoveryJob=null;
 function queueRealCityProfile(markerId){
  const job=require('../v2/backend/src/realcity-service').queue(markerId);
  job?.catch(()=>{});return job;
@@ -60,22 +59,6 @@ const SEEDED_VENUES=[
   {id:'lep_mors',n:'Морс ягодный',c:'drinks',d:'Холодный домашний морс',p:120},
   {id:'lep_samsa',n:'Самса с курицей',c:'bakery',d:'Горячая и хрустящая',p:160}
  ]},
- {venue_id:'obrucheva',slug:'obrucheva',name:'Шаурма на Обручева',config:{subtitle:'ТЕСТОВОЕ МЕНЮ',builder_enabled:false},menu:[
-  {id:'obr_small',n:'Шаурма мини',c:'shawarma',d:'Курица, томаты, огурцы и чесночный соус',p:230},
-  {id:'obr_big',n:'Шаурма большая',c:'shawarma',d:'Двойная курица, овощи и два соуса',p:390},
-  {id:'obr_spicy',n:'Шаурма острая',c:'shawarma',d:'Курица, халапеньо и острый соус',p:340},
-  {id:'obr_fries',n:'Фри с сырным соусом',c:'extras',d:'Большая хрустящая порция',p:190},
-  {id:'obr_cola',n:'Кола',c:'drinks',d:'Холодная, 0,5 л',p:130},
-  {id:'obr_ayran',n:'Айран',c:'drinks',d:'Освежающий кисломолочный напиток',p:110}
- ]},
- {venue_id:'flotskaya',slug:'flotskaya',name:'Шаурма на Флотской',config:{subtitle:'ТЕСТОВОЕ МЕНЮ',builder_enabled:false},menu:[
-  {id:'flt_classic',n:'Шаверма классика',c:'shawarma',d:'Курица гриль, капуста, томаты и белый соус',p:300},
-  {id:'flt_beef',n:'Шаверма с говядиной',c:'shawarma',d:'Говядина, овощи и соус барбекю',p:420},
-  {id:'flt_plate',n:'Шаурма на тарелке',c:'flatbread',d:'Мясо, овощи, фри и два соуса',p:450},
-  {id:'flt_cheese',n:'Сырные палочки',c:'extras',d:'Пять штук с соусом',p:240},
-  {id:'flt_compote',n:'Компот',c:'drinks',d:'Домашний, 0,5 л',p:100},
-  {id:'flt_cheburek',n:'Чебурек с мясом',c:'bakery',d:'Хрустящий с сочной начинкой',p:180}
- ]}
 ];
 
 const seed={shaurma_orders:[]};
@@ -212,24 +195,6 @@ async function initDb(){
  await DB.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_shaurmeg_markers_source ON shaurmeg_markers(source_provider,source_id) WHERE source_provider<>'' AND source_id<>''");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_category ON shaurmeg_markers(category,is_active)");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurmeg_markers_geo ON shaurmeg_markers(lat,lon)");
- await DB.query(`
-  CREATE TABLE IF NOT EXISTS shaurmeg_discovery_runs(
-    id BIGSERIAL PRIMARY KEY,
-    provider TEXT NOT NULL,
-    region TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'running',
-    reason TEXT NOT NULL DEFAULT 'auto',
-    raw_count INT NOT NULL DEFAULT 0,
-    discovered_count INT NOT NULL DEFAULT 0,
-    inserted_count INT NOT NULL DEFAULT 0,
-    updated_count INT NOT NULL DEFAULT 0,
-    details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    finished_at TIMESTAMPTZ
-  );
-  CREATE INDEX IF NOT EXISTS idx_shaurmeg_discovery_runs_latest ON shaurmeg_discovery_runs(provider,region,started_at DESC);
- `);
- await DB.query("UPDATE shaurmeg_discovery_runs SET status='interrupted',details=COALESCE(details,'{}'::jsonb)||jsonb_build_object('interrupted_at',NOW()),finished_at=NOW() WHERE status='running'");
  await DB.query("UPDATE shaurmeg_markers SET realcity_status='pending' WHERE realcity_profile='{}'::jsonb");
  await DB.query("UPDATE shaurma_orders o SET establishment_id=v.establishment_id FROM shaurma_venues v WHERE o.venue_id=v.venue_id AND (o.establishment_id IS NULL OR o.establishment_id='')");
  await DB.query("CREATE INDEX IF NOT EXISTS idx_shaurma_orders_establishment_created ON shaurma_orders(establishment_id,created_at DESC)");
@@ -274,7 +239,6 @@ async function initDb(){
   );
   CREATE INDEX IF NOT EXISTS idx_venue_audit_establishment ON shaurma_venue_audit(establishment_id,created_at DESC);
  `);
- await DB.query(`DELETE FROM shaurma_venues v WHERE v.venue_id IN ('obrucheva','flotskaya','d92e85a3c6c5') AND NOT EXISTS (SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=v.venue_id)`);
 
  await DB.query(`
   CREATE TABLE IF NOT EXISTS shaurma_users(
@@ -310,183 +274,6 @@ app.get('/api/health',(req,res)=>res.json({ok:true,mode:'shaurma-city',storage:D
 
 
 
-
-function canonicalVenueName(value){
- return String(value||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/gi,' ').replace(/\b(кафе|ресторан|быстрое питание|fast food|точка|киоск)\b/g,' ').replace(/\s+/g,' ').trim();
-}
-function venueNamesLikelySame(a,b){
- const x=canonicalVenueName(a),y=canonicalVenueName(b);if(!x||!y)return false;
- if(x===y||x.includes(y)||y.includes(x))return true;
- const A=new Set(x.split(' ').filter(t=>t.length>2)),B=new Set(y.split(' ').filter(t=>t.length>2));
- let common=0;for(const t of A)if(B.has(t))common++;
- return common>=1&&common/Math.max(1,Math.min(A.size,B.size))>=.67;
-}
-async function findNearbyManualMatch(client,r){
- const latPad=.00036,lonPad=.00058;
- const q=await client.query(`SELECT id,venue_id,name,position_locked,appearance_locked,metadata_locked,source_suppressed,auto_imported
-  FROM shaurmeg_markers
-  WHERE lat BETWEEN $1 AND $2 AND lon BETWEEN $3 AND $4 AND source_provider=''
-  ORDER BY ((lat-$5)*(lat-$5)+(lon-$6)*(lon-$6)) ASC LIMIT 8`,
-  [r.lat-latPad,r.lat+latPad,r.lon-lonPad,r.lon+lonPad,r.lat,r.lon]);
- return q.rows.find(x=>venueNamesLikelySame(x.name,r.name))||null;
-}
-
-async function runMoscowDiscovery({reason='auto'}={}){
- if(!DB)return null;if(discoveryJob)return discoveryJob;
- discoveryJob=(async()=>{
-  let runId=null;
-  try{
-   const run=await DB.query("INSERT INTO shaurmeg_discovery_runs(provider,region,status,reason) VALUES('openstreetmap','moscow','running',$1) RETURNING id",[reason]);
-   runId=run.rows[0].id;
-   const found=await discoverMoscowVenues();
-   const client=await DB.connect();let inserted=0,updated=0;
-   try{
-    await client.query('BEGIN');
-    for(const r of found.records){
-     await client.query(`
-      INSERT INTO shaurma_venues(venue_id,slug,name,is_active,config,menu,establishment_id)
-      VALUES($1,$1,$2,TRUE,$3::jsonb,'[]'::jsonb,$4)
-      ON CONFLICT(venue_id) DO UPDATE SET
-       establishment_id=COALESCE(shaurma_venues.establishment_id,EXCLUDED.establishment_id),
-       name=CASE WHEN EXISTS(SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=$1 AND m.metadata_locked=TRUE) THEN shaurma_venues.name ELSE EXCLUDED.name END,
-       is_active=CASE WHEN EXISTS(SELECT 1 FROM shaurmeg_markers m WHERE m.venue_id=$1 AND m.source_suppressed=TRUE) THEN FALSE ELSE TRUE END,
-       updated_at=NOW()
-     `,[r.venue_id,r.name,JSON.stringify({subtitle:'ЗАВЕДЕНИЕ НА КАРТЕ',builder_enabled:false,source:'openstreetmap'}),establishmentIdForVenue(r.venue_id)]);
-     const existing=await client.query("SELECT id,position_locked,appearance_locked,metadata_locked,source_suppressed FROM shaurmeg_markers WHERE source_provider=$1 AND source_id=$2 LIMIT 1",['openstreetmap',r.source_id]);
-     let attachedManual=null;
-     if(!existing.rows[0])attachedManual=await findNearbyManualMatch(client,r);
-     if(attachedManual){
-      await client.query(`UPDATE shaurmeg_markers SET source_provider='openstreetmap',source_id=$2,source_data=$3::jsonb,source_first_seen_at=COALESCE(source_first_seen_at,NOW()),source_last_seen_at=NOW(),source_checked_at=NOW(),verification_details=verification_details||$4::jsonb,relevance_score=GREATEST(relevance_score,$5),updated_at=NOW() WHERE id=$1`,
-       [attachedManual.id,r.source_id,JSON.stringify(r.source_data),JSON.stringify({linked_source:r.verification_details}),r.relevance_score]);
-      updated++;
-     }else if(existing.rows[0]){
-      const x=existing.rows[0];
-      await client.query(`
-       UPDATE shaurmeg_markers SET
-        name=CASE WHEN metadata_locked THEN name ELSE $3 END,
-        address=CASE WHEN metadata_locked THEN address ELSE $4 END,
-        description=CASE WHEN metadata_locked THEN description ELSE $5 END,
-        hours=CASE WHEN metadata_locked THEN hours ELSE $6 END,
-        lat=CASE WHEN position_locked THEN lat ELSE $7 END,
-        lon=CASE WHEN position_locked THEN lon ELSE $8 END,
-        category=$9,
-        marker_style=CASE WHEN appearance_locked THEN marker_style ELSE $10::jsonb END,
-        source_data=$11::jsonb,
-        source_last_seen_at=NOW(),source_checked_at=NOW(),
-        verification_status=CASE WHEN verification_status='manual_verified' THEN verification_status ELSE $12 END,
-        verification_score=CASE WHEN verification_status='manual_verified' THEN verification_score ELSE $13 END,
-        verification_details=CASE WHEN verification_status='manual_verified' THEN verification_details ELSE $14::jsonb END,
-        relevance_score=$15,
-        auto_imported=TRUE,
-        is_active=CASE WHEN source_suppressed THEN FALSE ELSE TRUE END,
-        updated_at=NOW()
-       WHERE id=$1
-      `,[x.id,r.venue_id,r.name,r.address,r.description,r.hours,r.lat,r.lon,r.category,JSON.stringify(r.marker_style),JSON.stringify(r.source_data),r.verification_status,r.verification_score,JSON.stringify(r.verification_details),r.relevance_score]);
-      updated++;
-     }else{
-      await client.query(`
-       INSERT INTO shaurmeg_markers(
-        venue_id,establishment_id,name,address,description,lat,lon,hours,category,marker_style,
-        source_provider,source_id,source_data,source_first_seen_at,source_last_seen_at,source_checked_at,
-        verification_status,verification_score,verification_details,relevance_score,auto_imported,
-        realcity_status,realcity_quality,is_active
-       ) VALUES($1,$16,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,'openstreetmap',$10,$11::jsonb,NOW(),NOW(),NOW(),$12,$13,$14::jsonb,$15,TRUE,'pending','heuristic',TRUE)
-      `,[r.venue_id,r.name,r.address,r.description,r.lat,r.lon,r.hours,r.category,JSON.stringify(r.marker_style),r.source_id,JSON.stringify(r.source_data),r.verification_status,r.verification_score,JSON.stringify(r.verification_details),r.relevance_score,establishmentIdForVenue(r.venue_id)]);
-      inserted++;
-     }
-    }
-    await client.query('COMMIT');
-   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
-   await DB.query("UPDATE shaurmeg_discovery_runs SET status='ready',raw_count=$2,discovered_count=$3,inserted_count=$4,updated_count=$5,details=$6::jsonb,finished_at=NOW() WHERE id=$1",[runId,found.raw_count,found.count,inserted,updated,JSON.stringify({scope:found.scope,categories:found.counts,queried_at:found.queried_at,coverage:found.coverage??1,failed_cells:found.failed_cells||[]})]);
-   console.log('Moscow discovery ready:',found.count,'inserted',inserted,'updated',updated);
-   return {count:found.count,inserted,updated,categories:found.counts};
-  }catch(e){
-   console.error('Moscow discovery:',e.message);
-   if(runId)await DB.query("UPDATE shaurmeg_discovery_runs SET status='failed',details=$2::jsonb,finished_at=NOW() WHERE id=$1",[runId,JSON.stringify({error:e.message})]).catch(()=>{});
-   throw e;
-  }
- })().finally(()=>{discoveryJob=null});
- return discoveryJob;
-}
-async function maybeAutoDiscoverMoscow(reason='startup'){
- if(!VENUE_DISCOVERY_ENABLED||!DB||discoveryJob)return;
- try{
-  const q=await DB.query("SELECT finished_at FROM shaurmeg_discovery_runs WHERE provider='openstreetmap' AND region='moscow' AND status='ready' ORDER BY finished_at DESC LIMIT 1");
-  const last=q.rows[0]?.finished_at?new Date(q.rows[0].finished_at).getTime():0;
-  if(last&&Date.now()-last<20*60*60*1000)return;
-  runMoscowDiscovery({reason}).catch(()=>{});
- }catch(e){console.error('Auto discovery check:',e.message)}
-}
-
-const PURGE_VENUES_MIGRATION='2026-09-24_keep_only_mak_and_lepyoshka_v1';
-async function purgeRemovedVenueRecordsOnce(){
- if(!DB)return;
- await DB.query(`CREATE TABLE IF NOT EXISTS shaurma_migrations(
-   migration_key TEXT PRIMARY KEY,
-   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-   details JSONB NOT NULL DEFAULT '{}'::jsonb
- )`);
- const done=await DB.query('SELECT 1 FROM shaurma_migrations WHERE migration_key=$1 LIMIT 1',[PURGE_VENUES_MIGRATION]);
- if(done.rows[0])return;
-
- const keepIds=['SC-MSK-5E435A0F67','SC-MSK-B7441AB59F'];
- const keep=await DB.query(
-   'SELECT establishment_id,venue_id,name FROM shaurma_venues WHERE establishment_id=ANY($1::text[]) ORDER BY establishment_id',
-   [keepIds]
- );
- if(keep.rows.length!==2){
-   throw new Error('venue_purge_aborted_keep_set_incomplete:'+JSON.stringify(keep.rows.map(x=>x.establishment_id)));
- }
-
- const client=await DB.connect();
- try{
-   await client.query('BEGIN');
-
-   const removed=await client.query(
-     'SELECT establishment_id,venue_id,name FROM shaurma_venues WHERE NOT (establishment_id=ANY($1::text[])) ORDER BY venue_id',
-     [keepIds]
-   );
-   const removedEst=removed.rows.map(x=>x.establishment_id).filter(Boolean);
-
-   const markerDel=await client.query(
-     'DELETE FROM shaurmeg_markers WHERE NOT (establishment_id=ANY($1::text[]))',
-     [keepIds]
-   );
-
-   let auditCount=0;
-   if(removedEst.length){
-     const auditDel=await client.query(
-       'DELETE FROM shaurma_venue_audit WHERE establishment_id=ANY($1::text[])',
-       [removedEst]
-     );
-     auditCount=auditDel.rowCount||0;
-   }
-
-   const venueDel=await client.query(
-     'DELETE FROM shaurma_venues WHERE NOT (establishment_id=ANY($1::text[]))',
-     [keepIds]
-   );
-
-   await client.query(
-     'INSERT INTO shaurma_migrations(migration_key,details) VALUES($1,$2::jsonb)',
-     [PURGE_VENUES_MIGRATION,JSON.stringify({
-       kept:keep.rows,
-       removed_venues:removed.rows,
-       deleted_venues:venueDel.rowCount||0,
-       deleted_markers:markerDel.rowCount||0,
-       deleted_audit_rows:auditCount,
-       historical_orders_preserved:true
-     })]
-   );
-   await client.query('COMMIT');
-   console.log('Venue purge complete · kept 2 · removed venues',venueDel.rowCount||0,'markers',markerDel.rowCount||0,'audit',auditCount,'orders preserved');
- }catch(e){
-   await client.query('ROLLBACK').catch(()=>{});
-   throw e;
- }finally{
-   client.release();
- }
-}
 
 const ownerClients=new Set();
 const telegramClients=new Map();
@@ -1488,21 +1275,18 @@ app.get('/api/shaurmeg/catalog-stats',async(req,res)=>{
  res.setHeader('Cache-Control','no-store');
  if(!DB)return res.json({total:0});
  try{
-  const [total,cats,verify,run]=await Promise.all([
+  const [total,cats,verify]=await Promise.all([
     DB.query("SELECT COUNT(*)::int total FROM shaurmeg_markers WHERE is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE"),
     DB.query("SELECT category,COUNT(*)::int count FROM shaurmeg_markers WHERE is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE GROUP BY category ORDER BY count DESC"),
-    DB.query("SELECT verification_status,COUNT(*)::int count FROM shaurmeg_markers WHERE is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE GROUP BY verification_status ORDER BY count DESC"),
-    DB.query("SELECT id,provider,region,status,reason,raw_count,discovered_count,inserted_count,updated_count,details,started_at,finished_at FROM shaurmeg_discovery_runs ORDER BY started_at DESC LIMIT 1")
+    DB.query("SELECT verification_status,COUNT(*)::int count FROM shaurmeg_markers WHERE is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE GROUP BY verification_status ORDER BY count DESC")
   ]);
-  res.json({total:total.rows[0]?.total||0,categories:cats.rows,verification:verify.rows,last_run:run.rows[0]||null});
+  res.json({total:total.rows[0]?.total||0,categories:cats.rows,verification:verify.rows,last_run:null});
  }catch(e){res.status(500).json({error:'catalog_stats_failed'})}
 });
 
 app.post('/api/shaurmeg/admin/discovery/moscow',async(req,res)=>{
  if(!ownerOk(req))return res.sendStatus(401);
- if(!VENUE_DISCOVERY_ENABLED)return res.status(409).json({error:'discovery_disabled',message:'Каталог зафиксирован. Новые точки добавляются вручную.'});
- const promise=runMoscowDiscovery({reason:'manual'});res.status(202).json({ok:true,running:true});
- promise.catch(()=>{});
+ return res.status(409).json({error:'discovery_disabled',message:'Автоматический импорт удалён. Новые точки добавляются вручную.'});
 });
 
 require('../v2/backend/src/realcity-studio').install(app,{db:DB,authorize:ownerOk,manifest:astraManifest,normalizeAssets:normalizeAstraRealCityAssets,normalizeConfig:normalizeAstraRealCityConfig,readiness:astraReadiness});
@@ -2132,4 +1916,4 @@ v2Telegram.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await purgeRemovedVenueRecordsOnce();await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');if(VENUE_DISCOVERY_ENABLED){maybeAutoDiscoverMoscow('startup');setInterval(()=>maybeAutoDiscoverMoscow('interval'),6*60*60*1000).unref?.()}else console.log('Moscow discovery disabled · catalog frozen')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>console.log('Shaurma City API on '+PORT)));

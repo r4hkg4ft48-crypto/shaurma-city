@@ -65,7 +65,7 @@ async function load({quiet=false}={}){
   const revision=++loadRevision,requestedEst=est;
   if(!quiet)setSync('Синхронизация…');
   const response=await call('/venue-owner/establishments/'+encodeURIComponent(requestedEst));if(revision!==loadRevision||requestedEst!==est)return;data=response;dirty=false;menuDirty=false;designDirty=false;$('#view-design').dataset.establishment=est;menu=(data.menu||[]).map(x=>({...x}));sections=(data.sections_all||data.sections||data.config?.menu_sections||[]).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));
-  if(!currentCategory||!activeSections().some(x=>x.id===currentCategory))currentCategory=activeSections()[0]?.id||'';
+  const selectable=MASTER?sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)):activeSections();if(!currentCategory||!selectable.some(x=>x.id===currentCategory))currentCategory=selectable[0]?.id||'';
   hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();renderGuestPreview();connect();setSync()
 }
 function setView(v){
@@ -110,7 +110,7 @@ function renderCategoryEditor(id){
   currentCategory=id;hydrateHeader();const cover=imageOf(s)||imageOf(menu.find(x=>x.c===id)),gallery=Array.isArray(s.gallery)?s.gallery:[];
   $('#categoryEditor').innerHTML='<section class="categoryEditor">'+
    '<div class="categoryEditorHero">'+(cover?'<img src="'+esc(cover)+'">':'')+'<div class="catHeroActions"><button class="darkPhotoBtn" data-cat-move="-1">↑ Выше</button><button class="darkPhotoBtn" data-cat-move="1">↓ Ниже</button><button class="darkPhotoBtn" data-cat-photo>▣ Изменить фото</button><input id="catPhotoInput" type="file" accept="image/*" hidden></div></div>'+
-   '<div class="categoryEditorTop"><div class="catMiniPhoto">'+(cover?'<img src="'+esc(cover)+'">':'')+'</div><div><h2>'+esc(s.name)+'</h2><p>Настройте параметры и наполнение категории</p></div>'+ (MASTER?'<label class="lockedSwitch">Доступна гостям <input id="catActive" type="checkbox" '+(s.active!==false?'checked':'')+'></label>':'<div class="lockedSwitch">Категория активна <span class="switch"></span></div>')+'</div>'+
+   '<div class="categoryEditorTop"><div class="catMiniPhoto">'+(cover?'<img src="'+esc(cover)+'">':'')+'</div><div><h2>'+esc(s.name)+'</h2><p>Настройте параметры и наполнение категории</p></div>'+ (MASTER?'<label class="lockedSwitch categoryAvailability"><span>Доступна гостям</span><input id="catActive" aria-label="Доступность категории для гостей" type="checkbox" '+(s.active!==false?'checked':'')+'></label>':'<div class="lockedSwitch">Категория активна <span class="switch"></span></div>')+'</div>'+
    '<div class="catFields"><div class="fieldGrid"><label class="field"><b>Название категории</b><input id="catName" value="'+esc(s.name)+'"></label><label class="field"><b>Короткая подпись</b><input id="catSubtitle" value="'+esc(s.subtitle||'')+'" placeholder="Например: свежо с гриля"></label></div></div>'+
    '<div class="settingGrid">'+
      '<div class="settingCard"><div class="blockTitle"><b>Доступные виды мяса</b><span>параметры</span></div>'+visualSettings(s,'meats')+settingsPills(s,'meats')+'</div>'+
@@ -255,7 +255,7 @@ function bind(){
     if(e.target.closest('[data-cat-photo]'))return $('#catPhotoInput').click();
     if(e.target.closest('[data-save-cat]'))return saveCategory();
   };
-  $('#categoryEditor').onchange=e=>{if(e.target.id==='catPhotoInput'&&e.target.files?.[0])catPhoto(e.target.files[0]).catch(x=>toast(x.message));if(e.target.id==='catGalleryInput'&&e.target.files?.length)catGallery(e.target.files).catch(x=>toast(x.message))};
+  $('#categoryEditor').onchange=async e=>{if(e.target.id==='catActive'&&MASTER){if(busy)return;syncCategoryDraft();markMenuDirty();const input=e.target;input.disabled=true;await saveMenu(input.checked?'Категория включена ✓':'Категория выключена ✓');input.disabled=false;return}if(e.target.id==='catPhotoInput'&&e.target.files?.[0])catPhoto(e.target.files[0]).catch(x=>toast(x.message));if(e.target.id==='catGalleryInput'&&e.target.files?.length)catGallery(e.target.files).catch(x=>toast(x.message))};
   $('#itemSearch').oninput=renderItems;$('#itemCategoryFilter').onchange=renderItems;$('#newItemBtn').onclick=newItem;$('#itemsGrid').onclick=e=>{let b=e.target.closest('[data-move-item]');if(b)return moveItem(Number(b.dataset.index),Number(b.dataset.moveItem));b=e.target.closest('[data-edit-item]');if(b)openEdit(b.dataset.editItem)};
   $('#itemEditorBack').onclick=closeItemEditor;$('#deleteItemBtn').onclick=deleteItem;
   $('#itemEditorBody').onclick=e=>{

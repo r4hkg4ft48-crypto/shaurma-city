@@ -59,7 +59,10 @@ test('clarifies ambiguous item before executing and accepts ordinal reply',async
       }
       if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
         const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
-        if(m)ctx[m[1]]=args[1];
+        if(m){
+          const key=m[1];
+          ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+        }
         return {rows:[]};
       }
       if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:aliases.filter(x=>x.entity_type===args[1])};
@@ -94,7 +97,7 @@ test('ambiguous remove action asks whether to hide or mark unavailable',async()=
   const DB={async query(sql,args=[]){
     if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
     if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
-    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);if(m)ctx[m[1]]=args[1];return {rows:[]}}
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);if(m){const key=m[1];ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1]}return {rows:[]}}
     if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
     throw new Error('Unexpected SQL in mock: '+sql);
   }};

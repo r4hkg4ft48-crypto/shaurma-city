@@ -181,6 +181,11 @@ function inferFreeform(text){
   const raw=clean(text),s=normalize(raw);let m;
   if(!raw)return null;
 
+  if(/^(?:где мы|что выбрано|что сейчас выбрано|текущий контекст|контекст)$/i.test(raw))return {kind:'context_status'};
+  if(/^(?:назад|вернись назад|на уровень выше|выйди назад)$/i.test(raw))return {kind:'back'};
+  if(/^(?:к категориям|к разделам|в корень меню|корень меню)$/i.test(raw))return {kind:'menu_root'};
+  if(/^(?:что здесь|покажи блюда|покажи позиции|что в этом разделе)$/i.test(raw))return {kind:'list_here'};
+
   m=raw.match(/^(?:найди|открой|выбери|давай|перейди к)\s+(?:блюдо|позицию|товар)?\s*(.+)$/i);
   if(m)return {kind:'navigate_item',query:clean(m[1])};
 
@@ -283,7 +288,7 @@ function createVenueDialogAgent({DB,commandBus}){
       let score=0,source='';
       for(const n of names){const s=similarity(query,n);if(s>score){score=s;source=n}}
       score=Math.max(score,similarity(query,itemText(item,section?.name||''))*.82);
-      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,source,type:'item'};
+      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,source,type:'item',category_id:String(item.c||item.category||'')};
     }).filter(x=>x.score>=.35).sort((a,b)=>b.score-a.score).slice(0,8);
   }
   async function rankCategories(venue,query){
@@ -305,7 +310,7 @@ function createVenueDialogAgent({DB,commandBus}){
   }
   async function ask(userId,kind,payload,candidates,title){
     const token=token8();
-    const list=candidates.slice(0,6).map(x=>({id:x.id,label:x.label,type:x.type||kind,score:x.score,command:x.command||null}));
+    const list=candidates.slice(0,6).map(x=>({id:x.id,label:x.label,type:x.type||kind,score:x.score,command:x.command||null,category_id:x.category_id||''}));
     await patchContext(userId,{pending_kind:kind,pending_payload:{...(payload||{}),token},pending_candidates:list});
     return {handled:true,text:clarifyText(title,list),reply_markup:candidateButtons(token,list)};
   }
@@ -513,7 +518,7 @@ function createVenueDialogAgent({DB,commandBus}){
 
     if(kind==='item_select'){
       await clearPending(user.id);
-      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null});
+      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
       const cmd=payload.command;
       if(payload.alias){
         const active=await activeVenue(user);
@@ -599,6 +604,58 @@ function createVenueDialogAgent({DB,commandBus}){
     const {venue,ctx}=active;
 
     const free=parsed.intent==='unknown'?inferFreeform(raw):null;
+
+    if(free?.kind==='context_status'){
+      const secs=sections(venue);
+      const item=currentItem(venue,ctx);
+      const cat=secs.find(x=>String(x.id)===String(ctx.selected_category_id||item?.c||item?.category||''));
+      const group=currentGroup(item,ctx);
+      return {handled:true,text:[
+        'Сейчас выбрано:',
+        'Точка: '+String(venue.name),
+        'Раздел: '+String(cat?.name||'—'),
+        'Позиция: '+String(item?.n||item?.name||'—'),
+        'Группа выбора: '+String(group?.name||'—')
+      ].join('\n')};
+    }
+
+    if(free?.kind==='menu_root'){
+      await patchContext(user.id,{selected_category_id:null,selected_item_id:null,selected_group_id:null});
+      return commandBus.handle({user,text:'покажи категории'});
+    }
+
+    if(free?.kind==='list_here'){
+      const item=currentItem(venue,ctx);
+      if(item)return commandBus.handle({user,text:'покажи настройки позиции'});
+      if(ctx.selected_category_id){
+        const sec=sections(venue).find(x=>String(x.id)===String(ctx.selected_category_id));
+        const items=(venue.menu||[]).filter(x=>String(x.c||x.category||'')===String(ctx.selected_category_id)&&x.active!==false);
+        return {handled:true,text:'Раздел «'+String(sec?.name||ctx.selected_category_id)+'»:\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'Пока пусто.')};
+      }
+      return commandBus.handle({user,text:'покажи категории'});
+    }
+
+    if(free?.kind==='back'){
+      const item=currentItem(venue,ctx);
+      if(ctx.selected_group_id&&item){
+        await patchContext(user.id,{selected_group_id:null});
+        return commandBus.handle({user,text:'покажи настройки позиции'});
+      }
+      if(item){
+        const categoryId=String(ctx.selected_category_id||item.c||item.category||'');
+        await patchContext(user.id,{selected_item_id:null,selected_group_id:null,selected_category_id:categoryId||null});
+        if(categoryId){
+          const sec=sections(venue).find(x=>String(x.id)===categoryId);
+          const items=(venue.menu||[]).filter(x=>String(x.c||x.category||'')===categoryId&&x.active!==false);
+          return {handled:true,text:'Вернулись в раздел «'+String(sec?.name||categoryId)+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'Пока пусто.')};
+        }
+      }
+      if(ctx.selected_category_id){
+        await patchContext(user.id,{selected_category_id:null,selected_item_id:null,selected_group_id:null});
+        return commandBus.handle({user,text:'покажи категории'});
+      }
+      return {handled:true,text:'Вы уже на верхнем уровне точки «'+String(venue.name)+'». Напишите «мои заведения», чтобы переключить точку.'};
+    }
     if(free?.kind==='alias'){
       const itemRank=await rankItems(venue,free.target),catRank=await rankCategories(venue,free.target);
       const ih=decisive(itemRank),ch=decisive(catRank);
@@ -633,7 +690,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const itemRank=await rankItems(venue,query),catRank=await rankCategories(venue,query);
       const ih=decisive(itemRank),ch=decisive(catRank);
       if(ih&&(!ch||ih.score>ch.score+.08)){
-        await patchContext(user.id,{selected_item_id:ih.id,selected_group_id:null});
+        await patchContext(user.id,{selected_item_id:ih.id,selected_group_id:null,...(ih.category_id?{selected_category_id:ih.category_id}:{})});
         return commandBus.handle({user,text:'работаем с '+ih.label});
       }
       if(ch&&(!ih||ch.score>ih.score+.08)){
@@ -657,7 +714,7 @@ function createVenueDialogAgent({DB,commandBus}){
           const picked=await chooseItem(user,venue,q,{command},'Какую именно позицию изменить?');
           if(picked.error)return {handled:true,text:picked.error};
           if(picked.ask)return picked.ask;
-          await patchContext(user.id,{selected_item_id:picked.item.id,selected_group_id:null});
+          await patchContext(user.id,{selected_item_id:picked.item.id,selected_group_id:null,...(picked.item.category_id?{selected_category_id:picked.item.category_id}:{})});
           const fresh=await context(user.id);
           const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
           if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};

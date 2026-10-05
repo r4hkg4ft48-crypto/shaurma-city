@@ -460,14 +460,26 @@ async function handleKitchenVoice(msg){
   if(!config.OPENAI_API_KEY){
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
-      text:'🎙 Голосовой помощник подключён в приложении, но на сервере ещё не задан OPENAI_API_KEY для распознавания речи.'
+      text:'🎙 Логика голосового управления уже использует тот же диалоговый агент, что и текст. Сейчас серверное распознавание речи отключено без OPENAI_API_KEY. Текстовое управление работает полностью бесплатно; позже подключим локальное распознавание речи без API.'
     });
   }
   try{await call(config.KITCHEN_BOT_TOKEN,'sendChatAction',{chat_id:chatId,action:'typing'})}catch{}
   try{
     const transcript=await transcribeKitchenVoice(msg);
-    const intent=await aiKitchenIntent(transcript);
-    return executeKitchenVoice(msg,transcript,intent);
+    const localIntent=voice.parseLocalIntent(transcript);
+    if(localIntent.intent!=='unknown')return executeKitchenVoice(msg,transcript,localIntent);
+
+    const result=await venueDialogAgent.handle({user:msg?.from,text:transcript});
+    if(result?.handled){
+      const text='🎙 Услышал: «'+String(transcript).slice(0,500)+'»\n\n'+String(result.text||'');
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+        chat_id:chatId,
+        text:text.replace(/<\/?(?:b|code)>/gi,'').slice(0,3900),
+        disable_web_page_preview:true,
+        ...(result.reply_markup?{reply_markup:result.reply_markup}:{})
+      });
+    }
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'🎙 Услышал: «'+String(transcript).slice(0,500)+'»\n\nНе уверен, что понял запрос. Ничего не меняю.'});
   }catch(e){
     console.error('kitchen voice',e.message);
     const tooLarge=e.message==='voice_file_too_large';

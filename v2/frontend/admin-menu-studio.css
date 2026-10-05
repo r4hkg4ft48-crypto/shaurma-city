@@ -34,3 +34,117 @@ body{margin:0;min-height:100vh;background:#edf2f7}button,input,select,textarea{f
 @media(max-width:480px){
  .heroCopy{align-items:flex-end}.syncCard{position:absolute;right:0;bottom:-2px;max-width:155px}.syncCard small{display:none}.heroCopy p{max-width:62%}.categoryRow{grid-template-columns:98px 1fr 38px}.categoryPhoto{height:66px}.categoryCopy p{font-size:11px}.categoryCopy h3{font-size:15px}.stateChip{font-size:9px;padding:4px 7px}.itemsGrid{grid-template-columns:1fr}.itemCardPhoto{height:190px}.fieldGrid{grid-template-columns:1fr}.field.wide{grid-column:auto}.optionCards{grid-template-columns:repeat(5,86px)}.themePresets{grid-template-columns:1fr 1fr}.heroTopTitle{font-size:16px}
 }
+/* ===== Shaurmeg Kitchen Studio · world-class dark layer ===== */
+:root{--k-bg:#050a10;--k-surface:#0a1622;--k-surface2:#0e1d2b;--k-line:rgba(255,255,255,.09);--k-text:#f5f8fb;--k-muted:#8ea1b5;--k-red:#ff3b43;--k-red2:#ff684a;--k-green:#29d18b}
+html{background:var(--k-bg)}
+body{color:var(--k-text);background:
+radial-gradient(circle at 18% -6%,rgba(255,59,67,.18),transparent 28%),
+radial-gradient(circle at 86% 6%,rgba(42,119,174,.18),transparent 30%),
+linear-gradient(180deg,#07111b,#050a10 42%,#03070b)}
+.studio{max-width:1180px;background:transparent}
+.studioHero{
+ min-height:338px;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px 0;
+ background:
+ linear-gradient(90deg,rgba(4,9,14,.94),rgba(4,9,14,.38)),
+ linear-gradient(180deg,rgba(4,9,14,.08),rgba(4,9,14,.88)),
+ url("assets/menu-shawarma.webp") 95% 42%/470px auto no-repeat,
+ #081521;
+ border-bottom:1px solid var(--k-line)
+}
+.studioHero:before{background:radial-gradient(circle at 84% 12%,rgba(255,73,61,.20),transparent 31%),linear-gradient(180deg,rgba(4,15,25,.05),rgba(4,12,20,.83))}
+.heroShade{background:linear-gradient(180deg,transparent 30%,#050b12)}
+.heroTopTitle{font-size:18px;letter-spacing:-.02em}
+.backBtn{background:rgba(9,19,29,.72);border:1px solid var(--k-line);box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.venueSelect{background:rgba(8,19,30,.88);border-color:var(--k-line);min-height:44px}
+.heroMeta span{background:rgba(8,19,30,.76);border:1px solid var(--k-line);color:#dce5ed}
+.venueChip:before{background:var(--k-red);box-shadow:0 0 14px rgba(255,59,67,.55)}
+.heroCopy h1{font-size:48px;letter-spacing:-.055em;color:#fff}
+.heroCopy p{color:#aebdca}
+.syncCard{background:rgba(8,20,31,.88);border-color:var(--k-line);box-shadow:0 12px 34px rgba(0,0,0,.18)}
+.studioTabs{gap:6px}
+.studioTabs button{background:rgba(8,19,30,.70);border:1px solid var(--k-line);color:#a8b8c6}
+.studioTabs button.active{background:linear-gradient(135deg,#ff3038,#ff6248);box-shadow:0 12px 28px rgba(255,47,55,.23)}
+.studioMain{background:transparent;min-height:calc(100vh - 300px);padding:14px 14px calc(100px + var(--safe-b))}
+.searchBox,.filterBtn,.filterSelect{
+ background:#081522;border-color:var(--k-line);color:#f2f6fa;box-shadow:none
+}
+.searchBox input{color:#f2f6fa}.searchBox input::placeholder{color:#61778c}.searchBox span{color:#7791a7}
+.categoryRow{
+ background:linear-gradient(180deg,#0c1926,#08131e);
+ border-color:var(--k-line);box-shadow:0 10px 28px rgba(0,0,0,.14);color:#fff
+}
+.categoryRow.activeSelection{outline:2px solid var(--k-red);box-shadow:0 0 0 1px rgba(255,59,67,.12),0 14px 36px rgba(0,0,0,.24)}
+.categoryPhoto{background:#0e2030}.categoryCopy h3{color:#fff}.categoryCopy p{color:var(--k-muted)}
+.stateChip{background:rgba(41,209,139,.10);color:#69dda7}.stateChip.sync{background:rgba(89,151,219,.10);color:#8dbbf0}.stateChip.off{background:rgba(255,255,255,.04);color:#7f8b97}
+.rowArrow{background:#101f2d;color:#d9e7f2;border:1px solid var(--k-line)}
+.categoryEditor{
+ border:1px solid rgba(255,63,70,.32);background:#08131e;box-shadow:0 24px 60px rgba(0,0,0,.33)
+}
+.categoryEditorHero{background:#0d2030}.categoryEditorHero:after{background:linear-gradient(180deg,transparent 30%,rgba(3,8,13,.92))}
+.darkPhotoBtn{background:rgba(5,12,20,.86);border-color:rgba(255,255,255,.14)}
+.categoryEditorTop h2{color:#fff}.categoryEditorTop p{color:var(--k-muted)}.catMiniPhoto{background:#102232}
+.lockedSwitch{background:rgba(41,209,139,.10);color:#6fe0ac}
+.catFields{color:#fff}.field b,.blockTitle b{color:#dbe6ef}
+.field input,.field select,.field textarea{
+ border-color:var(--k-line);background:#07131e;color:#f4f7fa
+}
+.settingCard,.toggleRow{
+ background:#0a1723;border-color:var(--k-line);color:#f0f5f8
+}
+.blockTitle span,.toggleRow small{color:var(--k-muted)}
+.pill{border-color:rgba(255,92,84,.20);background:rgba(255,59,67,.08);color:#ff8d86}
+.pill.gray{background:#0d1d2b;border-color:var(--k-line);color:#9db0c1}.addPill{border-color:#4d6579;background:#091623;color:#bdd0df}
+.visualOption{background:#091623;border-color:var(--k-line);color:#fff}.visualOption.selected{border-color:var(--k-red);background:rgba(255,59,67,.08)}
+.colorChoice{color:#dfe9f1}.galleryTile{border-color:var(--k-line);background:#0c1d2b}.galleryAdd{background:#091623;border-color:#50677b;color:#b9ccdc}
+.saveBar{background:linear-gradient(135deg,#ff3038,#ff684a);box-shadow:0 13px 32px rgba(255,49,57,.24)}
+.itemsTop small,.designHead small{color:#ff7b72}.itemsTop h2,.designHead h2{color:#fff}
+.redBtn{background:linear-gradient(135deg,#ff3038,#ff6549);box-shadow:0 10px 26px rgba(255,54,60,.20)}
+.itemsSummary span{background:#081522;border-color:var(--k-line);color:#91a6b8}
+.itemCard{
+ background:linear-gradient(180deg,#0b1825,#07131e);border-color:var(--k-line);
+ box-shadow:0 12px 32px rgba(0,0,0,.20);color:#fff
+}
+.itemCardPhoto{background:#102332}.itemBadge{background:rgba(5,13,21,.82);border:1px solid rgba(255,255,255,.10)}
+.itemCardBody h3{color:#fff}.itemCardBody p{color:var(--k-muted)}.itemMeta span{background:#102130;color:#9db2c5}
+.itemEdit{background:#102130;color:#d9e7f1;border:1px solid var(--k-line)}
+.designPanel{
+ background:linear-gradient(180deg,#0c1926,#07131e);border-color:var(--k-line);box-shadow:0 22px 55px rgba(0,0,0,.26);color:#fff
+}
+.designHead p{color:var(--k-muted)}.liveBadge{background:rgba(41,209,139,.10);color:#70dfad}
+.themePresets button{background:#091622;border-color:var(--k-line);color:#dbe5ee}
+.designGrid label{color:#dce6ee}.designGrid input,.designGrid select{background:#07131e;border-color:var(--k-line);color:#fff}
+.guestPreview{background:#03080d;border:1px solid var(--k-line);box-shadow:0 18px 45px rgba(0,0,0,.28)}
+.itemEditor{background:
+ radial-gradient(circle at 80% 0,rgba(255,59,67,.13),transparent 26%),
+ #050b12}
+.itemEditorTop{background:rgba(5,11,18,.94);border-bottom:1px solid var(--k-line);backdrop-filter:blur(18px)}
+.backBtn.dark{background:#0c1a27;color:#fff;border:1px solid var(--k-line)}
+.deleteLink{color:#ff8f91}
+.itemHero{background:#0b1d2b}.itemHero:after{content:"";position:absolute;inset:40% 0 0;background:linear-gradient(180deg,transparent,rgba(4,10,16,.58));pointer-events:none}
+.changePhotoBtn{z-index:2;background:rgba(4,11,18,.82)!important;color:#fff!important;border-color:rgba(255,255,255,.14)!important}
+.itemCanvas{background:transparent!important;color:#fff!important}
+.itemBasics,.itemSection{background:#0a1723!important;border:1px solid var(--k-line)!important;color:#fff!important;box-shadow:none!important}
+.itemSectionHead{border-bottom-color:var(--k-line)!important}.itemSectionHead b{color:#fff!important}.itemSectionHead small{color:var(--k-muted)!important}
+.optionCard{background:#07131e!important;border-color:var(--k-line)!important;color:#fff!important}.optionCard.default{border-color:rgba(255,70,74,.45)!important}
+.optionCard input{background:#0c1b28!important;color:#fff!important;border-color:var(--k-line)!important}
+.optActions button,.addOptionCard{background:#0d1d2b!important;color:#d8e6f1!important;border-color:var(--k-line)!important}
+.stickySave{background:rgba(5,11,18,.92)!important;border-top:1px solid var(--k-line)!important;backdrop-filter:blur(18px)}
+.previewBtn{background:#0b1926!important;color:#e5eef5!important;border-color:var(--k-line)!important}
+.saveItemBtn{background:linear-gradient(135deg,#ff3038,#ff6549)!important;color:#fff!important}
+.gate{background:radial-gradient(circle at 50% 0,rgba(255,59,67,.17),transparent 35%),#050b12}
+.gateCard{background:#0b1824;border-color:var(--k-line);color:#fff;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.gateCard small{color:#ff7b72}.gateCard p{color:var(--k-muted)}.gateCard input{background:#07131e;border-color:var(--k-line);color:#fff}
+.toast{background:#0b1824;border:1px solid var(--k-line);color:#fff}
+@media(max-width:720px){
+ .studioHero{min-height:360px;background-size:350px auto}
+ .heroCopy{align-items:flex-start;flex-direction:column}.heroCopy h1{font-size:40px}.syncCard{min-width:0}
+ .categoryRow{grid-template-columns:100px 1fr 42px}.categoryPhoto{height:76px}
+}
+@media(max-width:520px){
+ .studioHero{padding-left:12px;padding-right:12px;background-size:300px auto;background-position:120% 28%}
+ .heroTop{align-items:flex-start;flex-wrap:wrap}.heroTopTitle{font-size:16px}.venueSelect{order:3;margin-left:0;max-width:none;width:100%}
+ .heroCopy h1{font-size:36px}.studioTabs button{font-size:13px}.tabIcon{font-size:17px}
+ .itemsGrid{grid-template-columns:1fr}.itemCardPhoto{height:220px}
+ .themePresets{grid-template-columns:1fr 1fr}.designGrid{grid-template-columns:1fr}.settingGrid,.toggleRows{grid-template-columns:1fr}
+ .categoryEditorHero{height:210px}
+}

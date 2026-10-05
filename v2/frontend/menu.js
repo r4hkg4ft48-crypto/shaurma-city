@@ -454,16 +454,16 @@
     };
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
-      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||'');
+      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||''),unavailable=itemUnavailable(x),hasOptions=hasItemOptions(x);
       const meta=[String(x.weight||'').trim(),...(Array.isArray(x.tags)?x.tags.slice(0,2):[])].filter(Boolean);
       const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
-      return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+'">'+
-        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+'</div>'+
+      return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+(unavailable?' unavailable':'')+'">'+
+        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(unavailable?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
           '<p>'+esc(description)+'</p>'+
           (meta.length?'<div class="foodMeta">'+meta.map(v=>'<span>'+esc(v)+'</span>').join('')+'</div>':'')+
-          '<div class="foodRow"><b>'+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'">+</button></div>'+
+          '<div class="foodRow"><b>'+(hasOptions?'от ':'')+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'" '+(unavailable?'disabled':'')+'>'+(unavailable?'×':hasOptions?'Выбрать':'+')+'</button></div>'+
         '</div></article>';
     };
 
@@ -489,7 +489,7 @@
             '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
             '<h3>'+esc(featureName)+'</h3>'+
             '<p>'+esc(featureDesc)+'</p>'+
-            '<div class="menuFeatureBottom"><b>'+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'">Добавить <span>＋</span></button></div>'+
+            '<div class="menuFeatureBottom"><b>'+(hasItemOptions(feature)?'от ':'')+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'" '+(itemUnavailable(feature)?'disabled':'')+'>'+(itemUnavailable(feature)?'Нет в наличии':'Добавить <span>＋</span>')+'</button></div>'+
           '</div>'+
           '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
         '</article>';
@@ -520,7 +520,7 @@
     $('#checkoutBtn').disabled=!count;$('#placeOrder').disabled=!count;
     $('#cartItems').innerHTML=count?cart.map(x=>'<div class="cartItem"><div class="cartItemCopy"><b>'+esc(x.n)+'</b>'+
       (x.detail?'<small>'+esc(x.detail)+'</small>':'<small>'+money(x.p)+' за шт.</small>')+
-      '</div><div class="qty"><button data-minus="'+esc(x.id)+'">−</button><b>'+x.q+'</b><button data-plus="'+esc(x.id)+'">+</button></div></div>').join('')
+      '</div><div class="qty"><button data-minus="'+esc(x.cart_key||x.id)+'">−</button><b>'+x.q+'</b><button data-plus="'+esc(x.cart_key||x.id)+'">+</button></div></div>').join('')
       :'<div class="empty">Корзина пуста</div>';
     $('#checkoutItems').innerHTML=count?cart.map(x=>'<div class="checkoutQuickItem"><div><b>'+esc(x.n)+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+x.q+'</span><strong>'+money((Number(x.p)||0)*(Number(x.q)||0))+'</strong></div>').join(''):'';
   }

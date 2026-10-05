@@ -257,6 +257,7 @@ function normalizeMenuSections(input,menu=[],fallbackToDefaults=true){
         gallery:(Array.isArray(v.gallery)?v.gallery:(Array.isArray(d.gallery)?d.gallery:[])).map(x=>String(x||'').trim().slice(0,700000)).filter(Boolean).slice(0,12),
         color:hex(v.color||d.color,'#0B2945'),accent:hex(v.accent||d.accent,'#FF463D'),
         inherit_template:v.inherit_template!==false,manual_sort:v.manual_sort!==false,
+        dish_profile:['shawarma','pizza','salad','burger','drink','dessert','other'].includes(v.dish_profile)?v.dish_profile:'',
         settings:{
           meats:(Array.isArray(settings.meats)?settings.meats:d.settings?.meats||[]).map(String).slice(0,30),
           sizes:(Array.isArray(settings.sizes)?settings.sizes:d.settings?.sizes||[]).map(String).slice(0,30),
@@ -344,6 +345,9 @@ function normalizeMenu(input){
       image:String(x.image||x.i||'').trim().slice(0,700000),
       gallery:(Array.isArray(x.gallery)?x.gallery:[]).map(v=>String(v||'').trim().slice(0,700000)).filter(Boolean).slice(0,12),
       badge:String(x.badge||x.tag||'').trim().slice(0,40),
+      customization_enabled:x.customization_enabled!==false,
+      customization_icon:x.customization_icon!==false,
+      card_caption:{enabled:x.card_caption?.enabled===true,text:String(x.card_caption?.text||'').trim().slice(0,90),color:hex(x.card_caption?.color,'#FFFFFF'),style:['pill','plain','ribbon'].includes(x.card_caption?.style)?x.card_caption.style:'pill',glass:x.card_caption?.glass!==false},
       featured:x.featured===true,recommended:x.recommended===true,
       display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
       image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
@@ -389,6 +393,9 @@ function menuItemAvailableNow(item,timezone='Europe/Moscow',now=new Date()){
 }
 function menuSelectionPrice(item,selection={},choices={}){
   const src=normalizeMenu([item])[0];if(!src)return null;
+  // A fixed recipe has one authoritative base price. Stale/tampered choices
+  // cannot reactivate its archived customization or change the order amount.
+  if(src.customization_enabled===false)return {price:src.p,detail:src.composition};
   const sel=selection&&typeof selection==='object'&&!Array.isArray(selection)?selection:{};
   const custom=choices&&typeof choices==='object'&&!Array.isArray(choices)?choices:{};
   let total=Number(src.p)||0;const details=[];

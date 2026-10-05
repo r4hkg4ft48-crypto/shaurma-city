@@ -381,9 +381,13 @@ router.post('/orders',async(req,res)=>{
         normalized.push({...built,q});continue;
       }
       const src=menu.get(String(i.id));if(!src)return res.status(400).json({error:'item_not_in_menu',item_id:i.id});
-      const priced=D.menuSelectionPrice(src,i.selection||{});
+      if(src.available===false||src.stock===0)return res.status(409).json({error:'item_unavailable',item_id:i.id});
+      const minQty=Math.max(1,Math.min(50,Math.floor(Number(src.min_qty)||1)));
+      const maxQty=Math.max(minQty,Math.min(50,Math.floor(Number(src.max_qty)||50)));
+      if(q<minQty||q>maxQty)return res.status(400).json({error:'invalid_quantity',item_id:i.id,min_qty:minQty,max_qty:maxQty});
+      const priced=D.menuSelectionPrice(src,i.selection||{},i.choices||{});
       if(!priced||!Number.isFinite(priced.price)||priced.price<0)return res.status(400).json({error:'invalid_item_selection',item_id:i.id});
-      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p:priced.price,q,detail:String(priced.detail||i.detail||'').slice(0,500),selection:i.selection||{}});
+      normalized.push({id:String(src.id),n:String(src.n||src.name||'Позиция'),p:priced.price,q,detail:String(priced.detail||i.detail||'').slice(0,500),selection:i.selection||{},choices:i.choices||{}});
     }
     const fulfillment=req.body?.fulfillment_type==='cafe'?'cafe':'delivery';
     if(fulfillment==='delivery'&&!String(req.body?.phone||'').trim())return res.status(400).json({error:'phone_required'});

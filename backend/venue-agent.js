@@ -226,7 +226,7 @@ function inferFreeform(text){
   m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:остаток|осталось)\s+(\d+)$/i);
   if(m)return {kind:'command',command:{intent:'menu_stock',item:clean(m[1]),value:Number(m[2])}};
 
-  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:нет|не осталось|закончил\w*)$/i);
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:нет|не осталось|закончил[а-яa-z0-9]*)$/i);
   if(m)return {kind:'command',command:{intent:'menu_available',item:clean(m[1]),available:false}};
 
   m=raw.match(/^(?:верни|добавь обратно)\s+(.+?)\s+(?:в продажу|в наличие)$/i);

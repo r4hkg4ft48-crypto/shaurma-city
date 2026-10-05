@@ -681,6 +681,19 @@ router.get('/venue-owner/establishments/:establishmentId/orders',async(req,res)=
   try{const q=await db.query('SELECT * FROM shaurma_orders WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 200',[a.est]);res.json(q.rows)}
   catch(e){fail(res,e,'venue_owner_orders_failed')}
 });
+router.get('/venue-owner/establishments/:establishmentId/stats',async(req,res)=>{
+  const a=await venueAccess(req,res,'orders');if(!a)return;
+  try{
+    const q=await db.query("SELECT * FROM shaurma_orders WHERE establishment_id=$1 AND created_at>=NOW()-INTERVAL '1 day'",[a.est]),rows=q.rows;
+    res.json({
+      today:rows.length,
+      new:rows.filter(x=>x.status==='new').length,
+      cooking:rows.filter(x=>x.status==='cooking').length,
+      ready:rows.filter(x=>x.status==='ready').length,
+      revenue:rows.filter(x=>x.status!=='cancelled').reduce((s,x)=>s+(Number(x.total)||0),0)
+    });
+  }catch(e){fail(res,e,'venue_owner_stats_failed')}
+});
 router.patch('/venue-owner/establishments/:establishmentId/orders/:orderId',async(req,res)=>{
   const a=await venueAccess(req,res,'orders');if(!a)return;
   const status=String(req.body?.status||'');

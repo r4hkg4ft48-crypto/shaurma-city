@@ -5,6 +5,7 @@ const db=require('./db');
 const rt=require('./realtime');
 const voice=require('./voice-assistant');
 const {createVenueCommandBus}=require('../../../backend/venue-command');
+const {createVenueDialogAgent}=require('../../../backend/venue-agent');
 
 const TELEGRAM_MAX_RETRIES=3;
 const TELEGRAM_SYNC_DELAY_MS=300;
@@ -19,6 +20,7 @@ const venueCommandBus=createVenueCommandBus({
   },
   pushOwner:rt.pushOwner
 });
+const venueDialogAgent=createVenueDialogAgent({DB:db,commandBus:venueCommandBus});
 
 async function call(token,method,body={},attempt=0){
   if(!token)return null;
@@ -455,17 +457,35 @@ async function executeKitchenVoice(msg,transcript,intent){
 async function handleKitchenVoice(msg){
   const chatId=msg?.chat?.id;
   if(!chatId)return;
+  if(config.VOICE_PROVIDER!=='openai'){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'🎙 Голосовой ввод сейчас стоит в бесплатном режиме: платные API не вызываются. Диалоговый агент уже готов к голосу; пока используйте текст. Позже подключим локальный STT и подадим его расшифровку в тот же агент.'
+    });
+  }
   if(!config.OPENAI_API_KEY){
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
-      text:'🎙 Голосовой помощник подключён в приложении, но на сервере ещё не задан OPENAI_API_KEY для распознавания речи.'
+      text:'Для провайдера OpenAI не задан OPENAI_API_KEY. Платные вызовы не выполняются.'
     });
   }
   try{await call(config.KITCHEN_BOT_TOKEN,'sendChatAction',{chat_id:chatId,action:'typing'})}catch{}
   try{
     const transcript=await transcribeKitchenVoice(msg);
-    const intent=await aiKitchenIntent(transcript);
-    return executeKitchenVoice(msg,transcript,intent);
+    const localIntent=voice.parseLocalIntent(transcript);
+    if(localIntent.intent!=='unknown')return executeKitchenVoice(msg,transcript,localIntent);
+
+    const result=await venueDialogAgent.handle({user:msg?.from,text:transcript});
+    if(result?.handled){
+      const text='🎙 Услышал: «'+String(transcript).slice(0,500)+'»\n\n'+String(result.text||'');
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+        chat_id:chatId,
+        text:text.replace(/<\/?(?:b|code)>/gi,'').slice(0,3900),
+        disable_web_page_preview:true,
+        ...(result.reply_markup?{reply_markup:result.reply_markup}:{})
+      });
+    }
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'🎙 Услышал: «'+String(transcript).slice(0,500)+'»\n\nНе уверен, что понял запрос. Ничего не меняю.'});
   }catch(e){
     console.error('kitchen voice',e.message);
     const tooLarge=e.message==='voice_file_too_large';
@@ -483,6 +503,26 @@ async function handleKitchenVoice(msg){
 
 async function handleKitchenCallback(query){
   const id=String(query?.id||''),chatId=query?.message?.chat?.id,user=query?.from;
+  const agentData=String(query?.data||'');
+  if(/^va:/.test(agentData)&&chatId&&user?.id){
+    try{
+      const result=await venueDialogAgent.handleCallback({user,data:agentData});
+      await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Принято'});
+      if(result?.handled&&result.text){
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+          chat_id:chatId,
+          text:String(result.text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900),
+          disable_web_page_preview:true,
+          ...(result.reply_markup?{reply_markup:result.reply_markup}:{})
+        });
+      }
+      return;
+    }catch(e){
+      console.error('venue dialog callback',e.message);
+      try{await call(config.KITCHEN_BOT_TOKEN,'answerCallbackQuery',{callback_query_id:id,text:'Не удалось обработать выбор',show_alert:true})}catch{}
+      return;
+    }
+  }
   const m=String(query?.data||'').match(/^ko:(\d+):(cooking|ready|done)$/);
   if(!m||!chatId)return;
   try{
@@ -586,14 +626,19 @@ async function handleKitchenMessage(msg){
 
   if(raw&&user?.id){
     try{
-      const result=await venueCommandBus.handle({user,text:raw});
+      const result=await venueDialogAgent.handle({user,text:raw});
       if(result?.handled){
         const text=String(result.text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);
-        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text,disable_web_page_preview:true});
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+          chat_id:chatId,
+          text,
+          disable_web_page_preview:true,
+          ...(result.reply_markup?{reply_markup:result.reply_markup}:{})
+        });
       }
     }catch(e){
-      console.error('kitchen menu assistant',e.message);
-      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'Не удалось выполнить изменение меню. Данные не изменены.'});
+      console.error('kitchen venue dialog agent',e.message);
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'Не удалось обработать запрос. Ничего не изменено — попробуйте сформулировать иначе.'});
     }
   }
 

@@ -367,7 +367,8 @@ function normalizeMenu(input){
   }).filter(x=>x.id&&x.n);
 }
 function menuItemAvailableNow(item,timezone='Europe/Moscow',now=new Date()){
-  if(!item||item.active===false||item.available===false||Number(item.stock)===0)return false;
+  const stockEmpty=item?.stock!==null&&item?.stock!==undefined&&item?.stock!==''&&Number(item.stock)===0;
+  if(!item||item.active===false||item.available===false||stockEmpty)return false;
   const schedule=item.schedule&&typeof item.schedule==='object'?item.schedule:{};
   if(schedule.enabled!==true)return true;
   let parts;

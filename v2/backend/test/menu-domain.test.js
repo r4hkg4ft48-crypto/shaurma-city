@@ -66,3 +66,36 @@ test('inactive categories are retained in full section state',()=>{
   assert.equal(visible.length,8);
   assert.equal(all.find(x=>x.id===seed.sections[2].id).active,false);
 });
+
+
+test('generic custom choice groups are normalized and priced server-side',()=>{
+  const item=D.normalizeMenu([{
+    id:'x',n:'Test',c:'shawarma_doner',p:300,available:true,min_qty:1,max_qty:3,
+    choice_groups:[{
+      id:'spice',name:'Острота',type:'single',required:true,min:1,max:1,
+      options:[
+        {id:'mild',name:'Обычная',price_delta:0,active:true,default:true},
+        {id:'hot',name:'Острая',price_delta:40,active:true}
+      ]
+    },{
+      id:'extras2',name:'Дополнительно',type:'multiple',required:false,min:0,max:2,
+      options:[{id:'cheese',name:'Сыр',price_delta:50,active:true},{id:'jal',name:'Халапеньо',price_delta:30,active:true}]
+    }]
+  }])[0];
+  assert.equal(item.available,true);
+  assert.equal(item.max_qty,3);
+  assert.equal(item.choice_groups.length,2);
+  const priced=D.menuSelectionPrice(item,{}, {spice:['hot'],extras2:['cheese','jal']});
+  assert.ok(priced);
+  assert.equal(priced.price,420);
+  assert.equal(D.menuSelectionPrice(item,{}, {spice:[]}),null);
+  assert.equal(D.menuSelectionPrice(item,{}, {spice:['hot','mild']}),null);
+});
+
+
+test('scheduled menu availability respects timezone window',()=>{
+  const item={active:true,available:true,stock:null,schedule:{enabled:true,days:[1],from:'10:00',to:'12:00'}};
+  assert.equal(D.menuItemAvailableNow(item,'Europe/Moscow',new Date('2026-10-05T08:00:00Z')),true);
+  assert.equal(D.menuItemAvailableNow(item,'Europe/Moscow',new Date('2026-10-05T10:30:00Z')),false);
+  assert.equal(D.menuItemAvailableNow({...item,available:false},'Europe/Moscow',new Date('2026-10-05T08:00:00Z')),false);
+});

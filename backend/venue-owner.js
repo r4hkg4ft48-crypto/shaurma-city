@@ -2,7 +2,7 @@
 
 const crypto=require('crypto');
 const path=require('path');
-const {normalizeBuilderConfig}=require('../v2/backend/src/domain');
+const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const {createVenueCommandBus}=require('./venue-command');
 
 function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,normalizeMarkerStyle,publishVenue,pushOwner}){
@@ -409,19 +409,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const auth=await requireAccess(req,res,req.params.establishmentId,'menu');if(!auth)return;
     const menu=Array.isArray(req.body?.menu)?req.body.menu.slice(0,250):null;
     if(!menu)return res.status(400).json({error:'invalid_menu'});
-    const normalized=menu.map((x,i)=>({
-      id:String(x.id||('item_'+i)).trim().slice(0,100),
-      n:String(x.n||x.name||'Позиция').trim().slice(0,160),
-      c:slugSection(x.c||x.category||'shawarma'),
-      d:String(x.d||x.description||'').trim().slice(0,700),
-      p:Math.max(0,Math.min(100000,Number(x.p??x.price)||0)),
-      image:String(x.image||x.i||'').trim().slice(0,700000),
-      badge:String(x.badge||x.tag||'').trim().slice(0,40),
-      featured:x.featured===true,
-      display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
-      image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
-      active:x.active!==false
-    })).filter(x=>x.id&&x.n);
+    const normalized=normalizeMenu(menu);
     if(JSON.stringify(normalized).length>700000)return res.status(413).json({error:'menu_too_large'});
     const sections=normalizeMenuSections(req.body?.sections,normalized);
     try{

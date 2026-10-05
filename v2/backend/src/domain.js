@@ -303,6 +303,33 @@ function defaultMenuSeed(){
   });
   return {sections,menu};
 }
+function normalizeChoiceGroups(input){
+  if(!Array.isArray(input))return [];
+  return input.slice(0,24).map((g,gi)=>{
+    const options=(Array.isArray(g?.options)?g.options:[]).slice(0,60).map((o,oi)=>({
+      id:slugMenu(o?.id||o?.name,'choice_'+oi),
+      name:String(o?.name||o?.n||o?.id||'Вариант').trim().slice(0,120),
+      price_delta:clamp(Number(o?.price_delta??o?.price??0)||0,-100000,100000),
+      active:o?.active!==false,
+      default:o?.default===true,
+      image:String(o?.image||'').trim().slice(0,300000)
+    })).filter(o=>o.id&&o.name);
+    const type=String(g?.type||'single')==='multiple'?'multiple':'single';
+    const min=Math.max(0,Math.min(options.length,Math.floor(Number(g?.min)||0)));
+    const maxRaw=Math.floor(Number(g?.max)|| (type==='single'?1:Math.max(1,options.length)));
+    const max=Math.max(type==='single'?1:min,Math.min(Math.max(1,options.length),maxRaw||1));
+    return {
+      id:slugMenu(g?.id||g?.name,'group_'+gi),
+      name:String(g?.name||g?.n||'Выбор').trim().slice(0,120),
+      type,
+      required:g?.required===true||min>0,
+      min:g?.required===true&&min===0?1:min,
+      max:type==='single'?1:max,
+      active:g?.active!==false,
+      options
+    };
+  }).filter(g=>g.id&&g.name);
+}
 function normalizeMenu(input){
   if(!Array.isArray(input))return [];
   return input.slice(0,400).map((x,i)=>{
@@ -321,6 +348,9 @@ function normalizeMenu(input){
       display:['auto','main','compact'].includes(String(x.display||''))?String(x.display):'auto',
       image_fit:['cover','contain'].includes(String(x.image_fit||''))?String(x.image_fit):'cover',
       active:x.active!==false,
+      available:x.available!==false,
+      min_qty:clamp(Math.floor(Number(x.min_qty)||1),1,50),
+      max_qty:clamp(Math.floor(Number(x.max_qty)||50),1,50),
       weight:String(x.weight||'').trim().slice(0,40),
       sku:String(x.sku||'').trim().slice(0,80),
       stock:x.stock===null||x.stock===''||x.stock===undefined?null:clamp(Math.floor(Number(x.stock)||0),0,1000000),
@@ -331,16 +361,40 @@ function normalizeMenu(input){
       options:{
         meats:menuOptionList(opts.meats),sizes:menuOptionList(opts.sizes),bases:menuOptionList(opts.bases),sauces:menuOptionList(opts.sauces),extras:menuOptionList(opts.extras,60),
         required_groups:(Array.isArray(opts.required_groups)?opts.required_groups:[]).map(v=>String(v)).filter(v=>['meats','sizes','bases','sauces','extras'].includes(v)).slice(0,5)
-      }
+      },
+      choice_groups:normalizeChoiceGroups(x.choice_groups||x.custom_options||[])
     };
   }).filter(x=>x.id&&x.n);
 }
-function menuSelectionPrice(item,selection={}){
+function menuItemAvailableNow(item,timezone='Europe/Moscow',now=new Date()){
+  const stockEmpty=item?.stock!==null&&item?.stock!==undefined&&item?.stock!==''&&Number(item.stock)===0;
+  if(!item||item.active===false||item.available===false||stockEmpty)return false;
+  const schedule=item.schedule&&typeof item.schedule==='object'?item.schedule:{};
+  if(schedule.enabled!==true)return true;
+  let parts;
+  try{
+    parts=new Intl.DateTimeFormat('en-GB',{timeZone:String(timezone||'Europe/Moscow'),weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(now);
+  }catch{
+    parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(now);
+  }
+  const get=t=>parts.find(x=>x.type===t)?.value||'';
+  const dayMap={Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6},day=dayMap[get('weekday')];
+  const days=Array.isArray(schedule.days)?schedule.days.map(Number).filter(v=>v>=0&&v<=6):[];
+  if(days.length&& !days.includes(day))return false;
+  const toMin=v=>{const m=String(v||'').match(/^(\d{1,2}):(\d{2})$/);return m?Math.min(1439,Math.max(0,Number(m[1])*60+Number(m[2]))):null};
+  const from=toMin(schedule.from),to=toMin(schedule.to),current=Number(get('hour'))*60+Number(get('minute'));
+  if(from===null||to===null)return true;
+  if(from===to)return true;
+  return from<to?(current>=from&&current<to):(current>=from||current<to);
+}
+function menuSelectionPrice(item,selection={},choices={}){
   const src=normalizeMenu([item])[0];if(!src)return null;
   const sel=selection&&typeof selection==='object'&&!Array.isArray(selection)?selection:{};
+  const custom=choices&&typeof choices==='object'&&!Array.isArray(choices)?choices:{};
   let total=Number(src.p)||0;const details=[];
   for(const group of ['meats','sizes','bases','sauces','extras']){
-    const list=src.options[group]||[],raw=sel[group],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
+    const list=src.options[group]||[],raw=sel[group],ids=[...new Set(Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[])];
+    if(['meats','sizes','bases'].includes(group)&&ids.length>1)return null;
     const chosen=ids.map(id=>list.find(x=>x.active!==false&&x.id===id)).filter(Boolean);
     if(chosen.length!==ids.length)return null;
     if(src.options.required_groups.includes(group)&&!chosen.length){
@@ -348,6 +402,16 @@ function menuSelectionPrice(item,selection={}){
       if(!def)return null;chosen.push(def);
     }
     for(const opt of chosen){total+=Number(opt.price)||0;details.push(opt.name)}
+  }
+  for(const group of (src.choice_groups||[]).filter(g=>g.active!==false)){
+    const active=(group.options||[]).filter(o=>o.active!==false),raw=custom[String(group.id)],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
+    const unique=[...new Set(ids)],min=Math.max(group.required?1:0,Number(group.min)||0),max=group.type==='single'?1:Math.max(min,Number(group.max)||Math.max(1,active.length));
+    if(unique.length<min||unique.length>max)return null;
+    const chosen=unique.map(id=>active.find(o=>String(o.id)===id)).filter(Boolean);
+    if(chosen.length!==unique.length)return null;
+    if(!unique.length&&min===0)continue;
+    for(const opt of chosen)total+=Number(opt.price_delta)||0;
+    if(chosen.length)details.push(String(group.name||'Выбор')+': '+chosen.map(opt=>opt.name).join(', '));
   }
   return {price:clamp(total,0,100000),detail:details.join(' · ')};
 }
@@ -490,4 +554,4 @@ function priceBuilder(config,payload={}){
   };
 }
 function orderNumber(){return 'SC-'+Date.now().toString().slice(-7)+'-'+Math.floor(10+Math.random()*90)}
-module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,defaultItemImage,generatedMenuPhotoBase64,isGeneratedMenuPhotoName,normalizeMenu,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};
+module.exports={venueId,establishmentId,establishmentIdForVenue,markerId,markerStyle,menuSections,menuSectionsAll,normalizeMenuSections,defaultMenuCategories,defaultMenuSeed,defaultItemImage,generatedMenuPhotoBase64,isGeneratedMenuPhotoName,normalizeChoiceGroups,normalizeMenu,menuItemAvailableNow,menuSelectionPrice,normalizeBuilderConfig,builderConfig,priceBuilder,normalizeSiteCustomization,LEGACY_LEPESH_BUILDER,orderNumber,clamp,venueThemeKey,VENUE_THEME_KEYS,normalizeVenueTheme,DEFAULT_VENUE_THEME};

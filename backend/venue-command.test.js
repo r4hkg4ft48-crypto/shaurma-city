@@ -46,3 +46,17 @@ test('selects venue by short key syntax',()=>{
   assert.deepEqual(parseCommand('5E435A'),{intent:'venue_select',query:'5E435A'});
   assert.deepEqual(parseCommand('выбери точку Лепёшка'),{intent:'venue_select',query:'Лепёшка'});
 });
+
+
+test('parses conversational deep menu editing',()=>{
+  assert.deepEqual(parseCommand('работаем с сырной шаурмой'),{intent:'menu_item_select',item:'сырной шаурмой'});
+  assert.deepEqual(parseCommand('цена 420'),{intent:'menu_price_context',price:420});
+  assert.deepEqual(parseCommand('нет в наличии'),{intent:'menu_available',item:'',available:false});
+  assert.deepEqual(parseCommand('вес 450 г'),{intent:'menu_weight',value:'450 г'});
+  assert.deepEqual(parseCommand('состав курица, овощи, чесночный соус'),{intent:'menu_composition',value:'курица, овощи, чесночный соус'});
+  assert.deepEqual(parseCommand('остаток 12'),{intent:'menu_stock',value:12});
+  assert.deepEqual(parseCommand('теги острое, хит'),{intent:'menu_tags',value:['острое','хит']});
+  assert.deepEqual(parseCommand('добавь выбор Размер'),{intent:'choice_group_add',name:'Размер'});
+  assert.deepEqual(parseCommand('добавь вариант Большая +80'),{intent:'choice_option_add',name:'Большая',price_delta:80});
+  assert.deepEqual(parseCommand('добавь вариант мяса Говядина +100'),{intent:'fixed_option_add',group:'мяса',name:'Говядина',price:100});
+});

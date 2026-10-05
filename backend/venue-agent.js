@@ -334,6 +334,7 @@ function createVenueDialogAgent({DB,commandBus}){
     if(isCancel(text)||callbackIndex==='x'){await clearPending(user.id);return {handled:true,text:'Хорошо, ничего не меняю.'}}
 
     let idx=callbackIndex===null?ordinal(text):Number(callbackIndex);
+    if(kind==='confirm'&&callbackIndex===null&&isYes(text))idx=candidates.findIndex(x=>x.id==='yes');
     if(!(idx>=0&&idx<candidates.length)){
       const n=normalize(text);
       const scored=candidates.map((x,i)=>({i,score:similarity(n,x.label)})).sort((a,b)=>b.score-a.score);
@@ -363,6 +364,14 @@ function createVenueDialogAgent({DB,commandBus}){
       const active=await activeVenue(user),menu=Array.isArray(active.venue?.menu)?active.venue.menu:[];
       const items=menu.filter(x=>String(x.c||x.category||'')===String(chosen.id)&&x.active!==false);
       return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока нет активных позиций.')+'\n\nМожно написать название блюда или что нужно изменить.'};
+    }
+
+    if(kind==='alias_select'){
+      await clearPending(user.id);
+      const active=await activeVenue(user);
+      if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
+      await addAlias(user.id,active.venue.establishment_id,chosen.type,chosen.id,payload.alias);
+      return {handled:true,text:'Запомнил: «'+payload.alias+'» = «'+chosen.label+'» для этой точки.'};
     }
 
     if(kind==='item_select'){
@@ -429,11 +438,19 @@ function createVenueDialogAgent({DB,commandBus}){
 
     const free=parsed.intent==='unknown'?inferFreeform(raw):null;
     if(free?.kind==='alias'){
-      const item=await chooseItem(user,venue,free.target,{alias:free.alias},'К какой позиции привязать название «'+free.alias+'»?');
-      if(item.error)return {handled:true,text:item.error};
-      if(item.ask)return item.ask;
-      await addAlias(user.id,venue.establishment_id,'item',item.item.id,free.alias);
-      return {handled:true,text:'Запомнил: «'+free.alias+'» = «'+item.item.label+'».'};
+      const itemRank=await rankItems(venue,free.target),catRank=await rankCategories(venue,free.target);
+      const ih=decisive(itemRank),ch=decisive(catRank);
+      if(ih&&(!ch||ih.score>ch.score+.08)){
+        await addAlias(user.id,venue.establishment_id,'item',ih.id,free.alias);
+        return {handled:true,text:'Запомнил: «'+free.alias+'» = «'+ih.label+'».'};
+      }
+      if(ch&&(!ih||ch.score>ih.score+.08)){
+        await addAlias(user.id,venue.establishment_id,'category',ch.id,free.alias);
+        return {handled:true,text:'Запомнил: «'+free.alias+'» = раздел «'+ch.label+'».'};
+      }
+      const merged=[...itemRank.slice(0,4),...catRank.slice(0,3)].sort((a,b)=>b.score-a.score);
+      if(!merged.length)return {handled:true,text:'Не нашёл, к чему привязать «'+free.alias+'». Сначала назовите точное блюдо или раздел.'};
+      return ask(user.id,'alias_select',{alias:free.alias},merged,'Что именно вы называете «'+free.alias+'»?');
     }
     if(free?.kind==='action_clarify'){
       const token=token8(),candidates=free.actions.map((x,i)=>({id:String(i),label:x.label,type:'action',command:x.command}));

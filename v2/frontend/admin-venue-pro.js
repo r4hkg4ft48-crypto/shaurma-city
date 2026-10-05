@@ -213,7 +213,7 @@ function newItem(){
 function openEditItem(index){editingIndex=Number(index);itemDraft=clone(menu[editingIndex]);openItemDrawer()}
 function optionGroupHtml(group,list,required){
   const meta=GROUP_META[group];
-  return '<div class="optionGroup" data-option-group="'+group+'"><div class="optionHead"><span>'+meta.icon+'</span><b>'+meta.title+'</b><label><input type="checkbox" data-required-group="'+group+'" '+(required?'checked':'')+'> Обязательный выбор</label></div>'+
+  return '<div class="optionGroup" data-option-group="'+group+'"><div class="optionHead"><span>'+meta.icon+'</span><b>'+esc(window.ShaurmegDishSettings.label(sections.find(s=>s.id===itemDraft.c),group))+'</b><label><input type="checkbox" data-required-group="'+group+'" '+(required?'checked':'')+'> Обязательный выбор</label></div>'+
     '<div class="optionRows">'+(list||[]).map((o,i)=>'<div class="optionRow" data-option-index="'+i+'"><input data-opt-name value="'+esc(o.name||'')+'" placeholder="Название"><input data-opt-price type="number" value="'+Number(o.price||0)+'" placeholder="+ ₽"><label title="По умолчанию"><input data-opt-default type="checkbox" '+(o.default?'checked':'')+'> ✓</label><button data-remove-option="'+group+'" data-option-index="'+i+'">×</button></div>').join('')+'</div>'+
     '<button class="addChip" data-add-option="'+group+'" style="margin-top:8px">＋ Добавить вариант</button></div>';
 }
@@ -245,6 +245,8 @@ function renderItemEditor(){
     groups.map(g=>optionGroupHtml(g,x.options?.[g]||[],(x.options?.required_groups||[]).includes(g))).join('')+
     '<div class="optionGroup"><div class="optionHead"><span>🖼</span><b>Фото и галерея</b><small style="margin-left:auto">'+(x.gallery?.length||0)+' фото</small></div><div class="galleryRow" id="itemGallery">'+(x.gallery||[]).map((p,i)=>'<div class="galleryThumb" data-gallery-index="'+i+'"><img src="'+esc(p)+'"></div>').join('')+'</div><label class="photoUpload" style="display:block;margin-top:8px">＋ Добавить фото<input id="galleryInput" type="file" accept="image/*" multiple hidden></label></div>'+
     '</div>';
+  const settings=document.createElement('section');settings.className='consoleItemExtra';settings.id='dishSettings';$('#itemEditorBody .drawerForm').prepend(settings);window.ShaurmegDishSettings.mount(settings,x,sections.find(s=>s.id===x.c),{beforeChange:syncDraftFromEditor,applyPreset:renderItemEditor,onChange:()=>{}});
+  const choices=document.createElement('section');choices.id='itemChoiceGroups';choices.className='consoleItemExtra';$('#itemEditorBody .drawerForm').append(choices);window.ShaurmegChoices.mount(choices,x.choice_groups,{beforeChange:syncDraftFromEditor,compress:compressImage,onError:toast,context:()=>est+'|'+itemDraft?.id});
 }
 function syncDraftFromEditor(){
   if(!itemDraft||$('#itemDrawer').classList.contains('hidden'))return;
@@ -259,11 +261,11 @@ function syncDraftFromEditor(){
     const block=document.querySelector('[data-option-group="'+group+'"]'),arr=[];
     block?.querySelectorAll('.optionRow').forEach((row,i)=>{
       const name=row.querySelector('[data-opt-name]')?.value.trim();if(!name)return;
-      const old=itemDraft.options[group]?.[i]||{};arr.push({...old,id:old.id||slug(name||('opt_'+i)),name,price:Number(row.querySelector('[data-opt-price]')?.value)||0,active:true,default:!!row.querySelector('[data-opt-default]')?.checked});
+      const old=itemDraft.options[group]?.[i]||{};arr.push({...old,id:old.id||slug(name||('opt_'+i)),name,price:Number(row.querySelector('[data-opt-price]')?.value)||0,active:old.active!==false,default:!!row.querySelector('[data-opt-default]')?.checked});
     });
     itemDraft.options[group]=arr;if(block?.querySelector('[data-required-group]')?.checked)required.push(group);
   }
-  itemDraft.options.required_groups=required;
+  itemDraft.options.required_groups=required;window.ShaurmegDishSettings.read($('#dishSettings'),itemDraft);itemDraft.choice_groups=window.ShaurmegChoices.read($('#itemChoiceGroups'));
 }
 function addOption(group){
   syncDraftFromEditor();itemDraft.options=itemDraft.options||{};itemDraft.options[group]=Array.isArray(itemDraft.options[group])?itemDraft.options[group]:[];
@@ -383,7 +385,7 @@ function bind(){
   try{tg?.BackButton?.onClick(()=>setView('home'))}catch{}
   $('#navBuilderStudio').onclick=openBuilderStudio;
   $('#view-settings').onclick=e=>{const b=e.target.closest('[data-settings-view]');if(b)setView(b.dataset.settingsView)};
-  $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>setView('design');$('#addVenueConsole').onclick=()=>openAdvanced('add');
+  $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>setView('design');
   $('#orderStatusFilter').onclick=e=>{const b=e.target.closest('[data-filter]');if(b){orderFilter=b.dataset.filter;renderOrders()}};
   $('#profileHero').oninput=updateProfilePhoto;$('#profilePhotoFile').onchange=async e=>{if(e.target.files?.[0]){try{$('#profileHero').value=await compressImage(e.target.files[0],1100,.8);updateProfilePhoto();toast('Фото подготовлено · сохраните профиль')}catch(x){toast(x.message)}}};
   $('#venueSelect').onchange=async()=>{if(designBusy||saveBusy){$('#venueSelect').value=est;return toast('Дождитесь завершения сохранения')}if((profileDirty||designDirty)&&!await window.ShaurmegConsole.dialog({title:'Переключить заведение?',message:'Несохранённые изменения текущей точки будут отменены.',confirm:'Переключить'})){$('#venueSelect').value=est;return}est=$('#venueSelect').value;profileDirty=false;designDirty=false;currentCategory='';await loadVenue()};
@@ -413,7 +415,7 @@ function bind(){
     let b=e.target.closest('[data-add-option]');if(b)return addOption(b.dataset.addOption);
     b=e.target.closest('[data-remove-option]');if(b)return removeOption(b.dataset.removeOption,Number(b.dataset.optionIndex));
   };
-  $('#itemEditorBody').onchange=e=>{
+  $('#itemEditorBody').onchange=e=>{if(e.target.id==='iCategory'){syncDraftFromEditor();renderItemEditor();return}
     if(e.target.id==='itemPhotoInput'&&e.target.files?.[0])setItemPhoto(e.target.files[0]);
     if(e.target.id==='galleryInput'&&e.target.files?.length)addGallery(e.target.files);
   };

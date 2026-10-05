@@ -2,6 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createVenueDialogAgent,similarity,normalize,inferFreeform}=require('./venue-agent');
+const {parseCommand}=require('./venue-command');
 
 test('normalization tolerates common food slang and inflection',()=>{
   assert.equal(normalize('Сырной шавухой'),'сыр шаурма');
@@ -87,7 +88,8 @@ test('clarifies ambiguous item before executing and accepts ordinal reply',async
   const second=await agent.handle({user,text:'вторая'});
   assert.equal(second.handled,true);
   assert.equal(calls.length,1);
-  assert.equal(calls[0],'цена Шаурма сырная XL 420');
+  assert.equal(calls[0],'поставь цену на Шаурма сырная XL 420');
+  assert.equal(parseCommand(calls[0]).intent,'menu_price');
 });
 
 test('ambiguous remove action asks whether to hide or mark unavailable',async()=>{
@@ -156,4 +158,10 @@ test('stores pending venue clarification before any venue is selected',async()=>
   assert.equal(second.handled,true);
   assert.equal(ctx.establishment_id,'SC-MSK-BBBBBB2222');
   assert.equal(calls.at(-1),'/use SC-MSK-BBBBBB2222');
+});
+
+
+test('clarified builder option deletion remains executable after confirmation',()=>{
+  const parsed=parseCommand('удали соус Барбекю');
+  assert.equal(parsed.intent,'builder_option_delete');
 });

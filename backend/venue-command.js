@@ -653,7 +653,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
       return {handled:true,text:itemSettingsText(found.item,sections)};
     }
 
-    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_image_remove'||command.intent==='menu_image_fit'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'){
+    if(command.intent==='menu_price_context'||command.intent==='menu_available'||command.intent==='menu_badge'||command.intent==='menu_featured'||command.intent==='menu_display'||command.intent==='menu_image_remove'||command.intent==='menu_image_fit'||command.intent==='menu_category_move'||command.intent==='menu_delete'||command.intent==='menu_duplicate'||command.intent==='menu_qty'||command.intent==='menu_weight'||command.intent==='menu_composition'||command.intent==='menu_sku'||command.intent==='menu_stock'||command.intent==='menu_tags'||command.intent==='menu_recommended'||command.intent==='menu_card_color'||command.intent==='menu_schedule'){
       const found=resolveItem(command.item);
       if(!found.item)return itemMissing(command.item,found.matches);
       const item=found.item,index=menu.indexOf(item);
@@ -729,6 +729,77 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_qty',{item_id:item.id,min_qty:item.min_qty,max_qty:item.max_qty});
         return {handled:true,text:'✅ Количество для '+String(item.n||item.name)+': '+item.min_qty+'–'+item.max_qty+' шт.'};
       }
+      if(command.intent==='menu_weight'){
+        item.weight=String(command.value||'').slice(0,40);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_weight',{item_id:item.id,weight:item.weight});
+        return {handled:true,text:'✅ Вес: '+(item.weight||'не указан')};
+      }
+      if(command.intent==='menu_composition'){
+        item.composition=String(command.value||'').slice(0,1200);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_composition',{item_id:item.id});
+        return {handled:true,text:'✅ Состав позиции обновлён.'};
+      }
+      if(command.intent==='menu_sku'){
+        item.sku=String(command.value||'').slice(0,80);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_sku',{item_id:item.id,sku:item.sku});
+        return {handled:true,text:'✅ SKU: '+(item.sku||'не задан')};
+      }
+      if(command.intent==='menu_stock'){
+        item.stock=command.value===null?null:Math.max(0,Math.min(1000000,Math.floor(Number(command.value)||0)));
+        item.available=item.stock===0?false:item.available!==false;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_stock',{item_id:item.id,stock:item.stock});
+        return {handled:true,text:'✅ Остаток: '+(item.stock===null?'без ограничений':item.stock)+(item.stock===0?' · позиция недоступна':'')};
+      }
+      if(command.intent==='menu_tags'){
+        item.tags=(Array.isArray(command.value)?command.value:[]).map(x=>String(x).slice(0,40)).filter(Boolean).slice(0,20);
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_tags',{item_id:item.id,tags:item.tags});
+        return {handled:true,text:'✅ Теги: '+(item.tags.join(', ')||'убраны')};
+      }
+      if(command.intent==='menu_recommended'){
+        item.recommended=command.enabled;
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_recommended',{item_id:item.id,recommended:item.recommended});
+        return {handled:true,text:'✅ '+String(item.n||item.name)+' — '+(item.recommended?'добавлена в рекомендации':'убрана из рекомендаций')};
+      }
+      if(command.intent==='menu_card_color'){
+        item.card_color=String(command.value||'#FFFFFF').toUpperCase();
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_card_color',{item_id:item.id,card_color:item.card_color});
+        return {handled:true,text:'✅ Цвет карточки: '+item.card_color};
+      }
+      if(command.intent==='menu_schedule'){
+        item.schedule=command.enabled?{enabled:true,days:[0,1,2,3,4,5,6],from:command.from,to:command.to}:{enabled:false,days:[],from:'',to:''};
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_schedule',{item_id:item.id,schedule:item.schedule});
+        return {handled:true,text:'✅ Доступность по времени: '+(item.schedule.enabled?item.schedule.from+'–'+item.schedule.to:'всегда')};
+      }
+    }
+
+    if(['fixed_option_add','fixed_option_delete','fixed_option_price','fixed_option_toggle','fixed_option_default'].includes(command.intent)){
+      const found=resolveItem(command.item);
+      if(!found.item)return itemMissing(command.item,found.matches);
+      const item=found.item;await selectItemContext(user.id,item.id);
+      const key=fixedGroupKey(command.group);
+      if(!key)return {handled:true,text:'Не понял тип варианта. Используйте мясо, размер, основу, соус или добавку.'};
+      item.options=item.options&&typeof item.options==='object'?JSON.parse(JSON.stringify(item.options)):{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_groups:[]};
+      item.options[key]=Array.isArray(item.options[key])?item.options[key]:[];
+      const list=item.options[key];
+      if(command.intent==='fixed_option_add'){
+        const id=slug(command.name)+'_'+Date.now().toString(36).slice(-4);
+        list.push({id,name:command.name,price:Number(command.price)||0,active:true,default:false,image:''});
+        await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_fixed_option_add',{item_id:item.id,group:key,option_id:id});
+        return {handled:true,text:'✅ '+fixedGroupLabel(key)+': добавлен вариант «'+command.name+'»'+(Number(command.price)?' '+(Number(command.price)>0?'+':'')+Number(command.price)+' ₽':'')};
+      }
+      const optFound=findNamed(list,command.option,x=>x.name);
+      if(!optFound.item)return {handled:true,text:'Не нашёл вариант «'+String(command.option||'')+'» в разделе '+fixedGroupLabel(key)+'.'};
+      const option=optFound.item;
+      if(command.intent==='fixed_option_delete')item.options[key]=list.filter(x=>String(x.id)!==String(option.id));
+      if(command.intent==='fixed_option_price')option.price=Math.max(-100000,Math.min(100000,Math.round(Number(command.price)||0)));
+      if(command.intent==='fixed_option_toggle')option.active=command.enabled;
+      if(command.intent==='fixed_option_default'){
+        if(['meats','sizes','bases'].includes(key))for(const x of list)x.default=false;
+        option.default=true;
+      }
+      await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_'+command.intent,{item_id:item.id,group:key,option_id:option.id});
+      const label=command.intent==='fixed_option_delete'?'удалён':command.intent==='fixed_option_price'?'цена '+option.price+' ₽':command.intent==='fixed_option_toggle'?(command.enabled?'включён':'выключен'):'по умолчанию';
+      return {handled:true,text:'✅ '+fixedGroupLabel(key)+': «'+String(option.name)+'» — '+label+'.'};
     }
 
     if(command.intent==='choice_group_add'||command.intent==='choice_group_select'||command.intent==='choice_group_delete'||command.intent==='choice_group_rename'||command.intent==='choice_group_toggle'||command.intent==='choice_group_required'||command.intent==='choice_group_type'||command.intent==='choice_group_limit'||command.intent==='choice_option_add'||command.intent==='choice_option_price'||command.intent==='choice_option_toggle'||command.intent==='choice_option_delete'||command.intent==='choice_option_rename'||command.intent==='choice_option_default'){

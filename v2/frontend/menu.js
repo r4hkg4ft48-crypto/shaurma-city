@@ -472,7 +472,13 @@
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||''),unavailable=itemUnavailable(x),hasOptions=hasItemOptions(x);
-      const meta=[String(x.weight||'').trim(),...(Array.isArray(x.tags)?x.tags.slice(0,2):[])].filter(Boolean);
+      // Older seeds stored the category name as a tag. Keep real dish tags,
+      // while the configurable caption is the only category-replacement label.
+      const categoryKey=v=>String(v||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е');
+      const section=sectionById.get(String(x.c||x.category||''))||{};
+      const categoryTags=new Set([x.c,x.category,section.id,section.name].filter(Boolean).map(categoryKey));
+      const tags=(Array.isArray(x.tags)?x.tags:[]).filter(t=>!categoryTags.has(categoryKey(t))).slice(0,2);
+      const meta=[String(x.weight||'').trim(),...tags].filter(Boolean);
       const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
       return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+(unavailable?' unavailable':'')+'">'+
         '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(unavailable?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+

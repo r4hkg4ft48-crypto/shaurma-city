@@ -26,7 +26,7 @@
 <body class="consoleModule ">
 <div class="wrap" id="app" hidden>
   <div class="top"><div class="topLeft"><button class="masterBackVenue" id="masterBackVenue" type="button" aria-label="Назад">←</button><div class="brand"><b>SHAURMEG</b><small>VENUE OWNER CONTROL</small></div></div><div class="id" id="topId">—</div></div>
-  <div class="card hero"><div><h1 id="venueName">Заведение</h1><p id="venueAddress">—</p></div><div class="venueTools"><select id="venueSelect"></select><button class="secondary" id="addVenueButton" type="button">＋ Заведение</button><div class="venueCount" id="venueCount">1 заведение</div></div></div>
+  <div class="card hero"><div><h1 id="venueName">Заведение</h1><p id="venueAddress">—</p></div><div class="venueTools"><select id="venueSelect"></select><div class="venueCount" id="venueCount">1 заведение</div></div></div>
   <div class="tabs"><button class="tab active" data-tab="profile">Карточка</button><button class="tab" data-tab="menu">Меню</button><button class="tab" data-tab="site">Сайт</button><button class="tab" data-tab="orders">Заказы</button></div>
 
   <section class="pane active card" id="profilePane">
@@ -174,7 +174,7 @@ async function auth(){
  try{
    const j=await fetch(API+endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'auth');return j});
    session=j.session;sessionStorage.setItem(SESSION_KEY,session);accesses=j.establishments||[];
-   if(MASTER_MODE){$('#addVenueButton').hidden=true;$('#topId').title='MASTER ADMIN';}
+   if(MASTER_MODE){$('#topId').title='MASTER ADMIN';}
    return true
  }catch(e){
    setClaim(true,MASTER_MODE?'Не удалось подтвердить доступ Master Admin.':(e.message==='venue_owner_bot_not_configured'?'Бот владельцев ещё не подключён к серверу.':'Не удалось войти через Telegram.'));
@@ -196,7 +196,7 @@ async function refreshMe(){
    launchApplied=true;
    const tab=['profile','menu','site','orders'].includes(REQUESTED_TAB)?REQUESTED_TAB:'';
    if(tab)activateTab(tab);
-   if(REQUESTED_TAB==='add'&&!MASTER_MODE)openAddVenue();
+
  }
 }
 const cinemaEditor=new BuilderCinemaEditor($('#cinemaEditor'),{request:(path,opt={})=>api(path,{...opt,body:opt.body?JSON.stringify(opt.body):undefined}),compress:file=>compress(file,1100,1100,.8),base:id=>'/api/venue-owner/establishments/'+encodeURIComponent(id)+'/builder-cinema'});
@@ -331,7 +331,7 @@ async function loadOrders(){try{const [orders,stats]=await Promise.all([api('/ap
 setupMasterBack();if(MASTER_MODE)$('#masterBackVenue')?.addEventListener('click',backToMaster);
 $('#claimBtn').onclick=async()=>{const b=$('#claimBtn');b.disabled=true;$('#err').textContent='';try{await claimAdditionalVenue($('#claimCode').value)}catch(e){$('#err').textContent='Код недействителен или уже использован.'}finally{b.disabled=false}};
 $('#venueSelect').onchange=e=>openVenue(e.target.value);
-$('#addVenueButton').onclick=openAddVenue;
+
 $('#cancelAddVenue').onclick=closeAddVenue;
 $('#confirmAddVenue').onclick=async()=>{const b=$('#confirmAddVenue');b.disabled=true;$('#addVenueErr').textContent='';try{await claimAdditionalVenue($('#addVenueCode').value)}catch(e){$('#addVenueErr').textContent='Код недействителен, истёк или уже использован.'}finally{b.disabled=false}};
 $('#addVenueCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('#confirmAddVenue').click()});
@@ -356,7 +356,7 @@ $('#menuRows').addEventListener('click',e=>{const b=e.target.closest('[data-rm]'
 $('#sectionRows').addEventListener('click',e=>{const up=e.target.closest('[data-section-up]'),down=e.target.closest('[data-section-down]'),rm=e.target.closest('[data-section-rm]');if(up){const i=Number(up.dataset.sectionUp);if(i>0)[menuSections[i-1],menuSections[i]]=[menuSections[i],menuSections[i-1]];renderSections();renderMenu();return}if(down){const i=Number(down.dataset.sectionDown);if(i<menuSections.length-1)[menuSections[i+1],menuSections[i]]=[menuSections[i],menuSections[i+1]];renderSections();renderMenu();return}if(rm){const i=Number(rm.dataset.sectionRm),s=menuSections[i];if(!s)return;if(menu.some(x=>String(x.c||x.category)===s.id))return toast('Сначала перенесите блюда из этого раздела');menuSections.splice(i,1);renderSections();renderMenu()}});
 
 $('#orders').onclick=async e=>{const b=e.target.closest('[data-order]');if(!b)return;b.disabled=true;try{await api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/orders/'+b.dataset.order,{method:'PATCH',body:JSON.stringify({status:b.dataset.status})});await loadOrders()}catch{toast('Не удалось изменить заказ')}finally{b.disabled=false}};
-(async()=>{if(MASTER_MODE){$('#addVenueButton').hidden=true;$('#claimBtn').hidden=true}if(!session){const ok=await auth();if(!ok)return}try{await refreshMe()}catch{session='';sessionStorage.removeItem(SESSION_KEY);const ok=await auth();if(ok)await refreshMe()}})();
+(async()=>{if(MASTER_MODE){$('#claimBtn').hidden=true}if(!session){const ok=await auth();if(!ok)return}try{await refreshMe()}catch{session='';sessionStorage.removeItem(SESSION_KEY);const ok=await auth();if(ok)await refreshMe()}})();
 </script>
 </body>
 </html>

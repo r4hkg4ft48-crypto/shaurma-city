@@ -199,7 +199,7 @@ async function menuContext(marker,est){
 router.get('/menu-photo/:fileName',async(req,res)=>{
   try{
     const fileName=String(req.params.fileName||'');
-    if(!/^[a-z0-9_]+_\\d{2}\\.jpg$/i.test(fileName))return res.sendStatus(404);
+    if(!D.isGeneratedMenuPhotoName(fileName))return res.sendStatus(404);
     const b64=D.generatedMenuPhotoBase64(fileName);if(!b64)return res.sendStatus(404);
     const body=Buffer.from(b64,'base64');
     res.setHeader('Content-Type','image/jpeg');

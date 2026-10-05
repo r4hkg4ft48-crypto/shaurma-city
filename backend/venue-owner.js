@@ -10,7 +10,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   const MASTER_ADMIN_BOT_TOKEN=String(process.env.MASTER_ADMIN_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_MASTER_ADMIN_BOT_TOKEN||'').trim();
   const BASE_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/$/,'');
   const OWNER_APP_BASE=String(process.env.V2_PUBLIC_APP_URL||process.env.PUBLIC_APP_URL||'https://shaurmeg-v2-app.onrender.com').replace(/\/$/,'');
-  const OWNER_APP_URL=String(process.env.VENUE_OWNER_MINI_APP_URL||OWNER_APP_BASE+'/admin-venue.html').trim();
+  const OWNER_APP_URL=String(process.env.VENUE_OWNER_MINI_APP_URL||OWNER_APP_BASE+'/admin-venue-pro.html').trim();
   const SESSION_SECRET=String(process.env.VENUE_OWNER_SESSION_SECRET||process.env.OWNER_API_TOKEN||process.env.ADMIN_TELEGRAM_SESSION_SECRET||'').trim();
   const WEBHOOK_SECRET=BOT_TOKEN&&SESSION_SECRET?crypto.createHash('sha256').update('venue-owner-webhook:'+BOT_TOKEN+':'+SESSION_SECRET).digest('hex').slice(0,32):'';
   let botInfo=null;
@@ -225,7 +225,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const u=new URL(OWNER_APP_URL);
     if(establishmentId)u.searchParams.set('establishment',String(establishmentId));
     if(tab)u.searchParams.set('tab',String(tab));
-    u.searchParams.set('v','2');
+    u.searchParams.set('v','20261005b');
     return u.toString();
   }
   function canUse(access,permission){

@@ -760,6 +760,18 @@ function createVenueDialogAgent({DB,commandBus}){
       return commandBus.handle({user,text:raw});
     }
 
+    const salvageItems=await rankItems(venue,raw),salvageCats=await rankCategories(venue,raw);
+    const salvage=[...salvageItems.slice(0,4),...salvageCats.slice(0,3)].sort((a,b)=>b.score-a.score);
+    if(salvage.length&&salvage[0].score>=.45){
+      const token=token8();
+      await patchContext(user.id,{pending_kind:'entity_nav',pending_payload:{token},pending_candidates:salvage});
+      return {
+        handled:true,
+        text:clarifyText('Действие сформулировано неоднозначно. Ничего не меняю. Но похоже, речь об одном из этих объектов — выберите, и продолжим:',salvage),
+        reply_markup:candidateButtons(token,salvage)
+      };
+    }
+
     return {handled:true,text:'Я не уверен, что понял задачу, поэтому ничего не меняю.\n\nМожно написать естественно, например:\n«найди сырную шаурму»\n«у сырной сделай цену 420»\n«покажи напитки»\n«убери айран» — я уточню, скрыть его или поставить в стоп-лист.\n\nЕсли хотите, просто напишите название блюда — начнём с точного поиска.'};
   }
 

@@ -505,8 +505,10 @@ function createVenueDialogAgent({DB,commandBus}){
         return {handled:true,text:'Запомнил: «'+payload.alias+'» = «'+chosen.label+'» для этой точки.'};
       }
       if(cmd){
-        if(destructive(cmd))return confirmDanger(user,cmd,chosen.label);
-        return executeResolved(user,cmd,chosen.label);
+        const active=await activeVenue(user),fresh=await context(user.id);
+        const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
+        if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
+        return resolveNestedCommand(user,active.venue,fresh,cmd,item);
       }
       return commandBus.handle({user,text:'работаем с '+chosen.label});
     }
@@ -523,6 +525,26 @@ function createVenueDialogAgent({DB,commandBus}){
       return commandBus.handle({user,text:'работаем с '+chosen.label});
     }
 
+    if(kind==='command_entity'){
+      await clearPending(user.id);
+      const active=await activeVenue(user);
+      if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
+      const cmd={...(payload.command||{})};
+      if(payload.slot==='category')cmd.category=chosen.label;
+      if(payload.slot==='group'){
+        cmd.group=chosen.label;
+        await patchContext(user.id,{selected_group_id:chosen.id});
+      }
+      if(payload.slot==='option')cmd.option=chosen.label;
+      const fresh=await context(user.id);
+      const item=(active.venue.menu||[]).find(x=>String(x.id)===String(payload.item_id||fresh.selected_item_id||''));
+      if(item)return resolveNestedCommand(user,active.venue,fresh,cmd,item);
+      if(needsCategoryResolution(cmd))return resolveCategoryCommand(user,active.venue,cmd);
+      if(destructive(cmd))return confirmDanger(user,cmd,'');
+      const canonical=canonicalText(cmd,'');
+      return canonical?commandBus.handle({user,text:canonical}):{handled:false};
+    }
+
     if(kind==='action'){
       await clearPending(user.id);
       const action=chosen.command;
@@ -531,7 +553,10 @@ function createVenueDialogAgent({DB,commandBus}){
       const item=await chooseItem(user,active.venue,action.item,{command:action},'Какую позицию изменить?');
       if(item.error)return {handled:true,text:item.error};
       if(item.ask)return item.ask;
-      return executeResolved(user,action,item.item.label);
+      await patchContext(user.id,{selected_item_id:item.item.id,selected_group_id:null});
+      const fresh=await context(user.id);
+      const row=(active.venue?.menu||[]).find(x=>String(x.id)===String(item.item.id));
+      return resolveNestedCommand(user,active.venue,fresh,action,row);
     }
 
     return null;
@@ -616,18 +641,21 @@ function createVenueDialogAgent({DB,commandBus}){
           const picked=await chooseItem(user,venue,q,{command},'Какую именно позицию изменить?');
           if(picked.error)return {handled:true,text:picked.error};
           if(picked.ask)return picked.ask;
-          await patchContext(user.id,{selected_item_id:picked.item.id});
-          if(destructive(command))return confirmDanger(user,command,picked.item.label);
-          return executeResolved(user,command,picked.item.label);
+          await patchContext(user.id,{selected_item_id:picked.item.id,selected_group_id:null});
+          const fresh=await context(user.id);
+          const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
+          if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
+          return resolveNestedCommand(user,venue,fresh,command,item);
         }
-        if(!ctx.selected_item_id){
+        const fresh=await context(user.id);
+        if(!fresh.selected_item_id){
           return {handled:true,text:'Сначала уточним блюдо. Напишите его название или, например, «покажи напитки». Ничего не меняю, пока позиция не определена точно.'};
         }
-        const current=(venue.menu||[]).find(x=>String(x.id)===String(ctx.selected_item_id));
+        const current=(venue.menu||[]).find(x=>String(x.id)===String(fresh.selected_item_id));
         if(!current)return {handled:true,text:'Выбранная ранее позиция больше не найдена. Назовите блюдо ещё раз.'};
-        if(destructive(command))return confirmDanger(user,command,String(current.n||current.name));
-        return executeResolved(user,command,String(current.n||current.name));
+        return resolveNestedCommand(user,venue,fresh,command,current);
       }
+      if(needsCategoryResolution(command))return resolveCategoryCommand(user,venue,command);
       if(destructive(command))return confirmDanger(user,command,'');
       return commandBus.handle({user,text:raw});
     }

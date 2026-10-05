@@ -529,7 +529,7 @@
     meats:{name:'Мясо',type:'single'},sizes:{name:'Размер',type:'single'},bases:{name:'Основа',type:'single'},
     sauces:{name:'Соусы',type:'multiple'},extras:{name:'Добавки',type:'multiple'}
   };
-  function itemUnavailable(src){return src?.available===false||Number(src?.stock)===0}
+  function itemUnavailable(src){return src?.available===false||src?.available_now===false||Number(src?.stock)===0}
   function fixedOptionGroups(src){
     const opts=src?.options&&typeof src.options==='object'?src.options:{},required=new Set(Array.isArray(opts.required_groups)?opts.required_groups:[]);
     return Object.keys(FIXED_OPTION_META).map(id=>{

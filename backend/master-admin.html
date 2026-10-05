@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Shaurmeg · Master Admin</title>
+<title>Шаурмег · Супер админка</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--bg:#070b12;--panel:#0d141f;--panel2:#121c29;--line:rgba(255,255,255,.075);--text:#f4f7fb;--muted:#8290a3;--blue:#6f8dff;--cyan:#59c7dc;--green:#6bd8a3;--amber:#f1bb68;--red:#ff7e8d;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
@@ -28,11 +28,94 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
 @media(max-width:520px){.astraConfig{grid-template-columns:1fr}.astraConfig .wide{grid-column:1}.astraDataset{grid-template-columns:1fr}.astraAssetCard{grid-template-columns:1fr}.astraThumb{min-height:180px}.astraThumb img{height:180px}.astraReadiness{grid-template-columns:1fr}.astraScore{margin:auto}}
 @media(max-width:620px){.stats{grid-template-columns:1fr 1fr}.hero h1{font-size:34px}.modules{grid-template-columns:1fr 1fr}.module{min-height:126px;padding:13px}.module b{font-size:15px}.module small{font-size:9.5px}}
 </style>
-</head>
+<style>
+/* Shaurmeg Super Admin · network control visual system · 2026-10-05 */
+:root{--bg:#040910;--panel:#091521;--panel2:#0d1c2a;--line:rgba(255,255,255,.09);--text:#f6f8fb;--muted:#8fa2b5;--blue:#69a7ff;--cyan:#67d8e7;--green:#2bd18c;--amber:#ffbd64;--red:#ff4a52;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
+body{
+ background:
+ radial-gradient(circle at 12% -4%,rgba(255,67,74,.18),transparent 27%),
+ radial-gradient(circle at 87% 1%,rgba(31,112,173,.20),transparent 32%),
+ linear-gradient(180deg,#07111b 0,#040910 48%,#02060a 100%);
+}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
+ linear-gradient(90deg,transparent 0 19%,rgba(255,255,255,.014) 19.1% 19.3%,transparent 19.4% 39%,rgba(255,255,255,.01) 39.1% 39.2%,transparent 39.3%),
+ radial-gradient(circle at 80% 72%,rgba(255,61,68,.07),transparent 27%)}
+.app{width:min(1120px,100%);padding-left:14px;padding-right:14px}
+.top{
+ top:8px;padding:10px 12px;border-radius:19px;border-color:var(--line);
+ background:rgba(5,12,20,.88);box-shadow:0 14px 40px rgba(0,0,0,.24)
+}
+.mark{
+ width:42px;height:42px;border-radius:14px;font-size:0;
+ background:linear-gradient(145deg,#ff2932,#ff6849);
+ box-shadow:0 10px 28px rgba(255,48,55,.28),inset 0 0 0 1px rgba(255,255,255,.16)
+}
+.mark:before{content:"◆";font-size:18px;color:#fff;transform:rotate(45deg)}
+.brand b{font-size:15px;letter-spacing:.035em}.brand small{color:#8ea2b5}
+.status{color:#6be2ab}.status i{background:#2bd18c;box-shadow:0 0 14px rgba(43,209,140,.55)}
+.hero{
+ margin:12px 0 14px;padding:28px 24px 26px;border:1px solid var(--line);border-radius:30px;overflow:hidden;
+ background:
+ radial-gradient(circle at 87% 20%,rgba(255,69,74,.20),transparent 18%),
+ radial-gradient(circle at 74% 48%,rgba(70,139,211,.13),transparent 25%),
+ linear-gradient(110deg,rgba(12,29,44,.96),rgba(6,15,24,.84));
+ box-shadow:0 24px 70px rgba(0,0,0,.24);position:relative
+}
+.hero:after{content:"NETWORK CONTROL";position:absolute;right:22px;bottom:16px;color:rgba(255,255,255,.04);font-size:44px;font-weight:950;letter-spacing:.04em;pointer-events:none}
+.eyebrow{color:#ff746d}.hero h1{font-size:45px;margin-top:8px;color:#fff}.hero p{color:#9fb0c0;max-width:65ch;font-size:15px}
+.stats{gap:9px}.stat{
+ min-height:98px;padding:15px;border-color:var(--line);border-radius:20px;
+ background:linear-gradient(180deg,rgba(14,30,45,.96),rgba(7,17,27,.96));box-shadow:0 14px 32px rgba(0,0,0,.14)
+}
+.stat small{color:#8ea1b4;letter-spacing:.08em}.stat b{font-size:27px;color:#fff}
+.tabs{
+ position:sticky;top:72px;z-index:18;padding:5px;border-radius:17px;background:rgba(5,12,20,.90);
+ -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)
+}
+.tabs button{min-height:42px;color:#91a3b5}.tabs button.active{
+ color:#fff;background:linear-gradient(135deg,#ff3038,#ff6549);box-shadow:0 9px 24px rgba(255,47,55,.22)
+}
+.sectionTitle{margin-top:25px}.sectionTitle h2{font-size:26px;color:#fff}.sectionTitle small{color:#8799aa}
+.modules{gap:10px}.module{
+ min-height:140px;padding:17px;border-color:var(--line);border-radius:23px;
+ background:linear-gradient(155deg,#0d1c2a,#07131f);box-shadow:0 14px 38px rgba(0,0,0,.16);
+ transition:transform .18s ease,border-color .18s ease,background .18s ease
+}
+.module:hover{transform:translateY(-2px);border-color:rgba(255,86,82,.22);background:linear-gradient(155deg,#102232,#081522)}
+.module:before{background:var(--glow,rgba(255,65,72,.10))}
+.module span{width:39px;height:39px;border-radius:13px;background:#102131;border:1px solid var(--line)}
+.module b{font-size:18px;color:#fff}.module small{font-size:11px;color:#91a3b4}
+.panel{
+ border-color:var(--line);border-radius:24px;
+ background:linear-gradient(180deg,rgba(13,29,43,.96),rgba(6,15,24,.98));
+ box-shadow:0 18px 50px rgba(0,0,0,.20)
+}
+.field label{color:#8ea2b4}.field input,.field select,select,input{
+ background:#06121d;border-color:var(--line);color:#f3f6f9
+}
+.btn{background:#0b1926;border-color:var(--line);color:#eaf1f7}.btn.primary{background:linear-gradient(135deg,#ff3038,#ff6549);box-shadow:0 9px 24px rgba(255,47,55,.20)}
+.btn.danger{color:#ff969a;background:rgba(255,67,74,.08);border-color:rgba(255,67,74,.18)}
+.code{background:#050e17;border-color:rgba(105,167,255,.22);color:#dbe7f3}
+.row{background:#081520;border-color:var(--line)}.row small{color:#8295a8}
+.pill{background:rgba(43,209,140,.10);color:#6fe0ab}
+.login{background:radial-gradient(circle at 50% 0,rgba(255,59,67,.18),transparent 35%),#040910}.loginCard{background:#0a1723;border-color:var(--line);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+.astraIntro{border-color:rgba(103,216,231,.16);background:radial-gradient(circle at 100% 0,rgba(103,216,231,.10),transparent 40%),linear-gradient(155deg,#0d1c2a,#07131e)}
+.astraSelector,.astraDatasetBlock,.astraReadiness{background:#081520;border-color:var(--line)}
+.astraBadge{background:#0c1a27;border-color:var(--line)}.astraBadge.good{background:rgba(43,209,140,.08);color:#72dfad}
+.astraUpload{background:rgba(105,167,255,.035);border-color:rgba(105,167,255,.23)}
+.astraAssetCard{background:#06121c}.astraAssetFields input,.astraAssetFields select,.astraAssetFields textarea,.astraConfig textarea{background:#06121d;border-color:var(--line)}
+.astraScore{background:#06121c;border-color:rgba(255,72,78,.18)}
+.toast{background:#0a1723;border-color:var(--line)}
+@media(max-width:620px){
+ .hero{padding:23px 18px 22px}.hero h1{font-size:38px}.hero:after{font-size:27px;right:12px;bottom:10px}
+ .tabs{top:69px}
+ .module{min-height:130px}
+}
+</style></head>
 <body>
 <div class="app" id="app" hidden>
-  <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><div class="mark">Ш</div><div class="brand"><b>SHAURMEG MASTER</b><small>UNIFIED ADMIN CONTROL</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
-  <section class="hero"><span class="eyebrow">MASTER ADMIN · FULL ACCESS</span><h1>Одна админка.<br>Вся система.</h1><p>Единая оболочка над рабочими административными модулями Shaurmeg. Функции внутри разделов используют существующую серверную логику.</p></section>
+  <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><div class="mark">Ш</div><div class="brand"><b>ШАУРМЕГ · СУПЕР АДМИНКА</b><small>УПРАВЛЕНИЕ ВСЕЙ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
+  <section class="hero"><span class="eyebrow">SUPER ADMIN · NETWORK CONTROL</span><h1>Вся сеть.<br>Под полным контролем.</h1><p>Заведения, заказы, меню, карта, Astra / RealCity, доступы, владельцы, боты и инфраструктура — единая рабочая среда поверх существующей серверной логики.</p></section>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
 
   <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>

@@ -324,21 +324,9 @@ function canUse(access,permission){
 }
 
 function sectionsFrom(config={},menu=[]){
+  if(typeof D.normalizeMenuSections==='function')return D.normalizeMenuSections(config?.menu_sections,menu,true);
   const raw=Array.isArray(config?.menu_sections)?config.menu_sections:[];
-  const out=raw.map((x,i)=>({
-    id:clean(x?.id||slug(x?.name||('section_'+i))),
-    name:clean(x?.name||x?.title||x?.id||'Раздел'),
-    emoji:clean(x?.emoji||'').slice(0,8),
-    active:x?.active!==false,
-    order:i
-  })).filter(x=>x.id&&x.name);
-  const seen=new Set(out.map(x=>x.id));
-  for(const item of Array.isArray(menu)?menu:[]){
-    const id=clean(item?.c||item?.category||'shawarma');
-    if(!id||seen.has(id))continue;
-    seen.add(id);out.push({id,name:id,emoji:'',active:true,order:out.length});
-  }
-  return out.map((x,i)=>({...x,order:i}));
+  return raw.map((x,i)=>({...x,order:i}));
 }
 
 function looseWords(v){
@@ -498,10 +486,11 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
 
   async function saveMenu(access,userId,menu,config,action,payload){
     const normalized=D.normalizeMenu(menu);
+    const nextConfig={...(config||{}),menu_revision:(Number(config?.menu_revision)||0)+1};
     const q=await DB.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',
-      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(config||{})]);
+      [access.establishment_id,JSON.stringify(normalized),JSON.stringify(nextConfig)]);
     if(q.rows[0])publishVenue(q.rows[0]);
-    await audit(access.establishment_id,userId,action,payload);
+    await audit(access.establishment_id,userId,action,{...payload,menu_revision:nextConfig.menu_revision});
     return q.rows[0];
   }
   async function saveBuilder(access,userId,config,builder,action,payload={}){

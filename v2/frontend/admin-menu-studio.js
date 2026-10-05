@@ -65,7 +65,7 @@ async function load({quiet=false}={}){
   const revision=++loadRevision,requestedEst=est;
   if(!quiet)setSync('Синхронизация…');
   const response=await call('/venue-owner/establishments/'+encodeURIComponent(requestedEst));if(revision!==loadRevision||requestedEst!==est)return;data=response;dirty=false;menuDirty=false;designDirty=false;$('#view-design').dataset.establishment=est;menu=(data.menu||[]).map(x=>({...x}));sections=(data.sections_all||data.sections||data.config?.menu_sections||[]).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));
-  if(!currentCategory||!activeSections().some(x=>x.id===currentCategory))currentCategory=activeSections()[0]?.id||'';
+  const selectable=MASTER?sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)):activeSections();if(!currentCategory||!selectable.some(x=>x.id===currentCategory))currentCategory=selectable[0]?.id||'';
   hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();renderGuestPreview();connect();setSync()
 }
 function setView(v){

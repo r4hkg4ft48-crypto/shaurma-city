@@ -81,11 +81,12 @@ function itemText(item,categoryName=''){
 }
 function ordinal(v){
   const s=normalize(v);
-  if(/^(1|перв\w*)$/.test(s))return 0;
-  if(/^(2|втор\w*)$/.test(s))return 1;
-  if(/^(3|трет\w*)$/.test(s))return 2;
-  if(/^(4|четверт\w*)$/.test(s))return 3;
-  if(/^(5|пят\w*)$/.test(s))return 4;
+  if(/^(1|перв[а-яa-z0-9]*)$/.test(s))return 0;
+  if(/^(2|втор[а-яa-z0-9]*)$/.test(s))return 1;
+  if(/^(3|трет[а-яa-z0-9]*)$/.test(s))return 2;
+  if(/^(4|четверт[а-яa-z0-9]*)$/.test(s))return 3;
+  if(/^(5|пят[а-яa-z0-9]*)$/.test(s))return 4;
+  if(/^(6|шест[а-яa-z0-9]*)$/.test(s))return 5;
   const n=Number(s);return Number.isInteger(n)&&n>0&&n<=9?n-1:-1;
 }
 function isCancel(v){return /^(нет|не то|не это|отмена|отмени|стоп|назад)$/i.test(normalize(v))}

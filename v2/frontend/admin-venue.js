@@ -80,7 +80,7 @@
    if(!(await auth())){$('#gateText').textContent='Нет действующей Telegram-сессии. Откройте Mini App из бота владельца.';return}
    if(!accesses.length){$('#gateText').textContent='К этому Telegram-аккаунту пока не привязано ни одного заведения. Введите код, который выдал администратор карты.';return}
    $('#gate').classList.add('hidden');$('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+'</option>').join('');
-   est=new URL(location.href).searchParams.get('establishment')||accesses[0].establishment_id;if(!accesses.some(x=>x.establishment_id===est))est=accesses[0].establishment_id;$('#venueSelect').value=est;await load();
+   const launch=new URL(location.href);est=launch.searchParams.get('establishment')||accesses[0].establishment_id;if(!accesses.some(x=>x.establishment_id===est))est=accesses[0].establishment_id;$('#venueSelect').value=est;await load();selectTab(['menu','orders','profile'].includes(launch.searchParams.get('tab'))?launch.searchParams.get('tab'):'profile');
  }
  async function claimAccess(){
    if(!session)return toast('Откройте Mini App через Telegram-бота владельца');
@@ -281,7 +281,15 @@
      builder=builderForEdit({builder:j.builder});toast('Конструктор обновлён ✓');await load();
    }catch(e){toast(e.message)}finally{btn.disabled=false}
  }
- async function loadOrders(){try{const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');renderOrders(rows)}catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы</div>'}}
+ function renderOrderStats(rows){
+   const start=new Date();start.setHours(0,0,0,0);
+   const today=(rows||[]).filter(o=>new Date(o.created_at)>=start);
+   const live=today.filter(o=>!['done','cancelled'].includes(String(o.status||'')));
+   const revenue=today.filter(o=>o.status!=='cancelled').reduce((sum,o)=>sum+(Number(o.total)||0),0);
+   const set=(id,v)=>{const el=$(id);if(el)el.textContent=String(v)};
+   set('#statToday',today.length);set('#statNew',live.filter(o=>o.status==='new').length);set('#statCooking',live.filter(o=>o.status==='cooking').length);set('#statRevenue',money(revenue));
+ }
+ async function loadOrders(){try{const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');renderOrders(rows);renderOrderStats(rows);$('#ordersLive').textContent='LIVE'}catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы</div>';renderOrderStats([])}}
  function renderOrders(rows){
    const labels={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
    $('#ordersList').innerHTML=rows.length?rows.map(o=>'<article class="orderCard">'+
@@ -295,7 +303,8 @@
  }
  function connect(){stream?.close();stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));stream.addEventListener('order',()=>loadOrders());stream.addEventListener('update',()=>loadOrders());stream.onerror=()=>$('#ordersLive').textContent='RECONNECT'}
 
- document.querySelector('.tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(!b)return;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===b));['profile','menu','orders'].forEach(id=>$('#'+id).classList.toggle('hidden',id!==b.dataset.tab))};
+ function selectTab(tab){const target=['profile','menu','orders'].includes(tab)?tab:'profile';document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===target));['profile','menu','orders'].forEach(id=>$('#'+id).classList.toggle('hidden',id!==target));if(target==='orders')loadOrders()}
+ document.querySelector('.tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(!b)return;selectTab(b.dataset.tab)};
  $('#claimBtn').onclick=claimAccess;
  $('#ordersList').onclick=async e=>{const b=e.target.closest('[data-order]');if(!b)return;b.disabled=true;try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders/'+b.dataset.order,{method:'PATCH',body:{status:b.dataset.status}});await loadOrders();toast('Статус обновлён')}catch(err){toast(err.message)}finally{b.disabled=false}};
  $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;await load()};

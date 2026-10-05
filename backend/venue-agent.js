@@ -361,7 +361,11 @@ function createVenueDialogAgent({DB,commandBus}){
       await patchContext(user.id,{selected_category_id:null,selected_item_id:null,selected_group_id:null});
       return commandBus.handle({user,text:'/use '+hit.id});
     }
-    return ask(user.id,'venue_select',{query},ranked.filter(x=>x.score>=.3),'Какое заведение выбрать?');
+    const candidates=ranked.filter(x=>x.score>=.3);
+    if(candidates.length)return ask(user.id,'venue_select',{query},candidates,'Какое заведение выбрать?');
+    return ask(user.id,'venue_select',{query},list.map(v=>({
+      id:v.establishment_id,label:v.name+' · '+venueShortKey(v.establishment_id),type:'venue',score:1
+    })),'По такому названию точку не нашёл. Выберите из доступных:');
   }
   async function activeVenue(user){
     const list=await accesses(user.id);
@@ -620,13 +624,17 @@ function createVenueDialogAgent({DB,commandBus}){
   async function handle({user,text}){
     const raw=clean(text);if(!user?.id||!raw)return {handled:false};
 
+    const parsed=parseCommand(raw);
     const ctx0=await context(user.id);
     if(ctx0.pending_kind){
-      const pending=await consumePending(user,raw);
-      if(pending)return pending;
+      const explicitOverride=new Set(['help','venues_show','venue_select']).has(parsed.intent);
+      if(explicitOverride)await clearPending(user.id);
+      else{
+        const pending=await consumePending(user,raw);
+        if(pending)return pending;
+      }
     }
 
-    const parsed=parseCommand(raw);
     if(parsed.intent==='help')return {handled:true,text:dialogHelpText()};
     if(parsed.intent==='venues_show')return commandBus.handle({user,text:raw});
     if(parsed.intent==='venue_select')return selectVenue(user,parsed.query);

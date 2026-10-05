@@ -517,16 +517,29 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
         VALUES($1,$2,$3,$4::jsonb,NOW()+($5||' days')::interval,1,'superadmin')
         RETURNING id,establishment_id,role,permissions,expires_at,max_uses,uses,created_at
       `,[est,codeHash(raw),role,JSON.stringify(permissions),String(days)]);
-      let link=null,username=null;
-      try{const info=await getBotInfo();username=info?.username||null;if(username)link='https://t.me/'+username+'?start=claim_'+raw}catch{}
+      // Issuing a persisted key must not wait for an external Telegram getMe.
+      // Bot metadata is populated by startup sync; the code works without a link.
+      const username=botInfo?.username||null,link=username?'https://t.me/'+username+'?start=claim_'+raw:null;
       res.status(201).json({...q.rows[0],claim_code:raw,bot_username:username,claim_link:link,venue_name:venue.name});
-    }catch(e){res.status(500).json({error:'invite_create_failed'})}
+    }catch(e){console.error('venue invite create:',e.message);res.status(500).json({error:'invite_create_failed'})}
   });
 
   app.get('/api/shaurma/admin/establishments/:establishmentId/admins',async(req,res)=>{
     if(!ownerOk(req))return res.sendStatus(401);if(!DB)return res.status(503).json({error:'persistent_storage_required'});
-    const q=await DB.query("SELECT establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,created_at,updated_at FROM shaurma_venue_admins WHERE establishment_id=$1 ORDER BY created_at",[req.params.establishmentId]);
-    res.json(q.rows);
+    try{
+      const q=await DB.query("SELECT establishment_id,telegram_user_id,telegram_username,telegram_first_name,role,permissions,is_active,created_at,updated_at FROM shaurma_venue_admins WHERE establishment_id=$1 ORDER BY is_active DESC,created_at",[req.params.establishmentId]);
+      res.json(q.rows);
+    }catch(e){console.error('venue admins:',e.message);res.status(500).json({error:'venue_admins_failed'})}
+  });
+
+  // Raw OWN codes are displayed only once at creation; stored hashes never leave the API.
+  app.get('/api/shaurma/admin/establishments/:establishmentId/invites',async(req,res)=>{
+    if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+    try{const q=await DB.query('SELECT id,role,expires_at,max_uses,uses,is_active,created_at,last_used_at,kitchen_enabled FROM shaurma_venue_invites WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 50',[req.params.establishmentId]);res.json(q.rows)}catch(e){console.error('venue invites:',e.message);res.status(500).json({error:'venue_invites_failed'})}
+  });
+  app.delete('/api/shaurma/admin/establishments/:establishmentId/invites/:id',async(req,res)=>{
+    if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});if(!DB)return res.status(503).json({error:'persistent_storage_required'});
+    try{const q=await DB.query('UPDATE shaurma_venue_invites SET is_active=FALSE WHERE establishment_id=$1 AND id=$2 RETURNING id',[req.params.establishmentId,req.params.id]);if(!q.rows.length)return res.status(404).json({error:'invite_not_found'});res.json({ok:true})}catch(e){res.status(500).json({error:'invite_revoke_failed'})}
   });
 
   app.delete('/api/shaurma/admin/establishments/:establishmentId/admins/:telegramUserId',async(req,res)=>{

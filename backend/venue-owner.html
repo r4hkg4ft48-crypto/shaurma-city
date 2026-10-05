@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="/realcity-preview/builder-cinema.css?v=20261004">
 <script src="/realcity-preview/builder-cinema.js?v=20261004"></script>
 <script src="/realcity-preview/builder-cinema-admin.js?v=20261004"></script>
-<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-astra3"><script src="/realcity-preview/admin-console.js?v=20261005-astra3"></script></head>
+<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-final4"><script src="/realcity-preview/admin-console.js?v=20261005-final4"></script></head>
 <body class="consoleModule ">
 <div class="wrap" id="app" hidden>
   <div class="top"><div class="topLeft"><button class="masterBackVenue" id="masterBackVenue" type="button" aria-label="Назад">←</button><div class="brand"><b>SHAURMEG</b><small>VENUE OWNER CONTROL</small></div></div><div class="id" id="topId">—</div></div>
@@ -135,7 +135,7 @@ const API=location.origin,$=s=>document.querySelector(s),qa=s=>[...document.quer
 const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_LAUNCH.searchParams.get('establishment')||''),REQUESTED_TAB=String(OWNER_LAUNCH.searchParams.get('tab')||''),MASTER_MODE=OWNER_LAUNCH.searchParams.get('master')==='1';
 const SESSION_KEY=MASTER_MODE?'venue_owner_master_session':'venue_owner_session';
 function backToMaster(){location.href='/master-admin?tab=sites&v=1'}
-function setupMasterBack(){if(OWNER_LAUNCH.searchParams.get('from')==='console'){const back=()=>location.href='https://shaurmeg-v2-app.onrender.com/admin-venue-pro.html?establishment='+encodeURIComponent(currentId||REQUESTED_ESTABLISHMENT)+'&tab=settings&v=20261005-astra3';$('#masterBackVenue')?.classList.add('show');$('#masterBackVenue').onclick=back;try{window.Telegram?.WebApp?.BackButton?.show();window.Telegram?.WebApp?.BackButton?.onClick(back)}catch{};return}if(!MASTER_MODE)return;$('#masterBackVenue')?.classList.add('show');try{const tg=window.Telegram?.WebApp;tg?.BackButton?.show();tg?.BackButton?.onClick(backToMaster)}catch{}}
+function setupMasterBack(){if(OWNER_LAUNCH.searchParams.get('from')==='console'){const back=()=>location.href='https://shaurmeg-v2-app.onrender.com/admin-venue-pro.html?establishment='+encodeURIComponent(currentId||REQUESTED_ESTABLISHMENT)+'&tab=settings&v=20261005-final4';$('#masterBackVenue')?.classList.add('show');$('#masterBackVenue').onclick=back;try{window.Telegram?.WebApp?.BackButton?.show();window.Telegram?.WebApp?.BackButton?.onClick(back)}catch{};return}if(!MASTER_MODE)return;$('#masterBackVenue')?.classList.add('show');try{const tg=window.Telegram?.WebApp;tg?.BackButton?.show();tg?.BackButton?.onClick(backToMaster)}catch{}}
 let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],builderConfigDraft=null,hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1500)}

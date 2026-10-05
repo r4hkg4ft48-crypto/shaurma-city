@@ -4,10 +4,21 @@ const config=require('./config');
 const db=require('./db');
 const rt=require('./realtime');
 const voice=require('./voice-assistant');
+const {createVenueCommandBus}=require('../../../backend/venue-command');
 
 const TELEGRAM_MAX_RETRIES=3;
 const TELEGRAM_SYNC_DELAY_MS=300;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const venueCommandBus=createVenueCommandBus({
+  DB:db,
+  publishVenue:row=>{
+    if(!row?.establishment_id)return;
+    rt.pushVenue(row.establishment_id,'menu_changed',{establishment_id:row.establishment_id});
+    rt.pushVenue(row.establishment_id,'venue',row);
+    rt.pushOwner('venue',row);
+  },
+  pushOwner:rt.pushOwner
+});
 
 async function call(token,method,body={},attempt=0){
   if(!token)return null;
@@ -499,9 +510,38 @@ async function handleKitchenCallback(query){
   }
 }
 
+async function kitchenPhotoDataUrl(msg){
+  const photos=Array.isArray(msg?.photo)?msg.photo:[];
+  if(!photos.length)return '';
+  const preferred=[...photos].reverse().find(x=>!x.file_size||Number(x.file_size)<=480000)||photos[0];
+  const file=await call(config.KITCHEN_BOT_TOKEN,'getFile',{file_id:preferred.file_id});
+  if(!file?.file_path)throw new Error('telegram_photo_path_missing');
+  const response=await fetch('https://api.telegram.org/file/bot'+config.KITCHEN_BOT_TOKEN+'/'+file.file_path);
+  if(!response.ok)throw new Error('telegram_photo_download_failed');
+  const ab=await response.arrayBuffer();
+  if(ab.byteLength>520000)throw new Error('telegram_photo_too_large');
+  const ext=String(file.file_path).split('.').pop().toLowerCase();
+  const mime=ext==='png'?'image/png':ext==='webp'?'image/webp':'image/jpeg';
+  return 'data:'+mime+';base64,'+Buffer.from(ab).toString('base64');
+}
+
 async function handleKitchenMessage(msg){
   const chatId=msg?.chat?.id,user=msg?.from;
   if(!chatId)return;
+
+  if(msg?.photo?.length&&user?.id){
+    try{
+      const caption=String(msg.caption||'').trim();
+      const m=caption.match(/^(?:фото|картинка|изображение)(?:\s+(?:для|позиции|блюда))?\s*(.*)$/i);
+      const image=await kitchenPhotoDataUrl(msg);
+      const result=await venueCommandBus.setItemImage({user,itemQuery:String(m?.[1]||'').trim(),image});
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:String(result?.text||'Фото обновлено').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900)});
+    }catch(e){
+      console.error('kitchen menu photo',e.message);
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:e.message==='telegram_photo_too_large'?'Фото слишком большое. Отправьте его как обычное фото Telegram, не как файл.':'Не удалось сохранить фото позиции.'});
+    }
+  }
+
   if(msg?.voice||msg?.audio)return handleKitchenVoice(msg);
   const raw=String(msg.text||'').trim();
   const start=raw.match(/^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(.+))?$/i);
@@ -519,7 +559,7 @@ async function handleKitchenMessage(msg){
       const access=await claimKitchenAccess(chatId,user,code);
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:chatId,
-        text:'✅ Кухня подключена\n\n'+access.name+'\nТеперь новые заказы этого заведения будут приходить сюда автоматически.\n\nСтатусы: Принят → Готовится → Готово → Выполнен.'
+        text:'✅ Кухня подключена\n\n'+access.name+'\nТеперь новые заказы этого заведения будут приходить сюда автоматически.\n\nСтатусы: Принят → Готовится → Готово → Выполнен.\n\nЕсли у вас есть права владельца/менеджера, меню можно менять прямо здесь — /assistant.'
       });
     }catch(e){
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:e.message==='claim_code_invalid_or_expired'?'Ключ не найден или срок его действия истёк.':'Неверный ключ. Формат: OWN-XXXXXXXXXX'});
@@ -535,14 +575,32 @@ async function handleKitchenMessage(msg){
     if(accesses.length){
       return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:chatId,
-        text:'👨‍🍳 Бот приёма заказов Shaurmeg подключён.\n\nЗаведения:\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n')+'\n\nНовые заказы будут приходить автоматически.'
+        text:'👨‍🍳 Бот приёма заказов Shaurmeg подключён.\n\nЗаведения:\n'+accesses.map(x=>'• '+x.name+' · '+x.establishment_id).join('\n')+'\n\nНовые заказы будут приходить автоматически.\nДля управления меню: /assistant'
       });
     }
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
-      text:'👨‍🍳 Бот приёма заказов Shaurmeg\n\nОтправьте ключ доступа заведения в формате:\nOWN-XXXXXXXXXX\n\nМожно использовать тот же ключ, который выдан для подключения заведения к кабинету владельца.'
+      text:'👨‍🍳 Бот приёма заказов Shaurmeg\n\nОтправьте ключ доступа заведения в формате:\nOWN-XXXXXXXXXX'
     });
   }
+
+  if(raw&&user?.id){
+    try{
+      const result=await venueCommandBus.handle({user,text:raw});
+      if(result?.handled){
+        const text=String(result.text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);
+        return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text,disable_web_page_preview:true});
+      }
+    }catch(e){
+      console.error('kitchen menu assistant',e.message);
+      return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{chat_id:chatId,text:'Не удалось выполнить изменение меню. Данные не изменены.'});
+    }
+  }
+
+  return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+    chat_id:chatId,
+    text:'Не распознал запрос. Напишите /assistant — покажу примеры управления меню.'
+  });
 }
 
 async function sync(){
@@ -575,6 +633,7 @@ async function sync(){
       {command:'start',description:'Подключить приём заказов'},
       {command:'status',description:'Показать подключённые заведения'},
       {command:'voice',description:'Голосовые команды кухни'},
+      {command:'assistant',description:'Управление меню и точкой'},
       {command:'connect',description:'Подключить заведение по ключу'},
       {command:'disconnect',description:'Отключить этот чат от заказов'}
     ]}));

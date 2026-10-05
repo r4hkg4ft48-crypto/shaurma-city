@@ -636,14 +636,24 @@ router.put('/venue-owner/establishments/:establishmentId/builder',async(req,res)
   }catch(e){fail(res,e,'venue_owner_builder_failed')}
 });
 
+router.put('/venue-owner/establishments/:establishmentId/design',async(req,res)=>{
+  const a=await venueAccess(req,res,'profile');if(!a)return;
+  try{
+    const theme=D.normalizeVenueTheme(req.body?.theme||{}),site=D.normalizeSiteCustomization(req.body?.site_customization||{});
+    const q=await db.query("UPDATE shaurma_venues SET config=COALESCE(config,'{}'::jsonb)||jsonb_build_object('theme',$2::jsonb,'site_customization',$3::jsonb),updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[a.est,JSON.stringify(theme),JSON.stringify(site)]);
+    if(!q.rows[0])return res.sendStatus(404);
+    await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'design_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({theme,layout:site.menu.layout,design:site.design.mode})]);
+    rt.pushVenue(a.est,'venue',q.rows[0]);res.json({ok:true,theme,site_customization:site});
+  }catch(e){fail(res,e,'venue_owner_design_failed')}
+});
+
 router.put('/venue-owner/establishments/:establishmentId/theme',async(req,res)=>{
   const a=await venueAccess(req,res,'profile');if(!a)return;
   try{
     const theme=D.normalizeVenueTheme(req.body?.theme||req.body||{});
     const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);
     if(!current.rows[0])return res.sendStatus(404);
-    const cfg={...(current.rows[0].config||{}),theme};
-    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(cfg)]);
+    const q=await db.query("UPDATE shaurma_venues SET config=COALESCE(config,'{}'::jsonb)||jsonb_build_object('theme',$2::jsonb),updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[a.est,JSON.stringify(theme)]);
     await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'theme_updated',$3::jsonb)",[
       a.est,String(a.s.sub),JSON.stringify(theme)
     ]);
@@ -658,8 +668,7 @@ router.put('/venue-owner/establishments/:establishmentId/site',async(req,res)=>{
     const site=D.normalizeSiteCustomization(req.body?.site_customization||req.body||{});
     const current=await db.query('SELECT config FROM shaurma_venues WHERE establishment_id=$1',[a.est]);
     if(!current.rows[0])return res.sendStatus(404);
-    const cfg={...(current.rows[0].config||{}),site_customization:site};
-    const q=await db.query('UPDATE shaurma_venues SET config=$2::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[a.est,JSON.stringify(cfg)]);
+    const q=await db.query("UPDATE shaurma_venues SET config=COALESCE(config,'{}'::jsonb)||jsonb_build_object('site_customization',$2::jsonb),updated_at=NOW() WHERE establishment_id=$1 RETURNING *",[a.est,JSON.stringify(site)]);
     await db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'site_customization_updated',$3::jsonb)",[a.est,String(a.s.sub),JSON.stringify({version:site.version,layout:site.menu.layout,design:site.design.mode})]);
     rt.pushVenue(a.est,'venue',q.rows[0]);
     res.json({ok:true,site_customization:site});

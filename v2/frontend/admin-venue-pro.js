@@ -5,7 +5,7 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const clone=x=>JSON.parse(JSON.stringify(x??null));
 let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'';
-let accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,saveBusy=false,currentView='home',orderFilter='active',orderRows=[];
+let accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,saveBusy=false,currentView='home',orderFilter='active',orderRows=[],designBusy=false,profileDirty=false,designDirty=false;
 
 const GROUP_META={
   meats:{title:'Варианты мяса',icon:'🥩'},sizes:{title:'Размеры',icon:'↗'},bases:{title:'Основа / хлеб',icon:'🫓'},
@@ -76,8 +76,9 @@ function setSync(text='Синхронизировано',ok=true){
 }
 async function loadVenue({quiet=false}={}){
   if(!est)return;
+  if(quiet&&(profileDirty||designDirty||designBusy||saveBusy||!$('#itemDrawer').classList.contains('hidden')))return;
   if(!quiet)setSync('Синхронизация…',false);
-  data=await call('/venue-owner/establishments/'+encodeURIComponent(est));
+  const venue=est,response=await call('/venue-owner/establishments/'+encodeURIComponent(venue));if(venue!==est)return;data=response;
   menu=(data.menu||[]).map(x=>({...x}));
   sections=(data.sections_all||data.sections||[]).map(x=>({...x,settings:{...(x.settings||{})}}));
   currentCategory=activeSections().some(x=>x.id===currentCategory)?currentCategory:(activeSections()[0]?.id||'');
@@ -100,7 +101,7 @@ function setView(view){
   if(view==='design')renderPreview();
 }
 function withEst(url){
-  const u=new URL(url,location.href);u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-astra3');return u.toString();
+  const u=new URL(url,location.href);u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-final4');return u.toString();
 }
 function openMenuStudio(){location.href=withEst('admin-menu-studio.html')}
 function openBuilderStudio(){location.href=withEst('admin-menu-studio.html?view=builder')}
@@ -306,25 +307,25 @@ function hydrateDesign(){
   const theme=data?.config?.theme||{primary:'#D94343',secondary:'#13233B',tone:'balanced'},site=mergeSite(data?.config?.site_customization);
   $('#themePrimary').value=safeHex(theme.primary,'#D94343');$('#themePrimaryHex').value=safeHex(theme.primary,'#D94343');$('#themeSecondary').value=safeHex(theme.secondary,'#13233B');$('#themeSecondaryHex').value=safeHex(theme.secondary,'#13233B');$('#themeTone').value=theme.tone||'balanced';
   $('#siteCardStyle').value=site.menu.card_style;$('#siteLayout').value=site.menu.layout;$('#siteRadius').value=site.design.radius;$('#siteRadiusValue').textContent=site.design.radius+' px';$('#showDescriptions').checked=site.menu.show_descriptions!==false;
+  $('#view-design').dataset.establishment=est;window.ShaurmegDesign.hydrate($('#view-design'),site);
 }
 function safeHex(v,f){return /^#[0-9A-F]{6}$/i.test(String(v||''))?String(v).toUpperCase():f}
-function mergeSite(raw){return {design:{...DEFAULT_SITE.design,...(raw?.design||{})},menu:{...DEFAULT_SITE.menu,...(raw?.menu||{})},features:{...DEFAULT_SITE.features,...(raw?.features||{})}}}
+function mergeSite(raw){return window.ShaurmegDesign.merge(raw)}
 function readSite(){
-  const current=mergeSite(data?.config?.site_customization);current.design.radius=Number($('#siteRadius').value)||20;current.menu.card_style=$('#siteCardStyle').value;current.menu.layout=$('#siteLayout').value;current.menu.show_descriptions=$('#showDescriptions').checked;return current;
+  const current=window.ShaurmegDesign.read($('#view-design'),data?.config?.site_customization);current.design.radius=Number($('#siteRadius').value)||20;current.menu.card_style=$('#siteCardStyle').value;current.menu.layout=$('#siteLayout').value;current.menu.show_descriptions=$('#showDescriptions').checked;return current;
 }
 async function saveDesign(){
+  if(designBusy)return;designBusy=true;$('#saveDesignBtn').disabled=true;
   setSync('Публикуем…',false);try{
     const theme={primary:safeHex($('#themePrimaryHex').value,$('#themePrimary').value),secondary:safeHex($('#themeSecondaryHex').value,$('#themeSecondary').value),tone:$('#themeTone').value};
-    const [t,s]=await Promise.all([
-      call('/venue-owner/establishments/'+encodeURIComponent(est)+'/theme',{method:'PUT',body:{theme}}),
-      call('/venue-owner/establishments/'+encodeURIComponent(est)+'/site',{method:'PUT',body:{site_customization:readSite()}})
-    ]);
-    data.config={...(data.config||{}),theme:t.theme,site_customization:s.site_customization};renderPreview();toast('Дизайн опубликован ✓');setSync('Синхронизировано',true);
-  }catch(e){toast(e.message);setSync('Ошибка',false)}
+    const venue=est,site=readSite();
+    const saved=await call('/venue-owner/establishments/'+encodeURIComponent(venue)+'/design',{method:'PUT',body:{theme,site_customization:site}});if(est!==venue)return;
+    data.config={...(data.config||{}),theme:saved.theme,site_customization:saved.site_customization};designDirty=false;renderPreview();toast('Дизайн опубликован ✓');setSync('Синхронизировано',true);
+  }catch(e){toast(e.message);setSync('Не опубликовано · черновик сохранён',false)}finally{designBusy=false;$('#saveDesignBtn').disabled=false}
 }
 function renderPreview(){
   const root=$('#livePreview');if(!root||!data)return;const secs=activeSections(),items=menu.filter(x=>x.active!==false&&secs.some(s=>s.id===x.c)).slice(0,4),hero=photoFor({image:data.hero_image})||photoFor(items[0]);
-  root.innerHTML='<div class="livePhone"><div class="livePhoneScreen"><div class="liveHero">'+(hero?'<img src="'+esc(hero)+'">':'')+'<small>Шаурмег · '+esc(data.name||'')+'</small><h3>Меню</h3></div><div class="liveContent"><div class="liveChips">'+secs.slice(0,4).map(s=>'<span>'+esc(s.name)+'</span>').join('')+'</div><div class="liveItems">'+items.map(x=>'<article class="liveItem">'+(photoFor(x)?'<img src="'+esc(photoFor(x))+'">':'')+'<div><b>'+esc(x.n)+'</b><strong>'+money(x.p)+'</strong><button class="liveAdd">＋</button></div></article>').join('')+'</div></div></div></div>';
+  window.ShaurmegDesign.preview(root,{site:readSite(),theme:{primary:safeHex($('#themePrimaryHex').value,$('#themePrimary').value),secondary:safeHex($('#themeSecondaryHex').value,$('#themeSecondary').value),tone:$('#themeTone').value},venue:data,sections:secs,items,money});
 }
 function hydrateProfile(){
   $('#profileName').value=data?.name||'';$('#profileAddress').value=data?.address||'';$('#profileDescription').value=data?.description||'';$('#profileHours').value=data?.hours||'';$('#profilePrice').value=data?.price_label||'';$('#profileHero').value=data?.hero_image||'';updateProfilePhoto();
@@ -332,7 +333,7 @@ function hydrateProfile(){
 async function saveProfile(){
   try{
     await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/profile',{method:'PATCH',body:{name:$('#profileName').value.trim(),address:$('#profileAddress').value.trim(),description:$('#profileDescription').value.trim(),hours:$('#profileHours').value.trim(),price_label:$('#profilePrice').value.trim(),hero_image:$('#profileHero').value.trim()}});
-    toast('Профиль сохранён ✓');await loadVenue({quiet:true});
+    profileDirty=false;toast('Профиль сохранён ✓');await loadVenue({quiet:true});
   }catch(e){toast(e.message)}
 }
 const STATUS={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выполнен',cancelled:'Отменён'};
@@ -355,7 +356,7 @@ async function loadOrders(){
 }
 function updateProfilePhoto(){const e=$('#profilePhotoPreview'),src=$('#profileHero').value.trim();e.hidden=!src;if(src)e.src=src}
 function openAdvanced(tab){
- const u=new URL('/venue-owner',new URL(api).origin);u.searchParams.set('establishment',est);u.searchParams.set('tab',tab);u.searchParams.set('from','console');u.searchParams.set('v','20261005-astra3');
+ const u=new URL('/venue-owner',new URL(api).origin);u.searchParams.set('establishment',est);u.searchParams.set('tab',tab);u.searchParams.set('from','console');u.searchParams.set('v','20261005-final4');
  // Preserve Telegram launch data across our trusted application origins; it is verified again by the server.
  if(tg?.initData)u.hash='tgWebAppData='+encodeURIComponent(tg.initData)+'&tgWebAppVersion='+encodeURIComponent(tg.version||'8.0')+'&tgWebAppPlatform='+encodeURIComponent(tg.platform||'unknown');
  location.href=u.toString();
@@ -376,14 +377,16 @@ function openClientPreview(){
   window.open((window.SHAURMEG?.clientBase||location.origin)+'/menu.html?marker='+encodeURIComponent(markerId)+'&establishment='+encodeURIComponent(est),'_blank');
 }
 function bind(){
+  window.ShaurmegDesign.mount($('#view-design'),{compress:compressImage,onChange:()=>{designDirty=true;renderPreview();setSync('Есть неопубликованные изменения',false)},onError:toast});
+  $('#view-design').addEventListener('input',()=>{designDirty=true;renderPreview()});$('#view-profile').addEventListener('input',()=>{profileDirty=true});window.addEventListener('beforeunload',e=>{if(profileDirty||designDirty){e.preventDefault();e.returnValue=''}});
   $('#claimBtn').onclick=claim;$('#backBtn').onclick=()=>{if(currentView!=='home'){setView('home');return}if(tg?.close)tg.close();else history.back()};
   try{tg?.BackButton?.onClick(()=>setView('home'))}catch{}
   $('#navBuilderStudio').onclick=openBuilderStudio;
   $('#view-settings').onclick=e=>{const b=e.target.closest('[data-settings-view]');if(b)setView(b.dataset.settingsView)};
-  $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>openAdvanced('site');$('#addVenueConsole').onclick=()=>openAdvanced('add');
+  $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>setView('design');$('#addVenueConsole').onclick=()=>openAdvanced('add');
   $('#orderStatusFilter').onclick=e=>{const b=e.target.closest('[data-filter]');if(b){orderFilter=b.dataset.filter;renderOrders()}};
   $('#profileHero').oninput=updateProfilePhoto;$('#profilePhotoFile').onchange=async e=>{if(e.target.files?.[0]){try{$('#profileHero').value=await compressImage(e.target.files[0],1100,.8);updateProfilePhoto();toast('Фото подготовлено · сохраните профиль')}catch(x){toast(x.message)}}};
-  $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';await loadVenue()};
+  $('#venueSelect').onchange=async()=>{if(designBusy||saveBusy){$('#venueSelect').value=est;return toast('Дождитесь завершения сохранения')}if((profileDirty||designDirty)&&!await window.ShaurmegConsole.dialog({title:'Переключить заведение?',message:'Несохранённые изменения текущей точки будут отменены.',confirm:'Переключить'})){$('#venueSelect').value=est;return}est=$('#venueSelect').value;profileDirty=false;designDirty=false;currentCategory='';await loadVenue()};
   $('#mainTabs').onclick=e=>{const menu=e.target.closest('#navMenuStudio');if(menu)return openMenuStudio();const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
   $('#heroMenuStudio').onclick=openMenuStudio;$('#heroBuilderStudio').onclick=openBuilderStudio;$('#openMenuStudioCard').onclick=openMenuStudio;$('#openBuilderStudioCard').onclick=openBuilderStudio;
   $('#openClientFromHome').onclick=openClientPreview;

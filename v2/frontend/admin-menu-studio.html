@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#071f3a">
 <title>Шаурмег · кухонная студия меню</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="admin-menu-studio.css?v=20261005-astra3">
-<link rel="stylesheet" href="admin-console.css?v=20261005-astra3"><script src="admin-console.js?v=20261005-astra3"></script></head>
+<link rel="stylesheet" href="admin-menu-studio.css?v=20261005-final4">
+<link rel="stylesheet" href="admin-console.css?v=20261005-final4"><script src="admin-console.js?v=20261005-final4"></script></head>
 <body class="consoleStudio">
 <div class="studio" id="studio">
   <header class="studioHero" id="studioHero">
@@ -29,10 +29,10 @@
       <div class="syncCard" id="syncCard"><i></i><div><b>Синхронизировано</b><small id="syncTime">сейчас</small></div></div>
     </div>
     <nav class="studioTabs" id="studioTabs">
-      <button class="active" data-view="categories"><span class="tabIcon">⌗</span>Категории</button>
-      <button data-view="items"><span class="tabIcon">▤</span>Позиции</button>
-      <button data-view="design"><span class="tabIcon">◉</span>Дизайн</button>
-      <button data-view="builder"><span class="tabIcon">◇</span>Конструктор</button>
+      <button class="active" data-view="categories"><span class="tabIcon" data-icon="layers"></span>Категории</button>
+      <button data-view="items"><span class="tabIcon" data-icon="menu"></span>Позиции</button>
+      <button data-view="design"><span class="tabIcon" data-icon="palette"></span>Дизайн</button>
+      <button data-view="builder"><span class="tabIcon" data-icon="recipe"></span>Конструктор</button>
     </nav>
   </header>
 
@@ -64,8 +64,8 @@
 
     <section class="view hidden" id="view-builder">
       <div class="builderStudioHead">
-        <div><small>RECIPE LAB</small><h2>Конструктор блюда</h2><p>Реальные настройки сборки выбранного заведения — без дублирования серверной логики.</p></div>
-        <span class="liveBadge"><i></i> SAME SESSION</span>
+        <div><small>КОНСТРУКТОР</small><h2>Сборка блюда</h2><p>Ингредиенты, цены, ограничения выбора и фотографии выбранного заведения.</p></div>
+        <span class="liveBadge"><i></i> ВАША ТОЧКА</span>
       </div>
       <div class="builderFrameShell"><iframe id="builderFrame" title="Конструктор блюда" loading="lazy"></iframe></div>
     </section>
@@ -84,9 +84,12 @@
           <label><b>Дополнительный цвет</b><div class="colorInput"><input id="themeSecondary" type="color"><input id="themeSecondaryHex"></div></label>
           <label><b>Общий тон</b><select id="themeTone"><option value="balanced">Смешанный</option><option value="dark">Тёмный</option><option value="light">Светлый</option></select></label>
           <label><b>Раскладка меню</b><select id="siteLayout"><option value="hero-2-3">Hero + 2 / 3</option><option value="hero-2">Hero + 2</option><option value="uniform-2">2 колонки</option><option value="uniform-3">3 колонки</option></select></label>
+          <label><b>Стиль карточек</b><select id="studioCardStyle"><option value="photo">Фотография</option><option value="glass">Стекло</option><option value="solid">Сплошной цвет</option></select></label>
+          <label><b>Скругление, px</b><input id="studioRadius" type="number" min="10" max="34" value="20"></label>
+          <label><b>Описания блюд</b><input id="studioDescriptions" type="checkbox" checked></label>
         </div>
         <div class="guestPreview" id="guestPreview"></div>
-        <button class="saveBar" id="saveDesignBtn"><span>♛</span>Опубликовать дизайн</button>
+        <button class="saveBar" id="saveDesignBtn"><span data-icon="arrow"></span>Опубликовать дизайн</button>
       </div>
     </section>
   </main>
@@ -112,6 +115,9 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="config.js?v=20261005"></script>
-<script src="admin-menu-studio.js?v=20261005-astra3"></script>
+<link rel="stylesheet" href="admin-workbench.css?v=20261005-final4">
+<script src="admin-design-workbench.js?v=20261005-final4"></script>
+<script src="admin-choice-editor.js?v=20261005-final4"></script>
+<script src="admin-menu-studio.js?v=20261005-final4"></script>
 </body>
 </html>

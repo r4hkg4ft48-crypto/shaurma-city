@@ -7,7 +7,7 @@
 <title>Шаурмег · Супер админка</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-astra3"><script src="/realcity-preview/admin-console.js?v=20261005-astra3"></script><style>.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
+<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-final4"><script src="/realcity-preview/admin-console.js?v=20261005-final4"></script><style>.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
 .astraIntro{padding:15px;border:1px solid rgba(89,199,220,.14);border-radius:20px;background:radial-gradient(circle at 100% 0,rgba(89,199,220,.09),transparent 40%),linear-gradient(155deg,#111b28,#0a111a)}
 .astraIntro b{display:block;font-size:18px}.astraIntro p{margin:5px 0 0;color:var(--muted);font-size:10px}
 .astraSelector{padding:12px;border:1px solid var(--line);border-radius:18px;background:#0c141f}.astraSelector .field{margin:0}.astraStatusRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
@@ -253,7 +253,7 @@ function renderVenueList(){
 function updateSiteSelector(){$('#siteSelector').textContent='site:'+($('#siteVenue').value||'—')}
 function openOwnerFor(est,tab){
  if(!est)return toast('Выберите заведение');
- if(tab==='menu'){const u=new URL('/realcity-preview/admin-menu-studio.html',location.origin);u.searchParams.set('master','1');u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-astra3');location.href=u.toString();return}
+ if(tab==='menu'){const u=new URL('/realcity-preview/admin-menu-studio.html',location.origin);u.searchParams.set('master','1');u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-final4');location.href=u.toString();return}
  location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=4'
 }
 function openOwner(tab){openOwnerFor($('#siteVenue').value,tab)}
@@ -436,7 +436,7 @@ function renderConsoleScreen(name){
  $$('#consoleNav [data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===group));
  if(['orders','menu','map'].includes(name)){
    const f=$('#'+name+'Frame');if(!f.getAttribute('src')){
-    const u=new URL(name==='map'?'/shaurmeg-owner':name==='menu'?'/realcity-preview/admin-menu-studio.html':'/shaurma-owner',location.origin);u.searchParams.set('section',name==='menu'?'menu':'orders');if(name==='menu')u.searchParams.set('master','1');u.searchParams.set('from','master');u.searchParams.set('embed','console');u.searchParams.set('v','20261005-astra3');f.src=u.toString();
+    const u=new URL(name==='map'?'/shaurmeg-owner':name==='menu'?'/realcity-preview/admin-menu-studio.html':'/shaurma-owner',location.origin);u.searchParams.set('section',name==='menu'?'menu':'orders');if(name==='menu')u.searchParams.set('master','1');u.searchParams.set('from','master');u.searchParams.set('embed','console');u.searchParams.set('v','20261005-final4');f.src=u.toString();
    }
  }
  window.ShaurmegConsole?.icons();

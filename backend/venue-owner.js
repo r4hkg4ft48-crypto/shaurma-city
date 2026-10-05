@@ -225,7 +225,7 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
     const u=new URL(OWNER_APP_URL);
     if(establishmentId)u.searchParams.set('establishment',String(establishmentId));
     if(tab)u.searchParams.set('tab',String(tab));
-    u.searchParams.set('v','20261005-astra3');
+    u.searchParams.set('v','20261005-final4');
     return u.toString();
   }
   function canUse(access,permission){

@@ -23,8 +23,9 @@ function createServer(){const state=makeState();const server=http.createServer(a
  if(p.endsWith('/menu')&&req.method==='PUT'){if(state.failNextMenu){state.failNextMenu=false;return json({error:'Не удалось сохранить'},503)}Object.assign(state.venue,{menu:payload.menu,sections:payload.sections,sections_all:payload.sections});return json(state.venue)}
  if(p.includes('/orders/')&&req.method==='PATCH'){const o=state.orders.find(x=>String(x.id)===p.split('/').pop());if(o)o.status=payload.status;return json(o||{})}
  if(p.endsWith('/orders'))return json(state.orders);
- if(p.endsWith('/theme'))return json({theme:payload.theme});
- if(p.endsWith('/site'))return json({site_customization:payload.site_customization});
+ if(p.endsWith('/design')){if(state.failNextDesign){state.failNextDesign=false;return json({error:'Дизайн не сохранён'},503)}state.venue.config.theme=payload.theme;state.venue.config.site_customization=payload.site_customization;return json({theme:payload.theme,site_customization:payload.site_customization})}
+ if(p.endsWith('/theme')){state.venue.config.theme=payload.theme;return json({theme:payload.theme})}
+ if(p.endsWith('/site')){if(state.failNextDesign){state.failNextDesign=false;return json({error:'Дизайн не сохранён'},503)}state.venue.config.site_customization=payload.site_customization;return json({site_customization:payload.site_customization})}
  if(p.endsWith('/profile'))return json({ok:true});
  if(p.endsWith('/builder'))return json({builder:state.venue.config.builder,builder_enabled:true});
  if(p.endsWith('/builder-cinema'))return json({cinema:{enabled:false},builder:state.venue.config.builder});

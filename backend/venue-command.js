@@ -7,7 +7,8 @@ const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Го
 const PERMISSION_BY_INTENT={
   menu_show:'menu',menu_price:'menu',menu_price_context:'menu',menu_toggle:'menu',menu_add:'menu',menu_rename:'menu',menu_description:'menu',
   menu_item_select:'menu',menu_item_show:'menu',menu_available:'menu',menu_badge:'menu',menu_featured:'menu',menu_display:'menu',menu_image_remove:'menu',menu_image_fit:'menu',
-  menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',
+  menu_category_move:'menu',menu_delete:'menu',menu_duplicate:'menu',menu_qty:'menu',menu_weight:'menu',menu_composition:'menu',menu_sku:'menu',menu_stock:'menu',menu_tags:'menu',menu_recommended:'menu',menu_card_color:'menu',menu_schedule:'menu',
+  fixed_option_add:'menu',fixed_option_delete:'menu',fixed_option_price:'menu',fixed_option_toggle:'menu',fixed_option_default:'menu',
   choice_group_add:'menu',choice_group_select:'menu',choice_group_delete:'menu',choice_group_rename:'menu',choice_group_toggle:'menu',choice_group_required:'menu',choice_group_type:'menu',choice_group_limit:'menu',
   choice_option_add:'menu',choice_option_price:'menu',choice_option_toggle:'menu',choice_option_delete:'menu',choice_option_rename:'menu',choice_option_default:'menu',
   category_show:'menu',category_add:'menu',category_toggle:'menu',category_rename:'menu',category_delete:'menu',category_emoji:'menu',category_order:'menu',
@@ -117,6 +118,39 @@ function parseCommand(text){
   m=raw.match(/^(?:максимум|max)\s+(?:по\s+)?(\d+)\s*(?:шт|штук|штуки)\s*(?:в заказе)?$/i)||
     raw.match(/^максимальное количество\s+(\d+)$/i);
   if(m)return {intent:'menu_qty',field:'max_qty',value:Number(m[1])};
+
+  m=raw.match(/^(?:вес|масса)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_weight',value:clean(m[1])};
+  m=raw.match(/^(?:состав|ингредиенты)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_composition',value:clean(m[1])};
+  m=raw.match(/^(?:sku|артикул)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_sku',value:clean(m[1])};
+  m=raw.match(/^(?:остаток|в наличии)\s*(?:=|:)?\s*(\d+)$/i);
+  if(m)return {intent:'menu_stock',value:Number(m[1])};
+  if(/^(?:остаток|запас)\s+(?:безлимит|без ограничений|не считать)$/i.test(raw))return {intent:'menu_stock',value:null};
+  m=raw.match(/^(?:теги|метки)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_tags',value:clean(m[1]).split(/[,;]+/).map(clean).filter(Boolean)};
+  if(/^(?:рекомендовать|сделай рекомендованной|в рекомендации)$/i.test(raw))return {intent:'menu_recommended',enabled:true};
+  if(/^(?:не рекомендовать|убери из рекомендаций)$/i.test(raw))return {intent:'menu_recommended',enabled:false};
+  m=raw.match(/^(?:цвет карточки|цвет блюда)\s*(?:=|:)?\s*(#[0-9a-f]{6})$/i);
+  if(m)return {intent:'menu_card_color',value:m[1].toUpperCase()};
+  if(/^(?:расписание|время доступности)\s+(?:выкл|выключи|всегда)$/i.test(raw))return {intent:'menu_schedule',enabled:false};
+  m=raw.match(/^(?:расписание|доступна|доступно|продаем|продаётся)\s+(?:с\s+)?(\d{1,2}:\d{2})\s+(?:до|-|–)\s*(\d{1,2}:\d{2})$/i);
+  if(m)return {intent:'menu_schedule',enabled:true,from:m[1],to:m[2]};
+
+  m=raw.match(/^(?:добавь|создай)\s+(?:в позицию\s+)?(?:вариант\s+)?(мясо|размер|основу|соус|добавку)\s+(.+?)(?:\s+([+-]\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?)?$/i);
+  if(m)return {intent:'fixed_option_add',group:clean(m[1]),name:clean(m[2]),price:m[3]?Number(String(m[3]).replace(',','.')):0};
+  m=raw.match(/^(?:удали|убери)\s+(?:вариант\s+)?(мяса|размера|основы|соуса|добавки)\s+(.+)$/i);
+  if(m)return {intent:'fixed_option_delete',group:clean(m[1]),option:clean(m[2])};
+  m=raw.match(/^(?:цена|доплата)\s+(?:варианта\s+)?(мяса|размера|основы|соуса|добавки)\s+(.+?)\s+([+-]?\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  if(m)return {intent:'fixed_option_price',group:clean(m[1]),option:clean(m[2]),price:Number(String(m[3]).replace(',','.'))};
+  m=raw.match(/^(?:выключи|скрой)\s+(?:вариант\s+)?(мяса|размера|основы|соуса|добавки)\s+(.+)$/i);
+  if(m)return {intent:'fixed_option_toggle',group:clean(m[1]),option:clean(m[2]),enabled:false};
+  m=raw.match(/^(?:включи|верни)\s+(?:вариант\s+)?(мяса|размера|основы|соуса|добавки)\s+(.+)$/i);
+  if(m)return {intent:'fixed_option_toggle',group:clean(m[1]),option:clean(m[2]),enabled:true};
+  m=raw.match(/^(?:сделай|поставь)\s+(?:вариант\s+)?(мяса|размера|основы|соуса|добавки)\s+(.+?)\s+(?:по умолчанию|дефолтным)$/i);
+  if(m)return {intent:'fixed_option_default',group:clean(m[1]),option:clean(m[2])};
+
 
   m=raw.match(/^(?:добавь|создай)\s+(?:выбор|группу|параметр)\s+(.+)$/i);
   if(m)return {intent:'choice_group_add',name:clean(m[1])};
@@ -388,6 +422,16 @@ function menuLine(x){
 function orderLine(o){
   return '• #'+o.id+' · '+String(o.order_number||'')+' · '+(STATUS_LABELS[o.status]||o.status)+' · '+Number(o.total||0)+' ₽';
 }
+function fixedGroupKey(v){
+  const s=norm(v);
+  if(/мяс/.test(s))return 'meats';
+  if(/размер/.test(s))return 'sizes';
+  if(/основ/.test(s))return 'bases';
+  if(/соус/.test(s))return 'sauces';
+  if(/добав/.test(s))return 'extras';
+  return '';
+}
+function fixedGroupLabel(key){return ({meats:'Мясо',sizes:'Размер',bases:'Основа',sauces:'Соусы',extras:'Добавки'})[key]||key}
 function builderGroupKey(v){
   const s=norm(v);
   if(/формат|тип/.test(s))return 'types';

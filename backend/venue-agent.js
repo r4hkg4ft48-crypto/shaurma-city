@@ -145,6 +145,18 @@ function canonicalText(command,itemName=''){
     case 'choice_option_delete': return 'удали вариант '+command.option;
     case 'choice_option_rename': return 'переименуй вариант '+command.option+' -> '+command.name;
     case 'choice_option_default': return 'сделай вариант '+command.option+' по умолчанию';
+    case 'choice_group_rename': return 'переименуй выбор '+command.group+' -> '+command.name;
+    case 'choice_group_toggle': return (command.enabled?'включи выбор ':'выключи выбор ')+command.group;
+    case 'category_toggle': return (command.enabled?'включи категорию ':'выключи категорию ')+command.category;
+    case 'category_rename': return 'переименуй категорию '+command.category+' -> '+command.name;
+    case 'category_delete': return 'удали категорию '+command.category;
+    case 'category_emoji': return 'иконка категории '+command.category+' '+command.emoji;
+    case 'category_order': return 'категория '+command.category+' номер '+command.order;
+    case 'fixed_option_add': return 'добавь вариант '+command.group+' '+command.name+(Number(command.price)?' '+(Number(command.price)>0?'+':'')+command.price:'');
+    case 'fixed_option_delete': return 'удали вариант '+command.group+' '+command.option;
+    case 'fixed_option_price': return 'доплата варианта '+command.group+' '+command.option+' '+command.price;
+    case 'fixed_option_toggle': return (command.enabled?'включи вариант ':'выключи вариант ')+command.group+' '+command.option;
+    case 'fixed_option_default': return 'сделай вариант '+command.group+' '+command.option+' по умолчанию';
     default:return '';
   }
 }

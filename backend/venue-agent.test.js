@@ -110,3 +110,46 @@ test('ambiguous remove action asks whether to hide or mark unavailable',async()=
   assert.match(first.text,/Что именно сделать/);
   assert.equal(calls.length,0);
 });
+
+
+test('stores pending venue clarification before any venue is selected',async()=>{
+  const ctx={};
+  const venues=[
+    {establishment_id:'SC-MSK-AAAAAA1111',name:'Лепёшка Центр',menu:[],config:{},role:'owner',permissions:['menu']},
+    {establishment_id:'SC-MSK-BBBBBB2222',name:'Лепёшка Север',menu:[],config:{},role:'owner',permissions:['menu']}
+  ];
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:venues.map(x=>({...x}))};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:Object.keys(ctx).length?[{...ctx}]:[]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context')){
+      if(!Object.keys(ctx).length){ctx.telegram_user_id=String(args[0]);ctx.establishment_id=args[1]??null}
+      else if(args.length>1&&args[1]!==null&&args[1]!==undefined)ctx.establishment_id=String(args[1]);
+      return {rows:[]};
+    }
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const calls=[];
+  const commandBus={async handle(x){calls.push(x.text);return {handled:true,text:'EXEC '+x.text}}};
+  const agent=createVenueDialogAgent({DB,commandBus}),user={id:777};
+
+  const first=await agent.handle({user,text:'найди меню'});
+  assert.equal(first.handled,true);
+  assert.match(first.text,/Сначала выберите заведение/);
+  assert.equal(ctx.pending_kind,'venue_select');
+  assert.equal(ctx.establishment_id,null);
+  assert.equal(calls.length,0);
+
+  const second=await agent.handle({user,text:'вторая'});
+  assert.equal(second.handled,true);
+  assert.equal(ctx.establishment_id,'SC-MSK-BBBBBB2222');
+  assert.equal(calls.at(-1),'/use SC-MSK-BBBBBB2222');
+});

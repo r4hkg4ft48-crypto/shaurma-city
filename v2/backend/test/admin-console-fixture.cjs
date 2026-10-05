@@ -19,6 +19,8 @@ function createServer(){const state=makeState();const server=http.createServer(a
  if(p.endsWith('/venue')&&req.method==='PUT'){if(state.failNextMenu){state.failNextMenu=false;return json({error:'Не удалось сохранить'},503)}state.venue.menu=payload.menu||state.venue.menu;state.venue.config=payload.config||state.venue.config;state.venue.sections=state.venue.sections_all=state.venue.config.menu_sections;return json(state.venue)}
  if(p.endsWith('/bot-health'))return json([{id:'master_admin',ok:true,enabled:true},{id:'venue_owner',ok:true,enabled:true}]);
  if(p.endsWith('/admins'))return json([]);
+ if(p.endsWith('/invites')&&req.method==='POST')return json({id:1,claim_code:'OWN-AABBCCDDEE',expires_at:'2030-01-01T00:00:00Z'},201);
+ if(p.endsWith('/invites'))return json([{id:1,role:'owner',expires_at:'2030-01-01T00:00:00Z',max_uses:1,uses:0,is_active:true}]);
  if(p.endsWith('/stats'))return json({today:41,new:3,cooking:7,ready:2,revenue:24850});
  if(p.endsWith('/menu')&&req.method==='PUT'){if(state.failNextMenu){state.failNextMenu=false;return json({error:'Не удалось сохранить'},503)}Object.assign(state.venue,{menu:payload.menu,sections:payload.sections,sections_all:payload.sections});return json(state.venue)}
  if(p.includes('/orders/')&&req.method==='PATCH'){const o=state.orders.find(x=>String(x.id)===p.split('/').pop());if(o)o.status=payload.status;return json(o||{})}

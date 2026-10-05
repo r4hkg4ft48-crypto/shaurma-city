@@ -169,6 +169,11 @@ async function ensureSchema(){
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
   ALTER TABLE shaurma_venue_invites ADD COLUMN IF NOT EXISTS kitchen_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+  ALTER TABLE shaurma_venue_admins ADD COLUMN IF NOT EXISTS telegram_username TEXT NOT NULL DEFAULT '';
+  ALTER TABLE shaurma_venue_admins ADD COLUMN IF NOT EXISTS telegram_first_name TEXT NOT NULL DEFAULT '';
+  ALTER TABLE shaurma_venue_admins ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '["menu","profile","media","appearance","orders"]'::jsonb;
+  ALTER TABLE shaurma_venue_admins ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+  ALTER TABLE shaurma_venue_invites ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
   CREATE INDEX IF NOT EXISTS idx_v2_venue_invites_establishment ON shaurma_venue_invites(establishment_id,is_active);
 
   CREATE TABLE IF NOT EXISTS shaurma_kitchen_access(

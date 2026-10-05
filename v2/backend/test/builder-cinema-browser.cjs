@@ -29,6 +29,8 @@ test('mobile photo builder: selection, layers, cart, cancellation, owner upload'
   await page.locator('#builderStepNext').click();await page.locator('#builderStepNext').click();
   await page.waitForFunction(()=>document.querySelectorAll('.foodLayer').length===2);
   await page.locator('#builderStepNext').click();
+  await page.locator('[data-bsauce="garlic"]').locator('..').locator('.builderChoiceCopy').click();
+  assert.equal(await page.locator('[data-bsauce="garlic"]').getAttribute('aria-pressed'),'false','ingredient card does not add a sauce');
   await page.locator('[data-bsauce="garlic"]').click();await page.locator('#builderStepNext').click();
   await page.locator('[data-bextra="onion"]').click();
   await page.waitForFunction(()=>document.querySelectorAll('.foodLayer').length===4);

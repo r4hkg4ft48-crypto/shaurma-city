@@ -136,24 +136,34 @@
     }catch{return !!session}
   }
   function favoriteHeaders(){return session?{Authorization:'Bearer '+session}:{}}
+  let favoriteBuilds=new Map();
   async function loadFavoriteState(){
     if(!session||!est){favoriteIds=new Set();renderMenu();return}
     try{
       const r=await fetch(api+'/me/favorites',{headers:favoriteHeaders(),cache:'no-store'});if(!r.ok)throw 0;
       const j=await r.json(),prefix=String(est)+':';
       favoriteIds=new Set((Array.isArray(j.explicit)?j.explicit:[]).filter(x=>String(x).startsWith(prefix)).map(x=>String(x).slice(prefix.length)));
+      favoriteBuilds=new Map((j.groups||[]).filter(g=>g.establishment_id===est&&String(g.marker_id)===String(marker)&&g.venue_id===ctx?.venue?.venue_id).flatMap(g=>(g.items||[]).filter(x=>x.builder_data).map(x=>[String(x.item_id),x])));
     }catch{favoriteIds=new Set()}
     renderMenu();
   }
-  async function toggleFavorite(id){
+  async function toggleFavorite(id,src=null){
     if(!session)return toast('Откройте Shaurmeg через Telegram, чтобы сохранять избранное');
     const itemId=String(id),active=favoriteIds.has(itemId),method=active?'DELETE':'PUT';
     try{
-      const r=await fetch(api+'/me/favorites/'+encodeURIComponent(est)+'/'+encodeURIComponent(itemId),{method,headers:favoriteHeaders()});
+      const recipe=src?.builderData&&method==='PUT'?{builder_data:src.builderData,marker_id:marker,venue_id:ctx?.venue?.venue_id}:null;
+      const r=await fetch(api+'/me/favorites/'+encodeURIComponent(est)+'/'+encodeURIComponent(itemId),{method,headers:{...favoriteHeaders(),...(recipe?{'Content-Type':'application/json'}:{})},...(recipe?{body:JSON.stringify(recipe)}:{})});
       if(!r.ok)throw 0;
       if(active)favoriteIds.delete(itemId);else favoriteIds.add(itemId);
       renderMenu();toast(active?'Убрано из избранного':'Добавлено в избранное ♥');tg?.HapticFeedback?.selectionChanged?.();
     }catch{toast('Не удалось изменить избранное')}
+  }
+  let favoritePromptId='',favoritePromptSource=null,favoriteReturnFocus=null;
+  function offerFavorite(src){
+    if(!session||siteCustomization?.features?.favorites===false||favoriteIds.has(String(src.id)))return;
+    let prompt=$('#favoritePrompt');
+    if(!prompt){prompt=document.createElement('section');prompt.id='favoritePrompt';prompt.className='favoritePrompt';prompt.setAttribute('role','dialog');prompt.setAttribute('aria-modal','true');prompt.setAttribute('aria-labelledby','favoriteQuestion');prompt.innerHTML='<div class="favoriteGlass"><span class="favoriteSpark" aria-hidden="true">♡</span><h3 id="favoriteQuestion">Добавить в избранное?</h3><p></p><div><button type="button" data-favorite-answer="no">Нет</button><button type="button" data-favorite-answer="yes">Да</button></div></div>';document.body.append(prompt);prompt.onclick=async e=>{const b=e.target.closest('[data-favorite-answer]');if(!b)return;const id=favoritePromptId;prompt.classList.remove('show');favoritePromptId='';if(favoriteReturnFocus?.isConnected)favoriteReturnFocus.focus({preventScroll:true});if(b.dataset.favoriteAnswer==='yes'&&!favoriteIds.has(id))await toggleFavorite(id,favoritePromptSource)};prompt.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();prompt.querySelector('[data-favorite-answer="no"]').click()}if(e.key==='Tab'){const buttons=[...prompt.querySelectorAll('button')];e.preventDefault();buttons[document.activeElement===buttons[0]?1:0].focus()}}}
+    favoritePromptId=String(src.id);favoritePromptSource=src;favoriteReturnFocus=document.activeElement;prompt.querySelector('p').textContent=String(src.n||src.name||'');requestAnimationFrame(()=>{prompt.classList.add('show');prompt.querySelector('[data-favorite-answer="yes"]').focus({preventScroll:true})});
   }
 
   function builderConfig(config={}){
@@ -256,6 +266,7 @@
   }
   function chooseSignature(){
     const src=signatureItems[signatureIndex];if(!src)return;
+    if(hasItemOptions(src)){openItemOptions(src);return}
     const payload={
       id:String(src.id),
       n:String(src.n||src.name||'Фирменная шаурма'),
@@ -280,11 +291,12 @@
     if(!builderState.type)builderState.type=String(type?.id||'');
     if(!builderState.bread)builderState.bread=String(builder.breads?.[0]?.id||'');
     if(!builderState.meat)builderState.meat=String(builder.meats?.[0]?.id||'');
-    $('#builderTypes').innerHTML=(builder.types||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.type?'active':'')+'" data-btype="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x,true)+'</small></button>').join('');
-    $('#builderBreads').innerHTML=(builder.breads||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.bread?'active':'')+'" data-bbread="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
-    $('#builderMeats').innerHTML=(builder.meats||[]).map(x=>'<button class="builderChoice '+(String(x.id)===builderState.meat?'active':'')+'" data-bmeat="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
-    $('#builderSauces').innerHTML=(builder.sauces||[]).map(x=>'<button class="builderChoice '+(builderState.sauces.includes(String(x.id))?'active':'')+'" data-bsauce="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
-    $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>'<button class="builderChoice '+(builderState.extras.includes(String(x.id))?'active':'')+'" data-bextra="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x)+'</small></button>').join('');
+    const choice=(x,key,active,base=false)=>'<div class="builderChoice '+(active?'active':'')+'"><div class="builderChoiceCopy"><b>'+esc(x.name)+'</b><small>'+optionPriceText(x,base)+'</small></div><button type="button" class="builderChoicePlus" '+key+'="'+esc(x.id)+'" aria-label="'+(active&&['data-bsauce','data-bextra'].includes(key)?'Убрать: ':'Добавить / выбрать: ')+esc(x.name)+'" aria-pressed="'+active+'">'+(active?(['data-bsauce','data-bextra'].includes(key)?'−':'✓'):'+')+'</button></div>';
+    $('#builderTypes').innerHTML=(builder.types||[]).map(x=>choice(x,'data-btype',String(x.id)===builderState.type,true)).join('');
+    $('#builderBreads').innerHTML=(builder.breads||[]).map(x=>choice(x,'data-bbread',String(x.id)===builderState.bread)).join('');
+    $('#builderMeats').innerHTML=(builder.meats||[]).map(x=>choice(x,'data-bmeat',String(x.id)===builderState.meat)).join('');
+    $('#builderSauces').innerHTML=(builder.sauces||[]).map(x=>choice(x,'data-bsauce',builderState.sauces.includes(String(x.id)))).join('');
+    $('#builderExtras').innerHTML=(builder.extras||[]).map(x=>choice(x,'data-bextra',builderState.extras.includes(String(x.id)))).join('');
     $('#builderBreadBlock').classList.toggle('hidden',!(builder.breads||[]).length);
     $('#builderMeatBlock').classList.toggle('hidden',!(builder.meats||[]).length);
     $('#builderSauces').closest('.builderBlock')?.classList.toggle('hidden',!(builder.sauces||[]).length);
@@ -356,17 +368,20 @@
     if(building)return;
     const payload=builtPayload();if(!payload)return;
     const attempt=++buildAttempt;building=true;$('#addBuilder').disabled=true;
-    $('#builderCustomMode').querySelectorAll('.builderChoice').forEach(b=>b.disabled=true);
+    $('#builderCustomMode').querySelectorAll('.builderChoicePlus').forEach(b=>b.disabled=true);
     $('#builderSheet').scrollTo({top:0,behavior:'smooth'});
     const complete=await cinema.play(builder,builderState,cinemaForType(),{finish:true});
     if(attempt!==buildAttempt)return;
     building=false;$('#addBuilder').disabled=false;
-    $('#builderCustomMode').querySelectorAll('.builderChoice').forEach(b=>b.disabled=false);
+    $('#builderCustomMode').querySelectorAll('.builderChoicePlus').forEach(b=>b.disabled=false);
     if(complete&&$('#builderSheet').classList.contains('show'))showBuilderResult(payload);
   }
   function confirmBuilt(){
     if(!pendingBuilt)return;
-    cart.push(pendingBuilt);pendingBuilt=null;save();closeSheets();toast('Сборка добавлена ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
+    const saved=pendingBuilt,src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(saved.id));
+    if(saved.signature&&src){if(!addConfigured(src,{},{}))return;pendingBuilt=null;closeSheets();toast('Блюдо добавлено ✓');return}
+    cart.push(saved);pendingBuilt=null;save();closeSheets();toast('Сборка добавлена ✓');tg?.HapticFeedback?.notificationOccurred?.('success');
+    setTimeout(()=>offerFavorite(saved),280);
   }
   function editBuilt(){
     const origin=builderResultOrigin;pendingBuilt=null;$('#builderResult').hidden=true;$('#builderStage').hidden=false;$('#builderStage').classList.remove('builderCollapsing');renderBuilder();setBuilderMode(origin==='signature'?'signature':'custom');
@@ -452,6 +467,8 @@
         (src?'<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove()">':'<span class="foodNoPhoto"><b>SHAURMEG</b><small>'+esc(String(x.n||x.name||'Меню'))+'</small></span>')+
         '<i></i></div>';
     };
+    const captionFor=x=>{const c=x.card_caption;if(!c?.enabled||!String(c.text||'').trim())return '';const color=cleanHex(c.color,'#FFFFFF'),style=['pill','plain','ribbon'].includes(c.style)?c.style:'pill';return '<span class="dishCaption caption-'+style+(c.glass!==false?' captionGlass':'')+'" style="color:'+color+'">'+esc(c.text)+'</span>'};
+    const customizeFor=x=>hasItemOptions(x)&&x.customization_icon!==false?'<button type="button" class="customizeDish" data-customize="'+esc(x.id)+'" aria-label="Изменить состав '+esc(x.n||x.name)+'" title="Изменить состав"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg></button>':'';
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
       const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||''),unavailable=itemUnavailable(x),hasOptions=hasItemOptions(x);
@@ -461,9 +478,9 @@
         '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(unavailable?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+
         '<div class="foodBody">'+
           '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
-          '<p>'+esc(description)+'</p>'+
+          '<p>'+esc(description)+'</p>'+captionFor(x)+
           (meta.length?'<div class="foodMeta">'+meta.map(v=>'<span>'+esc(v)+'</span>').join('')+'</div>':'')+
-          '<div class="foodRow"><b>'+(hasOptions?'от ':'')+money(x.p??x.price)+'</b><button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'" '+(unavailable?'disabled':'')+'>'+(unavailable?'×':hasOptions?'Выбрать':'+')+'</button></div>'+
+          '<div class="foodRow"><b>'+(hasOptions?'от ':'')+money(x.p??x.price)+'</b>'+customizeFor(x)+'<button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'" '+(unavailable?'disabled':'')+'>'+(unavailable?'×':hasOptions&&x.customization_icon===false?'Выбрать':'+')+'</button></div>'+
         '</div></article>';
     };
 
@@ -488,8 +505,8 @@
           '<div class="menuFeatureCopy">'+
             '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
             '<h3>'+esc(featureName)+'</h3>'+
-            '<p>'+esc(featureDesc)+'</p>'+
-            '<div class="menuFeatureBottom"><b>'+(hasItemOptions(feature)?'от ':'')+money(feature.p??feature.price)+'</b><button data-add="'+esc(featureId)+'" '+(itemUnavailable(feature)?'disabled':'')+'>'+(itemUnavailable(feature)?'Нет в наличии':'Добавить <span>＋</span>')+'</button></div>'+
+            '<p>'+esc(featureDesc)+'</p>'+captionFor(feature)+
+            '<div class="menuFeatureBottom"><b>'+(hasItemOptions(feature)?'от ':'')+money(feature.p??feature.price)+'</b>'+customizeFor(feature)+'<button data-add="'+esc(featureId)+'" '+(itemUnavailable(feature)?'disabled':'')+'>'+(itemUnavailable(feature)?'Нет в наличии':'Добавить <span>＋</span>')+'</button></div>'+
           '</div>'+
           '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
         '</article>';
@@ -540,7 +557,7 @@
   function customOptionGroups(src){
     return (Array.isArray(src?.choice_groups)?src.choice_groups:[]).filter(g=>g&&g.active!==false&&Array.isArray(g.options)&&g.options.some(o=>o?.active!==false));
   }
-  function hasItemOptions(src){return fixedOptionGroups(src).length>0||customOptionGroups(src).length>0}
+  function hasItemOptions(src){return src.customization_enabled!==false&&(fixedOptionGroups(src).length>0||customOptionGroups(src).length>0)}
   function defaultItemSelection(src){
     const selection={};
     for(const group of fixedOptionGroups(src)){
@@ -568,6 +585,7 @@
     return out;
   }
   function localSelectionPrice(src,selection={},choices={}){
+    if(src.customization_enabled===false)return {price:Number(src.p??src.price)||0,detail:String(src.composition||'')};
     let price=Number(src?.p??src?.price)||0;const detail=[];
     for(const group of fixedOptionGroups(src)){
       const raw=selection[group.id],ids=Array.isArray(raw)?raw:(raw?[raw]:[]);
@@ -593,6 +611,7 @@
   }
   function addConfigured(src,selection={},choices={}){
     if(!src||itemUnavailable(src)){toast('Позиция временно недоступна');return false}
+    if(src.customization_enabled===false){selection={};choices={}}
     const priced=localSelectionPrice(src,selection,choices),key=cartIdentity(src.id,selection,choices);
     const minQty=Math.max(1,Number(src.min_qty)||1),stock=src.stock===null||src.stock===undefined?50:Math.max(0,Number(src.stock)||0);
     const maxQty=Math.max(minQty,Math.min(50,Number(src.max_qty)||50,stock||50));
@@ -606,6 +625,7 @@
     save();
     const cartButton=$('#cartBtn');if(cartButton){cartButton.classList.remove('cartBump');void cartButton.offsetWidth;cartButton.classList.add('cartBump')}
     tg?.HapticFeedback?.impactOccurred?.('light');
+    setTimeout(()=>offerFavorite(src),280);
     return true;
   }
   function renderItemOptions(){
@@ -661,6 +681,7 @@
     const itemId=String(qs.get('quick_item')||'');
     if(!itemId||qs.get('quick_checkout')!=='1')return;
     const src=(ctx?.venue?.menu||[]).find(x=>x.active!==false&&String(x.id)===itemId);
+    if(!src&&favoriteBuilds.has(itemId)){const recipe=favoriteBuilds.get(itemId);cart.push({id:itemId,n:recipe.name,p:recipe.price,q:1,detail:recipe.description,builderData:recipe.builder_data});save();openSheet('checkoutSheet');return}
     if(!src){toast('Эта позиция больше недоступна');return}
     const needsOptions=hasItemOptions(src);
     add(itemId);
@@ -754,7 +775,7 @@
   }
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
-  $('#menuFeature').onclick=e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
+  $('#menuFeature').onclick=e=>{const custom=e.target.closest('[data-customize]');if(custom){const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===custom.dataset.customize);if(src&&hasItemOptions(src))openItemOptions(src);return}const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
     const section=e.target.closest('[data-section-cat]');
     if(section){
@@ -764,6 +785,7 @@
       try{$('.menuSection')?.scrollIntoView?.({behavior:'smooth',block:'start'})}catch{}
       return;
     }
+    const custom=e.target.closest('[data-customize]');if(custom){const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===custom.dataset.customize);if(src&&hasItemOptions(src))openItemOptions(src);return}
     const fav=e.target.closest('[data-favorite]');if(fav){toggleFavorite(fav.dataset.favorite);return}
     const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)
   };

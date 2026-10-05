@@ -3,6 +3,14 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const D=require('../src/domain');
 
+test('fixed dishes ignore stale choices and preserve their archived recipe controls',()=>{
+ const item={id:'pizza',n:'Пицца',p:400,composition:'Сыр, томаты',customization_enabled:false,customization_icon:false,card_caption:{enabled:true,text:'Из дровяной печи',color:'#FFAA44',style:'ribbon',glass:false},options:{sizes:[{id:'large',name:'Большая',price:200}],required_groups:['sizes']},choice_groups:[{id:'cut',name:'Нарезка',type:'single',min:1,max:1,required:true,options:[{id:'6',name:'6 частей',price_delta:30}]}]};
+ const normalized=D.normalizeMenu([item])[0];assert.equal(normalized.options.sizes[0].price,200);assert.equal(normalized.choice_groups.length,1);assert.deepEqual(normalized.card_caption,{...item.card_caption,color:item.card_caption.color.toLowerCase()});assert.equal(normalized.customization_icon,false);
+ assert.deepEqual(D.menuSelectionPrice(normalized,{sizes:'forged'},{cut:['forged']}),{price:400,detail:'Сыр, томаты'});
+ assert.equal(D.normalizeMenu([{id:'legacy',n:'Старое блюдо'}])[0].customization_enabled,true);
+ assert.equal(D.normalizeMenuSections([{id:'pizza',name:'Пицца',dish_profile:'pizza'}],[],false)[0].dish_profile,'pizza');
+});
+
 test('default catalog has all configured categories and a populated menu',()=>{
   const seed=D.defaultMenuSeed();
   assert.equal(seed.sections.length,9);

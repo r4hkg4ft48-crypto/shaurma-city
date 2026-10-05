@@ -77,7 +77,7 @@ function favoriteRefs(value){
     const establishment_id=D.establishmentId(raw.establishment_id),item_id=String(raw.item_id||'').trim().slice(0,100);
     if(!establishment_id||!item_id)continue;
     const key=establishment_id+':'+item_id;if(seen.has(key))continue;seen.add(key);
-    out.push({establishment_id,item_id,added_at:String(raw.added_at||'')||null});
+    out.push({establishment_id,item_id,added_at:String(raw.added_at||'')||null,...(raw.builder_data&&typeof raw.builder_data==='object'?{builder_data:raw.builder_data,marker_id:String(raw.marker_id||''),venue_id:String(raw.venue_id||'')}: {})});
   }
   return out.slice(0,200);
 }
@@ -114,7 +114,7 @@ async function favoriteView(userId){
   }
   const ests=[...establishments];
   if(!ests.length)return {groups:[],explicit:[]};
-  const vq=await db.query(`SELECT v.establishment_id,v.venue_id,v.name,v.menu,v.updated_at,
+  const vq=await db.query(`SELECT v.establishment_id,v.venue_id,v.name,v.menu,v.config,v.updated_at,
       (SELECT m.id FROM shaurmeg_markers m WHERE m.establishment_id=v.establishment_id AND m.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE ORDER BY m.id LIMIT 1) marker_id,
       (SELECT m.address FROM shaurmeg_markers m WHERE m.establishment_id=v.establishment_id AND m.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE ORDER BY m.id LIMIT 1) address
     FROM shaurma_venues v
@@ -124,6 +124,11 @@ async function favoriteView(userId){
   for(const venue of vq.rows){
     if(!venue.marker_id)continue;
     const menu=(Array.isArray(venue.menu)?venue.menu:[]).filter(x=>x?.active!==false),byId=new Map(menu.map(x=>[String(x.id),x]));
+    for(const ref of explicit){
+      if(ref.establishment_id!==venue.establishment_id||!ref.builder_data||ref.marker_id!==String(venue.marker_id)||ref.venue_id!==venue.venue_id)continue;
+      const recipe=D.priceBuilder(venue.config||{},ref.builder_data);if(!recipe)continue;
+      byId.set(ref.item_id,{id:ref.item_id,n:recipe.n,d:recipe.detail,p:recipe.p,builder_data:recipe.builder,image:config.PUBLIC_APP_URL+'/assets/menu-shawarma.webp'});
+    }
     const inferred=[...history.entries()]
       .filter(([key])=>key.startsWith(venue.establishment_id+':'))
       .map(([key,stats])=>({item_id:key.slice(venue.establishment_id.length+1),...stats}))
@@ -141,6 +146,7 @@ async function favoriteView(userId){
         description:String(item.d||item.description||''),
         price:Number(item.p??item.price)||0,
         image:publicFavoriteImage(venue.establishment_id,item,venue.updated_at),
+        ...(item.builder_data?{builder_data:item.builder_data}:{}),
         explicit:explicitSet.has(key),
         order_count:Number(stats.orders)||0,
         quantity:Number(stats.quantity)||0,
@@ -155,20 +161,27 @@ async function favoriteView(userId){
   groups.sort((a,b)=>String(a.venue_name).localeCompare(String(b.venue_name),'ru',{sensitivity:'base'}));
   return {groups,explicit:[...explicitSet]};
 }
-async function setExplicitFavorite(userId,establishmentId,itemId,enabled){
+async function setExplicitFavorite(userId,establishmentId,itemId,enabled,input={}){
   const uid=String(userId||''),est=D.establishmentId(establishmentId),id=String(itemId||'').trim().slice(0,100);
   if(!est||!id)throw Object.assign(new Error('bad_favorite'),{status:400});
+  let recipeRef=null;
   if(enabled){
-    const vq=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 AND is_active=TRUE LIMIT 1',[est]);
+    const vq=await db.query('SELECT menu,config,venue_id FROM shaurma_venues WHERE establishment_id=$1 AND is_active=TRUE LIMIT 1',[est]);
     const item=(Array.isArray(vq.rows[0]?.menu)?vq.rows[0].menu:[]).find(x=>x?.active!==false&&String(x?.id||'')===id);
-    if(!item)throw Object.assign(new Error('favorite_item_unavailable'),{status:404});
+    if(!item&&/^custom_[a-zA-Z0-9_-]{1,80}$/.test(id)&&input.builder_data){
+      const venue=vq.rows[0],priced=venue&&D.priceBuilder(venue.config||{},input.builder_data),mid=D.markerId(input.marker_id);
+      if(!priced||!mid||String(input.venue_id)!==String(venue.venue_id))throw Object.assign(new Error('favorite_recipe_unavailable'),{status:400});
+      const bound=await db.query('SELECT id FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND venue_id=$3 AND is_active=TRUE AND COALESCE(source_suppressed,FALSE)=FALSE',[mid,est,venue.venue_id]);
+      if(!bound.rows.length)throw Object.assign(new Error('favorite_marker_mismatch'),{status:409});
+      recipeRef={builder_data:priced.builder,marker_id:String(mid),venue_id:venue.venue_id};
+    }else if(!item)throw Object.assign(new Error('favorite_item_unavailable'),{status:404});
   }
   return db.tx(async client=>{
     const uq=await client.query('SELECT favorites FROM shaurma_users WHERE telegram_user_id=$1 FOR UPDATE',[uid]);
     if(!uq.rows[0])throw Object.assign(new Error('user_not_found'),{status:404});
     let refs=favoriteRefs(uq.rows[0].favorites),key=est+':'+id;
     refs=refs.filter(x=>x.establishment_id+':'+x.item_id!==key);
-    if(enabled)refs.unshift({establishment_id:est,item_id:id,added_at:new Date().toISOString()});
+    if(enabled)refs.unshift({establishment_id:est,item_id:id,added_at:new Date().toISOString(),...(recipeRef||{})});
     refs=refs.slice(0,200);
     await client.query('UPDATE shaurma_users SET favorites=$2::jsonb,updated_at=NOW() WHERE telegram_user_id=$1',[uid,JSON.stringify(refs)]);
     return refs;
@@ -347,7 +360,7 @@ router.get('/me/favorites',auth.requireSession('client'),async(req,res)=>{
 });
 router.put('/me/favorites/:establishmentId/:itemId',auth.requireSession('client'),async(req,res)=>{
   try{
-    await setExplicitFavorite(req.session.sub,req.params.establishmentId,req.params.itemId,true);
+    await setExplicitFavorite(req.session.sub,req.params.establishmentId,req.params.itemId,true,req.body||{});
     res.json({ok:true,favorite:true});
   }catch(e){fail(res,e,'favorite_add_failed')}
 });

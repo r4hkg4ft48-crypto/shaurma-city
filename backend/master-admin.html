@@ -7,7 +7,7 @@
 <title>Шаурмег · Супер админка</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-final4"><script src="/realcity-preview/admin-console.js?v=20261005-final4"></script><style>.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
+<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261006-menu2"><script src="/realcity-preview/admin-console.js?v=20261006-menu2"></script><style>.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
 .astraIntro{padding:15px;border:1px solid rgba(89,199,220,.14);border-radius:20px;background:radial-gradient(circle at 100% 0,rgba(89,199,220,.09),transparent 40%),linear-gradient(155deg,#111b28,#0a111a)}
 .astraIntro b{display:block;font-size:18px}.astraIntro p{margin:5px 0 0;color:var(--muted);font-size:10px}
 .astraSelector{padding:12px;border:1px solid var(--line);border-radius:18px;background:#0c141f}.astraSelector .field{margin:0}.astraStatusRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
@@ -23,7 +23,7 @@
 .astraActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.astraManifest{margin-top:10px;max-height:200px;overflow:auto;white-space:pre-wrap;font:700 9px/1.45 ui-monospace,SFMono-Regular,monospace}
 @media(max-width:720px){.astraHead,.astraDataset{grid-template-columns:1fr}.astraConfig{grid-template-columns:1fr 1fr}.astraAssetCard{grid-template-columns:90px minmax(0,1fr)}}
 @media(max-width:520px){.astraConfig{grid-template-columns:1fr}.astraConfig .wide{grid-column:1}.astraDataset{grid-template-columns:1fr}.astraAssetCard{grid-template-columns:1fr}.astraThumb{min-height:180px}.astraThumb img{height:180px}.astraReadiness{grid-template-columns:1fr}.astraScore{margin:auto}}
-</style></head>
+</style><link rel="stylesheet" href="/realcity-preview/admin-map-workbench.css?v=20261006-menu2"></head>
 <body class="consoleModule consoleMaster">
 <div class="app" id="app" hidden>
   <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><img class="consoleEmblem" src="/realcity-preview/shaurmeg-emblem.svg" alt=""><div class="brand"><b>Шаур<span>мег</span></b><small>ЦЕНТР УПРАВЛЕНИЯ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
@@ -142,7 +142,7 @@
       <div class="field"><label>Заведение</label><select id="accessVenue"></select></div>
       <div class="actions"><button class="btn primary" id="createKey">Создать свежий OWN-ключ</button><button class="btn" id="loadAdmins">Владельцы / админы</button></div>
       <div class="code" id="keyOutput" hidden></div>
-      <div class="list" id="adminsList"></div>
+      <h3>Владельцы и администраторы</h3><div class="list" id="adminsList"></div><h3>Выданные ключи</h3><p class="muted">Сам ключ показывается один раз при создании. Здесь доступны срок, состояние и отзыв.</p><div class="list" id="invitesList"></div>
     </div>
   </section>
 
@@ -197,6 +197,7 @@ async function api(path,opt={}){
  if(adminSession)opt.headers.Authorization='Bearer '+adminSession;else if(ownerToken)opt.headers['X-Owner-Token']=ownerToken;
  if(!opt.method||opt.method==='GET'){opt.cache='no-store';path+=(path.includes('?')?'&':'?')+'t='+Date.now()}
  const r=await fetch(API+path,opt),j=await r.json().catch(()=>({}));
+ if(r.status===401&&!opt._reauth&&await telegramLogin())return api(path,{...opt,_reauth:true});
  if(!r.ok)throw Object.assign(new Error(j.error||'request_failed'),{status:r.status,body:j});
  return j
 }
@@ -218,7 +219,7 @@ function activate(name){
  syncMasterBack(name);
  renderConsoleScreen(name);
  if(name==='bots')loadBots();
- if(name==='owners')loadOwnerAdmins();
+ if(name==='owners')loadOwnerAdmins();if(name==='access'){loadAdmins();loadInvites()}
  if(name==='astra')loadAstraStudio();
 }
 async function telegramLogin(){
@@ -253,7 +254,7 @@ function renderVenueList(){
 function updateSiteSelector(){$('#siteSelector').textContent='site:'+($('#siteVenue').value||'—')}
 function openOwnerFor(est,tab){
  if(!est)return toast('Выберите заведение');
- if(tab==='menu'){const u=new URL('/realcity-preview/admin-menu-studio.html',location.origin);u.searchParams.set('master','1');u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-final4');location.href=u.toString();return}
+ if(tab==='menu'){const u=new URL('/realcity-preview/admin-menu-studio.html',location.origin);u.searchParams.set('master','1');u.searchParams.set('establishment',est);u.searchParams.set('v','20261006-menu2');location.href=u.toString();return}
  location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=4'
 }
 function openOwner(tab){openOwnerFor($('#siteVenue').value,tab)}
@@ -263,7 +264,7 @@ async function loadOwnerAdmins(){
  try{
   const rows=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins');
   $('#ownerAdminList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>@Shefofbotsbot · Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'подключён':'отключён')+'</span></div>').join(''):'<div class="empty">К этой точке ещё не подключён владелец через @Shefofbotsbot</div>'
- }catch{$('#ownerAdminList').innerHTML='<div class="empty">Не удалось загрузить владельцев</div>'}
+ }catch(e){$('#ownerAdminList').innerHTML='<div class="empty">'+esc('Не удалось загрузить владельцев: '+e.message)+'</div>'}
 }
 function astraSubtypeOptions(category,current){
  const rows=category==='main_building'
@@ -401,16 +402,21 @@ async function createKey(){
  try{
   const j=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/invites',{method:'POST',body:JSON.stringify({role:'owner'})});
   $('#keyOutput').hidden=false;$('#keyOutput').textContent='КЛЮЧ ДОСТУПА: '+String(j.claim_code||'')+'\nID: '+est+'\nДействует до: '+(j.expires_at?new Date(j.expires_at).toLocaleString('ru-RU'):'—');
-  await loadAdmins();toast('OWN-ключ создан')
- }catch{toast('Не удалось создать ключ')}finally{b.disabled=false}
+  await loadAdmins();await loadInvites();toast('OWN-ключ создан')
+ }catch(e){toast(e.status===401?'Сессия завершилась. Откройте суперадминку заново.':'Не удалось создать ключ: '+e.message)}finally{b.disabled=false}
 }
 async function loadAdmins(){
  const est=$('#accessVenue').value;if(!est)return;
  try{
   const rows=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins');
   $('#adminsList').innerHTML=rows.length?rows.map(x=>'<div class="row"><div><b>'+esc(x.telegram_first_name||x.telegram_username||x.telegram_user_id)+'</b><small>Telegram '+esc(x.telegram_user_id)+' · '+esc(x.role||'owner')+'</small></div><span class="pill">'+(x.is_active?'доступ':'отключён')+'</span>'+(x.is_active?'<button class="btn danger" data-revoke="'+esc(x.telegram_user_id)+'">Отозвать</button>':'')+'</div>').join(''):'<div class="empty">Нет подключённых владельцев</div>'
- }catch{$('#adminsList').innerHTML='<div class="empty">Не удалось загрузить доступы</div>'}
+ }catch(e){$('#adminsList').innerHTML='<div class="empty">'+esc(e.status===401?'Сессия завершилась. Откройте суперадминку заново.':'Не удалось загрузить доступы: '+e.message)+'</div>'}
 }
+async function loadInvites(){
+ const est=$('#accessVenue').value;if(!est)return;$('#invitesList').textContent='Загружаем ключи…';
+ try{const rows=await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/invites');if(est!==$('#accessVenue').value)return;$('#invitesList').innerHTML=rows.length?rows.map(x=>{const active=x.is_active&&new Date(x.expires_at)>new Date()&&Number(x.uses)<Number(x.max_uses);return '<div class="row"><div><b>OWN · #'+esc(x.id)+'</b><small>До '+esc(new Date(x.expires_at).toLocaleString('ru-RU'))+' · использован '+Number(x.uses)+'/'+Number(x.max_uses)+'</small></div><span class="pill">'+(active?'Активен':'Завершён')+'</span>'+(active?'<button class="btn danger" data-revoke-key="'+esc(x.id)+'">Отозвать</button>':'')+'</div>'}).join(''):'<div class="empty">Ключей пока нет</div>'}catch(e){$('#invitesList').innerHTML='<div class="empty">'+esc('Не удалось загрузить ключи: '+e.message)+'</div>'}
+}
+$('#invitesList').onclick=async e=>{const b=e.target.closest('[data-revoke-key]');if(!b)return;if(!await window.ShaurmegConsole.dialog({title:'Отозвать ключ?',message:'По нему больше нельзя будет подключить заведение.',confirm:'Отозвать'}))return;try{await api('/api/shaurma/admin/establishments/'+encodeURIComponent($('#accessVenue').value)+'/invites/'+encodeURIComponent(b.dataset.revokeKey),{method:'DELETE'});await loadInvites();toast('Ключ отозван')}catch(e){toast(e.message)}};
 async function revoke(userId){
  const est=$('#accessVenue').value;if(!est||!confirm('Отозвать доступ у Telegram '+userId+'?'))return;
  try{await api('/api/shaurma/admin/establishments/'+encodeURIComponent(est)+'/admins/'+encodeURIComponent(userId),{method:'DELETE'});await loadAdmins();toast('Доступ отозван')}catch{toast('Не удалось отозвать доступ')}
@@ -436,7 +442,7 @@ function renderConsoleScreen(name){
  $$('#consoleNav [data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===group));
  if(['orders','menu','map'].includes(name)){
    const f=$('#'+name+'Frame');if(!f.getAttribute('src')){
-    const u=new URL(name==='map'?'/shaurmeg-owner':name==='menu'?'/realcity-preview/admin-menu-studio.html':'/shaurma-owner',location.origin);u.searchParams.set('section',name==='menu'?'menu':'orders');if(name==='menu')u.searchParams.set('master','1');u.searchParams.set('from','master');u.searchParams.set('embed','console');u.searchParams.set('v','20261005-final4');f.src=u.toString();
+    const u=new URL(name==='map'?'/shaurmeg-owner':name==='menu'?'/realcity-preview/admin-menu-studio.html':'/shaurma-owner',location.origin);u.searchParams.set('section',name==='menu'?'menu':'orders');if(name==='menu')u.searchParams.set('master','1');u.searchParams.set('from','master');u.searchParams.set('embed','console');u.searchParams.set('v','20261006-menu2');f.src=u.toString();
    }
  }
  window.ShaurmegConsole?.icons();
@@ -476,7 +482,7 @@ $('#exportAstraPackage').onclick=exportAstraPackage;
 $('#importAstraOutput').onclick=()=>$('#astraOutputFile').click();
 $('#astraOutputFile').onchange=async e=>{await importAstraOutput(e.target.files[0]);e.target.value=''};
 $('#ownerVenue').onchange=loadOwnerAdmins;
-$('#createKey').onclick=createKey;$('#loadAdmins').onclick=loadAdmins;$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;$('#adminsList').innerHTML=''};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
+$('#createKey').onclick=createKey;$('#loadAdmins').onclick=()=>{loadAdmins();loadInvites()};$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;loadAdmins();loadInvites()};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{
  if(adminSession||ownerToken){await boot();return}
  const tg=window.Telegram?.WebApp;

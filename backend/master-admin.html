@@ -6,11 +6,8 @@
 <meta name="color-scheme" content="dark">
 <title>Шаурмег · Супер админка</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-:root{--bg:#070b12;--panel:#0d141f;--panel2:#121c29;--line:rgba(255,255,255,.075);--text:#f4f7fb;--muted:#8290a3;--blue:#6f8dff;--cyan:#59c7dc;--green:#6bd8a3;--amber:#f1bb68;--red:#ff7e8d;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
-*{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;color:var(--text);font:500 14px/1.45 -apple-system,BlinkMacSystemFont,"Inter","SF Pro Display",sans-serif;background:radial-gradient(circle at 82% -4%,rgba(89,199,220,.12),transparent 28%),radial-gradient(circle at 9% 0,rgba(111,141,255,.16),transparent 30%),var(--bg)}
-button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin:auto;padding:var(--safe-t) 13px calc(var(--safe-b) + 30px)}.top{position:sticky;top:8px;z-index:20;display:flex;gap:10px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:20px;background:rgba(10,16,25,.88);backdrop-filter:blur(18px)}.backBtn{width:38px;height:38px;min-height:38px;padding:0;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.05);color:#e9efff;font-size:20px;font-weight:900;display:grid;place-items:center}.backBtn[hidden]{display:none!important}.mark{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#8aa0ff,#4765dc);color:#07101c;font-weight:1000}.brand{min-width:0}.brand b{display:block;font-size:15px;letter-spacing:.02em}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:.13em}.grow{flex:1}.status{display:flex;gap:6px;align-items:center;color:#a8f0ce;font-size:10px}.status i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 12px var(--green)}.hero{padding:28px 4px 17px}.eyebrow{color:#879dff;font-size:9px;font-weight:900;letter-spacing:.16em}.hero h1{font-size:38px;line-height:.92;letter-spacing:-.055em;margin:7px 0 10px}.hero p{margin:0;color:var(--muted);max-width:54ch}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 0 14px}.stat{padding:13px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(18,28,41,.9),rgba(11,17,26,.92))}.stat small{display:block;color:var(--muted);font-size:9px}.stat b{display:block;font-size:23px;margin-top:5px}.sectionTitle{display:flex;align-items:end;justify-content:space-between;gap:10px;margin:22px 2px 10px}.sectionTitle h2{margin:0;font-size:22px;letter-spacing:-.035em}.sectionTitle small{color:var(--muted)}.modules{display:grid;grid-template-columns:1fr 1fr;gap:9px}.module{min-height:118px;text-align:left;padding:15px;border-radius:21px;border:1px solid var(--line);background:linear-gradient(155deg,#121c29,#0c131d);position:relative;overflow:hidden}.module:before{content:"";position:absolute;width:110px;height:110px;border-radius:50%;right:-42px;top:-52px;background:var(--glow,rgba(111,141,255,.13));filter:blur(3px)}.module span{display:grid;place-items:center;width:35px;height:35px;border-radius:12px;background:rgba(255,255,255,.055);font-size:18px}.module b{display:block;margin-top:15px;font-size:17px}.module small{display:block;margin-top:3px;color:var(--muted);font-size:10px;max-width:29ch}.module.wide{grid-column:1/-1;min-height:100px}.panel{border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,rgba(18,28,41,.94),rgba(10,16,24,.96));padding:14px}.field{display:grid;gap:5px;margin-bottom:9px}.field label{color:var(--muted);font-size:9px;font-weight:850;letter-spacing:.08em;text-transform:uppercase}select,input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:13px;background:#0a121d;padding:0 11px;outline:none}.actions{display:flex;gap:7px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:13px;min-height:42px;padding:0 13px;background:rgba(255,255,255,.045);font-weight:850}.btn.primary{border:0;background:linear-gradient(135deg,#708cff,#4562d8);color:#fff}.btn.danger{color:#ff9eaa;background:rgba(255,126,141,.08);border-color:rgba(255,126,141,.16)}.code{margin-top:10px;padding:12px;border-radius:15px;background:#080e17;border:1px dashed rgba(111,141,255,.28);font:800 13px/1.5 ui-monospace,SFMono-Regular,monospace;word-break:break-all}.list{display:grid;gap:7px;margin-top:10px}.row{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.02)}.row>div{min-width:0;flex:1}.row b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row small{display:block;color:var(--muted);font-size:9px;margin-top:2px}.pill{padding:5px 7px;border-radius:999px;background:rgba(107,216,163,.08);color:#9ce6c4;font-size:9px}.botDot{width:9px;height:9px;border-radius:50%;background:#526072}.botDot.ok{background:var(--green);box-shadow:0 0 10px rgba(107,216,163,.45)}.botDot.bad{background:var(--red)}.tabs{display:flex;gap:5px;overflow:auto;padding:4px;margin:5px 0 12px;border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.018);scrollbar-width:none}.tabs button{border:0;white-space:nowrap;min-height:38px;padding:0 12px;border-radius:11px;background:transparent;color:var(--muted);font-weight:800}.tabs button.active{background:#e8edff;color:#101727}.pane{display:none}.pane.active{display:block}.empty{padding:20px;text-align:center;color:var(--muted)}.login{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:18px;background:radial-gradient(circle at 50% 0,rgba(111,141,255,.18),transparent 35%),#070b12}.loginCard{width:min(410px,100%);padding:20px;border:1px solid var(--line);border-radius:24px;background:#0d1520}.loginCard h2{font-size:28px;margin:5px 0}.loginCard p{color:var(--muted)}.loginCard button{width:100%;margin-top:8px}.err{min-height:18px;color:#ff9ba7;font-size:11px;margin-top:8px}.toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 10px);z-index:120;transform:translate(-50%,15px);opacity:0;pointer-events:none;transition:.2s;padding:9px 12px;border-radius:12px;background:#111b28;border:1px solid var(--line)}.toast.show{opacity:1;transform:translate(-50%,0)}
-.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
+
+<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-astra3"><script src="/realcity-preview/admin-console.js?v=20261005-astra3"></script><style>.astraHead{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,.72fr);gap:10px;margin-bottom:10px}
 .astraIntro{padding:15px;border:1px solid rgba(89,199,220,.14);border-radius:20px;background:radial-gradient(circle at 100% 0,rgba(89,199,220,.09),transparent 40%),linear-gradient(155deg,#111b28,#0a111a)}
 .astraIntro b{display:block;font-size:18px}.astraIntro p{margin:5px 0 0;color:var(--muted);font-size:10px}
 .astraSelector{padding:12px;border:1px solid var(--line);border-radius:18px;background:#0c141f}.astraSelector .field{margin:0}.astraStatusRow{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
@@ -26,122 +23,32 @@ button,input,select{font:inherit;color:inherit}.app{width:min(900px,100%);margin
 .astraActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.astraManifest{margin-top:10px;max-height:200px;overflow:auto;white-space:pre-wrap;font:700 9px/1.45 ui-monospace,SFMono-Regular,monospace}
 @media(max-width:720px){.astraHead,.astraDataset{grid-template-columns:1fr}.astraConfig{grid-template-columns:1fr 1fr}.astraAssetCard{grid-template-columns:90px minmax(0,1fr)}}
 @media(max-width:520px){.astraConfig{grid-template-columns:1fr}.astraConfig .wide{grid-column:1}.astraDataset{grid-template-columns:1fr}.astraAssetCard{grid-template-columns:1fr}.astraThumb{min-height:180px}.astraThumb img{height:180px}.astraReadiness{grid-template-columns:1fr}.astraScore{margin:auto}}
-@media(max-width:620px){.stats{grid-template-columns:1fr 1fr}.hero h1{font-size:34px}.modules{grid-template-columns:1fr 1fr}.module{min-height:126px;padding:13px}.module b{font-size:15px}.module small{font-size:9.5px}}
-</style>
-<style>
-/* Shaurmeg Super Admin · network control visual system · 2026-10-05 */
-:root{--bg:#040910;--panel:#091521;--panel2:#0d1c2a;--line:rgba(255,255,255,.09);--text:#f6f8fb;--muted:#8fa2b5;--blue:#69a7ff;--cyan:#67d8e7;--green:#2bd18c;--amber:#ffbd64;--red:#ff4a52;--safe-t:max(env(safe-area-inset-top),12px);--safe-b:max(env(safe-area-inset-bottom),14px)}
-body{
- background:
- radial-gradient(circle at 12% -4%,rgba(255,67,74,.18),transparent 27%),
- radial-gradient(circle at 87% 1%,rgba(31,112,173,.20),transparent 32%),
- linear-gradient(180deg,#07111b 0,#040910 48%,#02060a 100%);
-}
-body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
- linear-gradient(90deg,transparent 0 19%,rgba(255,255,255,.014) 19.1% 19.3%,transparent 19.4% 39%,rgba(255,255,255,.01) 39.1% 39.2%,transparent 39.3%),
- radial-gradient(circle at 80% 72%,rgba(255,61,68,.07),transparent 27%)}
-.app{width:min(1120px,100%);padding-left:14px;padding-right:14px}
-.top{
- top:8px;padding:10px 12px;border-radius:19px;border-color:var(--line);
- background:rgba(5,12,20,.88);box-shadow:0 14px 40px rgba(0,0,0,.24)
-}
-.mark{
- width:42px;height:42px;border-radius:14px;font-size:0;
- background:linear-gradient(145deg,#ff2932,#ff6849);
- box-shadow:0 10px 28px rgba(255,48,55,.28),inset 0 0 0 1px rgba(255,255,255,.16)
-}
-.mark:before{content:"◆";font-size:18px;color:#fff;transform:rotate(45deg)}
-.brand b{font-size:15px;letter-spacing:.035em}.brand small{color:#8ea2b5}
-.status{color:#6be2ab}.status i{background:#2bd18c;box-shadow:0 0 14px rgba(43,209,140,.55)}
-.hero{
- margin:12px 0 14px;padding:28px 24px 26px;border:1px solid var(--line);border-radius:30px;overflow:hidden;
- background:
- radial-gradient(circle at 87% 20%,rgba(255,69,74,.20),transparent 18%),
- radial-gradient(circle at 74% 48%,rgba(70,139,211,.13),transparent 25%),
- linear-gradient(110deg,rgba(12,29,44,.96),rgba(6,15,24,.84));
- box-shadow:0 24px 70px rgba(0,0,0,.24);position:relative
-}
-.hero:after{content:"NETWORK CONTROL";position:absolute;right:22px;bottom:16px;color:rgba(255,255,255,.04);font-size:44px;font-weight:950;letter-spacing:.04em;pointer-events:none}
-.eyebrow{color:#ff746d}.hero h1{font-size:45px;margin-top:8px;color:#fff}.hero p{color:#9fb0c0;max-width:65ch;font-size:15px}
-.stats{gap:9px}.stat{
- min-height:98px;padding:15px;border-color:var(--line);border-radius:20px;
- background:linear-gradient(180deg,rgba(14,30,45,.96),rgba(7,17,27,.96));box-shadow:0 14px 32px rgba(0,0,0,.14)
-}
-.stat small{color:#8ea1b4;letter-spacing:.08em}.stat b{font-size:27px;color:#fff}
-.tabs{
- position:sticky;top:72px;z-index:18;padding:5px;border-radius:17px;background:rgba(5,12,20,.90);
- -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)
-}
-.tabs button{min-height:42px;color:#91a3b5}.tabs button.active{
- color:#fff;background:linear-gradient(135deg,#ff3038,#ff6549);box-shadow:0 9px 24px rgba(255,47,55,.22)
-}
-.sectionTitle{margin-top:25px}.sectionTitle h2{font-size:26px;color:#fff}.sectionTitle small{color:#8799aa}
-.modules{gap:10px}.module{
- min-height:140px;padding:17px;border-color:var(--line);border-radius:23px;
- background:linear-gradient(155deg,#0d1c2a,#07131f);box-shadow:0 14px 38px rgba(0,0,0,.16);
- transition:transform .18s ease,border-color .18s ease,background .18s ease
-}
-.module:hover{transform:translateY(-2px);border-color:rgba(255,86,82,.22);background:linear-gradient(155deg,#102232,#081522)}
-.module:before{background:var(--glow,rgba(255,65,72,.10))}
-.module span{width:39px;height:39px;border-radius:13px;background:#102131;border:1px solid var(--line)}
-.module b{font-size:18px;color:#fff}.module small{font-size:11px;color:#91a3b4}
-.panel{
- border-color:var(--line);border-radius:24px;
- background:linear-gradient(180deg,rgba(13,29,43,.96),rgba(6,15,24,.98));
- box-shadow:0 18px 50px rgba(0,0,0,.20)
-}
-.field label{color:#8ea2b4}.field input,.field select,select,input{
- background:#06121d;border-color:var(--line);color:#f3f6f9
-}
-.btn{background:#0b1926;border-color:var(--line);color:#eaf1f7}.btn.primary{background:linear-gradient(135deg,#ff3038,#ff6549);box-shadow:0 9px 24px rgba(255,47,55,.20)}
-.btn.danger{color:#ff969a;background:rgba(255,67,74,.08);border-color:rgba(255,67,74,.18)}
-.code{background:#050e17;border-color:rgba(105,167,255,.22);color:#dbe7f3}
-.row{background:#081520;border-color:var(--line)}.row small{color:#8295a8}
-.pill{background:rgba(43,209,140,.10);color:#6fe0ab}
-.login{background:radial-gradient(circle at 50% 0,rgba(255,59,67,.18),transparent 35%),#040910}.loginCard{background:#0a1723;border-color:var(--line);box-shadow:0 24px 70px rgba(0,0,0,.38)}
-.astraIntro{border-color:rgba(103,216,231,.16);background:radial-gradient(circle at 100% 0,rgba(103,216,231,.10),transparent 40%),linear-gradient(155deg,#0d1c2a,#07131e)}
-.astraSelector,.astraDatasetBlock,.astraReadiness{background:#081520;border-color:var(--line)}
-.astraBadge{background:#0c1a27;border-color:var(--line)}.astraBadge.good{background:rgba(43,209,140,.08);color:#72dfad}
-.astraUpload{background:rgba(105,167,255,.035);border-color:rgba(105,167,255,.23)}
-.astraAssetCard{background:#06121c}.astraAssetFields input,.astraAssetFields select,.astraAssetFields textarea,.astraConfig textarea{background:#06121d;border-color:var(--line)}
-.astraScore{background:#06121c;border-color:rgba(255,72,78,.18)}
-.toast{background:#0a1723;border-color:var(--line)}
-@media(max-width:620px){
- .hero{padding:23px 18px 22px}.hero h1{font-size:38px}.hero:after{font-size:27px;right:12px;bottom:10px}
- .tabs{top:69px}
- .module{min-height:130px}
-}
-</style><style>
-.hero{display:grid;grid-template-columns:minmax(0,1fr) 260px;align-items:center;gap:24px}
-.heroCopy{position:relative;z-index:2}.heroVersion{display:inline-flex;margin-top:16px;padding:7px 10px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:#081521;color:#91a7ba;font-size:9px;font-weight:900;letter-spacing:.12em}
-.networkVisual{position:relative;width:228px;height:228px;margin-left:auto;border-radius:50%;border:1px solid rgba(255,255,255,.08);background:radial-gradient(circle,rgba(255,62,68,.16),rgba(8,20,31,.82) 48%,rgba(5,12,20,.35) 49%,transparent 70%);box-shadow:inset 0 0 60px rgba(255,62,68,.06),0 25px 60px rgba(0,0,0,.28)}
-.networkVisual:before,.networkVisual:after{content:"";position:absolute;left:50%;top:50%;width:1px;height:76%;background:linear-gradient(transparent,rgba(255,255,255,.15),transparent);transform:translate(-50%,-50%) rotate(42deg)}
-.networkVisual:after{transform:translate(-50%,-50%) rotate(-42deg)}
-.networkVisual b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:72px;height:72px;border-radius:22px;background:linear-gradient(145deg,#ff3038,#ff694b);box-shadow:0 14px 35px rgba(255,48,56,.28);font-size:22px}
-.networkVisual i{position:absolute;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:#102231;box-shadow:0 0 0 5px rgba(255,255,255,.025)}
-.networkVisual i:nth-child(1){left:28px;top:52px}.networkVisual i:nth-child(2){right:24px;top:62px}.networkVisual i:nth-child(3){left:42px;bottom:34px}.networkVisual i:nth-child(4){right:45px;bottom:27px}
-.moduleGlyph{font-size:9px!important;letter-spacing:.10em;font-weight:950;color:#dce7ef!important;background:#102231!important;border:1px solid rgba(255,255,255,.09)}
-@media(max-width:720px){.hero{grid-template-columns:1fr}.networkVisual{display:none}}
 </style></head>
-<body>
+<body class="consoleModule consoleMaster">
 <div class="app" id="app" hidden>
-  <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><div class="mark">Ш</div><div class="brand"><b>ШАУРМЕГ · СУПЕР АДМИНКА</b><small>УПРАВЛЕНИЕ ВСЕЙ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
-  <section class="hero"><div class="heroCopy"><span class="eyebrow">SUPER ADMIN · NETWORK CONTROL</span><h1>Вся сеть.<br>В одном центре.</h1><p>Заведения, заказы, меню, карта, Astra / RealCity, доступы, владельцы и инфраструктура — отдельные рабочие модули внутри одной системы.</p><span class="heroVersion">CONTROL SYSTEM · UI 2.0</span></div><div class="networkVisual" aria-hidden="true"><i></i><i></i><i></i><i></i><b>SH</b></div></section>
-  <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
-
-  <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
+  <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><img class="consoleEmblem" src="/realcity-preview/shaurmeg-emblem.svg" alt=""><div class="brand"><b>Шаур<span>мег</span></b><small>ЦЕНТР УПРАВЛЕНИЯ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
+  <nav class="consoleNav" id="consoleNav" aria-label="Разделы сети">
+    <button class="active" data-tab="overview"><span data-icon="home"></span><b>Обзор</b></button>
+    <button data-tab="sites"><span data-icon="store"></span><b>Заведения</b></button>
+    <button data-tab="orders"><span data-icon="orders"></span><b>Заказы</b></button>
+    <button data-tab="map"><span data-icon="pin"></span><b>Карта</b></button>
+    <button data-tab="tools"><span data-icon="settings"></span><b>Система</b></button>
+  </nav>
+  <div class="consolePageHeading"><div><small id="consoleEyebrow">ОПЕРАЦИОННЫЙ ОБЗОР</small><h1 id="consolePageTitle">Вся сеть под контролем</h1></div><span class="consoleBuild">ASTRA / 03</span></div>
+  <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b><span>активных точек</span></div><div class="stat"><small>ЗАКАЗЫ ЗА 24 ЧАСА</small><b id="stToday">—</b><span>по всей сети</span></div><div class="stat"><small>НОВЫЕ ЗАКАЗЫ</small><b id="stNew">—</b><span>ожидают кухни</span></div><div class="stat"><small>ВЫРУЧКА ЗА 24 ЧАСА</small><b id="stRevenue">—</b><span>без отменённых</span></div></div>
+  <nav class="tabs" id="tabs" aria-label="Системные модули"><button data-tab="tools">Все инструменты</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="bots">Боты</button></nav>
 
   <section class="pane active" id="overviewPane">
-    <div class="sectionTitle"><h2>Управление</h2><small>исходные модули</small></div>
+    <div class="consoleNetworkStrip"><div><small>ЗАВЕДЕНИЯ СЕТИ</small><h2>На связи с каждой точкой</h2></div><div id="networkVenues" class="consoleVenueStrip"></div><button class="btn" data-tab-open="sites">Весь каталог →</button></div><div class="sectionTitle"><h2>Рабочие пространства</h2><small>Быстрый переход</small></div>
     <div class="modules">
-      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span class="moduleGlyph">ORD</span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
-      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span class="moduleGlyph">MENU</span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
-      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span class="moduleGlyph">MAP</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
-      <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span class="moduleGlyph">AI</span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
-      <button class="module" data-tab-open="access"><span class="moduleGlyph">KEY</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
-      <button class="module" data-tab-open="sites"><span class="moduleGlyph">WEB</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
-      <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span class="moduleGlyph">OWN</span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
-      <button class="module wide" data-tab-open="bots"><span class="moduleGlyph">BOT</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span class="moduleGlyph" data-icon="orders"></span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span class="moduleGlyph" data-icon="menu"></span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
+      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span class="moduleGlyph" data-icon="pin"></span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
+      <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span class="moduleGlyph" data-icon="layers"></span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
+      <button class="module" data-tab-open="access"><span class="moduleGlyph" data-icon="key"></span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
+      <button class="module" data-tab-open="sites"><span class="moduleGlyph" data-icon="store"></span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
+      <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span class="moduleGlyph" data-icon="users"></span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
+      <button class="module" data-tab-open="bots"><span class="moduleGlyph" data-icon="telegram"></span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
     </div>
   </section>
 
@@ -254,7 +161,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
     </div>
   </section>
 
-  <section class="pane" id="sitesPane">
+  <section class="pane" id="sitesPane"><div class="consoleCatalogBar"><label class="consoleSearch"><span data-icon="search"></span><input id="venueSearch" placeholder="Название или ID заведения"></label><select id="venueStatusFilter"><option value="all">Все заведения</option><option value="active">Активные</option><option value="paused">На паузе</option></select><button class="btn primary" data-tab-open="map"><span data-icon="plus"></span> Добавить точку</button></div>
     <div class="sectionTitle"><h2>Заведения</h2><small>точечное управление по SC-MSK</small></div>
     <div class="panel">
       <div class="field"><label>Выбрать заведение</label><select id="siteVenue"></select></div>
@@ -268,6 +175,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
     <div class="sectionTitle"><h2>Боты</h2><button class="btn" id="refreshBots">Обновить</button></div>
     <div class="panel"><div class="list" id="botsList"><div class="empty">Проверяем связки…</div></div></div>
   </section>
+  <section class="pane" id="toolsPane"><div class="consoleToolGrid" id="consoleToolGrid"></div></section>
+  <section class="pane consoleFramePane" id="ordersPane"><iframe id="ordersFrame" title="Заказы и аналитика сети"></iframe></section>
+  <section class="pane consoleFramePane" id="menuPane"><iframe id="menuFrame" title="Управление меню сети"></iframe></section>
+  <section class="pane consoleFramePane" id="mapPane"><iframe id="mapFrame" title="Карта и настройки заведений"></iframe></section>
+
 </div>
 
 <div class="login" id="login"><div class="loginCard"><span class="eyebrow">SHAURMEG MASTER</span><h2>Административный доступ</h2><p id="loginText">Проверяем Telegram-доступ…</p><div id="browserLogin" hidden><input id="password" type="password" placeholder="Пароль владельца"><button class="btn primary" id="loginBtn">Войти</button></div><div class="err" id="err"></div></div></div>
@@ -299,11 +211,12 @@ function masterBack(){
  try{window.Telegram?.WebApp?.close?.()}catch{}
 }
 function activate(name){
- if(!['overview','astra','access','owners','sites','bots'].includes(name))name='overview';
+ if(!['overview','astra','access','owners','sites','bots','tools','orders','menu','map'].includes(name))name='overview';
  $$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
  $$('.pane').forEach(x=>x.classList.toggle('active',x.id===name+'Pane'));
  try{const u=new URL(location.href);u.searchParams.set('tab',name);history.replaceState(null,'',u)}catch{}
  syncMasterBack(name);
+ renderConsoleScreen(name);
  if(name==='bots')loadBots();
  if(name==='owners')loadOwnerAdmins();
  if(name==='astra')loadAstraStudio();
@@ -329,14 +242,18 @@ async function loadCore(){
  $('#stToday').textContent=Number(stats.today||0);$('#stNew').textContent=Number(stats.new||0);$('#stRevenue').textContent=Number(stats.revenue||0).toLocaleString('ru-RU')+' ₽';
  const options=venues.filter(x=>x.establishment_id).map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name)+' · '+esc(x.establishment_id)+'</option>').join('');
  $('#accessVenue').innerHTML=options;$('#siteVenue').innerHTML=options;$('#ownerVenue').innerHTML=options;$('#astraVenue').innerHTML=options;
- renderVenueList();updateSiteSelector()
+ renderVenueList();updateSiteSelector();renderNetworkVenues();
 }
 function renderVenueList(){
- $('#venueList').innerHTML=venues.filter(x=>x.establishment_id).slice(0,80).map(x=>'<div class="row" data-est="'+esc(x.establishment_id)+'"><div><b>'+esc(x.name)+'</b><small>'+esc(x.establishment_id)+(x.marker_count?' · меток '+x.marker_count:'')+'</small></div><span class="pill">'+(x.is_active===false?'пауза':'активно')+'</span></div>').join('')||'<div class="empty">Заведений нет</div>'
+ const q=String($('#venueSearch')?.value||'').trim().toLocaleLowerCase('ru'),status=$('#venueStatusFilter')?.value||'all';
+ const rows=venues.filter(x=>x.establishment_id&&(!q||(x.name+' '+x.establishment_id).toLocaleLowerCase('ru').includes(q))&&(status==='all'||(status==='active'&&x.is_active!==false)||(status==='paused'&&x.is_active===false)));
+ $('#venueList').innerHTML=rows.map(x=>'<article class="consoleVenueCard"><button class="consoleVenueMain" data-est="'+esc(x.establishment_id)+'"><div class="consoleVenuePhoto">'+(venueImage(x)?'<img loading="lazy" src="'+esc(venueImage(x))+'" alt="">':'<span data-icon="store"></span>')+'</div><div><h3>'+esc(x.name)+'</h3><small>'+esc(x.establishment_id)+'</small><span class="pill '+(x.is_active===false?'paused':'')+'">'+(x.is_active===false?'На паузе':'Активно')+'</span></div><i>›</i></button><div class="consoleVenueActions"><button data-venue-console="profile" data-est-id="'+esc(x.establishment_id)+'">Карточка</button><button data-venue-console="menu" data-est-id="'+esc(x.establishment_id)+'">Меню</button><button data-venue-console="orders" data-est-id="'+esc(x.establishment_id)+'">Заказы</button></div></article>').join('')||'<div class="empty">Заведения не найдены</div>';
+ window.ShaurmegConsole?.icons($('#venueList'));
 }
 function updateSiteSelector(){$('#siteSelector').textContent='site:'+($('#siteVenue').value||'—')}
 function openOwnerFor(est,tab){
  if(!est)return toast('Выберите заведение');
+ if(tab==='menu'){const u=new URL('/realcity-preview/admin-menu-studio.html',location.origin);u.searchParams.set('master','1');u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-astra3');location.href=u.toString();return}
  location.href='/venue-owner?master=1&establishment='+encodeURIComponent(est)+'&tab='+encodeURIComponent(tab)+'&from=master&v=4'
 }
 function openOwner(tab){openOwnerFor($('#siteVenue').value,tab)}
@@ -505,14 +422,42 @@ async function loadBots(){
   $('#botsList').innerHTML=rows.map(x=>'<div class="row"><span class="botDot '+(x.ok?'ok':x.enabled?'bad':'')+'"></span><div><b>'+esc(labels[x.id]||x.id)+(x.username?' · @'+esc(x.username):'')+'</b><small>'+(x.enabled?(x.webhook?'webhook подключён':'webhook отсутствует'):'не настроен')+(x.pending?' · очередь '+x.pending:'')+(x.last_error?' · '+esc(x.last_error):'')+'</small></div><span class="pill">'+(x.ok?'OK':x.enabled?'ошибка':'off')+'</span></div>').join('')
  }catch{$('#botsList').innerHTML='<div class="empty">Диагностика недоступна</div>'}
 }
+function venueImage(x){return x.hero_image||x.marker_avatar||x.config?.hero_image||x.config?.site_customization?.design?.background_image||''}
+function renderNetworkVenues(){
+ $('#networkVenues').innerHTML=venues.filter(x=>x.establishment_id).slice(0,6).map(x=>'<button class="consoleMiniVenue" data-est-id="'+esc(x.establishment_id)+'" data-venue-console="profile">'+(venueImage(x)?'<img loading="lazy" src="'+esc(venueImage(x))+'" alt="">':'<span data-icon="store"></span>')+'<b>'+esc(x.name)+'</b><small>'+ (x.is_active===false?'На паузе':'Активно')+'</small></button>').join('')||'<p class="muted">Добавьте первое заведение на карте.</p>';
+ window.ShaurmegConsole?.icons($('#networkVenues'));
+}
+function renderConsoleScreen(name){
+ document.body.dataset.screen=name;
+ const titles={overview:'Вся сеть под контролем',sites:'Заведения',orders:'Заказы и аналитика',menu:'Меню сети',map:'Карта заведений',tools:'Инструменты системы',astra:'Astra / RealCity',access:'Ключи и доступы',owners:'Владельцы заведений',bots:'Telegram и интеграции'};
+ $('#consolePageTitle').textContent=titles[name]||titles.overview;
+ $('#consoleEyebrow').textContent=name==='overview'?'ОПЕРАЦИОННЫЙ ОБЗОР':'УПРАВЛЕНИЕ СЕТЬЮ';
+ const group=['astra','access','owners','bots'].includes(name)?'tools':name==='menu'?'sites':name;
+ $$('#consoleNav [data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===group));
+ if(['orders','menu','map'].includes(name)){
+   const f=$('#'+name+'Frame');if(!f.getAttribute('src')){
+    const u=new URL(name==='map'?'/shaurmeg-owner':name==='menu'?'/realcity-preview/admin-menu-studio.html':'/shaurma-owner',location.origin);u.searchParams.set('section',name==='menu'?'menu':'orders');if(name==='menu')u.searchParams.set('master','1');u.searchParams.set('from','master');u.searchParams.set('embed','console');u.searchParams.set('v','20261005-astra3');f.src=u.toString();
+   }
+ }
+ window.ShaurmegConsole?.icons();
+}
+function openConsoleModule(path){if(path.startsWith('/shaurmeg-owner'))return activate('map');if(path.startsWith('/shaurma-owner'))return activate(path.includes('section=menu')?'menu':'orders');location.href=path}
+function renderConsoleTools(){
+ const defs=[['astra','layers','Astra / RealCity','Фотографии, реконструкция и публикация'],['access','key','Ключи доступа','Выдача OWN-ключей и отзыв доступа'],['owners','users','Владельцы','Привязки Telegram и кабинеты точек'],['bots','telegram','Telegram-боты','Состояние связок и вебхуков'],['orders','chart','Аналитика','Периоды, выручка и история'],['menu','menu','Меню сети','Категории, блюда и конструкторы'],['map','pin','Карта','Метки, координаты и оформление'],['sites','store','Заведения','Карточки и настройки каждой точки']];
+ $('#consoleToolGrid').innerHTML=defs.map(([id,icon,title,desc])=>'<button class="consoleSetting" data-tab-open="'+id+'"><span data-icon="'+icon+'"></span><div><b>'+title+'</b><small>'+desc+'</small></div><i>›</i></button>').join('');
+}
+renderConsoleTools();
 async function boot(){
  try{await loadCore();$('#login').style.display='none';$('#app').hidden=false;activate(requestedTab)}catch(e){$('#err').textContent='Не удалось загрузить Master Admin: '+(e.body?.error||e.message)}
 }
+$('#consoleNav').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)activate(b.dataset.tab)};
+$('#venueSearch').oninput=renderVenueList;$('#venueStatusFilter').onchange=renderVenueList;
 $('#tabs').onclick=e=>{const b=e.target.closest('[data-tab]');if(b)activate(b.dataset.tab)};
 $('#masterBack').onclick=masterBack;
 try{window.Telegram?.WebApp?.BackButton?.onClick(masterBack)}catch{};
 document.addEventListener('click',e=>{
- const open=e.target.closest('[data-open]');if(open){location.href=open.dataset.open;return}
+ const open=e.target.closest('[data-open]');if(open){openConsoleModule(open.dataset.open);return}
+ const vc=e.target.closest('[data-venue-console]');if(vc){openOwnerFor(vc.dataset.estId,vc.dataset.venueConsole);return}
  const tab=e.target.closest('[data-tab-open]');if(tab){activate(tab.dataset.tabOpen);return}
  const own=e.target.closest('[data-owner-tab]');if(own){openOwner(own.dataset.ownerTab);return}
  const ownerApp=e.target.closest('[data-owner-app-tab]');if(ownerApp){openOwnerApp(ownerApp.dataset.ownerAppTab);return}

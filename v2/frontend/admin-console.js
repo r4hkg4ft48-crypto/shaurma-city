@@ -17,6 +17,9 @@
  }
  // Reuse the parent SDK before inline auth code runs in same-origin operational frames.
  if(new URLSearchParams(location.search).get('embed')==='console'){try{if(parent!==window&&parent.location.origin===location.origin&&parent.Telegram)window.Telegram=parent.Telegram}catch{}}
- window.ShaurmegConsole={icons};
+ function dialog({title,message='',input=false,value='',confirm='Продолжить'}){
+  return new Promise(resolve=>{const d=document.createElement('dialog');d.className='consoleDialog';const form=document.createElement('form');form.method='dialog';const h=document.createElement('h2');h.textContent=title;const p=document.createElement('p');p.textContent=message;form.append(h,p);let field;if(input){field=document.createElement('input');field.value=value;field.required=true;field.maxLength=100;field.setAttribute('aria-label',title);form.append(field)}const actions=document.createElement('div');actions.className='dialogActions';for(const [v,label] of [['cancel','Отмена'],['confirm',confirm]]){const b=document.createElement('button');b.value=v;b.textContent=label;if(v==='cancel')b.formNoValidate=true;actions.append(b)}form.append(actions);d.append(form);document.body.append(d);d.addEventListener('close',()=>{const result=d.returnValue==='confirm'?(input?field.value.trim():true):null;d.remove();resolve(result)},{once:true});d.showModal();field?.focus()});
+ }
+ window.ShaurmegConsole={icons,dialog};
  document.addEventListener('DOMContentLoaded',init,{once:true});
 })();

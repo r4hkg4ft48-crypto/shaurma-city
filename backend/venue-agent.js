@@ -217,10 +217,13 @@ function inferFreeform(text){
   m=raw.match(/^(?:покажи|открой|перейди в|зайди в)\s+(?:раздел|категорию)?\s*(.+)$/i);
   if(m&&!/^(меню|настройки|заказы|статистику)$/i.test(clean(m[1])))return {kind:'navigate_category',query:clean(m[1])};
 
-  m=raw.match(/^у\s+(.+?)\s+(?:сделай|поставь|измени|поменяй)\s+цен[ау]?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  m=raw.match(/^у\s+(.+?)\s+(?:сделай|поставь|измени|поменяй)\s+цен[ау]?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
   if(m)return {kind:'command',command:{intent:'menu_price',item:clean(m[1]),price:Number(String(m[2]).replace(',','.'))}};
 
-  m=raw.match(/^(?:сделай|поставь|измени|поменяй)\s+(?:цен[ау]\s+)?(?:у|для)\s+(.+?)\s+(?:на|до|по)\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р|руб)?$/i);
+  m=raw.match(/^(?:сделай|поставь|измени|поменяй)\s+(?:цен[ау]\s+)?(?:у|для)\s+(.+?)\s+(?:на|до|по)\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {kind:'command',command:{intent:'menu_price',item:clean(m[1]),price:Number(String(m[2]).replace(',','.'))}};
+
+  m=raw.match(/^(?:пусть\s+)?(.+?)\s+(?:будет|теперь)\s+(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)$/i);
   if(m)return {kind:'command',command:{intent:'menu_price',item:clean(m[1]),price:Number(String(m[2]).replace(',','.'))}};
 
   m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:остаток|осталось)\s+(\d+)$/i);

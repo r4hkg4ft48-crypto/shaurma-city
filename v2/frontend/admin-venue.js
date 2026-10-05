@@ -289,7 +289,18 @@
    const set=(id,v)=>{const el=$(id);if(el)el.textContent=String(v)};
    set('#statToday',today.length);set('#statNew',live.filter(o=>o.status==='new').length);set('#statCooking',live.filter(o=>o.status==='cooking').length);set('#statRevenue',money(revenue));
  }
- async function loadOrders(){try{const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');renderOrders(rows);renderOrderStats(rows);$('#ordersLive').textContent='LIVE'}catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы</div>';renderOrderStats([])}}
+ async function loadOrders(){try{
+   const [rows,stats]=await Promise.all([
+     call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders'),
+     call('/venue-owner/establishments/'+encodeURIComponent(est)+'/stats').catch(()=>null)
+   ]);
+   renderOrders(rows);
+   if(stats){
+     const set=(id,v)=>{const el=$(id);if(el)el.textContent=String(v)};
+     set('#statToday',stats.today??0);set('#statNew',stats.new??0);set('#statCooking',stats.cooking??0);set('#statRevenue',money(stats.revenue??0));
+   }else renderOrderStats(rows);
+   $('#ordersLive').textContent='LIVE';
+ }catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы</div>';renderOrderStats([])}}
  function renderOrders(rows){
    const labels={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
    $('#ordersList').innerHTML=rows.length?rows.map(o=>'<article class="orderCard">'+

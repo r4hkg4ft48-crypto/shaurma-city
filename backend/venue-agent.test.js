@@ -17,6 +17,9 @@ test('freeform price and stock phrases become structured intents',()=>{
   assert.deepEqual(inferFreeform('для айрана остаток 7'),{
     kind:'command',command:{intent:'menu_stock',item:'айрана',value:7}
   });
+  assert.deepEqual(inferFreeform('пусть сырная будет 430 рублей'),{
+    kind:'command',command:{intent:'menu_price',item:'сырная',price:430}
+  });
 });
 
 test('ambiguous remove request requests action clarification',()=>{

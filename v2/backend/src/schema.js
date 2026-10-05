@@ -207,7 +207,25 @@ async function ensureSchema(){
   );
   ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_item_id TEXT;
   ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_group_id TEXT;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_category_id TEXT;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS pending_kind TEXT;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS pending_payload JSONB NOT NULL DEFAULT '{}'::jsonb;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS pending_candidates JSONB NOT NULL DEFAULT '[]'::jsonb;
+  ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS dialog_summary TEXT NOT NULL DEFAULT '';
   CREATE INDEX IF NOT EXISTS idx_v2_owner_command_context_est ON shaurma_owner_command_context(establishment_id);
+
+  CREATE TABLE IF NOT EXISTS shaurma_menu_aliases(
+    id BIGSERIAL PRIMARY KEY,
+    establishment_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL CHECK(entity_type IN ('item','category','group','option')),
+    entity_id TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    normalized_alias TEXT NOT NULL,
+    telegram_user_id TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(establishment_id,entity_type,normalized_alias)
+  );
+  CREATE INDEX IF NOT EXISTS idx_v2_menu_aliases_lookup ON shaurma_menu_aliases(establishment_id,entity_type,normalized_alias);
 
   CREATE TABLE IF NOT EXISTS shaurma_venue_audit(
     id BIGSERIAL PRIMARY KEY,

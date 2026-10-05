@@ -165,3 +165,78 @@ test('clarified builder option deletion remains executable after confirmation',(
   const parsed=parseCommand('удали соус Барбекю');
   assert.equal(parsed.intent,'builder_option_delete');
 });
+
+
+test('explicit venue selection overrides stale clarification',async()=>{
+  const ctx={
+    telegram_user_id:'900',
+    establishment_id:'SC-MSK-AAAAAA1111',
+    pending_kind:'item_select',
+    pending_payload:{token:'12345678'},
+    pending_candidates:[{id:'x',label:'Старая позиция',type:'item'}]
+  };
+  const venues=[
+    {establishment_id:'SC-MSK-AAAAAA1111',name:'Лепёшка Центр',menu:[],config:{},role:'owner',permissions:['menu']},
+    {establishment_id:'SC-MSK-BBBBBB2222',name:'Лепёшка Север',menu:[],config:{},role:'owner',permissions:['menu']}
+  ];
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:venues.map(x=>({...x}))};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context')){
+      if(args.length>1&&args[1]!==null&&args[1]!==undefined)ctx.establishment_id=String(args[1]);
+      return {rows:[]};
+    }
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const calls=[];
+  const commandBus={async handle(x){calls.push(x.text);return {handled:true,text:x.text}}};
+  const agent=createVenueDialogAgent({DB,commandBus}),user={id:900};
+
+  const result=await agent.handle({user,text:'выбери точку Лепёшка Север'});
+  assert.equal(result.handled,true);
+  assert.equal(ctx.establishment_id,'SC-MSK-BBBBBB2222');
+  assert.equal(ctx.pending_kind,null);
+  assert.equal(calls.at(-1),'/use SC-MSK-BBBBBB2222');
+});
+
+test('unknown venue query falls back to accessible venue list',async()=>{
+  const ctx={};
+  const venues=[
+    {establishment_id:'SC-MSK-AAAAAA1111',name:'Лепёшка Центр',menu:[],config:{},role:'owner',permissions:['menu']},
+    {establishment_id:'SC-MSK-BBBBBB2222',name:'Лепёшка Север',menu:[],config:{},role:'owner',permissions:['menu']}
+  ];
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:venues.map(x=>({...x}))};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:Object.keys(ctx).length?[{...ctx}]:[]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context')){
+      if(!ctx.telegram_user_id){ctx.telegram_user_id=String(args[0]);ctx.establishment_id=args[1]??null}
+      return {rows:[]};
+    }
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const commandBus={async handle(x){return {handled:true,text:x.text}}};
+  const agent=createVenueDialogAgent({DB,commandBus}),user={id:901};
+
+  const result=await agent.handle({user,text:'выбери точку абракадабра'});
+  assert.equal(result.handled,true);
+  assert.match(result.text,/Выберите из доступных/);
+  assert.equal(result.reply_markup.inline_keyboard.length,3);
+});

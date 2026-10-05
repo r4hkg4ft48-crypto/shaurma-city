@@ -22,8 +22,8 @@
 <link rel="stylesheet" href="/realcity-preview/builder-cinema.css?v=20261004">
 <script src="/realcity-preview/builder-cinema.js?v=20261004"></script>
 <script src="/realcity-preview/builder-cinema-admin.js?v=20261004"></script>
-</head>
-<body>
+<link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-astra3"><script src="/realcity-preview/admin-console.js?v=20261005-astra3"></script></head>
+<body class="consoleModule ">
 <div class="wrap" id="app" hidden>
   <div class="top"><div class="topLeft"><button class="masterBackVenue" id="masterBackVenue" type="button" aria-label="Назад">←</button><div class="brand"><b>SHAURMEG</b><small>VENUE OWNER CONTROL</small></div></div><div class="id" id="topId">—</div></div>
   <div class="card hero"><div><h1 id="venueName">Заведение</h1><p id="venueAddress">—</p></div><div class="venueTools"><select id="venueSelect"></select><button class="secondary" id="addVenueButton" type="button">＋ Заведение</button><div class="venueCount" id="venueCount">1 заведение</div></div></div>
@@ -135,7 +135,7 @@ const API=location.origin,$=s=>document.querySelector(s),qa=s=>[...document.quer
 const OWNER_LAUNCH=new URL(location.href),REQUESTED_ESTABLISHMENT=String(OWNER_LAUNCH.searchParams.get('establishment')||''),REQUESTED_TAB=String(OWNER_LAUNCH.searchParams.get('tab')||''),MASTER_MODE=OWNER_LAUNCH.searchParams.get('master')==='1';
 const SESSION_KEY=MASTER_MODE?'venue_owner_master_session':'venue_owner_session';
 function backToMaster(){location.href='/master-admin?tab=sites&v=1'}
-function setupMasterBack(){if(!MASTER_MODE)return;$('#masterBackVenue')?.classList.add('show');try{const tg=window.Telegram?.WebApp;tg?.BackButton?.show();tg?.BackButton?.onClick(backToMaster)}catch{}}
+function setupMasterBack(){if(OWNER_LAUNCH.searchParams.get('from')==='console'){const back=()=>location.href='https://shaurmeg-v2-app.onrender.com/admin-venue-pro.html?establishment='+encodeURIComponent(currentId||REQUESTED_ESTABLISHMENT)+'&tab=settings&v=20261005-astra3';$('#masterBackVenue')?.classList.add('show');$('#masterBackVenue').onclick=back;try{window.Telegram?.WebApp?.BackButton?.show();window.Telegram?.WebApp?.BackButton?.onClick(back)}catch{};return}if(!MASTER_MODE)return;$('#masterBackVenue')?.classList.add('show');try{const tg=window.Telegram?.WebApp;tg?.BackButton?.show();tg?.BackButton?.onClick(backToMaster)}catch{}}
 let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],currentId='',venue=null,menu=[],menuSections=[],builderConfigDraft=null,hero='',gallery=[],avatar='',markerStyle={},siteCustomization={},siteBackground='',builderResultImage='',orderStream=null,launchApplied=false;
 const labels={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выдан',cancelled:'Отменён'};
 function toast(t){$('#toast').textContent=t;$('#toast').classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>$('#toast').classList.remove('show'),1500)}
@@ -328,7 +328,7 @@ function connectOrderStream(){
  orderStream.onerror=()=>{};
 }
 async function loadOrders(){try{const [orders,stats]=await Promise.all([api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/orders'),api('/api/venue-owner/establishments/'+encodeURIComponent(currentId)+'/stats')]);$('#sToday').textContent=stats.today;$('#sNew').textContent=stats.new;$('#sCooking').textContent=stats.cooking;$('#sRevenue').textContent=stats.revenue+' ₽';$('#orders').innerHTML=orders.length?orders.map(o=>'<div class="order"><div class="orderHead"><div><b>'+esc(o.order_number)+'</b><br><small>'+new Date(o.created_at).toLocaleString('ru-RU')+'</small></div><span class="status">'+esc(labels[o.status]||o.status)+'</span></div><div class="orderItems">'+(Array.isArray(o.items)?o.items.map(x=>esc(x.n||x.name)+' × '+(x.q||1)).join('<br>'):'')+'</div><div class="actions">'+(o.status==='new'?'<button data-order="'+o.id+'" data-status="cooking">Принять</button>':'')+(o.status==='cooking'?'<button data-order="'+o.id+'" data-status="ready">Готов</button>':'')+(o.status==='ready'?'<button data-order="'+o.id+'" data-status="done">Выдан</button>':'')+(!['done','cancelled'].includes(o.status)?'<button class="danger" data-order="'+o.id+'" data-status="cancelled">Отменить</button>':'')+'</div></div>').join(''):'<div class="muted">Заказов пока нет.</div>'}catch(e){$('#orders').innerHTML='<div class="muted">Заказы недоступны.</div>'}}
-setupMasterBack();$('#masterBackVenue')?.addEventListener('click',backToMaster);
+setupMasterBack();if(MASTER_MODE)$('#masterBackVenue')?.addEventListener('click',backToMaster);
 $('#claimBtn').onclick=async()=>{const b=$('#claimBtn');b.disabled=true;$('#err').textContent='';try{await claimAdditionalVenue($('#claimCode').value)}catch(e){$('#err').textContent='Код недействителен или уже использован.'}finally{b.disabled=false}};
 $('#venueSelect').onchange=e=>openVenue(e.target.value);
 $('#addVenueButton').onclick=openAddVenue;

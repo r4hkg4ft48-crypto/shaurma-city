@@ -651,7 +651,7 @@ async function handleKitchenMessage(msg){
 async function sync(){
   const mapUrl=config.PUBLIC_APP_URL+'/index.html';
   const adminUrl=config.PUBLIC_APP_URL+'/admin-map.html';
-  const venueUrl=config.PUBLIC_APP_URL+'/admin-venue-pro.html?v=20261005b';
+  const venueUrl=config.PUBLIC_APP_URL+'/admin-venue-pro.html?v=20261005-astra3';
   const tasks=[];
   const add=(name,fn)=>tasks.push({name,fn});
 

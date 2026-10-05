@@ -1,8 +1,9 @@
 (() => {
 'use strict';
-const S=window.SHAURMEG||{},api=S.api,tg=S.telegram,esc=S.esc||((v)=>String(v??'')),money=S.money||((v)=>Number(v||0)+' ₽');
+const MASTER=new URLSearchParams(location.search).get('master')==='1',SESSION_KEY=MASTER?'sc_admin_tg_session':'shaurmeg_venue_owner_session';
+const S=window.SHAURMEG||{},api=MASTER?new URL(S.api).origin+'/api':S.api,tg=S.telegram,esc=S.esc||((v)=>String(v??'')),money=S.money||((v)=>Number(v||0)+' ₽');
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clone=x=>JSON.parse(JSON.stringify(x??null));
-let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'',accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,busy=false,categoryFilter='all';
+let session=sessionStorage.getItem(SESSION_KEY)||'',accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,busy=false,categoryFilter='all';
 const GROUPS=['meats','sizes','bases','sauces','extras'];
 const GROUP_LABELS={meats:'Варианты мяса',sizes:'Размеры',bases:'Лаваш / основа',sauces:'Соусы',extras:'Дополнения',required_fields:'Обязательные параметры для карточки'};
 const DEFAULT_SITE={design:{mode:'cinematic',background_image:'',ambient_strength:.16,radius:20,panel_opacity:.9,contrast:1},menu:{layout:'hero-2-3',card_style:'photo',image_fit:'cover',show_descriptions:true,hero_label:'НАША ГОРДОСТЬ'},features:{favorites:true,menu_badges:true,builder_result:true}};
@@ -13,15 +14,22 @@ function code(v){const s=String(v||'').normalize('NFKC').toUpperCase().replace(/
 function safeHex(v,f='#0B2945'){const s=String(v||'').trim().toUpperCase();return /^#[0-9A-F]{6}$/.test(s)?s:f}
 function resolvedImage(v){const s=String(v||'').trim();if(!s)return '';if(s.startsWith('data:image/')||s.startsWith('http://')||s.startsWith('https://')||s.startsWith('/'))return s;return s}
 async function call(path,opt={}){
-  const headers={...(opt.headers||{})};if(session)headers.Authorization='Bearer '+session;
+  const headers={...(opt.headers||{})};if(session)headers.Authorization='Bearer '+session;if(MASTER&&!session){const token=sessionStorage.getItem('sc_owner_token');if(token)headers['X-Owner-Token']=token}
   if(opt.body!==undefined){headers['Content-Type']='application/json';if(typeof opt.body!=='string')opt.body=JSON.stringify(opt.body)}
+  if(MASTER&&path.startsWith('/venue-owner/establishments/')){
+    const suffix=path.split('/').slice(4).join('/');
+    if(!suffix){const v=accesses.find(x=>x.establishment_id===est);if(!v)throw new Error('Заведение не выбрано');path='/shaurma/venues/'+encodeURIComponent(v.venue_id)}
+    else if(suffix==='menu'){path='/shaurma/admin/establishments/'+encodeURIComponent(est)+'/venue';const input=JSON.parse(opt.body);opt.body=JSON.stringify({menu:input.menu,config:{...(data?.config||{}),menu_sections:input.sections}})}
+  }
   const r=await fetch(api+path,{...opt,headers,cache:'no-store'}),j=await r.json().catch(()=>null);
   if(!r.ok)throw new Error(j?.error||('HTTP '+r.status));return j
 }
 async function auth(){
-  if(session){try{const me=await call('/venue-owner/me');accesses=me.establishments||[];return true}catch{session='';sessionStorage.removeItem('shaurmeg_venue_owner_session')}}
+  if(MASTER){try{accesses=await call('/shaurma/admin/venues');return true}catch{if(!tg?.initData)return false;try{const r=await fetch(api+'/shaurma/admin-telegram-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})});const j=await r.json();if(!r.ok)return false;session=j.session;sessionStorage.setItem(SESSION_KEY,session);accesses=await call('/shaurma/admin/venues');return true}catch{return false}}}
+
+  if(session){try{const me=await call('/venue-owner/me');accesses=me.establishments||[];return true}catch{session='';sessionStorage.removeItem(SESSION_KEY)}}
   if(!tg?.initData)return false;
-  try{const r=await fetch(api+'/venue-owner/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}),j=await r.json();if(!r.ok)throw 0;session=j.session;accesses=j.establishments||[];sessionStorage.setItem('shaurmeg_venue_owner_session',session);return true}catch{return false}
+  try{const r=await fetch(api+'/venue-owner/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})}),j=await r.json();if(!r.ok)throw 0;session=j.session;accesses=j.establishments||[];sessionStorage.setItem(SESSION_KEY,session);return true}catch{return false}
 }
 async function claim(){
   const c=code($('#claimCode').value);if(!session)return toast('Откройте через @Shefofbotsbot');if(!c)return toast('Нужен ключ OWN-XXXXXXXXXX');
@@ -53,17 +61,17 @@ function hydrateHeader(){
 }
 async function load({quiet=false}={}){
   if(!quiet)setSync('Синхронизация…');
-  data=await call('/venue-owner/establishments/'+encodeURIComponent(est));menu=(data.menu||[]).map(x=>({...x}));sections=(data.sections_all||data.sections||[]).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));
+  data=await call('/venue-owner/establishments/'+encodeURIComponent(est));menu=(data.menu||[]).map(x=>({...x}));sections=(data.sections_all||data.sections||data.config?.menu_sections||[]).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));
   if(!currentCategory||!activeSections().some(x=>x.id===currentCategory))currentCategory=activeSections()[0]?.id||'';
   hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();renderGuestPreview();connect();setSync()
 }
 function setView(v){
-  $('#studioTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$('.view').forEach(x=>x.classList.toggle('hidden',x.id!=='view-'+v));
+  $$('#studioTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$$('.view').forEach(x=>x.classList.toggle('hidden',x.id!=='view-'+v));
   if(v==='design')renderGuestPreview();
   if(v==='builder'){
     const frame=$('#builderFrame');
     if(frame&&!frame.dataset.loaded){
-      const u=new URL('admin-venue.html',location.href);u.searchParams.set('establishment',est);u.searchParams.set('tab','menu');u.searchParams.set('focus','builder');u.searchParams.set('embed','builder');u.searchParams.set('v','20261005b');frame.src=u.toString();frame.dataset.loaded='1';
+      const u=new URL(MASTER?'/venue-owner':'admin-venue.html',location.href);if(MASTER){u.searchParams.set('master','1');u.searchParams.set('from','master');}u.searchParams.set('establishment',est);u.searchParams.set('tab',MASTER?'site':'menu');u.searchParams.set('focus','builder');u.searchParams.set('embed',MASTER?'console':'builder');u.searchParams.set('v','20261005-astra3');frame.src=u.toString();frame.dataset.loaded='1';
     }
   }
 }
@@ -74,7 +82,7 @@ function renderCategories(){
     return '<article class="categoryRow '+(s.id===currentCategory?'activeSelection ':'')+(active?'':'locked')+'" data-cat="'+esc(s.id)+'">'+
       '<div class="categoryPhoto">'+(img?'<img src="'+esc(img)+'" alt="">':'')+'</div>'+
       '<div class="categoryCopy"><h3>'+esc(s.name)+'</h3><p>'+itemCount(s.id)+' позиций</p><div class="categoryState"><span class="stateChip '+(active?'':'off')+'">'+(active?'Активна':'Отключена суперадмином')+'</span><span class="stateChip sync">Синхронизировано</span></div></div>'+
-      '<button class="rowArrow" data-open-cat="'+esc(s.id)+'" '+(active?'':'disabled')+'>›</button></article>';
+      '<button class="rowArrow" data-open-cat="'+esc(s.id)+'" '+(active||MASTER?'':'disabled')+'>›</button></article>';
   }).join('');
   if(currentCategory)renderCategoryEditor(currentCategory)
 }
@@ -93,11 +101,11 @@ function settingsPills(section,key){
   return '<div class="pills" data-setting-group="'+key+'">'+arr.map((v,i)=>'<span class="pill '+(i>2?'gray':'')+'">'+esc(v)+'<button data-remove-setting="'+key+'" data-index="'+i+'">×</button></span>').join('')+'<button class="addPill" data-add-setting="'+key+'">＋ Добавить</button></div>'
 }
 function renderCategoryEditor(id){
-  const s=sectionOf(id);if(!s||s.active===false){$('#categoryEditor').innerHTML='';return}
+  const s=sectionOf(id);if(!s||(!MASTER&&s.active===false)){$('#categoryEditor').innerHTML='';return}
   currentCategory=id;hydrateHeader();const cover=imageOf(s)||imageOf(menu.find(x=>x.c===id)),gallery=Array.isArray(s.gallery)?s.gallery:[];
   $('#categoryEditor').innerHTML='<section class="categoryEditor">'+
    '<div class="categoryEditorHero">'+(cover?'<img src="'+esc(cover)+'">':'')+'<div class="catHeroActions"><button class="darkPhotoBtn" data-cat-move="-1">↑ Выше</button><button class="darkPhotoBtn" data-cat-move="1">↓ Ниже</button><button class="darkPhotoBtn" data-cat-photo>▣ Изменить фото</button><input id="catPhotoInput" type="file" accept="image/*" hidden></div></div>'+
-   '<div class="categoryEditorTop"><div class="catMiniPhoto">'+(cover?'<img src="'+esc(cover)+'">':'')+'</div><div><h2>'+esc(s.name)+'</h2><p>Настройте параметры и наполнение категории</p></div><div class="lockedSwitch">Категория активна <span class="switch"></span></div></div>'+
+   '<div class="categoryEditorTop"><div class="catMiniPhoto">'+(cover?'<img src="'+esc(cover)+'">':'')+'</div><div><h2>'+esc(s.name)+'</h2><p>Настройте параметры и наполнение категории</p></div>'+ (MASTER?'<label class="lockedSwitch">Доступна гостям <input id="catActive" type="checkbox" '+(s.active!==false?'checked':'')+'></label>':'<div class="lockedSwitch">Категория активна <span class="switch"></span></div>')+'</div>'+
    '<div class="catFields"><div class="fieldGrid"><label class="field"><b>Название категории</b><input id="catName" value="'+esc(s.name)+'"></label><label class="field"><b>Короткая подпись</b><input id="catSubtitle" value="'+esc(s.subtitle||'')+'" placeholder="Например: свежо с гриля"></label></div></div>'+
    '<div class="settingGrid">'+
      '<div class="settingCard"><div class="blockTitle"><b>Доступные виды мяса</b><span>параметры</span></div>'+visualSettings(s,'meats')+settingsPills(s,'meats')+'</div>'+
@@ -130,12 +138,12 @@ async function moveItem(index,delta){
   await saveMenu('Порядок позиций сохранён ✓');
 }
 async function saveCategory(){
-  const s=sectionOf(currentCategory);if(!s)return;s.name=$('#catName').value.trim()||s.name;s.subtitle=$('#catSubtitle').value.trim();s.manual_sort=$('#catManualSort').checked;s.inherit_template=$('#catInherit').checked;await saveMenu('Категория сохранена ✓')
+  const s=sectionOf(currentCategory);if(!s)return;s.name=$('#catName').value.trim()||s.name;s.subtitle=$('#catSubtitle').value.trim();s.manual_sort=$('#catManualSort').checked;s.inherit_template=$('#catInherit').checked;if(MASTER)s.active=$('#catActive')?.checked!==false;await saveMenu('Категория сохранена ✓')
 }
 async function saveMenu(msg='Меню сохранено ✓'){
-  if(busy)return;busy=true;setSync('Сохраняем…');
-  try{const j=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/menu',{method:'PUT',body:{menu,sections}});menu=(j.menu||menu).map(x=>({...x}));sections=(j.sections_all||j.sections||sections).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));toast(msg);renderCategories();renderItemFilters();renderItems();renderGuestPreview();setSync()}
-  catch(e){toast(e.message);setSync('Ошибка синхронизации')}finally{busy=false}
+  if(busy)return false;busy=true;setSync('Сохраняем…');
+  try{const j=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/menu',{method:'PUT',body:{menu,sections}});data={...data,...j};menu=(j.menu||menu).map(x=>({...x}));sections=(j.sections_all||j.sections||j.config?.menu_sections||sections).map(x=>({...x,settings:{...(x.settings||{})},gallery:Array.isArray(x.gallery)?x.gallery:[]}));toast(msg);renderCategories();renderItemFilters();renderItems();renderGuestPreview();setSync();return true}
+  catch(e){toast(e.message);setSync('Ошибка синхронизации');return false}finally{busy=false}
 }
 function renderItemFilters(){
   const list=activeSections();$('#itemCategoryFilter').innerHTML='<option value="">Все категории</option>'+list.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');if(currentCategory&&list.some(x=>x.id===currentCategory))$('#itemCategoryFilter').value=currentCategory
@@ -177,13 +185,13 @@ function renderItemEditor(){
 function syncItemDraft(){
   if(!itemDraft||$('#itemEditor').classList.contains('hidden'))return;
   itemDraft.n=$('#iName')?.value.trim()||itemDraft.n;itemDraft.d=$('#iDesc')?.value.trim()||'';itemDraft.c=$('#iCat')?.value||itemDraft.c;itemDraft.p=Math.max(0,Number($('#iPrice')?.value)||0);itemDraft.weight=$('#iWeight')?.value.trim()||'';itemDraft.sku=$('#iSku')?.value.trim()||'';itemDraft.composition=$('#iComposition')?.value.trim()||'';itemDraft.tags=String($('#iTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean).slice(0,20);const stock=$('#iStock')?.value;itemDraft.stock=stock===''||stock===undefined?null:Math.max(0,Number(stock)||0);itemDraft.card_color=$('#iCardColor')?.value||'#FFFFFF';itemDraft.featured=!!$('#iFeatured')?.checked;itemDraft.recommended=!!$('#iRecommended')?.checked;itemDraft.schedule={...(itemDraft.schedule||{}),enabled:!!($('#iFrom')?.value||$('#iTo')?.value),from:$('#iFrom')?.value||'',to:$('#iTo')?.value||''};
-  itemDraft.options=itemDraft.options||{};const required=[];for(const g of GROUPS){const root=document.querySelector('[data-group="'+g+'"]'),arr=[];root?.querySelectorAll('[data-option-card]').forEach((card,i)=>{const name=card.querySelector('[data-opt-name]')?.value.trim();if(!name)return;const old=itemDraft.options[g]?.[i]||{};arr.push({...old,id:slug(name),name,price:Number(card.querySelector('[data-opt-price]')?.value)||0,active:true})});itemDraft.options[g]=arr;if(root?.querySelector('[data-required="'+g+'"]')?.checked)required.push(g)}itemDraft.options.required_groups=required
+  itemDraft.options=itemDraft.options||{};const required=[];for(const g of GROUPS){const root=document.querySelector('[data-group="'+g+'"]'),arr=[];root?.querySelectorAll('[data-option-card]').forEach((card,i)=>{const name=card.querySelector('[data-opt-name]')?.value.trim();if(!name)return;const old=itemDraft.options[g]?.[i]||{};arr.push({...old,id:old.id||slug(name),name,price:Number(card.querySelector('[data-opt-price]')?.value)||0,active:old.active!==false})});itemDraft.options[g]=arr;if(root?.querySelector('[data-required="'+g+'"]')?.checked)required.push(g)}itemDraft.options.required_groups=required
 }
 function addOption(g){syncItemDraft();itemDraft.options[g]=itemDraft.options[g]||[];itemDraft.options[g].push({id:'opt_'+Date.now().toString(36),name:'Новый вариант',price:0,active:true,default:false,image:''});renderItemEditor()}
 function removeOption(g,i){syncItemDraft();itemDraft.options[g]?.splice(i,1);renderItemEditor()}
 function defaultOption(g,i){syncItemDraft();(itemDraft.options[g]||[]).forEach((o,k)=>o.default=k===i);renderItemEditor()}
 async function saveItem(){
-  syncItemDraft();if(!itemDraft.n)return toast('Введите название позиции');if(editingIndex>=0)menu[editingIndex]=clone(itemDraft);else{menu.push(clone(itemDraft));editingIndex=menu.length-1}await saveMenu('Позиция сохранена и обновлена в меню ✓');closeItemEditor();renderItems()
+  if(busy)return;syncItemDraft();if(!itemDraft.n)return toast('Введите название позиции');if(editingIndex>=0)menu[editingIndex]=clone(itemDraft);else{menu.push(clone(itemDraft));editingIndex=menu.length-1}if(await saveMenu('Позиция сохранена и обновлена в меню ✓')){closeItemEditor();renderItems()}
 }
 async function deleteItem(){if(editingIndex<0){closeItemEditor();return}if(!confirm('Удалить позицию из меню?'))return;menu.splice(editingIndex,1);editingIndex=-1;await saveMenu('Позиция удалена ✓');closeItemEditor()}
 function readFile(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result||''));r.onerror=rej;r.readAsDataURL(f)})}
@@ -208,13 +216,15 @@ function mergeSite(r){return {design:{...DEFAULT_SITE.design,...(r?.design||{})}
 function hydrateDesign(){const t=data?.config?.theme||{primary:'#D94343',secondary:'#13233B',tone:'balanced'},s=mergeSite(data?.config?.site_customization);$('#themePrimary').value=safeHex(t.primary,'#D94343');$('#themePrimaryHex').value=safeHex(t.primary,'#D94343');$('#themeSecondary').value=safeHex(t.secondary,'#13233B');$('#themeSecondaryHex').value=safeHex(t.secondary,'#13233B');$('#themeTone').value=t.tone||'balanced';$('#siteLayout').value=s.menu.layout}
 function renderGuestPreview(){if(!data)return;const secs=activeSections(),items=menu.filter(x=>x.active!==false).slice(0,4),hero=currentHero();$('#guestPreview').innerHTML='<div class="previewPhone"><div class="previewHero" style="'+(hero?'background-image:url(&quot;'+esc(hero)+'&quot;)':'')+'"><div><small>'+esc(data.name||'SHAURMEG')+'</small><h3>Меню</h3></div></div><div class="previewBody"><div class="previewChips">'+secs.slice(0,4).map(s=>'<span>'+esc(s.name)+'</span>').join('')+'</div><div class="previewGrid">'+items.map(x=>'<article class="previewDish">'+(imageOf(x)?'<img src="'+esc(imageOf(x))+'">':'')+'<div><b>'+esc(x.n)+'</b><strong>'+money(x.p)+'</strong><button>＋</button></div></article>').join('')+'</div></div></div>'}
 async function saveDesign(){
+  if(MASTER){try{const theme={primary:safeHex($('#themePrimaryHex').value,$('#themePrimary').value),secondary:safeHex($('#themeSecondaryHex').value,$('#themeSecondary').value),tone:$('#themeTone').value},site=mergeSite(data?.config?.site_customization);site.menu.layout=$('#siteLayout').value;const saved=await call('/shaurma/admin/establishments/'+encodeURIComponent(est)+'/venue',{method:'PUT',body:{menu,config:{...(data.config||{}),theme,site_customization:site}}});data={...data,...saved};toast('Дизайн опубликован ✓');renderGuestPreview()}catch(e){toast(e.message)}return}
   try{const theme={primary:safeHex($('#themePrimaryHex').value,$('#themePrimary').value),secondary:safeHex($('#themeSecondaryHex').value,$('#themeSecondary').value),tone:$('#themeTone').value},site=mergeSite(data?.config?.site_customization);site.menu.layout=$('#siteLayout').value;const [a,b]=await Promise.all([call('/venue-owner/establishments/'+encodeURIComponent(est)+'/theme',{method:'PUT',body:{theme}}),call('/venue-owner/establishments/'+encodeURIComponent(est)+'/site',{method:'PUT',body:{site_customization:site}})]);data.config={...(data.config||{}),theme:a.theme,site_customization:b.site_customization};toast('Дизайн опубликован ✓');renderGuestPreview()}catch(e){toast(e.message)}
 }
 function clientPreview(){const marker=data?.marker_id||accesses.find(x=>x.establishment_id===est)?.marker_id;if(!marker)return toast('У точки нет marker_id');window.open(location.origin+'/menu.html?marker='+encodeURIComponent(marker)+'&establishment='+encodeURIComponent(est),'_blank')}
-function connect(){try{stream?.close()}catch{};if(!session||!est)return;try{stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));const refresh=()=>{clearTimeout(connect.t);connect.t=setTimeout(()=>load({quiet:true}).catch(()=>{}),220)};stream.addEventListener('venue',refresh);stream.addEventListener('menu_changed',refresh);stream.onerror=()=>setSync('Переподключение…')}catch{}}
+function connect(){try{stream?.close()}catch{};if(MASTER||!session||!est)return;try{stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));const refresh=()=>{clearTimeout(connect.t);connect.t=setTimeout(()=>load({quiet:true}).catch(()=>{}),220)};stream.addEventListener('venue',refresh);stream.addEventListener('menu_changed',refresh);stream.onerror=()=>setSync('Переподключение…')}catch{}}
 
 function bind(){
-  $('#claimBtn').onclick=claim;$('#studioBack').onclick=()=>location.href='admin-venue-pro.html?establishment='+encodeURIComponent(est)+'&v=20261005b';
+  $('#claimBtn').onclick=claim;const back=()=>{if(!$('#itemEditor').classList.contains('hidden'))return closeItemEditor();location.href=MASTER?'/master-admin?tab=sites':'admin-venue-pro.html?establishment='+encodeURIComponent(est)+'&v=20261005-astra3'};$('#studioBack').onclick=back;try{tg?.BackButton?.show();tg?.BackButton?.onClick(back)}catch{};
+  if(MASTER){$('#newCategoryBtn').classList.remove('hidden');$('#advancedMenuBtn').classList.remove('hidden');$('#newCategoryBtn').onclick=async()=>{const name=prompt('Название новой категории');if(!name?.trim())return;const id='category-'+Date.now().toString(36);sections.push({id,name:name.trim(),active:true,order:sections.length,settings:{}});currentCategory=id;await saveMenu('Категория создана ✓')};$('#advancedMenuBtn').onclick=()=>{location.href='/shaurma-owner?section=menu&from=master&establishment='+encodeURIComponent(est)}}
   $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';const frame=$('#builderFrame');if(frame){frame.dataset.loaded='';frame.removeAttribute('src')}await load()};
   $('#studioTabs').onclick=e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
   $('#categorySearch').oninput=renderCategories;$('#categoryFilterBtn').onclick=()=>{categoryFilter=categoryFilter==='all'?'active':categoryFilter==='active'?'locked':'all';$('#categoryFilterBtn').textContent=categoryFilter==='all'?'Все категории⌄':categoryFilter==='active'?'Только активные⌄':'Отключённые⌄';renderCategories()};
@@ -238,7 +248,7 @@ function bind(){
     b=e.target.closest('[data-opt-remove]');if(b)return removeOption(b.dataset.optRemove,Number(b.dataset.index));
     b=e.target.closest('[data-opt-default]');if(b)return defaultOption(b.dataset.optDefault,Number(b.dataset.index));
     b=e.target.closest('[data-opt-photo]');if(b){syncItemDraft();const input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=()=>input.files?.[0]&&optionPhoto(b.dataset.optPhoto,Number(b.dataset.index),input.files[0]).catch(x=>toast(x.message));input.click();return}
-    if(e.target.closest('#activeSwitch')){itemDraft.active=itemDraft.active===false?true:false;renderItemEditor()}
+    if(e.target.closest('#activeSwitch')){syncItemDraft();itemDraft.active=itemDraft.active===false?true:false;renderItemEditor()}
     if(e.target.closest('#saveItemBtn'))return saveItem();
     if(e.target.closest('#itemPreview'))return clientPreview();
   };

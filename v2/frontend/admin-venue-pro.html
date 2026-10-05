@@ -6,71 +6,83 @@
 <meta name="theme-color" content="#071c31">
 <title>Шаурмег · админка заведения</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="admin-venue-pro.css?v=20261005b">
-</head>
-<body>
+<link rel="stylesheet" href="admin-venue-pro.css?v=20261005-astra3">
+<link rel="stylesheet" href="admin-console.css?v=20261005-astra3"><script src="admin-console.js?v=20261005-astra3"></script></head>
+<body class="consoleOwner">
 <div class="app" id="app">
   <header class="hero">
     <div class="topline">
       <button class="iconBtn" id="backBtn" aria-label="Назад">←</button>
-      <div class="heroTitle"><small>ШАУРМЕГ · ПАРТНЁР</small><b>Админка заведения</b></div>
+      <img class="consoleEmblem" src="shaurmeg-emblem.svg" alt=""><div class="heroTitle"><b>Шаур<span>мег</span></b><small>УПРАВЛЕНИЕ ЗАВЕДЕНИЕМ</small></div>
       <select id="venueSelect" class="venueSelect" aria-label="Заведение"></select>
     </div>
     <div class="heroBody">
       <div class="heroCopy">
         <div class="venueMeta"><span id="establishmentChip">—</span><span class="syncBadge" id="syncBadge"><i></i> Синхронизировано</span></div>
         <h1 id="venueNameHero">Заведение</h1>
-        <p>Рабочая панель точки: меню, конструктор, заказы, внешний вид и профиль. Все изменения сразу связаны с клиентским Mini App.</p>
+        <p><span id="venueAddressHero">Панель управления заведением</span></p>
         <div class="heroActions">
-          <button class="primary" id="heroMenuStudio">Открыть Kitchen Studio</button>
-          <button class="secondary dark" id="heroBuilderStudio">Конструктор блюда</button>
+          <button class="primary" id="heroMenuStudio">Редактировать меню</button>
+          <button class="secondary dark" id="heroBuilderStudio">Собрать рецепт</button>
         </div>
       </div>
       <div class="heroPhoto" id="heroPhoto"><span>SHAURMEG</span></div>
     </div>
   </header>
 
-  <nav class="mainTabs" id="mainTabs">
-    <button data-view="home" class="active"><span>⌂</span><b>Главная</b></button>
-    <button id="navMenuStudio"><span>▤</span><b>Меню</b></button>
-    <button data-view="orders"><span>◉</span><b>Заказы</b></button>
-    <button data-view="design"><span>◇</span><b>Дизайн</b></button>
-    <button data-view="profile"><span>⚙</span><b>Точка</b></button>
+  <nav class="mainTabs" id="mainTabs" aria-label="Основная навигация">
+    <button data-view="home" class="active"><span data-icon="home"></span><b>Обзор</b></button>
+    <button data-view="orders"><span data-icon="orders"></span><b>Заказы</b></button>
+    <button id="navMenuStudio"><span data-icon="menu"></span><b>Меню</b></button>
+    <button id="navBuilderStudio"><span data-icon="recipe"></span><b>Сборка</b></button>
+    <button data-view="settings"><span data-icon="settings"></span><b>Настройки</b></button>
   </nav>
 
   <main>
     <section class="view" id="view-home">
       <div class="dashboardIntro">
-        <div><small>CONTROL ROOM</small><h2>Управление заведением</h2><p>Не длинная форма, а отдельные рабочие зоны. Каждая карточка ведёт к реальной функции.</p></div>
-        <button class="ghostAction" id="openClientFromHome">Посмотреть глазами гостя ↗</button>
+        <div><small>ОПЕРАЦИОННЫЙ ОБЗОР</small><h2>Сегодня</h2></div>
+        <button class="ghostAction" id="openClientFromHome">Открыть меню гостя ↗</button>
       </div>
       <div class="dashboardStats">
-        <article><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="homeOrdersToday">—</b><span>по серверу</span></article>
+        <article><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="homeOrdersToday">—</b><span>за последние 24 часа</span></article>
         <article><small>НОВЫЕ</small><b id="homeOrdersNew">—</b><span>ждут кухни</span></article>
         <article><small>ГОТОВЯТСЯ</small><b id="homeOrdersCooking">—</b><span>в работе</span></article>
-        <article><small>ВЫРУЧКА</small><b id="homeRevenue">—</b><span>за сутки</span></article>
+        <article><small>ВЫРУЧКА</small><b id="homeRevenue">—</b><span>без отменённых</span></article>
       </div>
       <div class="workspaceGrid">
         <button class="workspaceCard menuCard" id="openMenuStudioCard">
           <div class="workspacePhoto"></div><div class="workspaceShade"></div>
-          <div class="workspaceCopy"><small>KITCHEN STUDIO</small><h3>Меню и блюда</h3><p>Категории → блюдо → фото → состав → варианты → цена.</p><span>Открыть студию →</span></div>
+          <div class="workspaceCopy"><small>МЕНЮ</small><h3>Меню и блюда</h3><p>Категории, фотографии, цены и варианты.</p><span>Открыть студию →</span></div>
         </button>
         <button class="workspaceCard builderCard" id="openBuilderStudioCard">
           <div class="workspacePhoto"></div><div class="workspaceShade"></div>
-          <div class="workspaceCopy"><small>RECIPE LAB</small><h3>Конструктор</h3><p>Лаваш, мясо, соусы, добавки и кинематографическая сборка.</p><span>Настроить →</span></div>
+          <div class="workspaceCopy"><small>КОНСТРУКТОР</small><h3>Конструктор</h3><p>Лаваш, мясо, соусы, добавки и кинематографическая сборка.</p><span>Настроить →</span></div>
         </button>
         <button class="workspaceCard ordersCard" data-home-view="orders">
           <div class="workspaceVisual"><strong id="homeActiveOrders">0</strong><span>активных</span></div>
-          <div class="workspaceCopy"><small>LIVE ORDERS</small><h3>Заказы</h3><p>Принят → готовится → готово → выполнен.</p><span>Открыть ленту →</span></div>
+          <div class="workspaceCopy"><small>КУХНЯ</small><h3>Заказы</h3><p>Лента заказов и статусы кухни.</p><span>Открыть ленту →</span></div>
         </button>
         <button class="workspaceCard designCard" data-home-view="design">
           <div class="workspaceVisual designSwatch"><i></i><i></i><i></i></div>
-          <div class="workspaceCopy"><small>VISUAL SYSTEM</small><h3>Дизайн Mini App</h3><p>Цвет, карточки, сетка и живой предпросмотр.</p><span>Настроить →</span></div>
+          <div class="workspaceCopy"><small>ОФОРМЛЕНИЕ</small><h3>Дизайн Mini App</h3><p>Цвет, карточки, сетка и живой предпросмотр.</p><span>Настроить →</span></div>
         </button>
         <button class="workspaceCard profileCard" data-home-view="profile">
-          <div class="workspaceVisual profileVisual">SC</div>
-          <div class="workspaceCopy"><small>VENUE PROFILE</small><h3>Карточка точки</h3><p>Название, адрес, часы, описание и hero-фото.</p><span>Редактировать →</span></div>
+          <div class="workspaceVisual profileVisual"><span data-icon="store"></span></div>
+          <div class="workspaceCopy"><small>ЗАВЕДЕНИЕ</small><h3>Карточка точки</h3><p>Название, адрес, часы, описание и hero-фото.</p><span>Редактировать →</span></div>
         </button>
+      </div>
+      <section class="consoleRecent panel"><div class="sectionHead"><div><small>КУХНЯ СЕЙЧАС</small><h2>Последние заказы</h2></div><button class="secondary compact" data-home-view="orders">Все заказы →</button></div><div id="homeRecentOrders" class="orders"></div></section>
+    </section>
+
+    <section class="view hidden" id="view-settings">
+      <div class="sectionHead"><div><small>ВАШЕ ЗАВЕДЕНИЕ</small><h2>Настройки</h2></div></div>
+      <div class="consoleSettingsGrid">
+        <button class="consoleSetting" data-settings-view="profile"><span data-icon="store"></span><div><b>Карточка заведения</b><small>Название, адрес, часы и обложка</small></div><i>›</i></button>
+        <button class="consoleSetting" data-settings-view="design"><span data-icon="palette"></span><div><b>Вид меню</b><small>Цвета, карточки и предпросмотр</small></div><i>›</i></button>
+        <button class="consoleSetting" id="advancedProfile"><span data-icon="pin"></span><div><b>Карта и фотографии</b><small>Метка, аватар, галерея, телефон и ссылки</small></div><i>›</i></button>
+        <button class="consoleSetting" id="advancedSite"><span data-icon="layers"></span><div><b>Расширенное оформление</b><small>Фон, контраст, анимации и итог сборки</small></div><i>›</i></button>
+        <button class="consoleSetting" id="addVenueConsole"><span data-icon="plus"></span><div><b>Подключить заведение</b><small>Добавить ещё одну точку по OWN-ключу</small></div><i>›</i></button>
       </div>
     </section>
 
@@ -127,7 +139,7 @@
           <label class="field wide"><span>Описание</span><textarea id="profileDescription" rows="4"></textarea></label>
           <label class="field"><span>Часы работы</span><input id="profileHours"></label>
           <label class="field"><span>Ценовой диапазон</span><input id="profilePrice"></label>
-          <label class="field wide"><span>Hero-фото URL</span><input id="profileHero"></label>
+          <label class="field wide"><span>Обложка заведения</span><div class="consolePhotoEdit"><img id="profilePhotoPreview" alt="Обложка" hidden><label class="consoleUpload"><span data-icon="camera"></span>Загрузить фото<input id="profilePhotoFile" type="file" accept="image/*" hidden></label></div><input id="profileHero" placeholder="Или вставьте ссылку на фото"></label>
         </div>
         <div class="actions"><button class="primary" id="saveProfileBtn">Сохранить профиль</button></div>
       </div>
@@ -135,8 +147,8 @@
 
     <section class="view hidden" id="view-orders">
       <div class="panel">
-        <div class="sectionHead"><div><small>LIVE</small><h2>Заказы</h2></div><button class="secondary compact" id="refreshOrders">Обновить</button></div>
-        <div class="orders" id="ordersList"></div>
+        <div class="sectionHead"><div><small>ЛЕНТА КУХНИ</small><h2>Заказы</h2></div><button class="secondary compact" id="refreshOrders">Обновить</button></div>
+        <div class="consoleOrderFilters" id="orderStatusFilter"><button data-filter="active" class="active">В работе</button><button data-filter="new">Новые</button><button data-filter="cooking">Готовятся</button><button data-filter="ready">Готовы</button><button data-filter="all">Все</button></div><div class="orders" id="ordersList"></div>
       </div>
     </section>
   </main>
@@ -154,6 +166,6 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="config.js?v=20261005"></script>
-<script src="admin-venue-pro.js?v=20261005b"></script>
+<script src="admin-venue-pro.js?v=20261005-astra3"></script>
 </body>
 </html>

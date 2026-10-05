@@ -5,15 +5,15 @@ const {parseCommand,norm,venueShortKey}=require('./venue-command');
 
 const STOP=new Set(['и','в','во','на','с','со','из','для','по','к','ко','у','а','но','же','это','тот','та','то','эту','этот','этом','там','мне','нам','пока']);
 const SYN=[
-  [/\bшаверм\w*/g,'шаурма'],
-  [/\bшавух\w*/g,'шаурма'],
-  [/\bшав\w*/g,'шаурма'],
-  [/\bкартош\w*/g,'картофель'],
-  [/\bсырн\w*/g,'сыр'],
-  [/\bклассич\w*/g,'классика'],
-  [/\bговяж\w*/g,'говядина'],
-  [/\bкурин\w*/g,'курица'],
-  [/\bчесноч\w*/g,'чеснок']
+  [/шаверм[а-яa-z0-9]*/g,'шаурма'],
+  [/шавух[а-яa-z0-9]*/g,'шаурма'],
+  [/\bшава\b/g,'шаурма'],
+  [/картош[а-яa-z0-9]*/g,'картофель'],
+  [/сырн[а-яa-z0-9]*/g,'сыр'],
+  [/классич[а-яa-z0-9]*/g,'классика'],
+  [/говяж[а-яa-z0-9]*/g,'говядина'],
+  [/курин[а-яa-z0-9]*/g,'курица'],
+  [/чесноч[а-яa-z0-9]*/g,'чеснок']
 ];
 
 function clean(v){return String(v||'').trim()}
@@ -48,14 +48,30 @@ function similarity(a,b){
   const na=normalize(a),nb=normalize(b);
   if(!na||!nb)return 0;
   if(na===nb)return 1;
-  if(na.includes(nb)||nb.includes(na))return Math.min(.96,.78+Math.min(na.length,nb.length)/Math.max(na.length,nb.length)*.18);
+  if(na.includes(nb)||nb.includes(na))return Math.min(.97,.80+Math.min(na.length,nb.length)/Math.max(na.length,nb.length)*.17);
   const at=[...new Set(tokens(na))],bt=[...new Set(tokens(nb))];
   let overlap=0;
   for(const x of at)if(bt.includes(x))overlap++;
   const tokenScore=at.length?overlap/at.length:0;
   const reverse=bt.length?overlap/bt.length:0;
   const edit=1-levenshtein(na,nb)/Math.max(na.length,nb.length);
-  return Math.max(edit*.72,tokenScore*.65+reverse*.25,tokenScore===1?.91:0);
+  const fuzzy=at.length?at.map(x=>{
+    let best=0;
+    for(const y of bt){
+      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
+      if(s>best)best=s;
+    }
+    return best;
+  }).reduce((s,x)=>s+x,0)/at.length:0;
+  const fuzzyReverse=bt.length?bt.map(y=>{
+    let best=0;
+    for(const x of at){
+      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
+      if(s>best)best=s;
+    }
+    return best;
+  }).reduce((s,x)=>s+x,0)/bt.length:0;
+  return Math.max(edit*.72,tokenScore*.65+reverse*.25,tokenScore===1?.93:0,fuzzy*.72+fuzzyReverse*.20);
 }
 function itemText(item,categoryName=''){
   return [

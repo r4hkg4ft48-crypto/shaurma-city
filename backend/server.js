@@ -1170,7 +1170,7 @@ app.get('/api/shaurma/admin/venues',async(req,res)=>{
  try{
   res.setHeader('Cache-Control','no-store, no-cache, must-revalidate');
   if(!DB)return res.json([SEEDED_VENUES[0]].map(v=>({venue_id:v.venue_id,slug:v.slug,name:v.name,is_active:true,config:v.config})));
-  const q=await DB.query(`SELECT DISTINCT v.establishment_id,v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at,COUNT(m.id)::int AS marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.venue_id=$1 OR m.id IS NOT NULL GROUP BY v.venue_id ORDER BY v.name`,[DEFAULT_VENUE_ID]);
+  const q=await DB.query(`SELECT DISTINCT v.establishment_id,v.venue_id,v.slug,v.name,v.is_active,v.config,v.updated_at,(SELECT COALESCE(NULLIF(mm.hero_image,''),NULLIF(mm.marker_avatar,''),'') FROM shaurmeg_markers mm WHERE mm.venue_id=v.venue_id ORDER BY mm.is_active DESC,mm.updated_at DESC LIMIT 1) AS hero_image,COUNT(m.id)::int AS marker_count FROM shaurma_venues v LEFT JOIN shaurmeg_markers m ON m.venue_id=v.venue_id WHERE v.venue_id=$1 OR m.id IS NOT NULL GROUP BY v.venue_id ORDER BY v.name`,[DEFAULT_VENUE_ID]);
   res.json(q.rows);
  }catch(e){console.error('admin venue list:',e.message);res.status(500).json({error:'venue_list_failed'})}
 });

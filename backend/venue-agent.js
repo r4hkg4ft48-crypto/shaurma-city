@@ -91,6 +91,30 @@ function ordinal(v){
 function isCancel(v){return /^(нет|не то|не это|отмена|отмени|стоп|назад)$/i.test(normalize(v))}
 function isYes(v){return /^(да|ага|верно|точно|оно|он|она|подтверждаю|делай)$/i.test(normalize(v))}
 function token8(){return crypto.randomBytes(4).toString('hex')}
+function dialogHelpText(){
+  return [
+    '🤖 Диалоговый помощник точки',
+    '',
+    'Можно писать обычным языком — точные команды запоминать не нужно.',
+    'Если я не уверен в точке, разделе, блюде, группе или варианте, я сначала уточню и ничего не изменю.',
+    '',
+    'Примеры:',
+    '• «найди сырную шаурму»',
+    '• «у сырной сделай цену 420»',
+    '• «покажи напитки»',
+    '• «убери айран» — уточню: скрыть или временно снять с продажи',
+    '• «добавь выбор Острота»',
+    '• «добавь вариант Острая +30»',
+    '• «где мы?»',
+    '• «назад»',
+    '• «к разделам»',
+    '',
+    'Можно обучать коротким названиям:',
+    '• «запомни что большая сырная это сырная XL»',
+    '',
+    'Удаляющие действия требуют отдельного подтверждения.'
+  ].join('\n');
+}
 
 function candidateButtons(token,candidates){
   const rows=[];
@@ -574,7 +598,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const item=await chooseItem(user,active.venue,action.item,{command:action},'Какую позицию изменить?');
       if(item.error)return {handled:true,text:item.error};
       if(item.ask)return item.ask;
-      await patchContext(user.id,{selected_item_id:item.item.id,selected_group_id:null});
+      await patchContext(user.id,{selected_item_id:item.item.id,selected_group_id:null,...(item.item.category_id?{selected_category_id:item.item.category_id}:{})});
       const fresh=await context(user.id);
       const row=(active.venue?.menu||[]).find(x=>String(x.id)===String(item.item.id));
       return resolveNestedCommand(user,active.venue,fresh,action,row);
@@ -593,6 +617,8 @@ function createVenueDialogAgent({DB,commandBus}){
     }
 
     const parsed=parseCommand(raw);
+    if(parsed.intent==='help')return {handled:true,text:dialogHelpText()};
+    if(parsed.intent==='venues_show')return commandBus.handle({user,text:raw});
     if(parsed.intent==='venue_select')return selectVenue(user,parsed.query);
 
     const active=await activeVenue(user);

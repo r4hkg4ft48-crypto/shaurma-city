@@ -366,9 +366,10 @@ function normalizeMenu(input){
     };
   }).filter(x=>x.id&&x.n);
 }
-function menuSelectionPrice(item,selection={}){
+function menuSelectionPrice(item,selection={},choices={}){
   const src=normalizeMenu([item])[0];if(!src)return null;
   const sel=selection&&typeof selection==='object'&&!Array.isArray(selection)?selection:{};
+  const custom=choices&&typeof choices==='object'&&!Array.isArray(choices)?choices:{};
   let total=Number(src.p)||0;const details=[];
   for(const group of ['meats','sizes','bases','sauces','extras']){
     const list=src.options[group]||[],raw=sel[group],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
@@ -379,6 +380,16 @@ function menuSelectionPrice(item,selection={}){
       if(!def)return null;chosen.push(def);
     }
     for(const opt of chosen){total+=Number(opt.price)||0;details.push(opt.name)}
+  }
+  for(const group of (src.choice_groups||[]).filter(g=>g.active!==false)){
+    const active=(group.options||[]).filter(o=>o.active!==false),raw=custom[String(group.id)],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
+    const unique=[...new Set(ids)],min=Math.max(group.required?1:0,Number(group.min)||0),max=group.type==='single'?1:Math.max(min,Number(group.max)||Math.max(1,active.length));
+    if(unique.length<min||unique.length>max)return null;
+    const chosen=unique.map(id=>active.find(o=>String(o.id)===id)).filter(Boolean);
+    if(chosen.length!==unique.length)return null;
+    if(!unique.length&&min===0)continue;
+    for(const opt of chosen)total+=Number(opt.price_delta)||0;
+    if(chosen.length)details.push(String(group.name||'Выбор')+': '+chosen.map(opt=>opt.name).join(', '));
   }
   return {price:clamp(total,0,100000),detail:details.join(' · ')};
 }

@@ -3905,3 +3905,50 @@ body.panelOpen .activeOrderBadge,html.sheetOpen .activeOrderBadge{opacity:.18;po
 }
 .venuePage .itemOptionButtons button.active small{color:inherit;opacity:.72}
 @media(max-width:390px){.venuePage .itemOptionButtons{grid-template-columns:1fr}}
+/* Explicit composition controls and a quiet glass confirmation. */
+body.venuePage .builderChoice{display:flex;align-items:center;gap:12px;cursor:default;text-align:left}
+body.venuePage .builderChoiceCopy{flex:1;min-width:0}
+body.venuePage .builderChoicePlus{flex:none;width:44px;height:44px;min-height:44px;border-radius:13px;border:1px solid #ffffff30;background:var(--venue-accent,#8fe0a9);color:var(--venue-ink,#07111b);font-size:24px;display:grid;place-items:center;padding:0;touch-action:manipulation}
+.favoritePrompt{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;background:#07111b35;backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,visibility .25s}
+.favoritePrompt.show{opacity:1;visibility:visible;pointer-events:auto}
+.favoriteGlass{width:min(340px,100%);padding:25px;border-radius:28px;background:linear-gradient(135deg,#ffffff25,#ffffff0b),#0a1d2acb;border:1px solid #ffffff50;box-shadow:inset 0 1px #ffffff55,0 24px 90px #0006;backdrop-filter:blur(30px) saturate(150%);color:white;text-align:center;transform:translateY(18px) scale(.96);transition:transform .3s}
+.show .favoriteGlass{transform:none}.favoriteSpark{display:grid;place-items:center;width:52px;height:52px;border-radius:18px;background:#ffffff16;border:1px solid #ffffff30;margin:auto;font-size:34px;color:var(--venue-accent,#8fe0a9)}
+.favoriteGlass h3{font-size:21px;margin:18px 0 8px;letter-spacing:-.04em}.favoriteGlass p{color:#c0ced8;font-size:13px;margin:0 0 21px}.favoriteGlass>div{display:grid;grid-template-columns:1fr 1fr;gap:10px}.favoriteGlass button{min-height:46px;border:1px solid #ffffff35;border-radius:15px;background:#ffffff12;color:white;font-size:15px;font-weight:650}.favoriteGlass button[data-favorite-answer=yes]{background:var(--venue-accent,#8fe0a9);color:var(--venue-ink,#07111b);border:0}
+body.venuePage .dishCaption{display:block;max-width:100%;width:fit-content;margin:7px 0;padding:5px 8px;border-radius:9px;background:#07111ba3;border:1px solid #ffffff20;font-size:10px;line-height:1.35;overflow-wrap:anywhere;position:relative;z-index:2}
+body.venuePage .dishCaption.captionGlass{background:#ffffff15;backdrop-filter:blur(14px) saturate(130%);border-color:#ffffff40;box-shadow:inset 0 1px #ffffff25}
+body.venuePage .dishCaption.caption-plain{padding:0;background:transparent;border:0;box-shadow:none}
+body.venuePage .dishCaption.caption-ribbon{width:100%;border-radius:4px}
+body.venuePage .customizeDish{width:36px;height:44px;min-height:44px;flex:none;border:1px solid #ffffff35;border-radius:12px;background:#ffffff15;color:#fff;padding:7px;display:grid;place-items:center;cursor:pointer}
+.customizeDish svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+@media(prefers-reduced-motion:reduce){.favoritePrompt,.favoriteGlass{transition:none}.favoriteGlass{transform:none}}
+
+/* Symmetric photo catalog: every row reserves the same space for title and actions. */
+body.venuePage .mainDishGrid,body.venuePage .otherDishGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;align-items:stretch}
+body.venuePage .mainDishGrid .foodCardRef:nth-child(n),body.venuePage .otherDishGrid .foodCardRef:nth-child(n){aspect-ratio:auto!important;min-height:300px!important;border-radius:19px!important;display:flex;flex-direction:column;overflow:hidden}
+body.venuePage .foodCardRef .foodVisual{position:relative!important;inset:auto!important;flex:none;height:154px!important}
+body.venuePage .mainDishGrid .foodBody,body.venuePage .otherDishGrid .foodBody{position:relative!important;inset:auto!important;min-height:0!important;padding:12px!important;flex:1;display:flex;flex-direction:column;background:linear-gradient(145deg,#152d40f5,#081823fa)!important}
+body.venuePage .mainDishGrid .foodTitle,body.venuePage .otherDishGrid .foodTitle{padding:0 25px 0 0!important;min-height:36px!important;position:relative}
+body.venuePage .mainDishGrid .foodTitle h3,body.venuePage .otherDishGrid .foodTitle h3{font-size:14px!important;line-height:1.3!important;margin:0;min-height:36px}
+body.venuePage .mainDishGrid .foodBody p,body.venuePage .otherDishGrid .foodBody p,body.venuePage .foodCardRef:nth-child(n) .foodBody p{display:-webkit-box!important;-webkit-line-clamp:2!important;font-size:10px!important;line-height:1.45!important;min-height:29px!important;margin:7px 0!important;padding:0!important}
+body.venuePage .foodCardRef .foodMeta{font-size:9px;margin-bottom:6px}
+body.venuePage .mainDishGrid .foodRow,body.venuePage .otherDishGrid .foodRow{position:relative!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:5px!important;margin-top:auto!important;min-height:44px!important;padding:8px 0 0!important}
+body.venuePage .mainDishGrid .foodRow b,body.venuePage .otherDishGrid .foodRow b{flex:1;min-width:0;font-size:15px!important;line-height:1.15}
+body.venuePage .mainDishGrid .addBtn,body.venuePage .otherDishGrid .addBtn{position:static!important;transform:none!important;margin:0!important;flex:none;min-width:40px!important;width:auto!important;height:44px!important;min-height:44px!important;padding:0 9px!important;border-radius:12px!important;font-size:21px!important;line-height:1}
+body.venuePage .foodRow .customizeDish{width:30px;padding:5px;border-radius:10px}
+body.venuePage .foodFavorite{position:absolute!important;right:0!important;top:0!important;width:27px!important;height:32px!important}
+body.venuePage .menuFeatureBottom{display:flex;align-items:center;gap:7px}.menuFeatureBottom>b{margin-right:auto}
+@media(min-width:700px){body.venuePage .mainDishGrid,body.venuePage .otherDishGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}body.venuePage .foodCardRef .foodVisual{height:190px!important}}
+@media(max-width:350px){body.venuePage .mainDishGrid,body.venuePage .otherDishGrid{gap:8px!important}body.venuePage .mainDishGrid .foodBody,body.venuePage .otherDishGrid .foodBody{padding:9px!important}body.venuePage .foodCardRef .foodVisual{height:130px!important}body.venuePage .mainDishGrid .foodRow b,body.venuePage .otherDishGrid .foodRow b{font-size:12px!important}body.venuePage .foodRow .customizeDish{width:28px}}
+body.venuePage[data-menu-descriptions="hide"] .foodCardRef .foodBody p{display:none!important}
+
+/* Keep each configured layout and card material effective. */
+body.venuePage[data-menu-layout="uniform-2"] .mainDishGrid,body.venuePage[data-menu-layout="uniform-2"] .otherDishGrid,body.venuePage[data-menu-layout="hero-2"] .mainDishGrid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodRow,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .foodRow{display:grid!important;grid-template-columns:1fr auto auto;row-gap:6px!important}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodRow b,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .foodRow b{grid-column:1/-1;min-height:18px}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .customizeDish,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .customizeDish{grid-column:2;grid-row:2}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .addBtn,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .addBtn{grid-column:3;grid-row:2;font-size:18px!important;min-width:34px!important;padding:0 6px!important}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodBody,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .foodBody{padding:8px!important}
+body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodTitle h3,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .foodTitle h3{font-size:12px!important;min-height:32px}
+body.venuePage[data-card-style="glass"] .foodCardRef .foodBody{background:#102636c9!important;backdrop-filter:blur(22px) saturate(150%)}
+body.venuePage[data-card-style="solid"] .foodCardRef .foodBody{background:#102232!important}

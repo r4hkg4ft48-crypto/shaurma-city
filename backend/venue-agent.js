@@ -146,14 +146,14 @@ function commandNeedsItem(command){
   ]).has(command?.intent);
 }
 function destructive(command){
-  return new Set(['menu_delete','category_delete','choice_group_delete','choice_option_delete','builder_option_delete']).has(command?.intent);
+  return new Set(['menu_delete','category_delete','choice_group_delete','choice_option_delete','fixed_option_delete','builder_option_delete']).has(command?.intent);
 }
 function canonicalText(command,itemName=''){
   const i=itemName||command.item||'';
   switch(command.intent){
     case 'menu_item_select': return 'работаем с '+i;
     case 'menu_item_show': return i?'покажи настройки позиции '+i:'покажи настройки позиции';
-    case 'menu_price': return 'цена '+i+' '+command.price;
+    case 'menu_price': return 'поставь цену на '+i+' '+command.price;
     case 'menu_price_context': return 'цена '+command.price;
     case 'menu_toggle': return (command.enabled?'верни в меню ':'скрой блюдо ')+i;
     case 'menu_available': return command.available?(i?'верни '+i+' в наличие':'верни в наличие'):('нет в наличии'+(i?' '+i:''));
@@ -198,6 +198,7 @@ function canonicalText(command,itemName=''){
     case 'fixed_option_price': return 'доплата варианта '+command.group+' '+command.option+' '+command.price;
     case 'fixed_option_toggle': return (command.enabled?'включи вариант ':'выключи вариант ')+command.group+' '+command.option;
     case 'fixed_option_default': return 'сделай вариант '+command.group+' '+command.option+' по умолчанию';
+    case 'builder_option_delete': return 'удали '+command.group+' '+command.option;
     default:return '';
   }
 }

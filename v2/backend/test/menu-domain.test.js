@@ -91,3 +91,11 @@ test('generic custom choice groups are normalized and priced server-side',()=>{
   assert.equal(D.menuSelectionPrice(item,{}, {spice:[]}),null);
   assert.equal(D.menuSelectionPrice(item,{}, {spice:['hot','mild']}),null);
 });
+
+
+test('scheduled menu availability respects timezone window',()=>{
+  const item={active:true,available:true,stock:null,schedule:{enabled:true,days:[1],from:'10:00',to:'12:00'}};
+  assert.equal(D.menuItemAvailableNow(item,'Europe/Moscow',new Date('2026-10-05T08:00:00Z')),true);
+  assert.equal(D.menuItemAvailableNow(item,'Europe/Moscow',new Date('2026-10-05T10:30:00Z')),false);
+  assert.equal(D.menuItemAvailableNow({...item,available:false},'Europe/Moscow',new Date('2026-10-05T08:00:00Z')),false);
+});

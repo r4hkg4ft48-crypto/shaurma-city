@@ -982,14 +982,14 @@ async function handleAdminBotUpdate(update,api=adminTelegramApi){
 function masterAdminUrl(tab='overview'){
  const u=new URL(PUBLIC_API_URL+'/master-admin');
  if(tab)u.searchParams.set('tab',String(tab));
- u.searchParams.set('v','1');
+ u.searchParams.set('v','20261005b');
  return u.toString();
 }
 function masterModuleUrl(module){
- if(module==='orders')return PUBLIC_API_URL+'/shaurma-owner?section=orders&from=master&v=5';
- if(module==='menu')return PUBLIC_API_URL+'/shaurma-owner?section=menu&from=master&v=5';
+ if(module==='orders')return PUBLIC_API_URL+'/shaurma-owner?section=orders&from=master&v=20261005b';
+ if(module==='menu')return PUBLIC_API_URL+'/shaurma-owner?section=menu&from=master&v=20261005b';
  if(module==='realcity')return masterAdminUrl('astra');
- if(module==='map'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=5';
+ if(module==='map'||module==='add')return PUBLIC_API_URL+'/shaurmeg-owner?from=master&v=20261005b';
  if(module==='owners')return masterAdminUrl('owners');
  if(module==='sites')return masterAdminUrl('sites');
  if(module==='bots')return masterAdminUrl('bots');
@@ -1111,7 +1111,7 @@ async function syncAdminTelegramMiniApp(){
  if(!token){console.log('Telegram admin bot token not configured');return}
  try{
   const info=await getAdminBotInfo();
-  await adminTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Админка Shaurma City',web_app:{url:PUBLIC_API_URL+'/shaurma-owner?v=4'}}});
+  await adminTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Супер админка',web_app:{url:masterAdminUrl('overview')}}});
   if(accessAdminBotToken()){
     // Dedicated access-key bot configured: keep the legacy superadmin bot focused on its Mini App.
     await adminTelegramApi('setMyCommands',{commands:[{command:'start',description:'Открыть админку Shaurmeg'}]});

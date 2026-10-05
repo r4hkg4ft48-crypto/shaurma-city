@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#071c31">
 <title>Шаурмег · админка заведения</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="admin-venue-pro.css?v=20261005">
+<link rel="stylesheet" href="admin-venue-pro.css?v=20261005b">
 </head>
 <body>
 <div class="app" id="app">
@@ -17,25 +17,64 @@
       <select id="venueSelect" class="venueSelect" aria-label="Заведение"></select>
     </div>
     <div class="heroBody">
-      <div>
+      <div class="heroCopy">
         <div class="venueMeta"><span id="establishmentChip">—</span><span class="syncBadge" id="syncBadge"><i></i> Синхронизировано</span></div>
-        <h1 id="venueNameHero">Меню заведения</h1>
-        <p>Управляйте меню, фотографиями, вариантами блюд и дизайном. Изменения доходят до клиентского Mini App через единый сервер.</p>
+        <h1 id="venueNameHero">Заведение</h1>
+        <p>Рабочая панель точки: меню, конструктор, заказы, внешний вид и профиль. Все изменения сразу связаны с клиентским Mini App.</p>
+        <div class="heroActions">
+          <button class="primary" id="heroMenuStudio">Открыть Kitchen Studio</button>
+          <button class="secondary dark" id="heroBuilderStudio">Конструктор блюда</button>
+        </div>
       </div>
-      <div class="heroPhoto" id="heroPhoto"><span>🥙</span></div>
+      <div class="heroPhoto" id="heroPhoto"><span>SHAURMEG</span></div>
     </div>
   </header>
 
   <nav class="mainTabs" id="mainTabs">
-    <button data-view="categories" class="active">Категории</button>
-    <button data-view="items">Позиции</button>
-    <button data-view="design">Дизайн</button>
-    <button data-view="profile">Профиль</button>
-    <button data-view="orders">Заказы</button>
+    <button data-view="home" class="active"><span>⌂</span><b>Главная</b></button>
+    <button id="navMenuStudio"><span>▤</span><b>Меню</b></button>
+    <button data-view="orders"><span>◉</span><b>Заказы</b></button>
+    <button data-view="design"><span>◇</span><b>Дизайн</b></button>
+    <button data-view="profile"><span>⚙</span><b>Точка</b></button>
   </nav>
 
   <main>
-    <section class="view" id="view-categories">
+    <section class="view" id="view-home">
+      <div class="dashboardIntro">
+        <div><small>CONTROL ROOM</small><h2>Управление заведением</h2><p>Не длинная форма, а отдельные рабочие зоны. Каждая карточка ведёт к реальной функции.</p></div>
+        <button class="ghostAction" id="openClientFromHome">Посмотреть глазами гостя ↗</button>
+      </div>
+      <div class="dashboardStats">
+        <article><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="homeOrdersToday">—</b><span>по серверу</span></article>
+        <article><small>НОВЫЕ</small><b id="homeOrdersNew">—</b><span>ждут кухни</span></article>
+        <article><small>ГОТОВЯТСЯ</small><b id="homeOrdersCooking">—</b><span>в работе</span></article>
+        <article><small>ВЫРУЧКА</small><b id="homeRevenue">—</b><span>за сутки</span></article>
+      </div>
+      <div class="workspaceGrid">
+        <button class="workspaceCard menuCard" id="openMenuStudioCard">
+          <div class="workspacePhoto"></div><div class="workspaceShade"></div>
+          <div class="workspaceCopy"><small>KITCHEN STUDIO</small><h3>Меню и блюда</h3><p>Категории → блюдо → фото → состав → варианты → цена.</p><span>Открыть студию →</span></div>
+        </button>
+        <button class="workspaceCard builderCard" id="openBuilderStudioCard">
+          <div class="workspacePhoto"></div><div class="workspaceShade"></div>
+          <div class="workspaceCopy"><small>RECIPE LAB</small><h3>Конструктор</h3><p>Лаваш, мясо, соусы, добавки и кинематографическая сборка.</p><span>Настроить →</span></div>
+        </button>
+        <button class="workspaceCard ordersCard" data-home-view="orders">
+          <div class="workspaceVisual"><strong id="homeActiveOrders">0</strong><span>активных</span></div>
+          <div class="workspaceCopy"><small>LIVE ORDERS</small><h3>Заказы</h3><p>Принят → готовится → готово → выполнен.</p><span>Открыть ленту →</span></div>
+        </button>
+        <button class="workspaceCard designCard" data-home-view="design">
+          <div class="workspaceVisual designSwatch"><i></i><i></i><i></i></div>
+          <div class="workspaceCopy"><small>VISUAL SYSTEM</small><h3>Дизайн Mini App</h3><p>Цвет, карточки, сетка и живой предпросмотр.</p><span>Настроить →</span></div>
+        </button>
+        <button class="workspaceCard profileCard" data-home-view="profile">
+          <div class="workspaceVisual profileVisual">SC</div>
+          <div class="workspaceCopy"><small>VENUE PROFILE</small><h3>Карточка точки</h3><p>Название, адрес, часы, описание и hero-фото.</p><span>Редактировать →</span></div>
+        </button>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-categories">
       <div class="toolbar">
         <label class="search"><span>⌕</span><input id="categorySearch" placeholder="Поиск по категориям"></label>
         <span class="pill">Включает суперадмин</span>
@@ -115,6 +154,6 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="config.js?v=20261005"></script>
-<script src="admin-venue-pro.js?v=20261005"></script>
+<script src="admin-venue-pro.js?v=20261005b"></script>
 </body>
 </html>

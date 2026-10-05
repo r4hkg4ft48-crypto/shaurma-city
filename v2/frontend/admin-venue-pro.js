@@ -5,7 +5,7 @@ const $=s=>document.querySelector(s);
 const $$=s=>[...document.querySelectorAll(s)];
 const clone=x=>JSON.parse(JSON.stringify(x??null));
 let session=sessionStorage.getItem('shaurmeg_venue_owner_session')||'';
-let accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,saveBusy=false;
+let accesses=[],est='',data=null,menu=[],sections=[],stream=null,currentCategory='',editingIndex=-1,itemDraft=null,saveBusy=false,currentView='home',orderFilter='active',orderRows=[];
 
 const GROUP_META={
   meats:{title:'Варианты мяса',icon:'🥩'},sizes:{title:'Размеры',icon:'↗'},bases:{title:'Основа / хлеб',icon:'🫓'},
@@ -66,7 +66,7 @@ async function enter(){
   $('#venueSelect').value=est;
   await loadVenue();
   const tab=new URLSearchParams(location.search).get('tab');
-  if(tab==='menu')openMenuStudio();else if(['orders','profile','design'].includes(tab))setView(tab);else setView('home');
+  if(tab==='menu')openMenuStudio();else if(['orders','profile','design','settings'].includes(tab))setView(tab);else setView('home');
 }
 function activeSections(){return sections.filter(x=>x.active!==false).sort((a,b)=>(a.order||0)-(b.order||0))}
 function itemCount(sectionId){return menu.filter(x=>x.active!==false&&String(x.c)===String(sectionId)).length}
@@ -85,18 +85,22 @@ async function loadVenue({quiet=false}={}){
 }
 function hydrateHeader(){
   $('#establishmentChip').textContent=data?.establishment_id||est;
-  $('#venueNameHero').textContent=data?.name||'Меню заведения';
+  $('#venueNameHero').textContent=data?.name||'Меню заведения';$('#venueAddressHero').textContent=data?.address||'Панель управления заведением';
   const h=photoFor({image:data?.hero_image})||photoFor(activeSections()[0])||photoFor(menu[0]);
   $('#heroPhoto').innerHTML=h?'<img src="'+esc(h)+'" alt="">':'<span>SHAURMEG</span>';
 }
 function setView(view){
-  $('#mainTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  $('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+view));
+  currentView=view;document.body.dataset.screen=view;
+  try{view==='home'?tg?.BackButton?.hide():tg?.BackButton?.show()}catch{}
+  const u=new URL(location.href);u.searchParams.set('tab',view);history.replaceState(null,'',u);
+
+  $$('#mainTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===(['profile','design'].includes(view)?'settings':view)));
+  $$('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+view));
   if(view==='orders')loadOrders();
   if(view==='design')renderPreview();
 }
 function withEst(url){
-  const u=new URL(url,location.href);u.searchParams.set('establishment',est);u.searchParams.set('v','20261005b');return u.toString();
+  const u=new URL(url,location.href);u.searchParams.set('establishment',est);u.searchParams.set('v','20261005-astra3');return u.toString();
 }
 function openMenuStudio(){location.href=withEst('admin-menu-studio.html')}
 function openBuilderStudio(){location.href=withEst('admin-menu-studio.html?view=builder')}
@@ -105,6 +109,8 @@ async function loadHomeStats(){
   const put=(id,v)=>{const e=$(id);if(e)e.textContent=String(v)};
   put('#homeOrdersToday',s.today??0);put('#homeOrdersNew',s.new??0);put('#homeOrdersCooking',s.cooking??0);put('#homeRevenue',money(s.revenue??0));
   put('#homeActiveOrders',(Number(s.new)||0)+(Number(s.cooking)||0)+(Number(s.ready)||0));
+  const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');
+  $('#homeRecentOrders').innerHTML=rows.slice(0,3).map(o=>orderCard(o,false)).join('')||'<div class="empty">Заказов пока нет</div>';
 }
 function renderCategories(){
   const q=String($('#categorySearch')?.value||'').toLowerCase().trim();
@@ -165,12 +171,12 @@ async function saveCategory(){
   await saveMenuRemote('Категория сохранена ✓');
 }
 async function saveMenuRemote(message='Меню сохранено ✓'){
-  if(saveBusy)return;saveBusy=true;setSync('Сохраняем…',false);
+  if(saveBusy)return false;saveBusy=true;setSync('Сохраняем…',false);
   try{
     const j=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/menu',{method:'PUT',body:{menu,sections}});
     data={...data,...j};menu=(j.menu||menu).map(x=>({...x}));sections=(j.sections_all||j.sections||sections).map(x=>({...x,settings:{...(x.settings||{})}}));
-    toast(message);renderCategories();renderItemFilters();renderItems();renderPreview();setSync('Синхронизировано',true);
-  }catch(e){toast(e.message);setSync('Ошибка синхронизации',false)}finally{saveBusy=false}
+    toast(message);renderCategories();renderItemFilters();renderItems();renderPreview();setSync('Синхронизировано',true);return true;
+  }catch(e){toast(e.message);setSync('Ошибка синхронизации',false);return false}finally{saveBusy=false}
 }
 function renderItemFilters(){
   const list=activeSections();$('#itemCategoryFilter').innerHTML='<option value="">Все категории</option>'+list.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('');
@@ -252,7 +258,7 @@ function syncDraftFromEditor(){
     const block=document.querySelector('[data-option-group="'+group+'"]'),arr=[];
     block?.querySelectorAll('.optionRow').forEach((row,i)=>{
       const name=row.querySelector('[data-opt-name]')?.value.trim();if(!name)return;
-      arr.push({id:slug(name||('opt_'+i)),name,price:Number(row.querySelector('[data-opt-price]')?.value)||0,active:true,default:!!row.querySelector('[data-opt-default]')?.checked});
+      const old=itemDraft.options[group]?.[i]||{};arr.push({...old,id:old.id||slug(name||('opt_'+i)),name,price:Number(row.querySelector('[data-opt-price]')?.value)||0,active:true,default:!!row.querySelector('[data-opt-default]')?.checked});
     });
     itemDraft.options[group]=arr;if(block?.querySelector('[data-required-group]')?.checked)required.push(group);
   }
@@ -266,7 +272,7 @@ function removeOption(group,index){syncDraftFromEditor();itemDraft.options?.[gro
 async function saveItem(){
   syncDraftFromEditor();if(!itemDraft.n)return toast('Введите название');if(!itemDraft.c)return toast('Выберите категорию');
   if(editingIndex>=0)menu[editingIndex]=clone(itemDraft);else{menu.push(clone(itemDraft));editingIndex=menu.length-1}
-  await saveMenuRemote('Позиция сохранена и синхронизирована ✓');closeItemDrawer();renderItems();
+  if(await saveMenuRemote('Позиция сохранена и синхронизирована ✓')){closeItemDrawer();renderItems()};
 }
 async function deleteItem(){
   if(editingIndex<0){closeItemDrawer();return}
@@ -321,7 +327,7 @@ function renderPreview(){
   root.innerHTML='<div class="livePhone"><div class="livePhoneScreen"><div class="liveHero">'+(hero?'<img src="'+esc(hero)+'">':'')+'<small>Шаурмег · '+esc(data.name||'')+'</small><h3>Меню</h3></div><div class="liveContent"><div class="liveChips">'+secs.slice(0,4).map(s=>'<span>'+esc(s.name)+'</span>').join('')+'</div><div class="liveItems">'+items.map(x=>'<article class="liveItem">'+(photoFor(x)?'<img src="'+esc(photoFor(x))+'">':'')+'<div><b>'+esc(x.n)+'</b><strong>'+money(x.p)+'</strong><button class="liveAdd">＋</button></div></article>').join('')+'</div></div></div></div>';
 }
 function hydrateProfile(){
-  $('#profileName').value=data?.name||'';$('#profileAddress').value=data?.address||'';$('#profileDescription').value=data?.description||'';$('#profileHours').value=data?.hours||'';$('#profilePrice').value=data?.price_label||'';$('#profileHero').value=data?.hero_image||'';
+  $('#profileName').value=data?.name||'';$('#profileAddress').value=data?.address||'';$('#profileDescription').value=data?.description||'';$('#profileHours').value=data?.hours||'';$('#profilePrice').value=data?.price_label||'';$('#profileHero').value=data?.hero_image||'';updateProfilePhoto();
 }
 async function saveProfile(){
   try{
@@ -330,15 +336,29 @@ async function saveProfile(){
   }catch(e){toast(e.message)}
 }
 const STATUS={new:'Новый',cooking:'Готовится',ready:'Готов',done:'Выполнен',cancelled:'Отменён'};
+function orderCard(o,actions=true){
+ const phone=String(o.phone||'').replace(/[^+0-9]/g,''),date=new Date(o.created_at),time=Number.isNaN(date.getTime())?'':date.toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+ return '<article class="orderCard" data-status="'+esc(o.status)+'"><header><b>'+esc(o.order_number||('#'+o.id))+'</b><span>'+esc(STATUS[o.status]||o.status)+'</span></header><div class="orderCustomer"><span>'+esc(o.customer_name||o.telegram_first_name||'Гость')+'</span>'+(phone?'<a href="tel:'+esc(phone)+'">'+esc(o.phone)+'</a>':'<span>'+esc(time)+'</span>')+'</div><div class="orderItems">'+(o.items||[]).map(x=>esc(x.n||x.name)+' × '+Number(x.q||x.quantity||1)).join('<br>')+'</div><div class="orderBottom"><span>'+esc(o.fulfillment_type==='delivery'?'Доставка':'В заведении')+'</span><strong>'+money(o.total)+'</strong></div>'+(actions?'<div class="orderButtons">'+
+ (o.status==='new'?'<button class="primaryStep" data-order-status="cooking" data-order-id="'+esc(o.id)+'">Принять заказ</button>':'')+
+ (o.status==='cooking'?'<button class="primaryStep" data-order-status="ready" data-order-id="'+esc(o.id)+'">Заказ готов</button>':'')+
+ (o.status==='ready'?'<button class="primaryStep" data-order-status="done" data-order-id="'+esc(o.id)+'">Выдать заказ</button>':'')+
+ (!['done','cancelled'].includes(o.status)?'<button data-order-status="cancelled" data-order-id="'+esc(o.id)+'">Отменить</button>':'')+'</div>':'')+'</article>';
+}
+function renderOrders(){
+ const rows=orderRows.filter(o=>orderFilter==='all'||(orderFilter==='active'?!['done','cancelled'].includes(o.status):o.status===orderFilter));
+ $('#ordersList').innerHTML=rows.map(o=>orderCard(o)).join('')||'<div class="empty">В этом статусе заказов пока нет</div>';
+ $$('#orderStatusFilter [data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===orderFilter));
+}
 async function loadOrders(){
-  try{
-    const rows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');
-    $('#ordersList').innerHTML=rows.map(o=>'<article class="orderCard"><header><b>'+esc(o.order_number)+'</b><span class="status">'+esc(STATUS[o.status]||o.status)+'</span></header><div class="orderItems">'+(o.items||[]).map(x=>esc(x.n||x.name)+' × '+(x.q||1)).join(' · ')+'</div><strong>'+money(o.total)+'</strong><div class="orderButtons">'+
-      (o.status==='new'?'<button class="primaryStep" data-order-status="cooking" data-order-id="'+o.id+'">Принять</button>':'')+
-      (o.status==='cooking'?'<button class="primaryStep" data-order-status="ready" data-order-id="'+o.id+'">Готов</button>':'')+
-      (o.status==='ready'?'<button class="primaryStep" data-order-status="done" data-order-id="'+o.id+'">Выполнен</button>':'')+
-      (!['done','cancelled'].includes(o.status)?'<button data-order-status="cancelled" data-order-id="'+o.id+'">Отменить</button>':'')+'</div></article>').join('')||'<div class="panel">Заказов пока нет.</div>';
-  }catch(e){$('#ordersList').innerHTML='<div class="panel">Не удалось загрузить заказы: '+esc(e.message)+'</div>'}
+ try{orderRows=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders');renderOrders()}
+ catch(e){$('#ordersList').innerHTML='<div class="empty">Не удалось загрузить заказы: '+esc(e.message)+'</div>'}
+}
+function updateProfilePhoto(){const e=$('#profilePhotoPreview'),src=$('#profileHero').value.trim();e.hidden=!src;if(src)e.src=src}
+function openAdvanced(tab){
+ const u=new URL('/venue-owner',new URL(api).origin);u.searchParams.set('establishment',est);u.searchParams.set('tab',tab);u.searchParams.set('from','console');u.searchParams.set('v','20261005-astra3');
+ // Preserve Telegram launch data across our trusted application origins; it is verified again by the server.
+ if(tg?.initData)u.hash='tgWebAppData='+encodeURIComponent(tg.initData)+'&tgWebAppVersion='+encodeURIComponent(tg.version||'8.0')+'&tgWebAppPlatform='+encodeURIComponent(tg.platform||'unknown');
+ location.href=u.toString();
 }
 async function changeOrder(id,status){try{await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/orders/'+encodeURIComponent(id),{method:'PATCH',body:{status}});toast('Статус обновлён');await loadOrders()}catch(e){toast(e.message)}}
 function connectStream(){
@@ -347,7 +367,7 @@ function connectStream(){
     stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));
     const menuRefresh=()=>{setSync('Получаем изменения…',false);clearTimeout(connectStream.t);connectStream.t=setTimeout(()=>loadVenue({quiet:true}).catch(()=>{}),200)};
     stream.addEventListener('venue',menuRefresh);stream.addEventListener('menu_changed',menuRefresh);
-    stream.addEventListener('order',()=>{if(!$('#view-orders').classList.contains('hidden'))loadOrders()});stream.addEventListener('update',()=>{if(!$('#view-orders').classList.contains('hidden'))loadOrders()});
+    const ordersRefresh=()=>{if(currentView==='orders')loadOrders();loadHomeStats().catch(()=>{})};stream.addEventListener('order',ordersRefresh);stream.addEventListener('update',ordersRefresh);
     stream.onerror=()=>setSync('Переподключение…',false);
   }catch{}
 }
@@ -356,7 +376,13 @@ function openClientPreview(){
   window.open((window.SHAURMEG?.clientBase||location.origin)+'/menu.html?marker='+encodeURIComponent(markerId)+'&establishment='+encodeURIComponent(est),'_blank');
 }
 function bind(){
-  $('#claimBtn').onclick=claim;$('#backBtn').onclick=()=>{if(tg?.close)tg.close();else history.back()};
+  $('#claimBtn').onclick=claim;$('#backBtn').onclick=()=>{if(currentView!=='home'){setView('home');return}if(tg?.close)tg.close();else history.back()};
+  try{tg?.BackButton?.onClick(()=>setView('home'))}catch{}
+  $('#navBuilderStudio').onclick=openBuilderStudio;
+  $('#view-settings').onclick=e=>{const b=e.target.closest('[data-settings-view]');if(b)setView(b.dataset.settingsView)};
+  $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>openAdvanced('site');$('#addVenueConsole').onclick=()=>openAdvanced('add');
+  $('#orderStatusFilter').onclick=e=>{const b=e.target.closest('[data-filter]');if(b){orderFilter=b.dataset.filter;renderOrders()}};
+  $('#profileHero').oninput=updateProfilePhoto;$('#profilePhotoFile').onchange=async e=>{if(e.target.files?.[0]){try{$('#profileHero').value=await compressImage(e.target.files[0],1100,.8);updateProfilePhoto();toast('Фото подготовлено · сохраните профиль')}catch(x){toast(x.message)}}};
   $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';await loadVenue()};
   $('#mainTabs').onclick=e=>{const menu=e.target.closest('#navMenuStudio');if(menu)return openMenuStudio();const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
   $('#heroMenuStudio').onclick=openMenuStudio;$('#heroBuilderStudio').onclick=openBuilderStudio;$('#openMenuStudioCard').onclick=openMenuStudio;$('#openBuilderStudioCard').onclick=openBuilderStudio;

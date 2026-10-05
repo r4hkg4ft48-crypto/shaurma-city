@@ -323,6 +323,115 @@ function createVenueDialogAgent({DB,commandBus}){
     if(!ranked.length)return {error:'Не нашёл подходящую позицию. Напишите название чуть подробнее или сначала откройте категорию.'};
     return {ask:await ask(user.id,'item_select',payload,ranked,title)};
   }
+
+  function fixedGroupKey(v){
+    const s=normalize(v);
+    if(/мяс/.test(s))return 'meats';
+    if(/размер/.test(s))return 'sizes';
+    if(/основ/.test(s))return 'bases';
+    if(/соус/.test(s))return 'sauces';
+    if(/добав/.test(s))return 'extras';
+    return '';
+  }
+  function rankNamed(list,query,getLabel=x=>x?.name||x?.label||'',type='entity'){
+    return (Array.isArray(list)?list:[]).map(x=>({
+      id:String(x.id),label:String(getLabel(x)||x.id),score:similarity(query,getLabel(x)||x.id),type,raw:x
+    })).filter(x=>x.score>=.35).sort((a,b)=>b.score-a.score).slice(0,8);
+  }
+  function currentItem(venue,ctx){
+    return (Array.isArray(venue?.menu)?venue.menu:[]).find(x=>String(x.id)===String(ctx?.selected_item_id||''))||null;
+  }
+  function currentGroup(item,ctx){
+    return (Array.isArray(item?.choice_groups)?item.choice_groups:[]).find(x=>String(x.id)===String(ctx?.selected_group_id||''))||null;
+  }
+  function needsCategoryResolution(command){
+    return new Set(['menu_category_move','category_toggle','category_rename','category_delete','category_emoji','category_order']).has(command?.intent);
+  }
+  function needsCustomGroup(command){
+    return new Set([
+      'choice_group_select','choice_group_delete','choice_group_rename','choice_group_toggle','choice_group_required',
+      'choice_group_type','choice_group_limit','choice_option_add','choice_option_price','choice_option_toggle',
+      'choice_option_delete','choice_option_rename','choice_option_default'
+    ]).has(command?.intent);
+  }
+  function needsCustomOption(command){
+    return new Set(['choice_option_price','choice_option_toggle','choice_option_delete','choice_option_rename','choice_option_default']).has(command?.intent);
+  }
+  function needsFixedOption(command){
+    return new Set(['fixed_option_delete','fixed_option_price','fixed_option_toggle','fixed_option_default']).has(command?.intent);
+  }
+
+  async function askCommandEntity(user,command,slot,candidates,title,item){
+    return ask(user.id,'command_entity',{
+      command,slot,item_id:item?.id||'',item_label:String(item?.n||item?.name||'')
+    },candidates,title);
+  }
+
+  async function resolveNestedCommand(user,venue,ctx,command,item){
+    let cmd={...command};
+
+    if(cmd.intent==='menu_category_move'&&clean(cmd.category)){
+      const ranked=await rankCategories(venue,cmd.category),hit=decisive(ranked);
+      if(hit)cmd.category=hit.label;
+      else if(ranked.length)return askCommandEntity(user,cmd,'category',ranked,'В какую категорию перенести позицию?',item);
+      else return {handled:true,text:'Категорию «'+cmd.category+'» не нашёл. Чтобы не создать лишний раздел из-за опечатки, сначала явно создайте её: «добавь категорию '+cmd.category+'».'};
+    }
+
+    if(needsCustomGroup(cmd)){
+      const groups=Array.isArray(item?.choice_groups)?item.choice_groups:[];
+      let group=null;
+      if(clean(cmd.group)){
+        const ranked=rankNamed(groups,cmd.group,x=>x.name,'group'),hit=decisive(ranked);
+        if(hit){group=groups.find(x=>String(x.id)===hit.id);cmd.group=hit.label}
+        else if(ranked.length)return askCommandEntity(user,cmd,'group',ranked,'Какую группу выбора вы имеете в виду?',item);
+        else return {handled:true,text:'Группу «'+cmd.group+'» у позиции «'+String(item?.n||item?.name||'')+'» не нашёл. Ничего не меняю.'};
+      }else{
+        group=currentGroup(item,ctx);
+        if(!group&&groups.length===1)group=groups[0];
+        if(!group&&groups.length>1){
+          const ranked=groups.map(x=>({id:String(x.id),label:String(x.name||x.id),score:1,type:'group'}));
+          return askCommandEntity(user,cmd,'group',ranked,'С какой группой выбора работаем?',item);
+        }
+        if(!group&&groups.length===0&&cmd.intent!=='choice_group_add'){
+          return {handled:true,text:'У этой позиции пока нет произвольных групп выбора. Можно сказать: «добавь выбор Размер».'};
+        }
+        if(group)cmd.group=String(group.name||group.id);
+      }
+      if(group)await patchContext(user.id,{selected_group_id:String(group.id)});
+
+      if(needsCustomOption(cmd)){
+        const g=group||currentGroup(item,await context(user.id));
+        if(!g)return {handled:true,text:'Сначала выберите группу параметров.'};
+        const ranked=rankNamed(g.options||[],cmd.option,x=>x.name,'option'),hit=decisive(ranked);
+        if(hit)cmd.option=hit.label;
+        else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант изменить?',item);
+        else return {handled:true,text:'Вариант «'+String(cmd.option||'')+'» в группе «'+String(g.name||'')+'» не найден. Ничего не меняю.'};
+      }
+    }
+
+    if(needsFixedOption(cmd)){
+      const key=fixedGroupKey(cmd.group),list=Array.isArray(item?.options?.[key])?item.options[key]:[];
+      if(!key)return {handled:true,text:'Не понял тип варианта. Уточните: мясо, размер, основа, соус или добавка.'};
+      const ranked=rankNamed(list,cmd.option,x=>x.name,'fixed_option'),hit=decisive(ranked);
+      if(hit)cmd.option=hit.label;
+      else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант '+normalize(cmd.group)+' изменить?',item);
+      else return {handled:true,text:'Не нашёл вариант «'+String(cmd.option||'')+'». Ничего не меняю.'};
+    }
+
+    if(destructive(cmd))return confirmDanger(user,cmd,String(item?.n||item?.name||''));
+    return executeResolved(user,cmd,String(item?.n||item?.name||''));
+  }
+
+  async function resolveCategoryCommand(user,venue,command){
+    const ranked=await rankCategories(venue,command.category),hit=decisive(ranked);
+    if(hit){
+      const cmd={...command,category:hit.label};
+      if(destructive(cmd))return confirmDanger(user,cmd,'');
+      return executeResolved(user,cmd,'');
+    }
+    if(ranked.length)return askCommandEntity(user,command,'category',ranked,'Какую именно категорию изменить?',null);
+    return {handled:true,text:'Категорию «'+String(command.category||'')+'» не нашёл. Ничего не меняю.'};
+  }
   async function executeResolved(user,command,itemLabel=''){
     const text=canonicalText(command,itemLabel);
     if(!text)return {handled:false};

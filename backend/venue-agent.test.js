@@ -100,6 +100,10 @@ test('ambiguous remove action asks whether to hide or mark unavailable',async()=
   const DB={async query(sql,args=[]){
     if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
     if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context')){
+      if(!ctx.telegram_user_id){ctx.telegram_user_id=String(args[0]);ctx.establishment_id=args[1]??ctx.establishment_id??null}
+      return {rows:[]};
+    }
     if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);if(m){const key=m[1];ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1]}return {rows:[]}}
     if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
     throw new Error('Unexpected SQL in mock: '+sql);

@@ -34,7 +34,8 @@ async function bootstrap(){
   const wanted=new URLSearchParams(location.search).get('establishment');est=accesses.some(x=>x.establishment_id===wanted)?wanted:accesses[0].establishment_id;await enter()
 }
 async function enter(){
-  $('#gate').classList.add('hidden');$('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name||x.establishment_id)+'</option>').join('');$('#venueSelect').value=est;await load()
+  $('#gate').classList.add('hidden');$('#venueSelect').innerHTML=accesses.map(x=>'<option value="'+esc(x.establishment_id)+'">'+esc(x.name||x.establishment_id)+'</option>').join('');$('#venueSelect').value=est;await load();
+  const initial=new URLSearchParams(location.search).get('view');if(['categories','items','design','builder'].includes(initial))setView(initial)
 }
 function setSync(text='Синхронизировано'){
   const c=$('#syncCard');if(!c)return;c.querySelector('b').textContent=text;$('#syncTime').textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})
@@ -57,8 +58,14 @@ async function load({quiet=false}={}){
   hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();renderGuestPreview();connect();setSync()
 }
 function setView(v){
-  $$('#studioTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$$('.view').forEach(x=>x.classList.toggle('hidden',x.id!=='view-'+v));
-  if(v==='design')renderGuestPreview()
+  $('#studioTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));$('.view').forEach(x=>x.classList.toggle('hidden',x.id!=='view-'+v));
+  if(v==='design')renderGuestPreview();
+  if(v==='builder'){
+    const frame=$('#builderFrame');
+    if(frame&&!frame.dataset.loaded){
+      const u=new URL('admin-venue.html',location.href);u.searchParams.set('establishment',est);u.searchParams.set('tab','menu');u.searchParams.set('focus','builder');u.searchParams.set('embed','builder');u.searchParams.set('v','20261005b');frame.src=u.toString();frame.dataset.loaded='1';
+    }
+  }
 }
 function renderCategories(){
   const q=String($('#categorySearch').value||'').trim().toLowerCase(),rows=sections.slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(s=>(categoryFilter==='all'||(categoryFilter==='active'&&s.active!==false)||(categoryFilter==='locked'&&s.active===false))&&(!q||String(s.name).toLowerCase().includes(q)));
@@ -207,8 +214,8 @@ function clientPreview(){const marker=data?.marker_id||accesses.find(x=>x.establ
 function connect(){try{stream?.close()}catch{};if(!session||!est)return;try{stream=new EventSource(api+'/venue-owner/establishments/'+encodeURIComponent(est)+'/stream?owner_session='+encodeURIComponent(session));const refresh=()=>{clearTimeout(connect.t);connect.t=setTimeout(()=>load({quiet:true}).catch(()=>{}),220)};stream.addEventListener('venue',refresh);stream.addEventListener('menu_changed',refresh);stream.onerror=()=>setSync('Переподключение…')}catch{}}
 
 function bind(){
-  $('#claimBtn').onclick=claim;$('#studioBack').onclick=()=>location.href='admin-venue.html?establishment='+encodeURIComponent(est);
-  $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';await load()};
+  $('#claimBtn').onclick=claim;$('#studioBack').onclick=()=>location.href='admin-venue-pro.html?establishment='+encodeURIComponent(est)+'&v=20261005b';
+  $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';const frame=$('#builderFrame');if(frame){frame.dataset.loaded='';frame.removeAttribute('src')}await load()};
   $('#studioTabs').onclick=e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
   $('#categorySearch').oninput=renderCategories;$('#categoryFilterBtn').onclick=()=>{categoryFilter=categoryFilter==='all'?'active':categoryFilter==='active'?'locked':'all';$('#categoryFilterBtn').textContent=categoryFilter==='all'?'Все категории⌄':categoryFilter==='active'?'Только активные⌄':'Отключённые⌄';renderCategories()};
   $('#categoryList').onclick=e=>{const b=e.target.closest('[data-open-cat]');if(!b)return;currentCategory=b.dataset.openCat;renderCategories();setTimeout(()=>$('#categoryEditor').scrollIntoView({behavior:'smooth',block:'start'}),30)};

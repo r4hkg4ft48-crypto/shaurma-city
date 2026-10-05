@@ -66,7 +66,7 @@ async function enter(){
   $('#venueSelect').value=est;
   await loadVenue();
   const tab=new URLSearchParams(location.search).get('tab');
-  if(tab==='menu')setView('categories');else if(['orders','profile','design','items'].includes(tab))setView(tab);
+  if(tab==='menu')openMenuStudio();else if(['orders','profile','design'].includes(tab))setView(tab);else setView('home');
 }
 function activeSections(){return sections.filter(x=>x.active!==false).sort((a,b)=>(a.order||0)-(b.order||0))}
 function itemCount(sectionId){return menu.filter(x=>x.active!==false&&String(x.c)===String(sectionId)).length}
@@ -81,19 +81,30 @@ async function loadVenue({quiet=false}={}){
   menu=(data.menu||[]).map(x=>({...x}));
   sections=(data.sections_all||data.sections||[]).map(x=>({...x,settings:{...(x.settings||{})}}));
   currentCategory=activeSections().some(x=>x.id===currentCategory)?currentCategory:(activeSections()[0]?.id||'');
-  hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();hydrateProfile();renderPreview();connectStream();setSync('Синхронизировано',true);
+  hydrateHeader();renderCategories();renderItemFilters();renderItems();hydrateDesign();hydrateProfile();renderPreview();connectStream();loadHomeStats().catch(()=>{});setSync('Синхронизировано',true);
 }
 function hydrateHeader(){
   $('#establishmentChip').textContent=data?.establishment_id||est;
   $('#venueNameHero').textContent=data?.name||'Меню заведения';
   const h=photoFor({image:data?.hero_image})||photoFor(activeSections()[0])||photoFor(menu[0]);
-  $('#heroPhoto').innerHTML=h?'<img src="'+esc(h)+'" alt="">':'<span>🥙</span>';
+  $('#heroPhoto').innerHTML=h?'<img src="'+esc(h)+'" alt="">':'<span>SHAURMEG</span>';
 }
 function setView(view){
-  $$('#mainTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
-  $$('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+view));
+  $('#mainTabs [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+  $('.view').forEach(v=>v.classList.toggle('hidden',v.id!=='view-'+view));
   if(view==='orders')loadOrders();
   if(view==='design')renderPreview();
+}
+function withEst(url){
+  const u=new URL(url,location.href);u.searchParams.set('establishment',est);u.searchParams.set('v','20261005b');return u.toString();
+}
+function openMenuStudio(){location.href=withEst('admin-menu-studio.html')}
+function openBuilderStudio(){location.href=withEst('admin-menu-studio.html?view=builder')}
+async function loadHomeStats(){
+  const s=await call('/venue-owner/establishments/'+encodeURIComponent(est)+'/stats');
+  const put=(id,v)=>{const e=$(id);if(e)e.textContent=String(v)};
+  put('#homeOrdersToday',s.today??0);put('#homeOrdersNew',s.new??0);put('#homeOrdersCooking',s.cooking??0);put('#homeRevenue',money(s.revenue??0));
+  put('#homeActiveOrders',(Number(s.new)||0)+(Number(s.cooking)||0)+(Number(s.ready)||0));
 }
 function renderCategories(){
   const q=String($('#categorySearch')?.value||'').toLowerCase().trim();
@@ -347,7 +358,10 @@ function openClientPreview(){
 function bind(){
   $('#claimBtn').onclick=claim;$('#backBtn').onclick=()=>{if(tg?.close)tg.close();else history.back()};
   $('#venueSelect').onchange=async()=>{est=$('#venueSelect').value;currentCategory='';await loadVenue()};
-  $('#mainTabs').onclick=e=>{const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
+  $('#mainTabs').onclick=e=>{const menu=e.target.closest('#navMenuStudio');if(menu)return openMenuStudio();const b=e.target.closest('[data-view]');if(b)setView(b.dataset.view)};
+  $('#heroMenuStudio').onclick=openMenuStudio;$('#heroBuilderStudio').onclick=openBuilderStudio;$('#openMenuStudioCard').onclick=openMenuStudio;$('#openBuilderStudioCard').onclick=openBuilderStudio;
+  $('#openClientFromHome').onclick=openClientPreview;
+  $('#view-home').onclick=e=>{const b=e.target.closest('[data-home-view]');if(b)setView(b.dataset.homeView)};
   $('#categorySearch').oninput=renderCategories;
   $('#categoryList').onclick=e=>{const b=e.target.closest('[data-edit-category]');if(b){currentCategory=b.dataset.editCategory;renderCategoryEditor(currentCategory);$('#categoryEditor').scrollIntoView({behavior:'smooth',block:'start'})}};
   $('#categoryEditor').onclick=e=>{

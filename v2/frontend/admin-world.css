@@ -244,3 +244,15 @@ body.adminShell.adminWorld:before{
   .adminWorld .ownerMenuHero h2{font-size:30px!important}
   .adminWorld .ownerMenuHero .ownerAddItem{width:100%!important}
 }
+
+/* embedded Recipe Lab mode */
+.builderEmbed body.adminShell.adminWorld{background:#04090e!important}
+.builderEmbed .adminTop,.builderEmbed .tabs,.builderEmbed #profile,.builderEmbed #orders,
+.builderEmbed .ownerMenuHero,.builderEmbed .ownerMenuPanel>.notice,.builderEmbed .ownerMenuScope,
+.builderEmbed .menuEditorCards,.builderEmbed .ownerMenuSaveBar{display:none!important}
+.builderEmbed main{max-width:none!important;padding:0!important;margin:0!important}
+.builderEmbed #menu.ownerMenuPanel{display:block!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
+.builderEmbed .builderAdmin{display:block!important;margin:0!important;border:0!important;border-radius:0!important;min-height:100vh;background:#040a10!important}
+.builderEmbed .builderAdminHead{padding:18px!important}
+.builderEmbed .builderAdminMeta,.builderEmbed .builderAdminGroup,.builderEmbed .builderLimits,.builderEmbed .builderAdminNotice{margin-left:12px!important;margin-right:12px!important}
+.builderEmbed .loginGate{background:#04090e!important}

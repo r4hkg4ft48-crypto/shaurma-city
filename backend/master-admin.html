@@ -111,11 +111,22 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
  .tabs{top:69px}
  .module{min-height:130px}
 }
+</style><style>
+.hero{display:grid;grid-template-columns:minmax(0,1fr) 260px;align-items:center;gap:24px}
+.heroCopy{position:relative;z-index:2}.heroVersion{display:inline-flex;margin-top:16px;padding:7px 10px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background:#081521;color:#91a7ba;font-size:9px;font-weight:900;letter-spacing:.12em}
+.networkVisual{position:relative;width:228px;height:228px;margin-left:auto;border-radius:50%;border:1px solid rgba(255,255,255,.08);background:radial-gradient(circle,rgba(255,62,68,.16),rgba(8,20,31,.82) 48%,rgba(5,12,20,.35) 49%,transparent 70%);box-shadow:inset 0 0 60px rgba(255,62,68,.06),0 25px 60px rgba(0,0,0,.28)}
+.networkVisual:before,.networkVisual:after{content:"";position:absolute;left:50%;top:50%;width:1px;height:76%;background:linear-gradient(transparent,rgba(255,255,255,.15),transparent);transform:translate(-50%,-50%) rotate(42deg)}
+.networkVisual:after{transform:translate(-50%,-50%) rotate(-42deg)}
+.networkVisual b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:72px;height:72px;border-radius:22px;background:linear-gradient(145deg,#ff3038,#ff694b);box-shadow:0 14px 35px rgba(255,48,56,.28);font-size:22px}
+.networkVisual i{position:absolute;width:18px;height:18px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:#102231;box-shadow:0 0 0 5px rgba(255,255,255,.025)}
+.networkVisual i:nth-child(1){left:28px;top:52px}.networkVisual i:nth-child(2){right:24px;top:62px}.networkVisual i:nth-child(3){left:42px;bottom:34px}.networkVisual i:nth-child(4){right:45px;bottom:27px}
+.moduleGlyph{font-size:9px!important;letter-spacing:.10em;font-weight:950;color:#dce7ef!important;background:#102231!important;border:1px solid rgba(255,255,255,.09)}
+@media(max-width:720px){.hero{grid-template-columns:1fr}.networkVisual{display:none}}
 </style></head>
 <body>
 <div class="app" id="app" hidden>
   <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><div class="mark">Ш</div><div class="brand"><b>ШАУРМЕГ · СУПЕР АДМИНКА</b><small>УПРАВЛЕНИЕ ВСЕЙ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
-  <section class="hero"><span class="eyebrow">SUPER ADMIN · NETWORK CONTROL</span><h1>Вся сеть.<br>Под полным контролем.</h1><p>Заведения, заказы, меню, карта, Astra / RealCity, доступы, владельцы, боты и инфраструктура — единая рабочая среда поверх существующей серверной логики.</p></section>
+  <section class="hero"><div class="heroCopy"><span class="eyebrow">SUPER ADMIN · NETWORK CONTROL</span><h1>Вся сеть.<br>В одном центре.</h1><p>Заведения, заказы, меню, карта, Astra / RealCity, доступы, владельцы и инфраструктура — отдельные рабочие модули внутри одной системы.</p><span class="heroVersion">CONTROL SYSTEM · UI 2.0</span></div><div class="networkVisual" aria-hidden="true"><i></i><i></i><i></i><i></i><b>SH</b></div></section>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b></div><div class="stat"><small>ЗАКАЗЫ СЕГОДНЯ</small><b id="stToday">—</b></div><div class="stat"><small>НОВЫЕ</small><b id="stNew">—</b></div><div class="stat"><small>ВЫРУЧКА</small><b id="stRevenue">—</b></div></div>
 
   <nav class="tabs" id="tabs"><button class="active" data-tab="overview">Главная</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="sites">Заведения</button><button data-tab="bots">Боты</button></nav>
@@ -123,14 +134,14 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:
   <section class="pane active" id="overviewPane">
     <div class="sectionTitle"><h2>Управление</h2><small>исходные модули</small></div>
     <div class="modules">
-      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span>🧾</span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
-      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span>🍽</span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
-      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span>🗺</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
-      <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span>✦</span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
-      <button class="module" data-tab-open="access"><span>🔑</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
-      <button class="module" data-tab-open="sites"><span>🎛</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
-      <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span>👤</span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
-      <button class="module wide" data-tab-open="bots"><span>🤖</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span class="moduleGlyph">ORD</span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
+      <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span class="moduleGlyph">MENU</span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
+      <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span class="moduleGlyph">MAP</span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
+      <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span class="moduleGlyph">AI</span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
+      <button class="module" data-tab-open="access"><span class="moduleGlyph">KEY</span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
+      <button class="module" data-tab-open="sites"><span class="moduleGlyph">WEB</span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
+      <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span class="moduleGlyph">OWN</span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
+      <button class="module wide" data-tab-open="bots"><span class="moduleGlyph">BOT</span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
     </div>
   </section>
 

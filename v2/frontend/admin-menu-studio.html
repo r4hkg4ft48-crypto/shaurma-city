@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#071f3a">
 <title>Шаурмег · кухонная студия меню</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="admin-menu-studio.css?v=20261005a">
+<link rel="stylesheet" href="admin-menu-studio.css?v=20261005b">
 </head>
 <body>
 <div class="studio" id="studio">
@@ -32,6 +32,7 @@
       <button class="active" data-view="categories"><span class="tabIcon">⌗</span>Категории</button>
       <button data-view="items"><span class="tabIcon">▤</span>Позиции</button>
       <button data-view="design"><span class="tabIcon">◉</span>Дизайн</button>
+      <button data-view="builder"><span class="tabIcon">◇</span>Конструктор</button>
     </nav>
   </header>
 
@@ -59,6 +60,14 @@
       </div>
       <div class="itemsSummary" id="itemsSummary"></div>
       <div class="itemsGrid" id="itemsGrid"></div>
+    </section>
+
+    <section class="view hidden" id="view-builder">
+      <div class="builderStudioHead">
+        <div><small>RECIPE LAB</small><h2>Конструктор блюда</h2><p>Реальные настройки сборки выбранного заведения — без дублирования серверной логики.</p></div>
+        <span class="liveBadge"><i></i> SAME SESSION</span>
+      </div>
+      <div class="builderFrameShell"><iframe id="builderFrame" title="Конструктор блюда" loading="lazy"></iframe></div>
     </section>
 
     <section class="view hidden" id="view-design">
@@ -103,6 +112,6 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="config.js?v=20261005"></script>
-<script src="admin-menu-studio.js?v=20261005"></script>
+<script src="admin-menu-studio.js?v=20261005b"></script>
 </body>
 </html>

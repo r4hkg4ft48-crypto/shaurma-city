@@ -457,10 +457,16 @@ async function executeKitchenVoice(msg,transcript,intent){
 async function handleKitchenVoice(msg){
   const chatId=msg?.chat?.id;
   if(!chatId)return;
+  if(config.VOICE_PROVIDER!=='openai'){
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'🎙 Голосовой ввод сейчас стоит в бесплатном режиме: платные API не вызываются. Диалоговый агент уже готов к голосу; пока используйте текст. Позже подключим локальный STT и подадим его расшифровку в тот же агент.'
+    });
+  }
   if(!config.OPENAI_API_KEY){
     return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
       chat_id:chatId,
-      text:'🎙 Логика голосового управления уже использует тот же диалоговый агент, что и текст. Сейчас серверное распознавание речи отключено без OPENAI_API_KEY. Текстовое управление работает полностью бесплатно; позже подключим локальное распознавание речи без API.'
+      text:'Для провайдера OpenAI не задан OPENAI_API_KEY. Платные вызовы не выполняются.'
     });
   }
   try{await call(config.KITCHEN_BOT_TOKEN,'sendChatAction',{chat_id:chatId,action:'typing'})}catch{}

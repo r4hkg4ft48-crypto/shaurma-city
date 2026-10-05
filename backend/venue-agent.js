@@ -271,6 +271,11 @@ function createVenueDialogAgent({DB,commandBus}){
     );
   }
   async function patchContext(userId,fields={}){
+    await DB.query(
+      'INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,updated_at) VALUES($1,NULL,NOW()) '+
+      'ON CONFLICT(telegram_user_id) DO NOTHING',
+      [String(userId)]
+    );
     const allowed=['selected_category_id','selected_item_id','selected_group_id','pending_kind','dialog_summary'];
     for(const key of allowed)if(Object.prototype.hasOwnProperty.call(fields,key)){
       await DB.query('UPDATE shaurma_owner_command_context SET '+key+'=$2,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),fields[key]===undefined?null:fields[key]]);

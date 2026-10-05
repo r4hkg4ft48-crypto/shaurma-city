@@ -146,14 +146,14 @@ function commandNeedsItem(command){
   ]).has(command?.intent);
 }
 function destructive(command){
-  return new Set(['menu_delete','category_delete','choice_group_delete','choice_option_delete','builder_option_delete']).has(command?.intent);
+  return new Set(['menu_delete','category_delete','choice_group_delete','choice_option_delete','fixed_option_delete','builder_option_delete']).has(command?.intent);
 }
 function canonicalText(command,itemName=''){
   const i=itemName||command.item||'';
   switch(command.intent){
     case 'menu_item_select': return 'работаем с '+i;
     case 'menu_item_show': return i?'покажи настройки позиции '+i:'покажи настройки позиции';
-    case 'menu_price': return 'цена '+i+' '+command.price;
+    case 'menu_price': return 'поставь цену на '+i+' '+command.price;
     case 'menu_price_context': return 'цена '+command.price;
     case 'menu_toggle': return (command.enabled?'верни в меню ':'скрой блюдо ')+i;
     case 'menu_available': return command.available?(i?'верни '+i+' в наличие':'верни в наличие'):('нет в наличии'+(i?' '+i:''));
@@ -198,6 +198,7 @@ function canonicalText(command,itemName=''){
     case 'fixed_option_price': return 'доплата варианта '+command.group+' '+command.option+' '+command.price;
     case 'fixed_option_toggle': return (command.enabled?'включи вариант ':'выключи вариант ')+command.group+' '+command.option;
     case 'fixed_option_default': return 'сделай вариант '+command.group+' '+command.option+' по умолчанию';
+    case 'builder_option_delete': return 'удали '+command.group+' '+command.option;
     default:return '';
   }
 }
@@ -271,6 +272,11 @@ function createVenueDialogAgent({DB,commandBus}){
     );
   }
   async function patchContext(userId,fields={}){
+    await DB.query(
+      'INSERT INTO shaurma_owner_command_context(telegram_user_id,establishment_id,updated_at) VALUES($1,NULL,NOW()) '+
+      'ON CONFLICT(telegram_user_id) DO NOTHING',
+      [String(userId)]
+    );
     const allowed=['selected_category_id','selected_item_id','selected_group_id','pending_kind','dialog_summary'];
     for(const key of allowed)if(Object.prototype.hasOwnProperty.call(fields,key)){
       await DB.query('UPDATE shaurma_owner_command_context SET '+key+'=$2,updated_at=NOW() WHERE telegram_user_id=$1',[String(userId),fields[key]===undefined?null:fields[key]]);
@@ -355,7 +361,11 @@ function createVenueDialogAgent({DB,commandBus}){
       await patchContext(user.id,{selected_category_id:null,selected_item_id:null,selected_group_id:null});
       return commandBus.handle({user,text:'/use '+hit.id});
     }
-    return ask(user.id,'venue_select',{query},ranked.filter(x=>x.score>=.3),'Какое заведение выбрать?');
+    const candidates=ranked.filter(x=>x.score>=.3);
+    if(candidates.length)return ask(user.id,'venue_select',{query},candidates,'Какое заведение выбрать?');
+    return ask(user.id,'venue_select',{query},list.map(v=>({
+      id:v.establishment_id,label:v.name+' · '+venueShortKey(v.establishment_id),type:'venue',score:1
+    })),'По такому названию точку не нашёл. Выберите из доступных:');
   }
   async function activeVenue(user){
     const list=await accesses(user.id);
@@ -614,13 +624,17 @@ function createVenueDialogAgent({DB,commandBus}){
   async function handle({user,text}){
     const raw=clean(text);if(!user?.id||!raw)return {handled:false};
 
+    const parsed=parseCommand(raw);
     const ctx0=await context(user.id);
     if(ctx0.pending_kind){
-      const pending=await consumePending(user,raw);
-      if(pending)return pending;
+      const explicitOverride=new Set(['help','venues_show','venue_select']).has(parsed.intent);
+      if(explicitOverride)await clearPending(user.id);
+      else{
+        const pending=await consumePending(user,raw);
+        if(pending)return pending;
+      }
     }
 
-    const parsed=parseCommand(raw);
     if(parsed.intent==='help')return {handled:true,text:dialogHelpText()};
     if(parsed.intent==='venues_show')return commandBus.handle({user,text:raw});
     if(parsed.intent==='venue_select')return selectVenue(user,parsed.query);

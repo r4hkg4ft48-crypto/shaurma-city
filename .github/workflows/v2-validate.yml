@@ -181,6 +181,9 @@ jobs:
           trap "kill $PID 2>/dev/null || true" EXIT
           for i in {1..12}; do
             if curl --fail --silent http://127.0.0.1:3000/api/v2/health; then
+              CODE=$(curl --silent --output /tmp/kitchen-webhook.out --write-out "%{http_code}" -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:3000/api/v2/telegram/kitchen)
+              test "$CODE" = "200" || { echo "telegram kitchen webhook smoke failed: $CODE"; cat /tmp/kitchen-webhook.out; exit 1; }
+              echo "telegram kitchen webhook smoke ok"
               exit 0
             fi
             sleep 1

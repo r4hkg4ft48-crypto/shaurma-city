@@ -200,11 +200,12 @@ async function ensureSchema(){
 
   CREATE TABLE IF NOT EXISTS shaurma_owner_command_context(
     telegram_user_id TEXT PRIMARY KEY,
-    establishment_id TEXT NOT NULL,
+    establishment_id TEXT,
     selected_item_id TEXT,
     selected_group_id TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE shaurma_owner_command_context ALTER COLUMN establishment_id DROP NOT NULL;
   ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_item_id TEXT;
   ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_group_id TEXT;
   ALTER TABLE shaurma_owner_command_context ADD COLUMN IF NOT EXISTS selected_category_id TEXT;

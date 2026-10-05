@@ -362,7 +362,7 @@ function createVenueDialogAgent({DB,commandBus}){
       await patchContext(user.id,{selected_category_id:chosen.id,selected_item_id:null,selected_group_id:null});
       const active=await activeVenue(user),menu=Array.isArray(active.venue?.menu)?active.venue.menu:[];
       const items=menu.filter(x=>String(x.c||x.category||'')===String(chosen.id)&&x.active!==false);
-      return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price||0)+' ₽').join('\n'):'В категории пока нет активных позиций.')+'\n\nМожно написать название блюда или что нужно изменить.'};
+      return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока нет активных позиций.')+'\n\nМожно написать название блюда или что нужно изменить.'};
     }
 
     if(kind==='item_select'){
@@ -378,6 +378,18 @@ function createVenueDialogAgent({DB,commandBus}){
         if(destructive(cmd))return confirmDanger(user,cmd,chosen.label);
         return executeResolved(user,cmd,chosen.label);
       }
+      return commandBus.handle({user,text:'работаем с '+chosen.label});
+    }
+
+    if(kind==='entity_nav'){
+      await clearPending(user.id);
+      if(chosen.type==='category'){
+        await patchContext(user.id,{selected_category_id:chosen.id,selected_item_id:null,selected_group_id:null});
+        const active=await activeVenue(user),menu=Array.isArray(active.venue?.menu)?active.venue.menu:[];
+        const items=menu.filter(x=>String(x.c||x.category||'')===String(chosen.id)&&x.active!==false);
+        return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока пусто.')+'\n\nМожно написать название позиции.'};
+      }
+      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null});
       return commandBus.handle({user,text:'работаем с '+chosen.label});
     }
 
@@ -433,7 +445,7 @@ function createVenueDialogAgent({DB,commandBus}){
       if(hit){
         await patchContext(user.id,{selected_category_id:hit.id,selected_item_id:null,selected_group_id:null});
         const items=(venue.menu||[]).filter(x=>String(x.c||x.category||'')===hit.id&&x.active!==false);
-        return {handled:true,text:'Открыта категория «'+hit.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price||0)+' ₽').join('\n'):'В категории пока пусто.')+'\n\nМожно написать название позиции.'};
+        return {handled:true,text:'Открыта категория «'+hit.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока пусто.')+'\n\nМожно написать название позиции.'};
       }
       if(ranked.length)return ask(user.id,'category_nav',{query:free.query},ranked,'Какую категорию открыть?');
     }
@@ -448,7 +460,7 @@ function createVenueDialogAgent({DB,commandBus}){
       if(ch&&(!ih||ch.score>ih.score+.08)){
         await patchContext(user.id,{selected_category_id:ch.id,selected_item_id:null,selected_group_id:null});
         const items=(venue.menu||[]).filter(x=>String(x.c||x.category||'')===ch.id&&x.active!==false);
-        return {handled:true,text:'Открыта категория «'+ch.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price||0)+' ₽').join('\n'):'В категории пока пусто.')};
+        return {handled:true,text:'Открыта категория «'+ch.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока пусто.')};
       }
       const merged=[...itemRank.slice(0,4),...catRank.slice(0,3)].sort((a,b)=>b.score-a.score);
       if(merged.length){

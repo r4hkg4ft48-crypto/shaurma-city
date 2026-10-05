@@ -152,6 +152,8 @@ jobs:
         run: node --test v2/backend/test/voice-assistant.test.js
       - name: Venue command assistant contract
         run: node --test backend/venue-command.test.js
+      - name: Catalog cleanup PostgreSQL transaction contract
+        run: node --test backend/venue-catalog-cleanup.test.js
       - name: Venue dialog agent contract
         run: node --test backend/venue-agent.test.js
       - name: Mobile photographic builder

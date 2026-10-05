@@ -392,28 +392,41 @@ function findNamed(list,query,getName=x=>x?.name||x?.n||''){
 function itemSettingsText(item,sections=[]){
   if(!item)return '';
   const section=sections.find(x=>String(x.id)===String(item.c||item.category||'')),groups=Array.isArray(item.choice_groups)?item.choice_groups:[];
+  const fixed=item.options&&typeof item.options==='object'?item.options:{};
+  const schedule=item.schedule&&typeof item.schedule==='object'?item.schedule:{};
   const lines=[
     '🍽 '+String(item.n||item.name||'Позиция'),
     'ID: '+String(item.id),
     'Категория: '+String(section?.name||item.c||item.category||'—'),
     'Цена: '+Number(item.p??item.price??0)+' ₽',
     'В меню: '+(item.active===false?'нет':'да'),
-    'В наличии: '+(item.available===false?'нет':'да'),
-    'Карточка: '+String(item.display||'auto'),
-    'Главная: '+(item.featured===true?'да':'нет'),
+    'В наличии: '+(item.available===false||Number(item.stock)===0?'нет':'да'),
+    'Остаток: '+(item.stock===null||item.stock===undefined?'не ограничен':String(item.stock)),
+    'Вес: '+String(item.weight||'—'),
+    'SKU: '+String(item.sku||'—'),
+    'Состав: '+String(item.composition||'—'),
+    'Теги: '+((Array.isArray(item.tags)&&item.tags.length)?item.tags.join(', '):'—'),
+    'Карточка: '+String(item.display||'auto')+' · фото '+String(item.image_fit||'cover'),
+    'Главная: '+(item.featured===true?'да':'нет')+' · рекомендованная: '+(item.recommended===true?'да':'нет'),
     'Бейдж: '+String(item.badge||'—'),
+    'Цвет карточки: '+String(item.card_color||'—'),
     'Количество: '+Math.max(1,Number(item.min_qty)||1)+'–'+Math.max(1,Number(item.max_qty)||50),
-    'Групп выбора: '+groups.length
+    'Расписание: '+(schedule.enabled===true?String(schedule.from||'00:00')+'–'+String(schedule.to||'23:59'):'всегда'),
+    'Произвольных групп выбора: '+groups.length
   ];
   if(item.d||item.description)lines.push('Описание: '+String(item.d||item.description));
+  for(const key of ['meats','sizes','bases','sauces','extras']){
+    const list=Array.isArray(fixed[key])?fixed[key]:[];
+    if(!list.length)continue;
+    lines.push('',fixedGroupLabel(key)+(Array.isArray(fixed.required_groups)&&fixed.required_groups.includes(key)?' · обязательно':'')+':');
+    for(const o of list)lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price)?' '+(Number(o.price)>0?'+':'')+Number(o.price)+' ₽':'')+(o.default===true?' · по умолчанию':''));
+  }
   for(const g of groups){
     const opts=Array.isArray(g.options)?g.options:[];
-    lines.push('• '+String(g.name||'Выбор')+' · '+(g.active===false?'выкл · ':'')+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1)+' · '+opts.length+' вариантов');
-    for(const o of opts){
-      lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')+(o.default===true?' · по умолчанию':''));
-    }
+    lines.push('', '• '+String(g.name||'Выбор')+' · '+(g.active===false?'выкл · ':'')+(g.type==='multiple'?'несколько':'один')+' · '+Math.max(g.required?1:0,Number(g.min)||0)+'–'+Math.max(1,Number(g.max)||1));
+    for(const o of opts)lines.push('  - '+(o.active===false?'○ ':'● ')+String(o.name||'Вариант')+(Number(o.price_delta)?' '+(Number(o.price_delta)>0?'+':'')+Number(o.price_delta)+' ₽':'')+(o.default===true?' · по умолчанию':''));
   }
-  return lines.join('\n');
+  return lines.join('\n').slice(0,3900);
 }
 
 function menuLine(x){

@@ -372,7 +372,8 @@ function menuSelectionPrice(item,selection={},choices={}){
   const custom=choices&&typeof choices==='object'&&!Array.isArray(choices)?choices:{};
   let total=Number(src.p)||0;const details=[];
   for(const group of ['meats','sizes','bases','sauces','extras']){
-    const list=src.options[group]||[],raw=sel[group],ids=Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[];
+    const list=src.options[group]||[],raw=sel[group],ids=[...new Set(Array.isArray(raw)?raw.map(String):raw?[String(raw)]:[])];
+    if(['meats','sizes','bases'].includes(group)&&ids.length>1)return null;
     const chosen=ids.map(id=>list.find(x=>x.active!==false&&x.id===id)).filter(Boolean);
     if(chosen.length!==ids.length)return null;
     if(src.options.required_groups.includes(group)&&!chosen.length){

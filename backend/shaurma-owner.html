@@ -143,8 +143,8 @@ background:#06121d!important;border-color:var(--l)!important;color:#f4f7fa!impor
 .login{background:radial-gradient(circle at 50% 0,rgba(255,59,67,.18),transparent 35%),#040910!important}.loginCard{background:#0a1723!important;border-color:var(--l)!important;box-shadow:0 24px 70px rgba(0,0,0,.38)!important}.loginCard button{background:linear-gradient(135deg,#ff3038,#ff6549)!important}
 .toast{background:#0a1723!important;border-color:var(--l)!important}
 @media(max-width:650px){.adminTabs{top:76px}}
-</style></head>
-<body>
+</style><link rel="stylesheet" href="/realcity-preview/admin-console.css?v=20261005-astra3"><script src="/realcity-preview/admin-console.js?v=20261005-astra3"></script></head>
+<body class="consoleModule ">
 <div class="wrap" id="app" hidden>
 <header class="top"><div class="brand"><b>ШАУРМЕГ · УПРАВЛЕНИЕ</b><small>SUPER ADMIN · OPERATIONS</small></div><div class="topActions"><button class="masterBackLink" id="masterBackLink" type="button">← Супер админка</button><a class="mapAdminLink" href="/shaurmeg-owner">Карта сети</a><div class="live"><i></i><span id="liveText">Онлайн</span></div></div></header>
 <div class="adminTabs"><button class="adminTab active" data-admin-tab="orders">Активные заказы</button><button class="adminTab" data-admin-tab="menu">Настройка меню</button></div>
@@ -305,6 +305,7 @@ async function loadVenues(){
  venues=await api('/api/shaurma/admin/venues');
  $('#venueSelect').innerHTML=venues.map(v=>`<option value="${v.venue_id}">${escapeHtml(v.name)} · ${escapeHtml(v.establishment_id||'без ID')}${v.marker_count?' · с карты':''}</option>`).join('');
  $('#orderVenueSelect').innerHTML='<option value="">Все заведения</option>'+venues.filter(v=>v.establishment_id).map(v=>`<option value="${escapeHtml(v.establishment_id)}">${escapeHtml(v.name)} · ${escapeHtml(v.establishment_id)}</option>`).join('');
+ const requested=venues.find(v=>v.establishment_id===OWNER_LAUNCH.searchParams.get('establishment'));if(requested)$('#venueSelect').value=requested.venue_id;
  if(venues.length)await openVenue($('#venueSelect').value||venues[0].venue_id);else{$('#menuRows').innerHTML='<div class="empty">Сначала добавьте заведение меткой в редакторе карты</div>';$('#saveMenu').disabled=true}
  updateOrderScope();
 }

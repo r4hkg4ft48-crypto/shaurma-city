@@ -153,7 +153,7 @@ jobs:
       - name: Venue command assistant contract
         run: node --test backend/venue-command.test.js
       - name: Catalog cleanup PostgreSQL transaction contract
-        run: node --test backend/venue-catalog-cleanup.test.js
+        run: node --test backend/venue-catalog-cleanup.test.js backend/venue-access.test.js
       - name: Venue dialog agent contract
         run: node --test backend/venue-agent.test.js
       - name: Mobile photographic builder
@@ -163,6 +163,7 @@ jobs:
           npx playwright install --with-deps chromium
           node --test test/builder-cinema-browser.cjs
           node --test test/admin-console-browser.cjs
+          node --test test/menu-experience-browser.cjs
       - name: Builder visual checks
         if: always()
         uses: actions/upload-artifact@v4

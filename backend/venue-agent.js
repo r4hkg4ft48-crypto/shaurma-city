@@ -433,11 +433,11 @@ function createVenueDialogAgent({DB,commandBus}){
   }
 
   async function resolveNestedCommand(user,venue,ctx,command,item){
-    let cmd={...command};
+    let cmd={...command,...(item?.id?{target_item_id:String(item.id)}:{})};
 
     if(cmd.intent==='menu_category_move'&&clean(cmd.category)){
       const ranked=await rankCategories(venue,cmd.category),hit=decisive(ranked);
-      if(hit)cmd.category=hit.label;
+      if(hit){cmd.category=hit.label;cmd.target_category_id=hit.id;}
       else if(ranked.length)return askCommandEntity(user,cmd,'category',ranked,'В какую категорию перенести позицию?',item);
       else return {handled:true,text:'Категорию «'+cmd.category+'» не нашёл. Чтобы не создать лишний раздел из-за опечатки, сначала явно создайте её: «добавь категорию '+cmd.category+'».'};
     }
@@ -447,7 +447,7 @@ function createVenueDialogAgent({DB,commandBus}){
       let group=null;
       if(clean(cmd.group)){
         const ranked=rankNamed(groups,cmd.group,x=>x.name,'group'),hit=decisive(ranked);
-        if(hit){group=groups.find(x=>String(x.id)===hit.id);cmd.group=hit.label}
+        if(hit){group=groups.find(x=>String(x.id)===hit.id);cmd.group=hit.label;cmd.target_group_id=hit.id}
         else if(ranked.length)return askCommandEntity(user,cmd,'group',ranked,'Какую группу выбора вы имеете в виду?',item);
         else return {handled:true,text:'Группу «'+cmd.group+'» у позиции «'+String(item?.n||item?.name||'')+'» не нашёл. Ничего не меняю.'};
       }else{
@@ -460,7 +460,7 @@ function createVenueDialogAgent({DB,commandBus}){
         if(!group&&groups.length===0&&cmd.intent!=='choice_group_add'){
           return {handled:true,text:'У этой позиции пока нет произвольных групп выбора. Можно сказать: «добавь выбор Размер».'};
         }
-        if(group)cmd.group=String(group.name||group.id);
+        if(group){cmd.group=String(group.name||group.id);cmd.target_group_id=String(group.id)}
       }
       if(group)await patchContext(user.id,{selected_group_id:String(group.id)});
 
@@ -468,7 +468,7 @@ function createVenueDialogAgent({DB,commandBus}){
         const g=group||currentGroup(item,await context(user.id));
         if(!g)return {handled:true,text:'Сначала выберите группу параметров.'};
         const ranked=rankNamed(g.options||[],cmd.option,x=>x.name,'option'),hit=decisive(ranked);
-        if(hit)cmd.option=hit.label;
+        if(hit){cmd.option=hit.label;cmd.target_option_id=hit.id;}
         else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант изменить?',item);
         else return {handled:true,text:'Вариант «'+String(cmd.option||'')+'» в группе «'+String(g.name||'')+'» не найден. Ничего не меняю.'};
       }
@@ -478,7 +478,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const key=fixedGroupKey(cmd.group),list=Array.isArray(item?.options?.[key])?item.options[key]:[];
       if(!key)return {handled:true,text:'Не понял тип варианта. Уточните: мясо, размер, основа, соус или добавка.'};
       const ranked=rankNamed(list,cmd.option,x=>x.name,'fixed_option'),hit=decisive(ranked);
-      if(hit)cmd.option=hit.label;
+      if(hit){cmd.option=hit.label;cmd.target_option_id=hit.id;}
       else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант '+normalize(cmd.group)+' изменить?',item);
       else return {handled:true,text:'Не нашёл вариант «'+String(cmd.option||'')+'». Ничего не меняю.'};
     }
@@ -490,7 +490,7 @@ function createVenueDialogAgent({DB,commandBus}){
   async function resolveCategoryCommand(user,venue,command){
     const ranked=await rankCategories(venue,command.category),hit=decisive(ranked);
     if(hit){
-      const cmd={...command,category:hit.label};
+      const cmd={...command,category:hit.label,target_category_id:hit.id};
       if(destructive(cmd))return confirmDanger(user,cmd,'');
       return executeResolved(user,cmd,'');
     }
@@ -498,7 +498,11 @@ function createVenueDialogAgent({DB,commandBus}){
     return {handled:true,text:'Категорию «'+String(command.category||'')+'» не нашёл. Ничего не меняю.'};
   }
   async function executeResolved(user,command,itemLabel=''){
-    const text=canonicalText(command,itemLabel);
+    const structured={...command};
+    if(itemLabel&&!structured.item)structured.item=itemLabel;
+    if(typeof commandBus.execute==='function')return commandBus.execute({user,command:structured});
+    // Compatibility fallback only; the dialog agent itself never reparses when execute() exists.
+    const text=canonicalText(structured,itemLabel);
     if(!text)return {handled:false};
     return commandBus.handle({user,text});
   }
@@ -573,7 +577,7 @@ function createVenueDialogAgent({DB,commandBus}){
         const active=await activeVenue(user),fresh=await context(user.id);
         const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
         if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
-        return resolveNestedCommand(user,active.venue,fresh,cmd,item);
+        return resolveNestedCommand(user,active.venue,fresh,{...cmd,target_item_id:chosen.id},item);
       }
       return commandBus.handle({user,text:'работаем с '+chosen.label});
     }
@@ -595,12 +599,12 @@ function createVenueDialogAgent({DB,commandBus}){
       const active=await activeVenue(user);
       if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
       const cmd={...(payload.command||{})};
-      if(payload.slot==='category')cmd.category=chosen.label;
+      if(payload.slot==='category'){cmd.category=chosen.label;cmd.target_category_id=chosen.id;}
       if(payload.slot==='group'){
-        cmd.group=chosen.label;
+        cmd.group=chosen.label;cmd.target_group_id=chosen.id;
         await patchContext(user.id,{selected_group_id:chosen.id});
       }
-      if(payload.slot==='option')cmd.option=chosen.label;
+      if(payload.slot==='option'){cmd.option=chosen.label;cmd.target_option_id=chosen.id;}
       const fresh=await context(user.id);
       const item=(active.venue.menu||[]).find(x=>String(x.id)===String(payload.item_id||fresh.selected_item_id||''));
       if(item)return resolveNestedCommand(user,active.venue,fresh,cmd,item);
@@ -768,7 +772,7 @@ function createVenueDialogAgent({DB,commandBus}){
           const fresh=await context(user.id);
           const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
           if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
-          return resolveNestedCommand(user,venue,fresh,command,item);
+          return resolveNestedCommand(user,venue,fresh,{...command,target_item_id:picked.item.id},item);
         }
         const fresh=await context(user.id);
         if(!fresh.selected_item_id){
@@ -776,7 +780,7 @@ function createVenueDialogAgent({DB,commandBus}){
         }
         const current=(venue.menu||[]).find(x=>String(x.id)===String(fresh.selected_item_id));
         if(!current)return {handled:true,text:'Выбранная ранее позиция больше не найдена. Назовите блюдо ещё раз.'};
-        return resolveNestedCommand(user,venue,fresh,command,current);
+        return resolveNestedCommand(user,venue,fresh,{...command,target_item_id:String(current.id)},current);
       }
       if(needsCategoryResolution(command))return resolveCategoryCommand(user,venue,command);
       if(destructive(command))return confirmDanger(user,command,'');

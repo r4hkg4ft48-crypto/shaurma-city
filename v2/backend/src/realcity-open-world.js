@@ -309,6 +309,7 @@ async function analyzeImage(buffer){
 
 async function buildFacadeMaterial(buffer,candidate,assignment,referenceId){
   if(config.REALCITY_OPEN_WORLD_TEXTURES===false||!canPersistAdaptation(candidate))return null;
+  const sharp=require('sharp');
   if(assignment.heading_error>34||assignment.distance<3||assignment.distance>70)return null;
   const base=await sharp(buffer,{limitInputPixels:32000000}).rotate().jpeg({quality:92}).toBuffer();
   const meta=await sharp(base).metadata(),w=Number(meta.width),h=Number(meta.height);if(!w||!h||w<256||h<160)return null;

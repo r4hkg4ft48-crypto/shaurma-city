@@ -22,7 +22,7 @@ module.exports={
   CHANNEL_BOT_TOKEN:clean(process.env.CHANNEL_TELEGRAM_BOT_TOKEN),
   CHANNEL_BOT_USERNAME:clean(process.env.CHANNEL_TELEGRAM_BOT_USERNAME||'').replace(/^@/,''),
   CHANNEL_CHAT_ID:clean(process.env.SHAURMEG_CHANNEL_CHAT_ID),
-  CHANNEL_ASSET_BASE_URL:clean(process.env.SHAURMEG_CHANNEL_ASSET_BASE_URL).replace(/\/+$/,''),
+  CHANNEL_ASSET_BASE_URL:clean(process.env.SHAURMEG_CHANNEL_ASSET_BASE_URL).replace(/\/+$/,''),\n  CHANNEL_AUTO_PUBLISH_LAUNCH:clean(process.env.CHANNEL_AUTO_PUBLISH_LAUNCH).toLowerCase()==='true'||clean(process.env.CHANNEL_AUTO_PUBLISH_LAUNCH)==='1',
   CHANNEL_BOT_ADMIN_IDS:new Set(csv(process.env.CHANNEL_BOT_ADMIN_IDS||process.env.ADMIN_TELEGRAM_IDS||'')),
   OPENAI_API_KEY:clean(process.env.OPENAI_API_KEY),
   VOICE_PROVIDER:clean(process.env.KITCHEN_VOICE_PROVIDER||'off').toLowerCase(),
@@ -32,5 +32,5 @@ module.exports={
   OWNER_PASSWORD:clean(process.env.OWNER_PASSWORD),
   ADMIN_IDS:new Set(csv([process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(','))),
   SESSION_TTL_SEC:7*24*60*60,
-  BUILD:'v2-channel-bot-1'
+  BUILD:'v2-channel-rich-launch-1'
 };

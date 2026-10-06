@@ -492,7 +492,14 @@ function install(app){
     if(!config.CHANNEL_BOT_TOKEN)return;
     try{
       if(req.body?.my_chat_member){await bindChannel(req.body.my_chat_member.chat,true);return}
-      if(req.body?.channel_post){await bindChannel(req.body.channel_post.chat,true);return}
+      if(req.body?.channel_post){
+        const p=req.body.channel_post;
+        await bindChannel(p.chat,true);
+        if(/^#?bind$/i.test(String(p.text||'').trim())){
+          try{await call('deleteMessage',{chat_id:p.chat.id,message_id:p.message_id})}catch(e){console.warn('channel bind cleanup',e.message)}
+        }
+        return;
+      }
       if(req.body?.callback_query)return handleCallback(req.body.callback_query);
       if(req.body?.message)return handleMessage(req.body.message);
     }catch(e){console.error('channel webhook',e.message)}

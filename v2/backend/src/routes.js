@@ -262,7 +262,10 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
             generated_at:rw.generated_at||null,coverage:rw.coverage||null,
             materials_count:Array.isArray(rw.materials)?rw.materials.length:0,
             references_count:Array.isArray(rw.references)?rw.references.length:0,
+            reference_sources:[...new Set((Array.isArray(rw.references)?rw.references:[]).map(x=>x?.source).filter(Boolean))],
+            references:(Array.isArray(rw.references)?rw.references:[]).slice(0,12).map(x=>({source:x.source,license:x.license,match:x.match})),
             providers:Array.isArray(rw.attribution?.providers)?rw.attribution.providers:[],
+            source_report:profile.sources?.open_world||null,
             diagnostics:rw.diagnostics||null,reconstruction:rw.reconstruction||null
           },
           astra:{status:astra.status||null,coverage:astra.coverage||null}

@@ -3,6 +3,7 @@ const db=require('./db');
 const config=require('./config');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const zhulebino=require('./realcity-releases/zhulebino');
+const reconstruction=require('./realcity-reconstruction');
 
 async function installPhotoRelease(){
   if(!db.configured)return null;
@@ -40,6 +41,7 @@ function queue(markerId){
       // Merge only generated keys; keep the latest Astra output/input even if an
       // admin saved a reconstruction while the geometry request was in flight.
       await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb || (realcity_profile - ARRAY['version','generated_at','quality','confidence','building_style','palette','neighborhood_palette','facade','texture','environment','camera','scene','sources','real_world']),realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
+      reconstruction.enqueue(marker,profile).catch(e=>console.error('realcity reconstruction enqueue',id,e.message));
       return profile;
     }catch(e){
       console.error('realcity',id,e.message);
@@ -51,6 +53,8 @@ function queue(markerId){
 }
 async function bootstrap(){
   if(!db.configured)return;
+  await reconstruction.ensureSchema().catch(e=>console.error('RealCity reconstruction schema:',e.message));
+  await reconstruction.recoverStaleJobs().catch(e=>console.error('RealCity reconstruction recovery:',e.message));
   await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
   const q=await db.query("SELECT id,realcity_status,realcity_profile FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
   q.rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8).forEach(x=>queue(x.id)?.catch(()=>{}));

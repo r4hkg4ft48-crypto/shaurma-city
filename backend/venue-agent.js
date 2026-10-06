@@ -780,6 +780,7 @@ function createVenueDialogAgent({DB,commandBus}){
     const candidates=Array.isArray(ctx.pending_candidates)?ctx.pending_candidates:[];
     if(callbackToken&&payload.token!==callbackToken)return {handled:true,text:'Это уточнение уже устарело. Напишите запрос ещё раз.'};
     if(isCancel(text)||callbackIndex==='x'){await clearPending(user.id);return {handled:true,text:'Хорошо, ничего не меняю.'}}
+    if(kind==='slot_value')return consumeSlotValue(user,payload,text);
 
     let idx=callbackIndex===null?ordinal(text):Number(callbackIndex);
     if(kind==='confirm'&&callbackIndex===null&&isYes(text))idx=candidates.findIndex(x=>x.id==='yes');
@@ -826,6 +827,12 @@ function createVenueDialogAgent({DB,commandBus}){
       await clearPending(user.id);
       await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
       const cmd=payload.command;
+      if(payload.missing){
+        const active=await activeVenue(user);
+        const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
+        if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Назовите её ещё раз.'};
+        return askMissingSlot(user,item,payload.missing);
+      }
       if(payload.plan){
         const active=await activeVenue(user);
         const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
@@ -919,6 +926,20 @@ function createVenueDialogAgent({DB,commandBus}){
       return ask(user.id,'venue_select',{query:''},ranked,'Сначала выберите заведение:');
     }
     const {venue,ctx}=active;
+
+    const incompleteItem=inferIncompleteItemRequest(raw);
+    if(incompleteItem){
+      const picked=await chooseItem(user,venue,incompleteItem.item,{missing:incompleteItem},'Какое именно блюдо вы хотите изменить?');
+      if(picked.error)return {handled:true,text:picked.error};
+      if(picked.ask)return picked.ask;
+      const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
+      if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Назовите её ещё раз.'};
+      return askMissingSlot(user,item,incompleteItem);
+    }
+
+    const selectedForMissing=currentItem(venue,ctx);
+    const incompleteContext=selectedForMissing?inferIncompleteContextRequest(raw):null;
+    if(incompleteContext)return askMissingSlot(user,selectedForMissing,incompleteContext);
 
     const explicitPlan=inferItemActionPlan(raw);
     if(explicitPlan)return resolveAndExecuteItemPlan(user,venue,explicitPlan.item,explicitPlan.actions);

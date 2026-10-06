@@ -7,6 +7,7 @@ const auth=require('./auth');
 const rt=require('./realtime');
 const D=require('./domain');
 const realcity=require('./realcity-service');
+const photoreal=realcity.photoreal;
 const telegram=require('./telegram');
 
 const router=express.Router();
@@ -245,10 +246,11 @@ router.get('/map/points',async(req,res)=>{
 });
 router.get('/map/markers/:id/realcity',async(req,res)=>{
   try{
-    const q=await db.query('SELECT id,establishment_id,venue_id,lat,lon,realcity_profile,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
+    const q=await db.query('SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_profile,realcity_astra_assets,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
     const row=q.rows[0];if(!row)return res.sendStatus(404);
     const profile=row.realcity_profile||{};
     if(realcity.needsRefresh(profile))realcity.queue(row.id)?.catch(()=>{});
+    else photoreal.queue(row,profile).catch(e=>console.warn('RealCity photoreal on read',row.id,e.message));
     res.setHeader('Cache-Control','no-store');
     if(req.query.summary==='1'){
       const rw=profile.real_world||{},astra=profile.astra||{};
@@ -268,12 +270,26 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
             source_report:profile.sources?.open_world||null,
             diagnostics:rw.diagnostics||null,reconstruction:rw.reconstruction||null
           },
-          astra:{status:astra.status||null,coverage:astra.coverage||null}
+          astra:{status:astra.status||null,coverage:astra.coverage||null},
+          photoreal:photoreal.publicSummary(profile.photoreal),
+          photoreal_job:profile.photoreal_job||null
         }
       });
     }
     res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}
+});
+router.get('/realcity/reconstruction/source/:markerId/:assetId',async(req,res)=>{
+  try{
+    if(!photoreal.verifySource(req.params.markerId,req.params.assetId,req.query.expires,req.query.sig))return res.sendStatus(401);
+    const source=await photoreal.readPrivateSource(req.params.markerId,req.params.assetId);if(!source)return res.sendStatus(404);
+    res.setHeader('Cache-Control','private,no-store,max-age=0');res.setHeader('X-Content-Type-Options','nosniff');
+    res.type(source.mime||'application/octet-stream').send(source.content);
+  }catch(e){fail(res,e,'realcity_reconstruction_source_failed')}
+});
+router.post('/realcity/reconstruction/callback',async(req,res)=>{
+  try{res.setHeader('Cache-Control','no-store');res.json(await photoreal.acceptResult(req.body||{}))}
+  catch(e){fail(res,e,'realcity_reconstruction_callback_failed')}
 });
 router.get('/map/markers/:id/avatar',async(req,res)=>{
   try{

@@ -3,6 +3,7 @@ const db=require('./db');
 const config=require('./config');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const zhulebino=require('./realcity-releases/zhulebino');
+const photoreal=require('./realcity-photoreal');
 
 async function installPhotoRelease(){
   if(!db.configured)return null;
@@ -33,13 +34,17 @@ function queue(markerId){
   const job=(async()=>{
     try{
       await db.query("UPDATE shaurmeg_markers SET realcity_status='processing',realcity_updated_at=NOW() WHERE id=$1",[id]);
-      const q=await db.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,realcity_astra_config,realcity_profile,jsonb_array_length(realcity_astra_assets) astra_asset_count FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[id]);
+      const q=await db.query("SELECT id,establishment_id,venue_id,name,address,description,lat,lon,realcity_astra_config,realcity_astra_assets,realcity_profile,jsonb_array_length(realcity_astra_assets) astra_asset_count FROM shaurmeg_markers WHERE id=$1 LIMIT 1",[id]);
       const marker=q.rows[0];if(!marker)return null;
       const profile=await analyzeRealCityProfile(marker);
       if(Number(marker.astra_asset_count||0)>0)profile.astra_input={version:1,mode:'metadata_only',establishment_id:marker.establishment_id||'',asset_count:Number(marker.astra_asset_count||0),config:marker.realcity_astra_config||{}};
       // Merge only generated keys; keep the latest Astra output/input even if an
       // admin saved a reconstruction while the geometry request was in flight.
       await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb || (realcity_profile - ARRAY['version','generated_at','quality','confidence','building_style','palette','neighborhood_palette','facade','texture','environment','camera','scene','sources','real_world']),realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
+      // GPU reconstruction is a separate bounded job. It never blocks the map
+      // profile response; when ready it publishes only the photoreal subtree.
+      const refreshed=(await db.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_astra_assets,realcity_profile FROM shaurmeg_markers WHERE id=$1",[id])).rows[0];
+      if(refreshed)photoreal.queue(refreshed,refreshed.realcity_profile||{}).catch(e=>console.warn('RealCity photoreal queue',id,e.message));
       return profile;
     }catch(e){
       console.error('realcity',id,e.message);
@@ -55,4 +60,4 @@ async function bootstrap(){
   const q=await db.query("SELECT id,realcity_status,realcity_profile FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
   q.rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8).forEach(x=>queue(x.id)?.catch(()=>{}));
 }
-module.exports={queue,bootstrap,installPhotoRelease,needsRefresh,PROFILE_VERSION};
+module.exports={queue,bootstrap,installPhotoRelease,needsRefresh,PROFILE_VERSION,photoreal};

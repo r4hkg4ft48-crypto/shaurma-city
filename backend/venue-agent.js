@@ -255,6 +255,92 @@ function inferFreeform(text){
   return null;
 }
 
+
+const ACTION_HEAD='(?:сделай|поставь|установи|измени|поменяй|подними|увеличь|снизь|уменьши|убери|сними|верни|добавь|оставь|скрой|покажи|выключи|включи|пометь|назначь)';
+
+function splitActionClauses(v){
+  const raw=clean(v).replace(/[.;]+/g,',');
+  return raw.split(new RegExp('\\s*(?:,|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и))\\s*(?='+ACTION_HEAD+'\\b)','i'))
+    .map(clean).filter(Boolean);
+}
+function inferContextAction(text){
+  const raw=clean(text),s=normalize(raw);let m;
+  if(!raw)return null;
+
+  m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)?\s*(?:цен[ау])?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_context',price:Number(String(m[1]).replace(',','.'))};
+
+  m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)\s+цен[ау]\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_context',price:Number(String(m[1]).replace(',','.'))};
+
+  m=raw.match(/^(?:подними|увеличь)\s+(?:цен[ау]\s+)?(?:на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_delta',delta:Math.abs(Number(String(m[1]).replace(',','.')))};
+
+  m=raw.match(/^(?:снизь|уменьши)\s+(?:цен[ау]\s+)?(?:на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_delta',delta:-Math.abs(Number(String(m[1]).replace(',','.')))};
+
+  if(/^(?:(?:временно|пока)\s+)?(?:убери|сними|выключи)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:из\s+)?(?:продажи|наличия)$/i.test(raw)||
+     /^(?:пока\s+)?(?:не\s+продаем|не\s+продаём|не\s+продавай|нет\s+в\s+наличии|закончил[а-яa-z0-9]*)$/i.test(raw))
+    return {intent:'menu_available',available:false};
+
+  if(/^(?:верни|включи|добавь\s+обратно)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:в\s+)?(?:продажу|наличие)$/i.test(raw)||
+     /^(?:снова|опять)\s+(?:есть|продаем|продаём)\s*(?:в\s+наличии)?$/i.test(raw))
+    return {intent:'menu_available',available:true};
+
+  if(/^(?:скрой|убери)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:из\s+меню)?$/i.test(raw))return {intent:'menu_toggle',enabled:false};
+  if(/^(?:покажи|верни|включи)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:в\s+меню)$/i.test(raw))return {intent:'menu_toggle',enabled:true};
+
+  m=raw.match(/^(?:остаток|оставь|пусть\s+останется)\s*(\d+)\s*(?:шт|штук|штуки)?$/i);
+  if(m)return {intent:'menu_stock',value:Number(m[1])};
+  if(/^(?:остаток|запас)\s+(?:безлимит|без\s+ограничений|не\s+считать)$/i.test(raw))return {intent:'menu_stock',value:null};
+
+  m=raw.match(/^(?:вес|сделай\s+вес|поставь\s+вес)\s*(.+)$/i);
+  if(m)return {intent:'menu_weight',value:clean(m[1])};
+
+  m=raw.match(/^(?:бейдж|метка|пометь\s+как)\s+(.+)$/i);
+  if(m)return {intent:'menu_badge',value:clean(m[1])};
+
+  if(/^(?:сделай\s+)?(?:рекомендованн[а-я]*|в\s+рекомендации)$/i.test(raw))return {intent:'menu_recommended',enabled:true};
+  if(/^(?:убери|сними)\s+(?:из\s+)?рекомендаци[йи]$/i.test(raw))return {intent:'menu_recommended',enabled:false};
+
+  m=raw.match(/^(?:состав|сделай\s+состав|поставь\s+состав)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_composition',value:clean(m[1])};
+
+  m=raw.match(/^(?:теги|метки)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_tags',value:clean(m[1]).split(/[,;]+/).map(clean).filter(Boolean)};
+
+  if(/^не\s+скрывай\s+(?:из\s+меню)?$/i.test(raw)||/^оставь\s+(?:ее|её|его)?\s*в\s+меню$/i.test(raw))
+    return {intent:'menu_toggle',enabled:true};
+
+  return null;
+}
+function inferItemActionPlan(text){
+  const raw=clean(text);if(!raw)return null;
+  let item='',rest='',m;
+
+  m=raw.match(new RegExp('^(?:у|для)\\s+(.+?)\\s+('+ACTION_HEAD+'\\b.*)$','i'));
+  if(m){item=clean(m[1]);rest=clean(m[2])}
+
+  if(!item){
+    m=raw.match(/^(?:работаем\s+с|работать\s+с|возьми|открой|перейди\s+к)\s+(.+?)[,;]\s*(.+)$/i);
+    if(m){item=clean(m[1]);rest=clean(m[2])}
+  }
+
+  if(!item)return null;
+  const clauses=splitActionClauses(rest);
+  if(!clauses.length)return null;
+  const actions=[];
+  for(const clause of clauses){
+    const parsed=parseCommand(clause);
+    let action=parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:inferContextAction(clause);
+    if(!action)return null;
+    const copy={...action};
+    delete copy.item;
+    actions.push(copy);
+  }
+  return actions.length?{kind:'item_plan',item,actions,source:raw}:null;
+}
+
 function createVenueDialogAgent({DB,commandBus}){
   async function accesses(userId){
     const q=await DB.query(

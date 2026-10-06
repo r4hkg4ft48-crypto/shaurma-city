@@ -540,7 +540,7 @@
         }
       }
       if(token!==focusToken)return;
-      if(astraLayer&&activeRealCityModel){
+      if((astraLayer||photorealLayer)&&activeRealCityModel){
         const cam=activeRealCityModel.camera,offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
         $('#realBadge').textContent=activeRealCityMode==='photoreal'?'REAL CITY · LIVE 3D':activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';

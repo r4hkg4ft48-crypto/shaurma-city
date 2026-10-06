@@ -66,7 +66,14 @@ function sourcePackage(x){
     panoramic:x.panoramic===true,captured_at:x.captured_at||null,
     license:clean(x.license,180),attribution:clean(x.attribution,500),
     image_url:clean(x.image_url,2200),page_url:clean(x.page_url,2200),
-    distance_m:finite(x.distance_m)?Number(x.distance_m):null
+    distance_m:finite(x.distance_m)?Number(x.distance_m):null,
+    match:x.match&&typeof x.match==='object'?{
+      building_id:clean(x.match.building_id,120),
+      edge_index:Number.isInteger(Number(x.match.edge_index))?Number(x.match.edge_index):null,
+      distance_m:finite(x.match.distance_m)?Number(x.match.distance_m):null,
+      heading_error_deg:finite(x.match.heading_error_deg)?Number(x.match.heading_error_deg):null,
+      quality:finite(x.match.quality)?Number(x.match.quality):null
+    }:null
   };
 }
 
@@ -93,8 +100,14 @@ function shouldEnqueue(profile){
 }
 
 async function buildPackage(marker,profile){
-  const candidates=(await openWorld.collectCandidates(marker)).filter(x=>x?.image_url&&x?.coordinates?.length===2).slice(0,MAX_SOURCES);
-  const sources=candidates.map(sourcePackage);
+  const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
+  const raw=await openWorld.collectCandidates(marker);
+  const candidates=openWorld._internals.diversify(raw.filter(x=>x?.image_url&&x?.coordinates?.length===2&&openWorld._internals.canPersistAdaptation(x)),marker,MAX_SOURCES);
+  const sources=candidates.map(x=>{
+    const ref=refs.get(String(x.source)+':'+String(x.id));
+    const distance=openWorld._internals.haversine(x.coordinates,[Number(marker.lon),Number(marker.lat)]);
+    return sourcePackage({...x,distance_m:distance,match:ref?.match||null});
+  });
   const scene=profile.scene||{};
   return {
     schema:'shaurmeg.realcity.reconstruction.package.v1',

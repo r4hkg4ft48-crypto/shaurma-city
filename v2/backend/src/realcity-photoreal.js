@@ -149,11 +149,11 @@ function verifyCallback(body,sig){
   return !!config.REALCITY_RECONSTRUCTION_SECRET&&safeEqual(resultSignature(body),sig);
 }
 function validateChunk(c){
-  if(!c||!/^rcsp1-base64$/.test(c.codec||'')||!/^[a-z0-9_-]{1,60}$/i.test(String(c.id||'')))throw new Error('photoreal_invalid_chunk');
+  if(!c||!/^rcsp[12]-base64$/.test(c.codec||'')||!/^[a-z0-9_-]{1,60}$/i.test(String(c.id||'')))throw new Error('photoreal_invalid_chunk');
   if(!Number.isInteger(c.point_count)||c.point_count<100||c.point_count>config.REALCITY_RECONSTRUCTION_MAX_POINTS)throw new Error('photoreal_invalid_points');
   if(typeof c.data!=='string'||!/^[A-Za-z0-9+/=]+$/.test(c.data)||c.data.length>MAX_ARTIFACT_B64)throw new Error('photoreal_invalid_data');
   if(!Array.isArray(c.bounds_min)||!Array.isArray(c.bounds_max)||c.bounds_min.length!==3||c.bounds_max.length!==3||[...c.bounds_min,...c.bounds_max].some(v=>!finite(v)))throw new Error('photoreal_invalid_bounds');
-  return {id:String(c.id),lod:Math.max(0,Math.min(3,Number(c.lod)||0)),codec:'rcsp1-base64',point_count:c.point_count,data:c.data,
+  return {id:String(c.id),lod:Math.max(0,Math.min(3,Number(c.lod)||0)),codec:String(c.codec),point_count:c.point_count,data:c.data,
     bounds_min:c.bounds_min.map(Number),bounds_max:c.bounds_max.map(Number),byte_size:Math.ceil(c.data.length*.75),
     min_zoom:finite(c.min_zoom)?Number(c.min_zoom):16.8,max_zoom:finite(c.max_zoom)?Number(c.max_zoom):24};
 }

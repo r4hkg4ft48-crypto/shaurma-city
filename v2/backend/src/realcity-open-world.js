@@ -264,7 +264,6 @@ function mixColors(list,fallback){
 }
 
 async function analyzeImage(buffer){
-  const sharp=require('sharp');
   const {data,info}=await sharp(buffer,{limitInputPixels:32000000}).rotate().resize({width:384,height:288,fit:'inside',withoutEnlargement:true}).removeAlpha().raw().toBuffer({resolveWithObject:true});
   const w=info.width,h=info.height,ch=info.channels;if(w<64||h<48||ch<3)throw new Error('open_world_image_too_small');
   const lum=new Float32Array(w*h),cols=new Float32Array(w),rows=new Float32Array(h),hist=new Map();

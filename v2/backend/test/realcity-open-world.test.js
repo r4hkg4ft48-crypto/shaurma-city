@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
+const sharp=require('sharp');
 const O=require('../src/realcity-open-world');
 const S=require('../../frontend/realcity-spatial');
 
@@ -65,4 +66,35 @@ test('street observation is matched to a concrete building edge',()=>{
   assert.equal(hit.building.id,'hero');
   assert.ok(Number.isInteger(hit.edge.index));
   assert.ok(hit.quality>0);
+});
+
+
+test('derived open image becomes a bounded facade material on exactly one edge',async()=>{
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560">
+    <rect width="900" height="560" fill="#b4775f"/>
+    <rect y="430" width="900" height="130" fill="#33383a"/>
+    <g fill="#263844" stroke="#e0d4c5" stroke-width="11">
+      <rect x="90" y="85" width="130" height="110"/><rect x="385" y="85" width="130" height="110"/><rect x="680" y="85" width="130" height="110"/>
+      <rect x="90" y="250" width="130" height="110"/><rect x="385" y="250" width="130" height="110"/><rect x="680" y="250" width="130" height="110"/>
+    </g>
+  </svg>`;
+  const buffer=await sharp(Buffer.from(svg)).jpeg({quality:92}).toBuffer();
+  const candidate={source:'panoramax',id:'p-texture',coordinates:[37,54.99978],heading:0,fov:78,panoramic:false,license:'etalab-2.0',attribution:'Panoramax test'};
+  const analysis=await O.analyzeImage(buffer),hit=O.nearestAssignment(candidate,analysis,scene);
+  assert.ok(hit);
+  const material=await O.buildFacadeMaterial(buffer,candidate,hit,'panoramax:p-texture');
+  assert.ok(material);
+  assert.equal(material.mode,'facade');
+  assert.match(material.data_url,/^data:image\/webp;base64,/);
+  assert.ok(material.width<=640);
+  assert.ok(material.height>=300&&material.height<=960);
+
+  const obs=[{reference_id:'panoramax:p-texture',building_id:String(hit.building.id),edge_index:hit.edge.index,quality:.82,analysis,material_id:material.id,material}];
+  const refs=[{id:'panoramax:p-texture',source:'panoramax',source_id:'p-texture',license:'etalab-2.0',attribution:'Panoramax test',page_url:'https://api.panoramax.xyz/'}];
+  const model=O.compileModel(marker,scene,obs,refs);
+  assert.equal(model.materials.length,1);
+  const facade=model.buildings.find(x=>x.building_id===String(hit.building.id)).facades.find(x=>x.edge_index===hit.edge.index);
+  assert.equal(facade.material_id,material.id);
+  assert.equal(facade.evidence,'observed');
+  assert.equal(facade.modules.length,0);
 });

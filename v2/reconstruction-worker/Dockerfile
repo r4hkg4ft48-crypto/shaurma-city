@@ -11,6 +11,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 WORKDIR /app
 COPY v2/reconstruction-worker/requirements.txt /app/requirements.txt
 RUN python -m pip install --upgrade pip && pip install -r /app/requirements.txt
+RUN python - <<'PY'
+from transformers import AutoImageProcessor,AutoModelForDepthEstimation
+model='depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf'
+AutoImageProcessor.from_pretrained(model)
+AutoModelForDepthEstimation.from_pretrained(model)
+print('cached',model)
+PY
 
 COPY v2/reconstruction-worker/app.py /app/app.py
 

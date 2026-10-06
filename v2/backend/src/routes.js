@@ -234,7 +234,7 @@ router.get('/map/points',async(req,res)=>{
         CASE WHEN $1::boolean THEN jsonb_strip_nulls(jsonb_build_object(
           'version',m.realcity_profile->'version','camera',m.realcity_profile->'camera',
           'palette',m.realcity_profile->'palette'
-        )) ELSE (m.realcity_profile - 'astra') END realcity_profile,m.realcity_quality,m.updated_at,
+        )) ELSE (m.realcity_profile - ARRAY['astra','real_world']) END realcity_profile,m.realcity_quality,m.updated_at,
         (jsonb_array_length(v.menu)>0) has_menu
       FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
       WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE

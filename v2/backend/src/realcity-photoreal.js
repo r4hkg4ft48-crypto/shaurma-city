@@ -127,7 +127,7 @@ function buildPayload(marker,profile,assets,sources,inputSignature,jobId){
 }
 function artifactDigest(artifact){
   const chunks=(artifact?.chunks||[]).map(c=>{
-    let digest='';try{digest=hash(Buffer.from(String(c?.data||''),'base64'))}catch{}
+    let digest='';try{digest=crypto.createHash('sha256').update(Buffer.from(String(c?.data||''),'base64')).digest('hex')}catch{}
     return [String(c?.id||''),Number(c?.point_count)||0,digest].join(':');
   }).join(';');
   return hash([String(artifact?.engine||''),String(artifact?.input_signature||''),String(artifact?.target?.marker_id||''),(artifact?.origin||[]).join(','),chunks].join('|'));

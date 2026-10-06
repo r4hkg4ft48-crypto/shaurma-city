@@ -14,7 +14,8 @@ async function call(method,body={},attempt=0){
   const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body)
+    body:JSON.stringify(body),
+    signal:AbortSignal.timeout(8000)
   });
   const j=await r.json().catch(()=>({}));
   if((r.status===429||j.error_code===429)&&attempt<3){

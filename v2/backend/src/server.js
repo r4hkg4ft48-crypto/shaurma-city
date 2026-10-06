@@ -28,6 +28,5 @@ ensureSchema()
  .then(()=>realcity.bootstrap())
  .then(()=>channelBot.bootstrap())
  .then(()=>telegram.sync())
- .then(()=>channelBot.sync())
  .catch(e=>console.error('bootstrap',e.message))
- .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);channelBot.publishLaunchMissing().then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel launch publish',e.message))}));
+ .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);channelBot.sync().then(()=>channelBot.publishLaunchMissing()).then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel bot post-start sync',e.message))}));

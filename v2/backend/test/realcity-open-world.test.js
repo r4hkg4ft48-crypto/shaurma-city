@@ -98,3 +98,19 @@ test('derived open image becomes a bounded facade material on exactly one edge',
   assert.equal(facade.evidence,'observed');
   assert.equal(facade.modules.length,0);
 });
+
+
+test('licensed Commons imagery may become a bounded facade derivative',async()=>{
+  assert.equal(O._internals.canPersistAdaptation({source:'wikimedia',license:'CC BY-SA 4.0'}),true);
+  assert.equal(O._internals.canPersistAdaptation({source:'wikimedia',license:'All Rights Reserved'}),false);
+  const candidate={source:'wikimedia',id:'commons-1',coordinates:[37,54.99978],heading:null,fov:78,panoramic:false,license:'CC BY-SA 4.0',attribution:'Commons test'};
+  const analysis={facade_likelihood:.9,wall:'#b77f62',accent:'#6f5144',windows:'#263944',material:'brick',row_peaks:5,col_peaks:3,storefront_score:.3,balcony_score:.1};
+  const hit=O.nearestAssignment(candidate,analysis,scene);
+  assert.ok(hit);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560"><rect width="900" height="560" fill="#b4775f"/><g fill="#263844"><rect x="100" y="100" width="160" height="120"/><rect x="370" y="100" width="160" height="120"/><rect x="640" y="100" width="160" height="120"/></g></svg>`;
+  const buffer=await sharp(Buffer.from(svg)).jpeg({quality:92}).toBuffer();
+  const material=await O.buildFacadeMaterial(buffer,candidate,hit,'wikimedia:commons-1');
+  assert.ok(material);
+  assert.match(material.data_url,/^data:image\/webp;base64,/);
+  assert.equal(material.license,'CC BY-SA 4.0');
+});

@@ -24,7 +24,7 @@ const MAX_IMAGE_BYTES=7*1024*1024;
 const MAX_TEXTURES=6;
 const STREET_SOURCES=new Set(['panoramax','kartaview','mapillary']);
 const SOURCE_WEIGHT={panoramax:1,kartaview:.92,mapillary:.96,wikimedia:.58};
-const ALLOWED_LICENSE_HINTS=['CC BY-SA 4.0','CC-BY-SA-4.0','CC BY-SA','Licence Ouverte 2.0','etalab-2.0','ODbL'];
+const ALLOWED_LICENSE_HINTS=['CC BY-SA 4.0','CC-BY-SA-4.0','CC BY-SA','CC BY 4.0','CC-BY-4.0','CC BY 3.0','CC-BY-3.0','Public domain','PD','Licence Ouverte 2.0','etalab-2.0','ODbL'];
 
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 const finite=v=>Number.isFinite(Number(v));
@@ -37,7 +37,12 @@ const hexRgb=v=>{const m=String(v||'').match(/^#([0-9a-f]{6})$/i);return m?[pars
 const shade=(v,d)=>{const c=hexRgb(v);return c?rgbHex(c[0]+d,c[1]+d,c[2]+d):v};
 const sourceWeight=s=>SOURCE_WEIGHT[s]||.5;
 function licenseUrlFor(value){const v=String(value||'').toLowerCase();if(v.includes('cc by-sa')||v.includes('cc-by-sa'))return 'https://creativecommons.org/licenses/by-sa/4.0/';if(v.includes('licence ouverte')||v.includes('etalab'))return 'https://www.etalab.gouv.fr/licence-ouverte-open-licence/';if(v.includes('odbl'))return 'https://opendatacommons.org/licenses/odbl/1-0/';return null}
-function canPersistAdaptation(candidate){if(candidate.source==='kartaview')return true;if(candidate.source!=='panoramax')return false;return ALLOWED_LICENSE_HINTS.some(x=>String(candidate.license||'').toLowerCase().includes(x.toLowerCase()))}
+function canPersistAdaptation(candidate){
+  if(candidate.source==='kartaview')return true;
+  if(!['panoramax','wikimedia'].includes(candidate.source))return false;
+  const license=String(candidate.license||'').toLowerCase();
+  return ALLOWED_LICENSE_HINTS.some(x=>license.includes(x.toLowerCase()));
+}
 
 function bbox(marker,radius=210){
   const lat=Number(marker.lat),lon=Number(marker.lon),dy=radius/110540,dx=radius/(111320*Math.max(.2,Math.cos(lat*Math.PI/180)));
@@ -310,8 +315,8 @@ async function analyzeImage(buffer){
 
 async function buildFacadeMaterial(buffer,candidate,assignment,referenceId){
   if(config.REALCITY_OPEN_WORLD_TEXTURES===false||!canPersistAdaptation(candidate))return null;
-  const sharp=require('sharp');
-  if(assignment.heading_error>34||assignment.distance<3||assignment.distance>70)return null;
+  const maxHeading=candidate.heading===null?28:34;
+  if(assignment.heading_error>maxHeading||assignment.distance<3||assignment.distance>70)return null;
   const base=await sharp(buffer,{limitInputPixels:32000000}).rotate().jpeg({quality:92}).toBuffer();
   const meta=await sharp(base).metadata(),w=Number(meta.width),h=Number(meta.height);if(!w||!h||w<256||h<160)return null;
   const a=assignment.edge.coordinates?.[0],b=assignment.edge.coordinates?.[1];if(!a||!b)return null;
@@ -458,7 +463,8 @@ async function reconstruct(marker,scene){
       const assignment=nearestAssignment(c,analysis,scene);if(!assignment||assignment.quality<.08)return;
       const ref=referenceOf(c,analysis,assignment);references.push(ref);
       let material=null;
-      if(textureBudget>0&&assignment.quality>=.13&&STREET_SOURCES.has(c.source)){textureBudget--;try{material=await buildFacadeMaterial(buffer,c,assignment,ref.id)}catch{}}
+      const textureThreshold=c.source==='wikimedia'?.18:.13;
+      if(textureBudget>0&&assignment.quality>=textureThreshold&&canPersistAdaptation(c)){textureBudget--;try{material=await buildFacadeMaterial(buffer,c,assignment,ref.id)}catch{}}
       observations.push({reference_id:ref.id,building_id:String(assignment.building.id),edge_index:assignment.edge.index,quality:assignment.quality,analysis,material_id:material?.id||null,material});
     }catch{}
   }));
@@ -474,5 +480,5 @@ async function reconstruct(marker,scene){
 
 module.exports={
   ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
-  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig}
+  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation}
 };

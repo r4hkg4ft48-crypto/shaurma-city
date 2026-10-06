@@ -37,3 +37,17 @@ test('photoreal freshness is tied to RealCity profile version',()=>{
   assert.equal(R.shouldEnqueue({...fresh,version:15}),true);
   assert.equal(R.shouldEnqueue({version:14}),true);
 });
+
+
+test('reconstruction source sweep keeps many licensed observations while bounding one provider',()=>{
+  const marker={lon:37.8,lat:55.7};
+  const rows=Array.from({length:50},(_,i)=>({
+    id:'w'+i,source:'wikimedia',image_url:'https://upload.wikimedia.org/'+i+'.jpg',
+    coordinates:[37.8+(i%12)*.0002,55.7+Math.floor(i/12)*.0002],
+    license:'CC BY-SA 4.0'
+  }));
+  const picked=R._internals.reconstructionCandidates(rows,marker,64);
+  assert.ok(picked.length>2,'dense pipeline must not inherit the two-image facade cap');
+  assert.ok(picked.length<=28,'Commons remains bounded');
+  assert.ok(picked.every(x=>Number.isFinite(x.distance_m)));
+});

@@ -26,11 +26,18 @@ function artifact(){
   };
 }
 
-test('photoreal input signature is pinned to geometry and source revision',()=>{
-  const a=P.sceneSignature(marker,profile,[]);
-  const moved={...profile,scene:{...profile.scene,buildings:[{...profile.scene.buildings[0],ring:[[37,55],[37.0002,55],[37.0002,55.0001],[37,55.0001],[37,55]]}]}};
-  assert.notEqual(a,P.sceneSignature(marker,moved,[]));
-  assert.notEqual(a,P.sceneSignature(marker,profile,[{id:'p1',sha256:'abc',category:'main_building',subtype:'facade',priority:4}]));
+test('photoreal input signature is pinned to geometry and enabled source revision',()=>{
+  const before=config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS;
+  try{
+    config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=false;
+    const a=P.sceneSignature(marker,profile,[]);
+    const moved={...profile,scene:{...profile.scene,buildings:[{...profile.scene.buildings[0],ring:[[37,55],[37.0002,55],[37.0002,55.0001],[37,55.0001],[37,55]]}]}};
+    assert.notEqual(a,P.sceneSignature(marker,moved,[]));
+    const privateAssets=[{id:'p1',sha256:'abc',category:'main_building',subtype:'facade',priority:4}];
+    assert.equal(a,P.sceneSignature(marker,profile,privateAssets),'disabled private photos must not invalidate an open-only world');
+    config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=true;
+    assert.notEqual(a,P.sceneSignature(marker,profile,privateAssets),'opted-in private photos must bind the reconstruction signature');
+  }finally{config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=before}
 });
 
 test('RCSP2 validates exact binary layout and bounds',()=>{

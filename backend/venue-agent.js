@@ -9,7 +9,6 @@ const SYN=[
   [/шавух[а-яa-z0-9]*/g,'шаурма'],
   [/\bшава\b/g,'шаурма'],
   [/картош[а-яa-z0-9]*/g,'картофель'],
-  [/сырн[а-яa-z0-9]*/g,'сыр'],
   [/клас+ич[а-яa-z0-9]*/g,'классика'],
   [/говяж[а-яa-z0-9]*/g,'говядина'],
   [/курин[а-яa-z0-9]*/g,'курица'],
@@ -48,30 +47,35 @@ function similarity(a,b){
   const na=normalize(a),nb=normalize(b);
   if(!na||!nb)return 0;
   if(na===nb)return 1;
-  if(na.includes(nb)||nb.includes(na))return Math.min(.97,.80+Math.min(na.length,nb.length)/Math.max(na.length,nb.length)*.17);
   const at=[...new Set(tokens(na))],bt=[...new Set(tokens(nb))];
-  let overlap=0;
-  for(const x of at)if(bt.includes(x))overlap++;
-  const tokenScore=at.length?overlap/at.length:0;
-  const reverse=bt.length?overlap/bt.length:0;
+  if(!at.length||!bt.length)return 0;
+
+  const tokenSim=(x,y)=>{
+    if(x===y)return 1;
+    const edit=1-levenshtein(x,y)/Math.max(x.length,y.length);
+    if(x.length>=4&&y.length>=4&&(x.startsWith(y)||y.startsWith(x)))return Math.max(.92,edit);
+    return Math.max(0,edit);
+  };
+  const bestFor=(src,dst)=>src.map(x=>{
+    let best=0;
+    for(const y of dst)best=Math.max(best,tokenSim(x,y));
+    return best;
+  });
+
+  const qScores=bestFor(at,bt),cScores=bestFor(bt,at);
+  const queryCoverage=qScores.reduce((s,x)=>s+x,0)/at.length;
+  const candidateCoverage=cScores.reduce((s,x)=>s+x,0)/bt.length;
+  const strongQuery=qScores.filter(x=>x>=.88).length/at.length;
+  const strongCandidate=cScores.filter(x=>x>=.88).length/bt.length;
   const edit=1-levenshtein(na,nb)/Math.max(na.length,nb.length);
-  const fuzzy=at.length?at.map(x=>{
-    let best=0;
-    for(const y of bt){
-      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
-      if(s>best)best=s;
-    }
-    return best;
-  }).reduce((s,x)=>s+x,0)/at.length:0;
-  const fuzzyReverse=bt.length?bt.map(y=>{
-    let best=0;
-    for(const x of at){
-      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
-      if(s>best)best=s;
-    }
-    return best;
-  }).reduce((s,x)=>s+x,0)/bt.length:0;
-  return Math.max(edit*.72,tokenScore*.65+reverse*.25,tokenScore===1?.93:0,fuzzy*.72+fuzzyReverse*.20);
+  const exactContain=na.includes(nb)||nb.includes(na);
+
+  // Query coverage dominates: "сырная шаурма" must not collapse to an item matching only "сыр".
+  let score=queryCoverage*.67+candidateCoverage*.20+Math.max(0,edit)*.13;
+  if(strongQuery===1)score=Math.max(score,.90+strongCandidate*.08);
+  if(exactContain&&strongQuery>=.5)score=Math.max(score,.84+strongQuery*.10);
+  if(at.length>=2&&strongQuery<1)score*=.78;
+  return Math.max(0,Math.min(1,score));
 }
 function itemText(item,categoryName=''){
   return [
@@ -319,10 +323,11 @@ function createVenueDialogAgent({DB,commandBus}){
     return menu.map(item=>{
       const section=secs.find(x=>String(x.id)===String(item.c||item.category||''));
       const names=[item?.n,item?.name,...(aliasMap.get(String(item.id))||[])].filter(Boolean);
-      let score=0,source='';
-      for(const n of names){const s=similarity(query,n);if(s>score){score=s;source=n}}
-      score=Math.max(score,similarity(query,itemText(item,section?.name||''))*.82);
-      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,source,type:'item',category_id:String(item.c||item.category||'')};
+      let titleScore=0,source='';
+      for(const n of names){const s=similarity(query,n);if(s>titleScore){titleScore=s;source=n}}
+      const metadataScore=similarity(query,itemText(item,section?.name||''))*.72;
+      const score=Math.max(titleScore,metadataScore);
+      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,titleScore,source,type:'item',category_id:String(item.c||item.category||'')};
     }).filter(x=>x.score>=.35).sort((a,b)=>b.score-a.score).slice(0,8);
   }
   async function rankCategories(venue,query){
@@ -338,8 +343,9 @@ function createVenueDialogAgent({DB,commandBus}){
   function decisive(ranked){
     if(!ranked.length)return null;
     const a=ranked[0],b=ranked[1];
-    if(a.score>=.985)return a;
-    if(a.score>=.94&&(!b||a.score-b.score>=.18))return a;
+    if(a.score>=.995)return a;
+    if(a.score>=.965&&(!b||a.score-b.score>=.12))return a;
+    if(a.titleScore>=.97&&(!b||a.titleScore-(b.titleScore||b.score)>=.16))return a;
     return null;
   }
   async function ask(userId,kind,payload,candidates,title){

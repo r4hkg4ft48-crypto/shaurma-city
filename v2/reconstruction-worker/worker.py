@@ -312,6 +312,20 @@ def local_xy(origin,p):
     y=(lat-lat0)*110540.0
     return x,y
 
+def matched_target(source:dict,scene:dict):
+    match=source.get("match") if isinstance(source.get("match"),dict) else None
+    if not match:return None
+    bid=str(match.get("building_id") or "")
+    try:edge_index=int(match.get("edge_index"))
+    except Exception:return None
+    for building in scene.get("buildings",[]):
+        if str(building.get("id"))!=bid:continue
+        ring=building.get("ring") or []
+        if 0<=edge_index<len(ring)-1:
+            a,b=ring[edge_index],ring[edge_index+1]
+            return [(float(a[0])+float(b[0]))/2,(float(a[1])+float(b[1]))/2]
+    return None
+
 def metric_depth(relative:np.ndarray,anchor:float,radius:float)->np.ndarray:
     finite=np.isfinite(relative)&(relative>0)
     if not finite.any():return np.full_like(relative,anchor,dtype=np.float32)
@@ -336,16 +350,18 @@ def metric_depth(relative:np.ndarray,anchor:float,radius:float)->np.ndarray:
     d=anchor*med/np.maximum(inv,.06)
     return np.clip(d,1.2,min(max(radius*1.25,45),180)).astype(np.float32)
 
-def frame_points(frame:Frame,origin,radius,target_points:int):
+def frame_points(frame:Frame,origin,scene,radius,target_points:int):
     rgb=frame.image;rel=frame.depth
     h,w=rgb.shape[:2]
     source=frame.source
     cam=source.get("coordinates") or origin
     cx,cy=local_xy(origin,cam)
-    target_dist=source.get("distance_m")
+    match=source.get("match") if isinstance(source.get("match"),dict) else {}
+    target_dist=match.get("distance_m") if isinstance(match.get("distance_m"),(int,float)) else source.get("distance_m")
     if not isinstance(target_dist,(int,float)) or not math.isfinite(float(target_dist)):
-        target_dist=haversine_m(cam,origin)
-    anchor=max(5,min(80,float(target_dist or 28)))
+        target=matched_target(source,scene)
+        target_dist=haversine_m(cam,target or origin)
+    anchor=max(5,min(100,float(target_dist or 28)))
     depth=metric_depth(rel,anchor,radius)
     fov=float(source.get("fov") or 78)
     if source.get("panoramic"):fov=90.0
@@ -353,7 +369,8 @@ def frame_points(frame:Frame,origin,radius,target_points:int):
     fx=w/(2*math.tan(math.radians(fov)/2));fy=fx
     heading=source.get("heading")
     if not isinstance(heading,(int,float)) or not math.isfinite(float(heading)):
-        heading=bearing_deg(cam,origin)
+        target=matched_target(source,scene)
+        heading=bearing_deg(cam,target or origin)
     yaw=math.radians(float(heading))
     forward=np.array([math.sin(yaw),math.cos(yaw),0.0],np.float32)
     right=np.array([math.cos(yaw),-math.sin(yaw),0.0],np.float32)
@@ -449,7 +466,7 @@ def reconstruct(job_id,package,engine:DepthEngine):
     per=max(24000,min(90000,int(target_total*2.2/max(1,len(frames)))))
     ps=[];cs=[]
     for i,f in enumerate(frames):
-        p,c=frame_points(f,origin,radius,per)
+        p,c=frame_points(f,origin,package["scene"],radius,per)
         if len(p):ps.append(p);cs.append(c)
         heartbeat(job_id,"unproject",frame=i+1,total=len(frames),raw_points=sum(len(x) for x in ps))
     if not ps and not len(colmap_points):raise RuntimeError("no_valid_dense_points")

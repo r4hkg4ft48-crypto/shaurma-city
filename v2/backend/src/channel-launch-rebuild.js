@@ -1,5 +1,7 @@
 'use strict';
 
+// Clean channel launch rebuild.
+
 const config=require('./config');
 const db=require('./db');
 const content=require('./channel-content');

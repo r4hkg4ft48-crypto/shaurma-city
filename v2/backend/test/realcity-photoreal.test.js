@@ -85,3 +85,31 @@ test('RCSP2 browser decoder preserves anisotropic scale and quaternion',()=>{
   assert.ok(out[13]>.85&&out[14]>.9);
   assert.equal(out[15],2);
 });
+
+
+test('photoreal candidate sweep does not inherit two-image Commons cap',()=>{
+  const rows=Array.from({length:48},(_,i)=>({
+    id:'commons-'+i,source:'wikimedia',coordinates:[37+(i%12)*.00015,55+Math.floor(i/12)*.00015],
+    image_url:'https://upload.wikimedia.org/'+i+'.jpg',license:'CC BY-SA 4.0'
+  }));
+  const picked=P._internals.photorealCandidates(rows,marker,72,360);
+  assert.ok(picked.length>2);
+  assert.ok(picked.length<=32);
+  assert.ok(picked.every(x=>Number.isFinite(x.distance_m)));
+});
+
+test('photoreal source sweep rejects distant unrelated imagery',()=>{
+  const near={id:'near',source:'wikimedia',coordinates:[37.0002,55.0001],image_url:'https://upload.wikimedia.org/near.jpg',license:'CC BY-SA 4.0'};
+  const far={id:'far',source:'wikimedia',coordinates:[37.03,55.03],image_url:'https://upload.wikimedia.org/far.jpg',license:'CC BY-SA 4.0'};
+  const picked=P._internals.photorealCandidates([near,far],marker,72,320);
+  assert.equal(picked.some(x=>x.id==='near'),true);
+  assert.equal(picked.some(x=>x.id==='far'),false);
+});
+
+test('photoreal worker keeps commercial VGGT cache and metric fallback contracts',()=>{
+  const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/model=VGGT\.from_pretrained\(VGGT_MODEL\)\.to\(device\)\.eval\(\)/);
+  assert.match(src,/model=get_vggt\(device\)/);
+  assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
+  assert.doesNotMatch(src,/def get_vggt\([\s\S]{0,500}?model=get_vggt\(device\)/);
+});

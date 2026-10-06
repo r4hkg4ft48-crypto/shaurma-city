@@ -127,7 +127,8 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
             z0=float(np.median(centers[:,2]))
             points[:,2]-=z0; centers[:,2]-=z0
             method="gps-similarity"
-            return points,centers,{"method":method,"rms_m":rms,"scale":scale,"geo_cameras":len(geo_src)}
+            yaw=float(math.degrees(math.atan2(R2[1,0],R2[0,0])))
+            return points,centers,{"method":method,"rms_m":rms,"scale":scale,"yaw_deg":yaw,"geo_cameras":len(geo_src)}
     # Scale the relative reconstruction to the mapped quarter. The geometry is
     # still anchored to the exact marker; confidence reports this weaker mode.
     radial=np.linalg.norm(points[:,:2]-np.median(points[:,:2],axis=0),axis=1)
@@ -150,7 +151,12 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
             R=np.array([[math.cos(a),-math.sin(a)],[math.sin(a),math.cos(a)]])
             points[:,:2]=(R@points[:,:2].T).T; centers[:,:2]=(R@centers[:,:2].T).T
             method="map-scale-heading"
-    return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"geo_cameras":len(geo_src)}
+            yaw_deg=float(math.degrees(a))
+        else:
+            yaw_deg=0.0
+    else:
+        yaw_deg=0.0
+    return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"yaw_deg":yaw_deg,"geo_cameras":len(geo_src)}
 
 def choose_samples(point_maps:np.ndarray,conf:np.ndarray,images:np.ndarray,target:int):
     # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence pixels while
@@ -217,137 +223,44 @@ def voxel_reduce(points,colors,conf,max_points:int):
     ids=np.fromiter(packed.values(),dtype=np.int64)
     return points[ids],colors[ids],conf[ids]
 
-def encode_rcsp(points:np.ndarray,colors:np.ndarray,conf:np.ndarray,radii:np.ndarray|None=None):
+def rotate_quats_z(quats:np.ndarray,yaw_deg:float)->np.ndarray:
+    if not len(quats) or abs(yaw_deg)<1e-7:return quats
+    a=math.radians(yaw_deg)*.5
+    w0,x0,y0,z0=math.cos(a),0.0,0.0,math.sin(a)
+    w,x,y,z=quats[:,0],quats[:,1],quats[:,2],quats[:,3]
+    out=np.empty_like(quats)
+    out[:,0]=w0*w-x0*x-y0*y-z0*z
+    out[:,1]=w0*x+x0*w+y0*z-z0*y
+    out[:,2]=w0*y-x0*z+y0*w+z0*x
+    out[:,3]=w0*z+x0*y-y0*x+z0*w
+    n=np.linalg.norm(out,axis=1,keepdims=True)
+    return out/np.maximum(n,1e-8)
+
+def encode_rcsp2(points:np.ndarray,colors:np.ndarray,conf:np.ndarray,scales:np.ndarray,quats:np.ndarray):
     mn=np.percentile(points,.2,axis=0).astype(np.float32)
     mx=np.percentile(points,99.8,axis=0).astype(np.float32)
     pad=np.maximum((mx-mn)*.015,.05);mn-=pad;mx+=pad
     keep=np.all((points>=mn)&(points<=mx),axis=1)
-    points,colors,conf=points[keep],colors[keep],conf[keep]
+    points,colors,conf,scales,quats=points[keep],colors[keep],conf[keep],scales[keep],quats[keep]
     mid=(mn+mx)/2;half=np.maximum((mx-mn)/2,1e-4)
-    q=np.clip(np.round((points-mid)/half*32767),-32767,32767).astype("<i2")
+    qpos=np.clip(np.round((points-mid)/half*32767),-32767,32767).astype("<i2")
     rgb=np.clip(np.round(colors*255),0,255).astype(np.uint8)
-    cf=np.clip((conf-np.percentile(conf,5))/max(np.percentile(conf,95)-np.percentile(conf,5),1e-6),0,1)
-    cu=np.round(cf*255).astype(np.uint8)
-    # Learned Gaussian scale is preferred; the deterministic fallback enlarges
-    # low-confidence surfels slightly to close tiny holes.
-    if radii is not None:
-        learned=np.asarray(radii)[keep]
-        radius=np.clip(np.round(np.clip(learned,.004,.34)/.0015),1,255).astype(np.uint8)
-    else:
-        radius=np.clip(np.round((.035+(1-cf)*.09)/.0015),1,255).astype(np.uint8)
-    semantic=np.zeros(len(points),dtype=np.uint8)
-    semantic[points[:,2]<.35]=2
-    rec=np.empty((len(points),12),dtype=np.uint8)
-    rec[:,:6]=q.view(np.uint8).reshape(-1,6)
-    rec[:,6:9]=rgb;rec[:,9]=radius;rec[:,10]=cu;rec[:,11]=semantic
+    qscale=np.clip(np.round(np.clip(scales,.001,65.535)*1000),1,65535).astype("<u2")
+    qn=quats/np.maximum(np.linalg.norm(quats,axis=1,keepdims=True),1e-8)
+    qquat=np.clip(np.round(qn*127),-127,127).astype(np.int8)
+    c0=np.asarray(conf,dtype=np.float32)
+    lo,hi=np.percentile(c0,[3,97]) if len(c0)>8 else (float(c0.min()),float(c0.max()))
+    norm=np.clip((c0-lo)/max(float(hi-lo),1e-6),0,1)
+    opacity=np.round(np.clip(.18+.82*c0,0,1)*255).astype(np.uint8)
+    confidence=np.round(norm*255).astype(np.uint8)
+    semantic=np.zeros(len(points),dtype=np.uint8);semantic[points[:,2]<.35]=2
+    rec=np.empty((len(points),22),dtype=np.uint8)
+    rec[:,:6]=qpos.view(np.uint8).reshape(-1,6)
+    rec[:,6:9]=rgb
+    rec[:,9:15]=qscale.view(np.uint8).reshape(-1,6)
+    rec[:,15:19]=qquat.view(np.uint8).reshape(-1,4)
+    rec[:,19]=opacity;rec[:,20]=confidence;rec[:,21]=semantic
     return base64.b64encode(rec.tobytes()).decode(),mn.tolist(),mx.tolist(),len(points)
-
-def refine_cameras_with_ba(images,depth_conf,points_3d,extrinsic,intrinsic,dtype):
-    if not USE_BA or len(extrinsic)<4:
-        return extrinsic,intrinsic,{"bundle_adjustment":False}
-    try:
-        import torch
-        import pycolmap
-        from vggt.dependency.track_predict import predict_tracks
-        from vggt.dependency.np_to_pycolmap import batch_np_matrix_to_pycolmap
-        with torch.autocast(device_type="cuda",dtype=dtype):
-            tracks,vis,track_conf,tracked_points,points_rgb=predict_tracks(
-                images,conf=depth_conf,points_3d=points_3d,masks=None,
-                max_query_pts=min(4096,max(1536,len(extrinsic)*192)),
-                query_frame_num=min(len(extrinsic),10),
-                keypoint_extractor="aliked+sp",fine_tracking=True)
-        mask=vis>.2
-        reconstruction,valid=batch_np_matrix_to_pycolmap(
-            tracked_points,extrinsic,intrinsic,tracks,np.array(images.shape[-2:]),
-            masks=mask,max_reproj_error=7.0,shared_camera=False,camera_type="PINHOLE",points_rgb=points_rgb)
-        if reconstruction is None: raise RuntimeError("ba_reconstruction_empty")
-        opts=pycolmap.BundleAdjustmentOptions()
-        pycolmap.bundle_adjustment(reconstruction,opts)
-        out_e=[];out_i=[]
-        for i in range(len(extrinsic)):
-            im=reconstruction.images[i+1]
-            pose=np.asarray(im.cam_from_world().matrix(),dtype=np.float32)
-            cam=reconstruction.cameras[im.camera_id]
-            K=np.asarray(cam.calibration_matrix(),dtype=np.float32)
-            if pose.shape!=(3,4) or K.shape!=(3,3): raise RuntimeError("ba_camera_shape")
-            out_e.append(pose);out_i.append(K)
-        return np.stack(out_e),np.stack(out_i),{"bundle_adjustment":True,"tracks":int(mask.sum())}
-    except Exception as e:
-        return extrinsic,intrinsic,{"bundle_adjustment":False,"ba_error":str(e)[:160]}
-
-def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf):
-    if not USE_GSPLAT or len(points)<3000:
-        radius=np.full(len(points),.045,dtype=np.float32)
-        return points,colors,confidence,radius,{"gaussian_optimized":False}
-    try:
-        import torch
-        import torch.nn.functional as F
-        from gsplat.rendering import rasterization
-        device=images.device
-        max_init=min(len(points),120000)
-        if len(points)>max_init:
-            ids=np.argpartition(confidence,-max_init)[-max_init:]
-            points,colors,confidence=points[ids],colors[ids],confidence[ids]
-        means=torch.nn.Parameter(torch.from_numpy(points).float().to(device))
-        initial=means.detach().clone()
-        color_logits=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(colors,.002,.998)).float().to(device)))
-        scene_extent=float(np.linalg.norm(np.percentile(points,97,axis=0)-np.percentile(points,3,axis=0)))
-        base=max(scene_extent/max(len(points)**(1/3),1)*.32,.0025)
-        scales=torch.nn.Parameter(torch.full((len(points),3),math.log(base),device=device))
-        quats=torch.nn.Parameter(torch.zeros((len(points),4),device=device));quats.data[:,0]=1
-        opacities=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(.22+.62*(confidence-confidence.min())/max(float(confidence.max()-confidence.min()),1e-6),.08,.92)).float().to(device)))
-        opts=[
-          torch.optim.Adam([means],lr=1.2e-4),
-          torch.optim.Adam([scales],lr=3.5e-3),
-          torch.optim.Adam([quats],lr=8e-4),
-          torch.optim.Adam([opacities],lr=2.5e-2),
-          torch.optim.Adam([color_logits],lr=2e-3)
-        ]
-        view=torch.eye(4,device=device).repeat(len(extrinsic),1,1)
-        view[:,:3,:4]=torch.from_numpy(extrinsic).float().to(device)
-        Ks=torch.from_numpy(intrinsic).float().to(device)
-        targets=images.permute(0,2,3,1).contiguous().float().clamp(0,1)
-        conf_t=torch.from_numpy(depth_conf).float().to(device)
-        H,W=targets.shape[1:3]
-        yy=torch.arange(H,device=device)[:,None].expand(H,W)
-        thresholds=torch.quantile(conf_t.reshape(len(conf_t),-1),.28,dim=1)
-        valid=(conf_t>thresholds[:,None,None])&(yy[None]>H*.07)
-        steps=max(120,min(GSPLAT_STEPS,len(extrinsic)*32))
-        losses=[]
-        for step in range(steps):
-            i=(step*7+step//max(1,len(extrinsic)))%len(extrinsic)
-            for opt in opts: opt.zero_grad(set_to_none=True)
-            render,alpha,_=rasterization(
-              means=means,quats=F.normalize(quats,dim=-1),scales=torch.exp(scales),
-              opacities=torch.sigmoid(opacities),colors=torch.sigmoid(color_logits),
-              viewmats=view[i:i+1],Ks=Ks[i:i+1],width=W,height=H,sh_degree=None,
-              packed=True,rasterize_mode="antialiased",near_plane=.005,far_plane=1e5)
-            mask=valid[i]
-            rgb=render[0,...,:3]
-            if mask.any():
-                l1=torch.abs(rgb[mask]-targets[i][mask]).mean()
-                coverage=(1-alpha[0,...,0][mask]).mean()
-            else:
-                l1=torch.abs(rgb-targets[i]).mean();coverage=(1-alpha[0,...,0]).mean()
-            geom=((means-initial)**2).mean()
-            scale_reg=torch.relu(torch.exp(scales).max(dim=1).values-base*8).mean()
-            loss=l1+.018*coverage+2e-5*geom+5e-4*scale_reg
-            loss.backward()
-            for opt in opts: opt.step()
-            with torch.no_grad():
-                scales.clamp_(math.log(base*.18),math.log(base*10))
-                opacities.clamp_(-5.0,5.0)
-                color_logits.clamp_(-7.0,7.0)
-            if step%40==0 or step==steps-1:losses.append(float(loss.detach().cpu()))
-        with torch.no_grad():
-            out_points=means.detach().cpu().numpy()
-            out_colors=torch.sigmoid(color_logits).detach().cpu().numpy()
-            out_conf=torch.sigmoid(opacities).detach().cpu().numpy()
-            out_radius=torch.exp(scales).mean(1).detach().cpu().numpy()
-        return out_points,out_colors,out_conf,out_radius,{"gaussian_optimized":True,"gaussian_steps":steps,"gaussian_loss":losses[-1] if losses else None,"gaussians":len(out_points)}
-    except Exception as e:
-        radius=np.full(len(points),.045,dtype=np.float32)
-        return points,colors,confidence,radius,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
 
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
@@ -385,19 +298,20 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     target=int(job.policy.get("max_points",150000))
     pts,cols,scores,frames=choose_samples(p,cf,ims,target*3)
     pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
-    pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,120000))
-    pts,cols,scores,radii,gs=gsplat_refine(pts,cols,scores,images.squeeze(0),ex,intr_np,cf)
+    pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,140000))
+    pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,images.squeeze(0),ex,intr_np,cf)
     pts,centers,alignment=anchor_points(pts,centers,sources,job.map_anchor["origin"],job.map_anchor)
-    radii=radii*float(alignment.get("scale",1.0))
+    world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
+    quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
     radius=float(job.map_anchor.get("radius_m",190))*1.15
     m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<160)
-    pts,cols,scores,radii=pts[m],cols[m],scores[m],radii[m]
+    pts,cols,scores,scales_xyz,quats=pts[m],cols[m],scores[m],scales_xyz[m],quats[m]
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
     backend="vggt-1b-commercial"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
-    return pts,cols,scores,radii,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba,**gs}
+    return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba,**gs}
 
-def artifact_for(job:Job,points,colors,conf,radii,alignment,stats):
-    data,mn,mx,count=encode_rcsp(points,colors,conf,radii)
+def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
+    data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
@@ -409,8 +323,8 @@ def artifact_for(job:Job,points,colors,conf,radii,alignment,stats):
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,
       "target":job.target,"origin":job.map_anchor["origin"],"anchor":{"building_id":anchor.get("building_id"),"geometry_key":anchor.get("geometry_key")},
-      "representation":"photometric-splats-v1",
-      "chunks":[{"id":"near","lod":0,"codec":"rcsp1-base64","point_count":count,"data":data,"bounds_min":mn,"bounds_max":mx,"min_zoom":16.7,"max_zoom":24}],
+      "representation":"gaussian-splats-v2",
+      "chunks":[{"id":"near","lod":0,"codec":"rcsp2-base64","point_count":count,"data":data,"bounds_min":mn,"bounds_max":mx,"min_zoom":16.7,"max_zoom":24}],
       "alignment":alignment,"quality":quality,"sources":source_meta,
       "stats":{**stats,"points":count,"confidence_mean":quality["confidence_mean"],"dynamic_removed":int(stats.get("dynamic_removed",0))}
     }
@@ -438,9 +352,9 @@ async def run_job(job:Job):
                     continue
             if len(paths)<3: raise RuntimeError("not_enough_decodable_views")
             loop=asyncio.get_running_loop()
-            points,colors,conf,radii,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+            points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
-            artifact=artifact_for(job,points,colors,conf,radii,alignment,stats)
+            artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
         except Exception as e:
             traceback.print_exc()

@@ -5,7 +5,7 @@ const db=require('./db');
 const content=require('./channel-content');
 const assets=require('./channel-assets');
 
-const VERSION='rich-direct-media-20261006-v3';
+const VERSION='rich-direct-media-20261006-v4';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 async function tg(method,body={},attempt=0){

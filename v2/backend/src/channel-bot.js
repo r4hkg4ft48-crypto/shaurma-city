@@ -38,7 +38,7 @@ function allAdminIds(){
 }
 function isAdmin(userId){return allAdminIds().has(String(userId||''))}
 function assetUrl(post){
-  const base=String(config.CHANNEL_ASSET_BASE_URL||'').replace(/\/+$/,'');
+  const base=String(config.CHANNEL_ASSET_BASE_URL||config.PUBLIC_API_URL||'').replace(/\/+$/,'');
   const path=String(post?.media?.path||'').replace(/^\/+/, '');
   return base&&path?base+'/'+path:'';
 }
@@ -105,9 +105,10 @@ async function bootstrap(){
   `);
 }
 
-async function sendText(chatId,text,replyMarkup=null){
+async function sendText(chatId,text,replyMarkup=null,opts={}){
   const body={chat_id:chatId,text:String(text||'').slice(0,4090),disable_web_page_preview:true};
   if(replyMarkup)body.reply_markup=replyMarkup;
+  if(opts.parse_mode)body.parse_mode=opts.parse_mode;
   return call('sendMessage',body);
 }
 
@@ -117,6 +118,7 @@ async function postToChannel(post,publishedBy=''){
   const text=String(post.text||'');
   const media=assetUrl(post);
   const buttons=post.cta==='connect'?connectKeyboard():null;
+  const parseMode=post.format||'';
   const messageIds=[];
 
   if(media&&post.media?.kind){
@@ -125,7 +127,7 @@ async function postToChannel(post,publishedBy=''){
       if(text.length<=1000&&['photo','video','animation'].includes(kind)){
         const method={photo:'sendPhoto',video:'sendVideo',animation:'sendAnimation'}[kind];
         const field={photo:'photo',video:'video',animation:'animation'}[kind];
-        const msg=await call(method,{chat_id:chatId,[field]:media,caption:text,...(buttons?{reply_markup:buttons}:{})});
+        const msg=await call(method,{chat_id:chatId,[field]:media,caption:text,...(parseMode?{parse_mode:parseMode}:{}),...(buttons?{reply_markup:buttons}:{})});
         if(msg?.message_id)messageIds.push(msg.message_id);
       }else{
         const method={photo:'sendPhoto',video:'sendVideo',animation:'sendAnimation'}[kind];
@@ -134,16 +136,16 @@ async function postToChannel(post,publishedBy=''){
           const mediaMsg=await call(method,{chat_id:chatId,[field]:media});
           if(mediaMsg?.message_id)messageIds.push(mediaMsg.message_id);
         }
-        const msg=await sendText(chatId,text,buttons);
+        const msg=await sendText(chatId,text,buttons,parseMode?{parse_mode:parseMode}:{});
         if(msg?.message_id)messageIds.push(msg.message_id);
       }
     }catch(e){
       console.warn('channel media fallback',post.slug,e.message);
-      const msg=await sendText(chatId,text,buttons);
+      const msg=await sendText(chatId,text,buttons,parseMode?{parse_mode:parseMode}:{});
       if(msg?.message_id)messageIds.push(msg.message_id);
     }
   }else{
-    const msg=await sendText(chatId,text,buttons);
+    const msg=await sendText(chatId,text,buttons,parseMode?{parse_mode:parseMode}:{});
     if(msg?.message_id)messageIds.push(msg.message_id);
   }
 
@@ -381,6 +383,14 @@ async function sync(){
     const me=await call('getMe',{});
     runtimeUsername=String(me?.username||'');
   }catch(e){console.error('channel bot getMe',e.message)}
+  try{await call('setMyName',{name:'Шаурмег • подключение'})}catch(e){console.warn('channel bot name',e.message)}
+  try{await call('setMyDescription',{description:'Официальный бот Шаурмега: подключение заведения, возможности продукта и заявки на запуск.'})}catch(e){console.warn('channel bot description',e.message)}
+  try{await call('setMyShortDescription',{short_description:'Подключение заведения к Шаурмегу'})}catch(e){console.warn('channel bot short description',e.message)}
+  if(config.CHANNEL_CHAT_ID){
+    try{await call('setChatDescription',{chat_id:config.CHANNEL_CHAT_ID,description:'Шаурмег — карта, меню, заказы, live-статусы и управление заведением в одной Telegram-экосистеме. Подключение — через бота канала.'})}
+    catch(e){console.warn('channel description',e.message)}
+  }
+
   const commands=[
     {command:'start',description:'О Шаурмеге'},
     {command:'connect',description:'Подключить заведение'},
@@ -446,4 +456,27 @@ function install(app){
   });
 }
 
-module.exports={bootstrap,sync,install,postToChannel,unpublish,handleMessage,handleCallback};
+async function publishLaunchMissing(){
+  if(!config.CHANNEL_AUTO_PUBLISH_LAUNCH)return {enabled:false,published:0};
+  if(!config.CHANNEL_CHAT_ID)return {enabled:true,published:0,error:'channel_chat_id_not_configured'};
+  const existing=new Set();
+  if(db.configured){
+    const q=await db.query('SELECT DISTINCT slug FROM shaurmeg_channel_publications WHERE channel_chat_id=$1',[String(config.CHANNEL_CHAT_ID)]);
+    for(const row of q.rows)existing.add(String(row.slug));
+  }
+  let published=0,failed=0;
+  for(const post of content.launch()){
+    if(existing.has(post.slug))continue;
+    try{
+      await postToChannel(post,'auto-launch');
+      published++;
+      await sleep(900);
+    }catch(e){
+      failed++;
+      console.error('channel auto publish',post.slug,e.message);
+    }
+  }
+  return {enabled:true,published,failed};
+}
+
+module.exports={bootstrap,sync,install,postToChannel,unpublish,handleMessage,handleCallback,publishLaunchMissing};

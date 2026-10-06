@@ -320,7 +320,8 @@ function inferItemActionPlan(text){
   const raw=clean(text);if(!raw)return null;
   let item='',rest='',m;
 
-  m=raw.match(new RegExp('^(?:у|для)\\s+(.+?)\\s+('+ACTION_HEAD+'(?:\\s|$).*)  if(m){item=clean(m[1]);rest=clean(m[2])}
+  m=raw.match(new RegExp('^(?:у|для)\\s+(.+?)\\s+('+ACTION_HEAD+'(?:\\s|$).*)$','i'));
+  if(m){item=clean(m[1]);rest=clean(m[2])}
 
   if(!item){
     m=raw.match(/^(?:работаем\s+с|работать\s+с|возьми|открой|перейди\s+к)\s+(.+?)[,;]\s*(.+)$/i);

@@ -19,7 +19,11 @@ WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
 USE_BA=os.getenv("REALCITY_USE_BA","true").lower() not in ("0","false","off","no")
 USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","off","no")
 GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
+ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() not in ("0","false","off","no")
+DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
+_VGGT_CACHE=None
+_DEPTH_CACHE=None
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
 class Job(BaseModel):
@@ -373,9 +377,120 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
         fallback_quats=np.zeros((len(points),4),dtype=np.float32);fallback_quats[:,0]=1
         return points,colors,confidence,fallback_scales,fallback_quats,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
 
+def frame_budget(requested:int)->int:
+    try:
+        import torch
+        if not torch.cuda.is_available():return min(requested,8)
+        total=torch.cuda.get_device_properties(0).total_memory/(1024**3)
+        if total>=75:return min(requested,48)
+        if total>=46:return min(requested,28)
+        if total>=30:return min(requested,20)
+        if total>=20:return min(requested,14)
+        return min(requested,8)
+    except Exception:
+        return min(requested,8)
+
+def get_vggt(device):
+    global _VGGT_CACHE
+    if _VGGT_CACHE is not None:return _VGGT_CACHE
+    from vggt.models.vggt import VGGT
+    # Hugging Face reads HF_TOKEN automatically. Keeping the model resident is
+    # essential: reloading a 1B checkpoint for every venue wastes minutes and VRAM.
+    model=get_vggt(device)
+    _VGGT_CACHE=model
+    return model
+
+def get_depth_engine(device):
+    global _DEPTH_CACHE
+    if _DEPTH_CACHE is not None:return _DEPTH_CACHE
+    from transformers import AutoImageProcessor,AutoModelForDepthEstimation
+    processor=AutoImageProcessor.from_pretrained(DEPTH_MODEL)
+    model=AutoModelForDepthEstimation.from_pretrained(DEPTH_MODEL).to(device).eval()
+    _DEPTH_CACHE=(processor,model)
+    return _DEPTH_CACHE
+
+def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
+    import torch
+    from transformers import AutoImageProcessor,AutoModelForDepthEstimation
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    processor,model=get_depth_engine(device)
+    origin=job.map_anchor["origin"]
+    radius=float(job.map_anchor.get("radius_m",190))
+    target=int(job.policy.get("max_points",150000))
+    all_points=[];all_colors=[];all_conf=[];all_frames=[]
+    used=0
+    for i,(path,source) in enumerate(zip(image_paths,sources)):
+        coords=source.get("coordinates")
+        if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
+            continue
+        im=Image.open(path).convert("RGB")
+        # One common raster size keeps inference bounded and preserves enough
+        # detail for windows, curbs and vegetation on the fallback path.
+        im.thumbnail((768,576),Image.Resampling.LANCZOS)
+        rgb=np.asarray(im)
+        h,w=rgb.shape[:2]
+        inputs=processor(images=im,return_tensors="pt")
+        inputs={k:v.to(device) for k,v in inputs.items()}
+        with torch.inference_mode():
+            if device=="cuda":
+                with torch.autocast("cuda",dtype=torch.float16):
+                    pred=model(**inputs).predicted_depth
+            else:
+                pred=model(**inputs).predicted_depth
+        d=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
+        finite=np.isfinite(d)
+        if not finite.any():continue
+        lo,hi=np.percentile(d[finite],[3,97])
+        disparity=np.clip((d-lo)/max(float(hi-lo),1e-6),0,1)
+        cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        camera_distance=max(5.0,min(80.0,math.hypot(cx,cy)))
+        inv=.12+.88*disparity
+        median=float(np.median(inv[finite]))
+        depth=np.clip(camera_distance*median/np.maximum(inv,.05),1.2,min(radius*1.25,180.0))
+        heading=source.get("heading")
+        if not isinstance(heading,(int,float)):
+            # Point the camera approximately toward the venue only when source
+            # metadata lacks a compass bearing.
+            heading=(math.degrees(math.atan2(-cx,-cy))+360)%360
+        yaw=math.radians(float(heading))
+        forward=np.array([math.sin(yaw),math.cos(yaw),0.0],np.float32)
+        right=np.array([math.cos(yaw),-math.sin(yaw),0.0],np.float32)
+        up=np.array([0.0,0.0,1.0],np.float32)
+        fov=float(source.get("fov") or 78)
+        fov=max(35,min(110,90 if source.get("panoramic") else fov))
+        focal=w/(2*math.tan(math.radians(fov)/2))
+        desired=max(12000,min(45000,int(target*1.8/max(1,len(image_paths)))))
+        step=max(1,int(math.sqrt((w*h)/desired)))
+        ys=np.arange(step//2,h,step,dtype=np.int32);xs=np.arange(step//2,w,step,dtype=np.int32)
+        xx,yy=np.meshgrid(xs,ys)
+        z=depth[yy,xx]
+        xn=(xx.astype(np.float32)-(w-1)/2)/focal
+        yn=(yy.astype(np.float32)-(h-1)/2)/focal
+        rays=forward[None,None,:]+xn[...,None]*right[None,None,:]-yn[...,None]*up[None,None,:]
+        rays/=np.maximum(np.linalg.norm(rays,axis=2,keepdims=True),1e-6)
+        pts=np.array([cx,cy,1.65],np.float32)[None,None,:]+rays*z[...,None]
+        cols=rgb[yy,xx].astype(np.float32)/255
+        rr=np.linalg.norm(pts[...,:2],axis=2)
+        sky=(yy<h*.48)&(cols[...,2]>cols[...,0]*1.08)&(cols[...,2]>cols[...,1]*1.03)&(cols[...,2]>.42)&(z>camera_distance*.8)
+        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-4)&(pts[...,2]<75)&(~sky)
+        if not valid.any():continue
+        p=pts[valid];col=cols[valid]
+        # Confidence favours central pixels and stable mid-range disparity.
+        center=1-np.minimum(1,np.sqrt(((xx[valid]-(w-1)/2)/(w*.55))**2+((yy[valid]-(h-1)/2)/(h*.7))**2))
+        cf=np.clip(.45+.42*center,.2,.9).astype(np.float32)
+        all_points.append(p);all_colors.append(col);all_conf.append(cf);all_frames.append(np.full(len(p),used,dtype=np.int16));used+=1
+    if not all_points:raise RuntimeError("depth_fallback_no_geotagged_views")
+    pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
+    pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
+    pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,140000))
+    scales=np.full((len(pts),3),.075,dtype=np.float32)
+    quats=np.zeros((len(pts),4),dtype=np.float32);quats[:,0]=1
+    alignment={"method":"gps-depth-fallback","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
+    gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
+    return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-small-gps","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
-    from vggt.models.vggt import VGGT
     from vggt.utils.load_fn import load_and_preprocess_images
     from vggt.utils.pose_enc import pose_encoding_to_extri_intri
     from vggt.utils.geometry import unproject_depth_map_to_point_map
@@ -427,10 +542,12 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
-      "geometry":"dense_multi_view_depth","appearance":"source_pixels","alignment":alignment.get("method"),
+      "geometry":"gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth",
+      "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
-      "generated_pixels_only":False
+      "generated_pixels_only":False,
+      "photogrammetric":not bool(stats.get("fallback"))
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,
@@ -454,7 +571,8 @@ async def run_job(job:Job):
     async with SEM:
         root=Path(tempfile.mkdtemp(prefix="realcity_"))
         try:
-            selected=job.sources[:max(3,min(int(job.policy.get("max_frames",24)),len(job.sources)))]
+            requested=max(3,min(int(job.policy.get("max_frames",24)),len(job.sources)))
+            selected=job.sources[:frame_budget(requested)]
             paths=[];kept=[]
             for i,s in enumerate(selected):
                 try:
@@ -464,7 +582,13 @@ async def run_job(job:Job):
                     continue
             if len(paths)<3: raise RuntimeError("not_enough_decodable_views")
             loop=asyncio.get_running_loop()
-            points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+            try:
+                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+            except Exception as primary:
+                if not ALLOW_DEPTH_FALLBACK:raise
+                print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
+                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
+                stats["primary_error"]=str(primary)[:180]
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
@@ -483,7 +607,7 @@ async def health():
         gpu=torch.cuda.get_device_name(0) if cuda else ""
     except Exception:
         cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":VGGT_MODEL,"commercial_checkpoint_required":True}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":VGGT_MODEL,"commercial_checkpoint_required":True,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":DEPTH_MODEL}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

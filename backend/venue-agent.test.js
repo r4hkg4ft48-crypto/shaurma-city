@@ -396,3 +396,98 @@ test('semantic planner splits conjunctions and pronouns',()=>{
   assert.deepEqual(contextPlan.actions.map(x=>x.intent),['menu_price_context','menu_available']);
   assert.deepEqual(inferContextAction('у неё подними цену на 50'),{intent:'menu_price_delta',delta:50});
 });
+
+
+test('natural multi-action sentence resolves one exact dish and builds one atomic plan',async()=>{
+  const ctx={telegram_user_id:'601',establishment_id:'SC-MSK-TALK001234'};
+  const venue={
+    establishment_id:'SC-MSK-TALK001234',
+    name:'Разговорная точка',
+    config:{menu_sections:[
+      {id:'shawarma',name:'Шаурма',active:true,order:0},
+      {id:'extras',name:'Добавки',active:true,order:1}
+    ]},
+    menu:[
+      {id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true,available:true},
+      {id:'cheese',n:'Сыр',c:'extras',p:50,active:true,available:true}
+    ]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const plans=[];
+  const commandBus={
+    async executeItemPlan(x){plans.push(x);return {handled:true,text:'OK'}},
+    async execute(){throw new Error('multi-action request must use atomic plan')},
+    async handle(){throw new Error('resolved request must not be reparsed')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus});
+  const result=await agent.handle({
+    user:{id:601},
+    text:'у сырной шаурмы поставь цену 420 и пока убери из продажи, но не скрывай из меню'
+  });
+
+  assert.equal(result.handled,true);
+  assert.equal(plans.length,1);
+  assert.equal(plans[0].target_item_id,'cheese_shawarma');
+  assert.deepEqual(plans[0].actions.map(x=>x.intent),[
+    'menu_price_context','menu_available','menu_toggle'
+  ]);
+  assert.equal(plans[0].actions[0].price,420);
+  assert.equal(plans[0].actions[1].available,false);
+  assert.equal(plans[0].actions[2].enabled,true);
+});
+
+test('selected dish keeps conversational pronoun context for follow-up plan',async()=>{
+  const ctx={
+    telegram_user_id:'602',
+    establishment_id:'SC-MSK-TALK001234',
+    selected_item_id:'cheese_shawarma',
+    selected_category_id:'shawarma'
+  };
+  const venue={
+    establishment_id:'SC-MSK-TALK001234',
+    name:'Разговорная точка',
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0}]},
+    menu:[{id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true,available:true}]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){return {rows:[]}}
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const plans=[];
+  const commandBus={
+    async executeItemPlan(x){plans.push(x);return {handled:true,text:'OK'}},
+    async execute(){throw new Error('follow-up plan must stay atomic')},
+    async handle(){throw new Error('follow-up must not be reparsed')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus});
+  const result=await agent.handle({
+    user:{id:602},
+    text:'там подними цену на 20 и пока убери из продажи'
+  });
+
+  assert.equal(result.handled,true);
+  assert.equal(plans.length,1);
+  assert.equal(plans[0].target_item_id,'cheese_shawarma');
+  assert.equal(plans[0].actions[0].intent,'menu_price_context');
+  assert.equal(plans[0].actions[0].price,410);
+  assert.equal(plans[0].actions[1].intent,'menu_available');
+  assert.equal(plans[0].actions[1].available,false);
+});

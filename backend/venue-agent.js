@@ -556,6 +556,9 @@ function createVenueDialogAgent({DB,commandBus}){
     if(!commands.length||commands.some(x=>!allowed.has(x.intent))){
       return {handled:true,text:'В этой фразе есть изменение, которое пока нельзя безопасно объединить с остальными. Ничего не меняю — сформулируйте эту часть отдельно.'};
     }
+    if(typeof commandBus.executeItemPlan==='function'){
+      return commandBus.executeItemPlan({user,target_item_id:String(item.id),actions:commands});
+    }
     const results=[];
     for(const command of commands){
       const result=await executeResolved(user,command,String(item.n||item.name||''));

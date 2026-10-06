@@ -575,6 +575,86 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {row:q.rows[0],builder:normalized,config:next};
   }
 
+
+  async function executeItemPlan({user,target_item_id,actions=[]}){
+    const resolved=await resolveAccess(user.id,{intent:'menu_item_show'});
+    if(resolved.error)return {handled:true,text:resolved.error};
+    const access=resolved.access;
+    if(!canUse(access,'menu'))return {handled:true,text:'⛔️ У вас нет права menu для этой точки.'};
+
+    const venue=await loadVenue(access.establishment_id);
+    if(!venue)return {handled:true,text:'Точка не найдена.'};
+    const menu=Array.isArray(venue.menu)?venue.menu.map(x=>({...x})):[];
+    const config=venue.config&&typeof venue.config==='object'?{...venue.config}:{};
+    const sections=sectionsFrom(config,menu);
+    const index=menu.findIndex(x=>String(x.id)===String(target_item_id||''));
+    if(index<0)return {handled:true,text:'Позиция уже изменилась или удалена. Ничего не меняю.'};
+
+    const item={...menu[index]};
+    const allowed=new Set([
+      'menu_price_context','menu_available','menu_toggle','menu_weight','menu_stock','menu_badge',
+      'menu_recommended','menu_composition','menu_tags'
+    ]);
+    const normalized=[];
+    for(const raw of (Array.isArray(actions)?actions:[])){
+      const action=raw&&typeof raw==='object'?{...raw}:{};
+      if(!allowed.has(action.intent))return {handled:true,text:'Одна из частей запроса пока не поддерживается в составном изменении. Ничего не изменено.'};
+      if(action.intent==='menu_price_context'){
+        const price=Number(action.price);
+        if(!Number.isFinite(price)||price<0||price>100000)return {handled:true,text:'Цена в запросе выглядит неверно. Ничего не изменено.'};
+        normalized.push({intent:action.intent,price:Math.round(price)});
+      }else if(action.intent==='menu_stock'){
+        if(action.value!==null&&(!Number.isFinite(Number(action.value))||Number(action.value)<0))return {handled:true,text:'Остаток в запросе выглядит неверно. Ничего не изменено.'};
+        normalized.push({intent:action.intent,value:action.value===null?null:Math.min(1000000,Math.floor(Number(action.value)))});
+      }else if(action.intent==='menu_tags'){
+        normalized.push({intent:action.intent,value:(Array.isArray(action.value)?action.value:[]).map(x=>String(x).trim().slice(0,40)).filter(Boolean).slice(0,20)});
+      }else normalized.push(action);
+    }
+    if(!normalized.length)return {handled:true,text:'Не нашёл безопасных изменений для выполнения.'};
+
+    const lines=[];
+    for(const action of normalized){
+      if(action.intent==='menu_price_context'){
+        const old=Number(item.p??item.price??0);item.p=action.price;
+        lines.push('✅ Цена: '+old+' ₽ → '+action.price+' ₽');
+      }else if(action.intent==='menu_available'){
+        item.available=action.available!==false;
+        lines.push('✅ '+(item.available?'Снова в наличии':'Временно снято с продажи'));
+      }else if(action.intent==='menu_toggle'){
+        item.active=action.enabled!==false;
+        lines.push('✅ '+(item.active?'Оставлено в меню':'Скрыто из меню'));
+      }else if(action.intent==='menu_weight'){
+        item.weight=String(action.value||'').slice(0,40);
+        lines.push('✅ Вес: '+(item.weight||'не указан'));
+      }else if(action.intent==='menu_stock'){
+        item.stock=action.value;
+        if(item.stock===0)item.available=false;
+        lines.push('✅ Остаток: '+(item.stock===null?'без ограничений':item.stock));
+      }else if(action.intent==='menu_badge'){
+        item.badge=String(action.value||'').slice(0,40);
+        lines.push('✅ Метка: '+(item.badge||'убрана'));
+      }else if(action.intent==='menu_recommended'){
+        item.recommended=action.enabled===true;
+        lines.push('✅ '+(item.recommended?'Добавлено в рекомендации':'Убрано из рекомендаций'));
+      }else if(action.intent==='menu_composition'){
+        item.composition=String(action.value||'').slice(0,1200);
+        lines.push('✅ Состав обновлён');
+      }else if(action.intent==='menu_tags'){
+        item.tags=action.value;
+        lines.push('✅ Теги: '+(item.tags.join(', ')||'убраны'));
+      }
+    }
+
+    menu[index]=item;
+    await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_menu_plan',{
+      item_id:item.id,
+      intents:normalized.map(x=>x.intent),
+      actions:normalized
+    });
+    await selectItemContext(user.id,item.id);
+    return {handled:true,text:'✅ '+String(item.n||item.name||'Позиция')+'\n'+lines.join('\n')};
+  }
+
   async function handle({user,text,command:providedCommand}){
     const command=providedCommand&&typeof providedCommand==='object'?{...providedCommand}:parseCommand(text);
     if(command.intent==='help')return {handled:true,text:helpText()};
@@ -1168,7 +1248,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
   }
 
   const execute=({user,command})=>handle({user,command});
-  return {handle,execute,setItemImage};
+  return {handle,execute,executeItemPlan,setItemImage};
 }
 
 module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

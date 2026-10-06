@@ -542,10 +542,12 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
-      "geometry":"dense_multi_view_depth","appearance":"source_pixels","alignment":alignment.get("method"),
+      "geometry":"gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth",
+      "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
-      "generated_pixels_only":False
+      "generated_pixels_only":False,
+      "photogrammetric":not bool(stats.get("fallback"))
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,

@@ -35,6 +35,8 @@ const rgbHex=(r,g,b)=>'#'+hex(r)+hex(g)+hex(b);
 const hexRgb=v=>{const m=String(v||'').match(/^#([0-9a-f]{6})$/i);return m?[parseInt(m[1].slice(0,2),16),parseInt(m[1].slice(2,4),16),parseInt(m[1].slice(4,6),16)]:null};
 const shade=(v,d)=>{const c=hexRgb(v);return c?rgbHex(c[0]+d,c[1]+d,c[2]+d):v};
 const sourceWeight=s=>SOURCE_WEIGHT[s]||.5;
+function licenseUrlFor(value){const v=String(value||'').toLowerCase();if(v.includes('cc by-sa')||v.includes('cc-by-sa'))return 'https://creativecommons.org/licenses/by-sa/4.0/';if(v.includes('licence ouverte')||v.includes('etalab'))return 'https://www.etalab.gouv.fr/licence-ouverte-open-licence/';if(v.includes('odbl'))return 'https://opendatacommons.org/licenses/odbl/1-0/';return null}
+function canPersistAdaptation(candidate){if(candidate.source==='kartaview')return true;if(candidate.source!=='panoramax')return false;return ALLOWED_LICENSE_HINTS.some(x=>String(candidate.license||'').toLowerCase().includes(x.toLowerCase()))}
 
 function bbox(marker,radius=210){
   const lat=Number(marker.lat),lon=Number(marker.lon),dy=radius/110540,dx=radius/(111320*Math.max(.2,Math.cos(lat*Math.PI/180)));
@@ -95,7 +97,7 @@ function candidateBase(source,id,coords,imageUrl,pageUrl,extra={}){
   return {
     source,id:clean(id,120),coordinates:[Number(coords[0]),Number(coords[1])],
     image_url:image,page_url:page||null,heading:finite(extra.heading)?((Number(extra.heading)%360)+360)%360:null,
-    captured_at:extra.captured_at||null,license:clean(extra.license,100)||null,
+    captured_at:extra.captured_at||null,license:clean(extra.license,100)||null,license_url:safeUrl(extra.license_url)||licenseUrlFor(extra.license),
     attribution:clean(extra.attribution,300)||source,sequence_id:clean(extra.sequence_id,120)||null,
     panoramic:extra.panoramic===true,fov:finite(extra.fov)?clamp(Number(extra.fov),25,360):(extra.panoramic===true?360:78)
   };
@@ -138,10 +140,10 @@ async function collectPanoramax(marker){
       const fov=Number(p['pers:interior_orientation']?.field_of_view)||Number(p.field_of_view)||78;
       const itemLicense=clean(p.license||'',100)||licenseFromConfig(cfg);
       if(p.license&&!/cc[-\s]?by|licen[cs]e ouverte|etalab|odbl|public domain/i.test(String(p.license)))continue;
-      const page='https://api.panoramax.xyz/#focus=pic&pic='+encodeURIComponent(id);
+      const page=(item.links||[]).find(l=>['alternate','self'].includes(String(l.rel||''))&&safeUrl(l.href))?.href||root+'/pictures/'+encodeURIComponent(id);
       const c=candidateBase('panoramax',id,coords,url,page,{
         heading:p['view:azimuth']??p['exif:GPSImgDirection']??p.compass_angle??p.heading,
-        captured_at:p.datetime||p.datetimetz||null,license:itemLicense,
+        captured_at:p.datetime||p.datetimetz||null,license:itemLicense,license_url:licenseUrlFor(itemLicense),
         attribution:producer(item)?'Panoramax · '+producer(item):'Panoramax contributors',
         sequence_id:item.collection||p.collection,panoramic:fov>=300,fov
       });
@@ -183,7 +185,7 @@ async function collectKartaView(marker){
     const c=candidateBase('kartaview',key,coords,image,'https://kartaview.org/map/@'+coords[1]+','+coords[0]+',18z',{
       heading:row.heading??row.compass??row.cameraHeading??row.direction,
       captured_at:row.date_added??row.dateAdded??row.createdAt??row.timestamp??null,
-      license:'CC BY-SA 4.0',attribution:'© Grab and KartaView Contributors',
+      license:'CC BY-SA 4.0',license_url:'https://creativecommons.org/licenses/by-sa/4.0/',attribution:'© Grab and KartaView Contributors',
       sequence_id:row.sequenceId??row.sequence_id,panoramic:fov>=300,fov
     });if(c)out.push(c);
     if(out.length>=48)break;
@@ -203,7 +205,7 @@ async function collectMapillary(marker){
     const coords=row.computed_geometry?.coordinates,author=clean(row.creator?.username||row.creator?.name||'',100);
     const c=candidateBase('mapillary',row.id,coords,row.thumb_1024_url,'https://www.mapillary.com/app/?pKey='+encodeURIComponent(row.id),{
       heading:row.compass_angle,captured_at:row.captured_at?new Date(Number(row.captured_at)).toISOString():null,
-      license:'CC BY-SA (Mapillary imagery; Developer Terms also apply)',
+      license:'CC BY-SA (Mapillary imagery; Developer Terms also apply)',license_url:'https://www.mapillary.com/terms',
       attribution:author?'© Mapillary · '+author:'© Mapillary',panoramic:row.is_pano===true,fov:row.is_pano===true?360:78
     });if(c)out.push(c);
   }
@@ -222,7 +224,7 @@ async function collectWikimedia(marker){
     const author=clean(meta.Artist?.value||meta.Credit?.value||'',140),lic=clean(meta.LicenseShortName?.value||meta.License?.value||'',100);
     if(lic&&!/CC|public domain|PD/i.test(lic))continue;
     const c=candidateBase('wikimedia',page.pageid,[c0.lon,c0.lat],info.thumburl||info.url,info.descriptionurl,{
-      captured_at:meta.DateTimeOriginal?.value||meta.DateTime?.value||null,license:lic||'Wikimedia Commons',
+      captured_at:meta.DateTimeOriginal?.value||meta.DateTime?.value||null,license:lic||'Wikimedia Commons',license_url:meta.LicenseUrl?.value||licenseUrlFor(lic),
       attribution:author?'Wikimedia Commons · '+author:'Wikimedia Commons contributors'
     });if(c)out.push(c);
   }
@@ -307,7 +309,8 @@ async function analyzeImage(buffer){
 }
 
 async function buildFacadeMaterial(buffer,candidate,assignment,referenceId){
-  if(config.REALCITY_OPEN_WORLD_TEXTURES===false||candidate.source==='wikimedia')return null;
+  if(config.REALCITY_OPEN_WORLD_TEXTURES===false||!canPersistAdaptation(candidate))return null;
+  if(assignment.heading_error>34||assignment.distance<3||assignment.distance>70)return null;
   const base=await sharp(buffer,{limitInputPixels:32000000}).rotate().jpeg({quality:92}).toBuffer();
   const meta=await sharp(base).metadata(),w=Number(meta.width),h=Number(meta.height);if(!w||!h||w<256||h<160)return null;
   const a=assignment.edge.coordinates?.[0],b=assignment.edge.coordinates?.[1];if(!a||!b)return null;
@@ -329,7 +332,7 @@ async function buildFacadeMaterial(buffer,candidate,assignment,referenceId){
   const outW=640,outH=clamp(Math.round(outW*facadeHeight/Math.max(3,assignment.edge.length)),300,960);
   const data=await source.resize({width:outW,height:outH,fit:'fill'}).sharpen(.38).webp({quality:74,effort:4}).toBuffer();
   const id='ow_'+crypto.createHash('sha1').update(referenceId+':'+assignment.building.id+':'+assignment.edge.index).digest('hex').slice(0,14);
-  return {id,mode:'facade',data_url:'data:image/webp;base64,'+data.toString('base64'),width:outW,height:outH,roughness:.9,metalness:0,lighting_mix:.18,source_asset_ids:[referenceId],license:candidate.license,attribution:candidate.attribution};
+  return {id,mode:'facade',data_url:'data:image/webp;base64,'+data.toString('base64'),width:outW,height:outH,roughness:.9,metalness:0,lighting_mix:.18,source_asset_ids:[referenceId],license:candidate.license,license_url:candidate.license_url,attribution:candidate.attribution,adapted:true,changes:'cropped to matched facade view, resized, sharpened and encoded as WebP'};
 }
 
 function nearestAssignment(candidate,analysis,scene){
@@ -437,7 +440,7 @@ async function collectCandidates(marker){
 }
 function referenceOf(c,analysis,assignment){
   return {
-    id:c.source+':'+c.id,source:c.source,source_id:c.id,page_url:c.page_url,license:c.license,attribution:c.attribution,
+    id:c.source+':'+c.id,source:c.source,source_id:c.id,page_url:c.page_url,license:c.license,license_url:c.license_url,attribution:c.attribution,
     captured_at:c.captured_at,coordinates:c.coordinates,heading:c.heading,sequence_id:c.sequence_id,
     derived:{facade_likelihood:analysis.facade_likelihood,material:analysis.material,wall:analysis.wall,edge_density:analysis.edge_density},
     match:{building_id:String(assignment.building.id),edge_index:assignment.edge.index,distance_m:Number(assignment.distance.toFixed(1)),heading_error_deg:Number(assignment.heading_error.toFixed(1)),quality:Number(assignment.quality.toFixed(3))}

@@ -92,8 +92,17 @@ test('photoreal candidate sweep does not inherit two-image Commons cap',()=>{
     id:'commons-'+i,source:'wikimedia',coordinates:[37+(i%12)*.00015,55+Math.floor(i/12)*.00015],
     image_url:'https://upload.wikimedia.org/'+i+'.jpg',license:'CC BY-SA 4.0'
   }));
-  const picked=P._internals.photorealCandidates(rows,marker,72);
+  const picked=P._internals.photorealCandidates(rows,marker,72,360);
   assert.ok(picked.length>2);
   assert.ok(picked.length<=32);
   assert.ok(picked.every(x=>Number.isFinite(x.distance_m)));
+});
+
+
+test('photoreal candidate sweep rejects distant unrelated imagery',()=>{
+  const near={id:'near',source:'wikimedia',coordinates:[37.0002,55.0001],image_url:'https://upload.wikimedia.org/near.jpg',license:'CC BY-SA 4.0'};
+  const far={id:'far',source:'wikimedia',coordinates:[37.03,55.03],image_url:'https://upload.wikimedia.org/far.jpg',license:'CC BY-SA 4.0'};
+  const picked=P._internals.photorealCandidates([near,far],marker,72,320);
+  assert.equal(picked.some(x=>x.id==='near'),true);
+  assert.equal(picked.some(x=>x.id==='far'),false);
 });

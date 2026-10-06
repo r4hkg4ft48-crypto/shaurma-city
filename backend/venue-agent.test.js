@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {createVenueDialogAgent,similarity,normalize,inferFreeform}=require('./venue-agent');
+const {createVenueDialogAgent,similarity,normalize,inferFreeform,inferContextAction,inferItemActionPlan,inferContextActionPlan,splitActionClauses}=require('./venue-agent');
 const {parseCommand}=require('./venue-command');
 
 test('normalization tolerates common food slang and inflection',()=>{
@@ -374,4 +374,21 @@ test('uses current dish for pronoun follow-up without asking again',async()=>{
   assert.equal(result.handled,true);
   assert.deepEqual(executed.map(x=>x.intent),['menu_price_context','menu_available']);
   assert.ok(executed.every(x=>x.target_item_id==='cheese_shawarma'));
+});
+
+
+test('semantic planner splits conjunctions and pronouns',()=>{
+  assert.deepEqual(
+    splitActionClauses('поставь цену 420 и временно убери из продажи, но не скрывай из меню'),
+    ['поставь цену 420','временно убери из продажи','не скрывай из меню']
+  );
+  const plan=inferItemActionPlan('у сырной шаурмы поставь цену 420 и временно убери из продажи, но не скрывай из меню');
+  assert.ok(plan);
+  assert.equal(plan.item,'сырной шаурмы');
+  assert.deepEqual(plan.actions.map(x=>x.intent),['menu_price_context','menu_available','menu_toggle']);
+
+  const contextPlan=inferContextActionPlan('там сделай цену 430 и временно убери из продажи');
+  assert.ok(contextPlan);
+  assert.deepEqual(contextPlan.actions.map(x=>x.intent),['menu_price_context','menu_available']);
+  assert.deepEqual(inferContextAction('у неё подними цену на 50'),{intent:'menu_price_delta',delta:50});
 });

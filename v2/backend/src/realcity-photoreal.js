@@ -31,7 +31,7 @@ function sceneSignature(marker,profile,assets=[]){
     engine:ENGINE,target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
-    assets:assets.map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.priority]),
+    assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.priority]),
     open:(profile?.real_world?.references||[]).map(r=>[r.source,r.source_id,r.license,r.coordinates,r.heading])
   });
 }

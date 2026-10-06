@@ -361,6 +361,67 @@ function inferContextActionPlan(text){
   return actions.length>1?{kind:'context_plan',actions,source:clean(text)}:null;
 }
 
+
+function parseHumanNumber(v){
+  const raw=normalize(v).replace(/\b(?:рубл[а-я]*|руб|р|штук[а-я]*|шт)\b/g,' ').replace(/\s+/g,' ').trim();
+  const numeric=raw.match(/-?\d+(?:[.,]\d+)?/);
+  if(numeric)return Number(numeric[0].replace(',','.'));
+  const units={ноль:0,один:1,одна:1,одно:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9};
+  const teens={десять:10,одиннадцать:11,двенадцать:12,тринадцать:13,четырнадцать:14,пятнадцать:15,шестнадцать:16,семнадцать:17,восемнадцать:18,девятнадцать:19};
+  const tens={двадцать:20,тридцать:30,сорок:40,пятьдесят:50,шестьдесят:60,семьдесят:70,восемьдесят:80,девяносто:90};
+  const hundreds={сто:100,двести:200,триста:300,четыреста:400,пятьсот:500,шестьсот:600,семьсот:700,восемьсот:800,девятьсот:900};
+  const words=raw.split(' ').filter(Boolean);
+  let total=0,chunk=0,seen=false;
+  for(const word of words){
+    if(Object.prototype.hasOwnProperty.call(units,word)){chunk+=units[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(teens,word)){chunk+=teens[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(tens,word)){chunk+=tens[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(hundreds,word)){chunk+=hundreds[word];seen=true;continue}
+    if(/^тысяч/.test(word)){total+=(chunk||1)*1000;chunk=0;seen=true;continue}
+    if(!['примерно','около','где','то','гдето'].includes(word))return null;
+  }
+  return seen?total+chunk:null;
+}
+function incompleteSpec(slot,command,question,type='text'){
+  return {slot,command,question,type};
+}
+function inferIncompleteItemRequest(text){
+  const raw=clean(text);let m;
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:сделай|поставь|измени|поменяй|установи)\s+цен[ау]\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('price',{intent:'menu_price_context'},'На какую цену поставить?','money')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|измени|поменяй|установи)?\s*(?:остаток|количество)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_stock'},'Какой остаток поставить?','count')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|измени|поменяй|установи)?\s*вес\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_weight'},'Какой вес указать?','text')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поменяй|измени|обнови)\s+состав\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_composition'},'Какой состав записать?','text')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|добавь|измени)\s+(?:бейдж|метку)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_badge'},'Какую метку поставить?','text')};
+  m=raw.match(/^(?:переименуй|назови\s+по\s+другому)\s+(?:блюдо|позицию)?\s*(.+?)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('name',{intent:'menu_rename'},'Как теперь назвать эту позицию?','text')};
+  m=raw.match(/^(?:перенеси|перемести)\s+(.+?)\s+(?:в\s+другой\s+раздел|в\s+другую\s+категорию|в\s+раздел|в\s+категорию)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('category',{intent:'menu_category_move'},'В какую категорию перенести?','category')};
+  return null;
+}
+function inferIncompleteContextRequest(text){
+  const raw=clean(text);
+  if(/^(?:сделай|поставь|измени|поменяй|установи)\s+цен[ау]\s*$/i.test(raw)||/^цен[ау]\s*$/i.test(raw))
+    return incompleteSpec('price',{intent:'menu_price_context'},'На какую цену поставить?','money');
+  if(/^(?:поставь|измени|поменяй|установи)?\s*(?:остаток|количество)\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_stock'},'Какой остаток поставить?','count');
+  if(/^(?:поставь|измени|поменяй|установи)?\s*вес\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_weight'},'Какой вес указать?','text');
+  if(/^(?:поменяй|измени|обнови)\s+состав\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_composition'},'Какой состав записать?','text');
+  if(/^(?:поставь|добавь|измени)\s+(?:бейдж|метку)\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_badge'},'Какую метку поставить?','text');
+  if(/^(?:переименуй|назови\s+по\s+другому)(?:\s+(?:ее|её|его|позицию|блюдо))?\s*$/i.test(raw))
+    return incompleteSpec('name',{intent:'menu_rename'},'Как теперь назвать эту позицию?','text');
+  if(/^(?:перенеси|перемести)(?:\s+(?:ее|её|его|позицию|блюдо))?\s+(?:в\s+другой\s+раздел|в\s+другую\s+категорию|в\s+раздел|в\s+категорию)\s*$/i.test(raw))
+    return incompleteSpec('category',{intent:'menu_category_move'},'В какую категорию перенести?','category');
+  return null;
+}
+
 function createVenueDialogAgent({DB,commandBus}){
   async function accesses(userId){
     const q=await DB.query(

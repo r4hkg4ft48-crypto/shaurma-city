@@ -333,8 +333,9 @@ function inferItemActionPlan(text){
   if(!clauses.length)return null;
   const actions=[];
   for(const clause of clauses){
-    const parsed=parseCommand(clause);
-    let action=parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:inferContextAction(clause);
+    const contextual=inferContextAction(clause);
+    const parsed=contextual?null:parseCommand(clause);
+    const action=contextual||(parsed&&parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:null);
     if(!action)return null;
     const copy={...action};
     delete copy.item;
@@ -349,8 +350,9 @@ function inferContextActionPlan(text){
   if(clauses.length<2)return null;
   const actions=[];
   for(const clause of clauses){
-    const parsed=parseCommand(clause);
-    let action=parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:inferContextAction(clause);
+    const contextual=inferContextAction(clause);
+    const parsed=contextual?null:parseCommand(clause);
+    const action=contextual||(parsed&&parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:null);
     if(!action)return null;
     const copy={...action};
     delete copy.item;

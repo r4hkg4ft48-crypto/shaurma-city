@@ -1,49 +1,76 @@
-/* RealCity photometric splat renderer.
-   Renders dense source-colour reconstruction directly in MapLibre's WebGL
-   context. No procedural facade geometry, billboard panoramas or detached scene. */
+/* RealCity anisotropic Gaussian renderer.
+   Dense source-colour reconstruction rendered inside MapLibre's WebGL context.
+   RCSP2 carries 3D scales + quaternion + opacity for perspective-correct
+   elliptical splats. RCSP1 remains readable as a compatibility fallback. */
 (function(root){
   'use strict';
-  const S=root.RealCitySpatial,STRIDE=9;
+  const S=root.RealCitySpatial,STRIDE=16;
   const VS=`precision highp float;
 attribute vec3 a_position;
 attribute vec3 a_color;
-attribute float a_radius;
+attribute vec3 a_scale;
+attribute vec4 a_quat;
+attribute float a_opacity;
 attribute float a_confidence;
 attribute float a_semantic;
 uniform mat4 u_matrix;
-uniform float u_pixels_per_meter;
+uniform vec2 u_viewport;
 uniform float u_progress;
 uniform float u_zoom;
 varying vec3 v_color;
+varying vec3 v_inv_cov;
+varying float v_size;
+varying float v_opacity;
 varying float v_confidence;
 varying float v_semantic;
+vec3 qrotate(vec3 v,vec4 q){
+  q=normalize(q);
+  vec3 u=q.yzw;float s=q.x;
+  return 2.0*dot(u,v)*u+(s*s-dot(u,u))*v+2.0*s*cross(u,v);
+}
+vec2 screenDelta(vec4 c,vec4 p){
+  float cw=max(abs(c.w),1e-6),pw=max(abs(p.w),1e-6);
+  return ((p.xy/pw)-(c.xy/cw))*u_viewport*.5;
+}
 void main(){
   float grow=1.0-pow(1.0-clamp(u_progress,0.0,1.0),3.0);
-  vec3 p=a_position;
-  p.z*=grow;
-  gl_Position=u_matrix*vec4(p,1.0);
-  float size=max(1.8,a_radius*u_pixels_per_meter*8.0);
-  size*=mix(.78,1.0,smoothstep(17.0,19.0,u_zoom));
-  gl_PointSize=clamp(size*grow,1.5,16.0);
-  v_color=a_color;
-  v_confidence=a_confidence;
-  v_semantic=a_semantic;
+  vec3 pos=a_position;pos.z*=grow;
+  vec3 sc=max(a_scale*max(grow,.08),vec3(.001));
+  vec4 c=u_matrix*vec4(pos,1.0);
+  gl_Position=c;
+  vec3 ax=qrotate(vec3(sc.x,0.0,0.0),a_quat);
+  vec3 ay=qrotate(vec3(0.0,sc.y,0.0),a_quat);
+  vec3 az=qrotate(vec3(0.0,0.0,sc.z),a_quat);
+  vec2 vx=screenDelta(c,u_matrix*vec4(pos+ax,1.0));
+  vec2 vy=screenDelta(c,u_matrix*vec4(pos+ay,1.0));
+  vec2 vz=screenDelta(c,u_matrix*vec4(pos+az,1.0));
+  float A=dot(vec3(vx.x,vy.x,vz.x),vec3(vx.x,vy.x,vz.x))+.42;
+  float B=vx.x*vx.y+vy.x*vy.y+vz.x*vz.y;
+  float D=dot(vec3(vx.y,vy.y,vz.y),vec3(vx.y,vy.y,vz.y))+.42;
+  float det=max(A*D-B*B,.0001);
+  v_inv_cov=vec3(D/det,-B/det,A/det);
+  float root=sqrt(max(0.0,(A-D)*(A-D)+4.0*B*B));
+  float lambda=max(.25,.5*(A+D+root));
+  float radius=3.15*sqrt(lambda);
+  float size=clamp(radius*2.0,1.8,96.0);
+  gl_PointSize=size;
+  v_size=size;v_color=a_color;v_opacity=a_opacity;v_confidence=a_confidence;v_semantic=a_semantic;
 }`;
   const FS=`precision highp float;
 varying vec3 v_color;
+varying vec3 v_inv_cov;
+varying float v_size;
+varying float v_opacity;
 varying float v_confidence;
 varying float v_semantic;
 void main(){
-  vec2 q=gl_PointCoord*2.0-1.0;
-  float d2=dot(q,q);
-  if(d2>1.0)discard;
-  float gaussian=exp(-d2*2.8);
-  float edge=smoothstep(1.0,.58,d2);
-  float alpha=clamp((.38+.62*v_confidence)*gaussian*edge,0.0,.98);
-  vec3 c=v_color;
-  /* Preserve captured radiance. Only a tiny confidence lift prevents holes;
-     no synthetic sun/shadow is applied to photographic pixels. */
-  c=mix(c,c*1.015,.45*v_confidence);
+  vec2 p=(gl_PointCoord-.5)*v_size;
+  float mahal=v_inv_cov.x*p.x*p.x+2.0*v_inv_cov.y*p.x*p.y+v_inv_cov.z*p.y*p.y;
+  if(mahal>10.0)discard;
+  float gaussian=exp(-.5*mahal);
+  float alpha=clamp(gaussian*v_opacity*(.55+.45*v_confidence),0.0,.985);
+  if(alpha<.018)discard;
+  vec3 c=clamp(v_color,0.0,1.0);
   gl_FragColor=vec4(c*alpha,alpha);
 }`;
   function shader(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const e=gl.getShaderInfoLog(s);gl.deleteShader(s);throw new Error(e)}return s}
@@ -64,22 +91,33 @@ void main(){
     const raw=atob(value),out=new Uint8Array(raw.length);
     for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;
   }
+  function put(out,p,x,y,z,r,g,b,sx,sy,sz,qw,qx,qy,qz,opacity,confidence,semantic){
+    out[p]=x;out[p+1]=y;out[p+2]=z;out[p+3]=r;out[p+4]=g;out[p+5]=b;
+    out[p+6]=sx;out[p+7]=sy;out[p+8]=sz;out[p+9]=qw;out[p+10]=qx;out[p+11]=qy;out[p+12]=qz;
+    out[p+13]=opacity;out[p+14]=confidence;out[p+15]=semantic;
+  }
   function decodeChunk(chunk){
-    if(chunk?.codec!=='rcsp1-base64'||typeof chunk.data!=='string')throw new Error('realcity_splat_codec');
-    const bytes=b64(chunk.data),expected=Number(chunk.point_count)*12;
+    const codec=chunk?.codec,record=codec==='rcsp2-base64'?22:codec==='rcsp1-base64'?12:0;
+    if(!record||typeof chunk.data!=='string')throw new Error('realcity_splat_codec');
+    const bytes=b64(chunk.data),expected=Number(chunk.point_count)*record;
     if(!Number.isInteger(chunk.point_count)||chunk.point_count<1||bytes.byteLength!==expected)throw new Error('realcity_splat_bytes');
     const mn=chunk.bounds_min,mx=chunk.bounds_max;
     if(!Array.isArray(mn)||!Array.isArray(mx)||mn.length!==3||mx.length!==3)throw new Error('realcity_splat_bounds');
     const mid=mn.map((v,i)=>(Number(v)+Number(mx[i]))*.5),half=mn.map((v,i)=>Math.max(1e-4,(Number(mx[i])-Number(v))*.5));
     const out=new Float32Array(chunk.point_count*STRIDE),view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
     for(let i=0;i<chunk.point_count;i++){
-      const o=i*12,p=i*STRIDE;
-      out[p]=mid[0]+view.getInt16(o,true)/32767*half[0];
-      out[p+1]=mid[1]+view.getInt16(o+2,true)/32767*half[1];
-      out[p+2]=mid[2]+view.getInt16(o+4,true)/32767*half[2];
-      out[p+3]=bytes[o+6]/255;out[p+4]=bytes[o+7]/255;out[p+5]=bytes[o+8]/255;
-      out[p+6]=Math.max(.012,bytes[o+9]*.0015);
-      out[p+7]=bytes[o+10]/255;out[p+8]=bytes[o+11];
+      const o=i*record,p=i*STRIDE;
+      const x=mid[0]+view.getInt16(o,true)/32767*half[0],y=mid[1]+view.getInt16(o+2,true)/32767*half[1],z=mid[2]+view.getInt16(o+4,true)/32767*half[2];
+      const r=bytes[o+6]/255,g=bytes[o+7]/255,b=bytes[o+8]/255;
+      if(codec==='rcsp2-base64'){
+        const sx=view.getUint16(o+9,true)/1000,sy=view.getUint16(o+11,true)/1000,sz=view.getUint16(o+13,true)/1000;
+        let qw=view.getInt8(o+15)/127,qx=view.getInt8(o+16)/127,qy=view.getInt8(o+17)/127,qz=view.getInt8(o+18)/127;
+        const qn=Math.hypot(qw,qx,qy,qz)||1;qw/=qn;qx/=qn;qy/=qn;qz/=qn;
+        put(out,p,x,y,z,r,g,b,sx,sy,sz,qw,qx,qy,qz,bytes[o+19]/255,bytes[o+20]/255,bytes[o+21]);
+      }else{
+        const radius=Math.max(.012,bytes[o+9]*.0015),conf=bytes[o+10]/255;
+        put(out,p,x,y,z,r,g,b,radius,radius,radius,1,0,0,0,.35+.65*conf,conf,bytes[o+11]);
+      }
     }
     return out;
   }
@@ -93,7 +131,7 @@ void main(){
   function create({marker,profile,model,layerId='realcity-photoreal-splats',reducedMotion=false,onError=()=>{}}){
     if(!S?.boundPhotoreal?.(model,marker,profile?.scene))return null;
     let cloud;try{cloud=decode(model)}catch(e){onError(e);return null}
-    const frame=S.frame([Number(marker.lon),Number(marker.lat)]),cos=Math.max(.1,Math.cos(Number(marker.lat)*Math.PI/180));
+    const frame=S.frame([Number(marker.lon),Number(marker.lat)]);
     const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
       stats:{points:cloud.count,chunks:cloud.chunks,bytes:cloud.vertices.byteLength,representation:model.representation},
       onAdd(map,gl){
@@ -101,10 +139,10 @@ void main(){
         try{
           this.program=program(gl);this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,cloud.vertices,gl.STATIC_DRAW);
           this.attributes=[];
-          for(const [name,size,offset] of [['a_position',3,0],['a_color',3,3],['a_radius',1,6],['a_confidence',1,7],['a_semantic',1,8]]){
+          for(const [name,size,offset] of [['a_position',3,0],['a_color',3,3],['a_scale',3,6],['a_quat',4,9],['a_opacity',1,13],['a_confidence',1,14],['a_semantic',1,15]]){
             const loc=gl.getAttribLocation(this.program,name);if(loc<0)continue;this.attributes.push({loc,size,offset});
           }
-          this.uniforms={};for(const n of ['u_matrix','u_pixels_per_meter','u_progress','u_zoom'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
+          this.uniforms={};for(const n of ['u_matrix','u_viewport','u_progress','u_zoom'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
           this.ready=true;
         }catch(e){onError(e);this.onRemove(map,gl)}
       },
@@ -114,11 +152,12 @@ void main(){
         const m=args?.defaultProjectionData?.mainMatrix||args?.modelViewProjectionMatrix||(Array.isArray(args)||ArrayBuffer.isView(args)?args:null);if(!m)return;
         gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
         for(const a of this.attributes){gl.enableVertexAttribArray(a.loc);gl.vertexAttribPointer(a.loc,a.size,gl.FLOAT,false,STRIDE*4,a.offset*4)}
-        const matrix=localMatrix(m,frame.origin,frame.scale),zoom=this.map.getZoom(),ppm=Math.pow(2,zoom)/(156543.03392*cos);
-        gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform1f(this.uniforms.u_pixels_per_meter,ppm);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,zoom);
-        gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.disable(gl.CULL_FACE);
+        const canvas=this.map.getCanvas(),matrix=localMatrix(m,frame.origin,frame.scale);
+        gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform2f(this.uniforms.u_viewport,canvas.width,canvas.height);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,this.map.getZoom());
+        gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
         gl.drawArrays(gl.POINTS,0,cloud.count);
+        gl.depthMask(true);
         for(const a of this.attributes)gl.disableVertexAttribArray(a.loc);
       },
       onRemove(map,gl){this.disposed=true;this.ready=false;if(this.buffer)gl.deleteBuffer(this.buffer);if(this.program)gl.deleteProgram(this.program)}

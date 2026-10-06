@@ -85,3 +85,15 @@ test('RCSP2 browser decoder preserves anisotropic scale and quaternion',()=>{
   assert.ok(out[13]>.85&&out[14]>.9);
   assert.equal(out[15],2);
 });
+
+
+test('photoreal candidate sweep does not inherit two-image Commons cap',()=>{
+  const rows=Array.from({length:48},(_,i)=>({
+    id:'commons-'+i,source:'wikimedia',coordinates:[37+(i%12)*.00015,55+Math.floor(i/12)*.00015],
+    image_url:'https://upload.wikimedia.org/'+i+'.jpg',license:'CC BY-SA 4.0'
+  }));
+  const picked=P._internals.photorealCandidates(rows,marker,72);
+  assert.ok(picked.length>2);
+  assert.ok(picked.length<=32);
+  assert.ok(picked.every(x=>Number.isFinite(x.distance_m)));
+});

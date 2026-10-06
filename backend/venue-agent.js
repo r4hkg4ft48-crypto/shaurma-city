@@ -579,7 +579,7 @@ function createVenueDialogAgent({DB,commandBus}){
         if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
         return resolveNestedCommand(user,active.venue,fresh,{...cmd,target_item_id:chosen.id},item);
       }
-      return commandBus.handle({user,text:'работаем с '+chosen.label});
+      return executeResolved(user,{intent:'menu_item_select',item:chosen.label,target_item_id:chosen.id},chosen.label);
     }
 
     if(kind==='entity_nav'){
@@ -590,8 +590,8 @@ function createVenueDialogAgent({DB,commandBus}){
         const items=menu.filter(x=>String(x.c||x.category||'')===String(chosen.id)&&x.active!==false);
         return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока пусто.')+'\n\nМожно написать название позиции.'};
       }
-      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null});
-      return commandBus.handle({user,text:'работаем с '+chosen.label});
+      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
+      return executeResolved(user,{intent:'menu_item_select',item:chosen.label,target_item_id:chosen.id},chosen.label);
     }
 
     if(kind==='command_entity'){
@@ -610,8 +610,7 @@ function createVenueDialogAgent({DB,commandBus}){
       if(item)return resolveNestedCommand(user,active.venue,fresh,cmd,item);
       if(needsCategoryResolution(cmd))return resolveCategoryCommand(user,active.venue,cmd);
       if(destructive(cmd))return confirmDanger(user,cmd,'');
-      const canonical=canonicalText(cmd,'');
-      return canonical?commandBus.handle({user,text:canonical}):{handled:false};
+      return executeResolved(user,cmd,'');
     }
 
     if(kind==='action'){
@@ -745,7 +744,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const ih=decisive(itemRank),ch=decisive(catRank);
       if(ih&&(!ch||ih.score>ch.score+.08)){
         await patchContext(user.id,{selected_item_id:ih.id,selected_group_id:null,...(ih.category_id?{selected_category_id:ih.category_id}:{})});
-        return commandBus.handle({user,text:'работаем с '+ih.label});
+        return executeResolved(user,{intent:'menu_item_select',item:ih.label,target_item_id:ih.id},ih.label);
       }
       if(ch&&(!ih||ch.score>ih.score+.08)){
         await patchContext(user.id,{selected_category_id:ch.id,selected_item_id:null,selected_group_id:null});
@@ -784,6 +783,7 @@ function createVenueDialogAgent({DB,commandBus}){
       }
       if(needsCategoryResolution(command))return resolveCategoryCommand(user,venue,command);
       if(destructive(command))return confirmDanger(user,command,'');
+      if(typeof commandBus.execute==='function')return commandBus.execute({user,command});
       return commandBus.handle({user,text:raw});
     }
 

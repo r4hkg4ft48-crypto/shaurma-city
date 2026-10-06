@@ -250,6 +250,25 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
     const profile=row.realcity_profile||{};
     if(realcity.needsRefresh(profile))realcity.queue(row.id)?.catch(()=>{});
     res.setHeader('Cache-Control','no-store');
+    if(req.query.summary==='1'){
+      const rw=profile.real_world||{},astra=profile.astra||{};
+      return res.json({
+        marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,
+        status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at,
+        profile:{
+          version:profile.version||0,quality:profile.quality||null,confidence:profile.confidence??null,
+          real_world:{
+            status:rw.status||null,engine:rw.engine||null,mode:rw.mode||null,quality:rw.quality||null,
+            generated_at:rw.generated_at||null,coverage:rw.coverage||null,
+            materials_count:Array.isArray(rw.materials)?rw.materials.length:0,
+            references_count:Array.isArray(rw.references)?rw.references.length:0,
+            providers:Array.isArray(rw.attribution?.providers)?rw.attribution.providers:[],
+            diagnostics:rw.diagnostics||null,reconstruction:rw.reconstruction||null
+          },
+          astra:{status:astra.status||null,coverage:astra.coverage||null}
+        }
+      });
+    }
     res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}
 });

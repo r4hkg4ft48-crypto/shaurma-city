@@ -91,7 +91,7 @@
     if(!Number.isFinite(Number(marker.lon))||!Number.isFinite(Number(marker.lat))||Math.abs(model.origin[0]-Number(marker.lon))>1e-7||Math.abs(model.origin[1]-Number(marker.lat))>1e-7)return false;
     const anchor=model.anchor||{},base=scene?.buildings?.find(x=>String(x.id)===String(anchor.building_id));
     if(!base||anchor.geometry_key!==geometryKey(base.ring))return false;
-    return model.chunks.every(c=>c?.codec==='rcsp1-base64'&&Number.isInteger(c.point_count)&&c.point_count>0&&typeof c.data==='string'&&Array.isArray(c.bounds_min)&&Array.isArray(c.bounds_max));
+    return model.chunks.every(c=>/^rcsp[12]-base64$/.test(String(c?.codec||''))&&Number.isInteger(c.point_count)&&c.point_count>0&&typeof c.data==='string'&&Array.isArray(c.bounds_min)&&Array.isArray(c.bounds_max));
   }
   return {ring,frame,edges,nearestEdge,bufferRing,geometryKey,bound,boundPhotoreal,signedArea,containsRing};
 });

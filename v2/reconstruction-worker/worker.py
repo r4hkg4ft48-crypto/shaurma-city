@@ -36,7 +36,7 @@ API=os.getenv("REALCITY_API_URL","https://shaurma-city-api.onrender.com").rstrip
 TOKEN=os.getenv("REALCITY_RECONSTRUCTION_WORKER_TOKEN","").strip()
 WORKER_ID=os.getenv("REALCITY_WORKER_ID",f"realcity-{uuid.uuid4().hex[:10]}")
 POLL=max(2,float(os.getenv("REALCITY_WORKER_POLL_SECONDS","8")))
-MODEL_ID=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Small-hf")
+MODEL_ID=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 DEVICE_PREF=os.getenv("REALCITY_DEVICE","cuda").strip().lower()
 MAX_DOWNLOAD_MB=max(4,min(40,int(os.getenv("REALCITY_SOURCE_MAX_MB","18"))))
 TIMEOUT=(8,35)
@@ -77,7 +77,7 @@ def claim():
     r=session.post(api("/api/v2/internal/realcity/reconstruction/claim"),json={"worker_id":WORKER_ID},headers=auth_headers(),timeout=TIMEOUT)
     r.raise_for_status()
     j=r.json()
-    return None if j.get("job") is None else j
+    return j if j.get("job_id") else None
 
 def heartbeat(job_id,stage,**report):
     try:
@@ -185,11 +185,24 @@ def local_xy(origin,p):
     return x,y
 
 def metric_depth(relative:np.ndarray,anchor:float,radius:float)->np.ndarray:
-    finite=np.isfinite(relative)
+    finite=np.isfinite(relative)&(relative>0)
     if not finite.any():return np.full_like(relative,anchor,dtype=np.float32)
+    if "Metric-Outdoor" in MODEL_ID or "Metric-VKITTI" in MODEL_ID:
+        # Metric Outdoor checkpoints predict absolute outdoor depth. Keep that
+        # geometry and only apply a bounded scene-anchor correction when the
+        # source is matched to a known facade distance.
+        d=np.clip(relative.astype(np.float32),.6,min(max(radius*1.35,55),200))
+        h,w=d.shape
+        roi=d[int(h*.32):int(h*.72),int(w*.34):int(w*.66)]
+        valid=roi[np.isfinite(roi)&(roi>.6)&(roi<180)]
+        if valid.size>80 and math.isfinite(anchor) and anchor>3:
+            med=float(np.median(valid))
+            ratio=anchor/max(med,.5)
+            if .45<=ratio<=2.2:
+                d*=ratio
+        return np.clip(d,.6,min(max(radius*1.35,55),200)).astype(np.float32)
     lo,hi=np.percentile(relative[finite],[3,97])
     n=np.clip((relative-lo)/max(1e-6,hi-lo),0,1)
-    # Depth Anything relative output is disparity-like: larger = nearer.
     inv=.14+.86*n
     med=float(np.median(inv[finite]))
     d=anchor*med/np.maximum(inv,.06)

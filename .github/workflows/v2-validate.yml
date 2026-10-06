@@ -166,6 +166,7 @@ jobs:
           node --test test/builder-cinema-browser.cjs
           node --test test/admin-console-browser.cjs
           node --test test/menu-experience-browser.cjs
+          node --test test/realcity-splat-browser.cjs
       - name: Builder visual checks
         if: always()
         uses: actions/upload-artifact@v4

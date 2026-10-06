@@ -47,6 +47,11 @@ function botUrl(start=''){
   if(!username)return '';
   return 'https://t.me/'+username+(start?'?start='+encodeURIComponent(start):'');
 }
+function channelAdminUrl(){
+  const username=String(runtimeUsername||config.CHANNEL_BOT_USERNAME||'').replace(/^@/,'');
+  if(!username)return '';
+  return 'https://t.me/'+username+'?startchannel&admin=post_messages+edit_messages+delete_messages';
+}
 function connectKeyboard(){
   const url=botUrl('connect');
   return url?{inline_keyboard:[[{text:'Подключить заведение',url}]]}:null;
@@ -59,10 +64,13 @@ function publicKeyboard(){
   ]};
 }
 function adminKeyboard(){
-  return {inline_keyboard:[
+  const rows=[
     [{text:'📚 Каталог',callback_data:'admin:catalog'},{text:'🚀 Публикация запуска',callback_data:'admin:launch'}],
     [{text:'📥 Новые заявки',callback_data:'admin:leads'}]
-  ]};
+  ];
+  const adminUrl=channelAdminUrl();
+  if(adminUrl)rows.push([{text:'➕ Добавить бота в канал',url:adminUrl}]);
+  return {inline_keyboard:rows};
 }
 
 async function bootstrap(){
@@ -277,6 +285,17 @@ async function adminStatusText(){
       lines.push('Webhook: '+String(webhook?.url||'not set'));
       lines.push('Pending updates: '+Number(webhook?.pending_update_count||0));
       if(webhook?.last_error_message)lines.push('Last error: '+String(webhook.last_error_message));
+      if(config.CHANNEL_CHAT_ID){
+        try{
+          const member=await call('getChatMember',{chat_id:config.CHANNEL_CHAT_ID,user_id:me.id});
+          lines.push('Channel access: '+String(member?.status||'unknown'));
+          if(member?.status==='administrator'){
+            lines.push('Can post: '+(member.can_post_messages!==false?'yes':'no'));
+            lines.push('Can edit/pin: '+(member.can_edit_messages!==false?'yes':'no'));
+            lines.push('Can delete: '+(member.can_delete_messages!==false?'yes':'no'));
+          }
+        }catch(e){lines.push('Channel access: not added / '+String(e.message||'unavailable'))}
+      }
     }catch(e){lines.push('Telegram: '+e.message)}
   }
   return lines.join('\n');
@@ -367,6 +386,24 @@ async function sync(){
     {command:'connect',description:'Подключить заведение'},
     {command:'about',description:'Возможности продукта'}
   ];
+  await call('setMyDefaultAdministratorRights',{
+    for_channels:true,
+    rights:{
+      can_manage_chat:true,
+      can_change_info:false,
+      can_post_messages:true,
+      can_edit_messages:true,
+      can_delete_messages:true,
+      can_invite_users:false,
+      can_restrict_members:false,
+      can_promote_members:false,
+      can_manage_video_chats:false,
+      can_post_stories:false,
+      can_edit_stories:false,
+      can_delete_stories:false,
+      is_anonymous:false
+    }
+  });
   await call('setMyCommands',{commands});
   for(const adminId of allAdminIds()){
     try{await call('setMyCommands',{scope:{type:'chat',chat_id:Number(adminId)},commands:[
@@ -388,7 +425,14 @@ function install(app){
     try{
       const [me,webhook]=await Promise.all([call('getMe',{}),call('getWebhookInfo',{})]);
       runtimeUsername=String(me?.username||runtimeUsername||'');
-      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:config.CHANNEL_CHAT_ID||'',webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
+      let channel_access={status:'not_checked'};
+      if(config.CHANNEL_CHAT_ID){
+        try{
+          const member=await call('getChatMember',{chat_id:config.CHANNEL_CHAT_ID,user_id:me.id});
+          channel_access={status:String(member?.status||'unknown'),can_post_messages:member?.can_post_messages!==false,can_edit_messages:member?.can_edit_messages!==false,can_delete_messages:member?.can_delete_messages!==false};
+        }catch(e){channel_access={status:'not_added',error:String(e.message||'channel_access_failed')}}
+      }
+      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:config.CHANNEL_CHAT_ID||'',channel_admin_url:channelAdminUrl(),channel_access,webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
     }catch(e){res.status(503).json({ok:false,enabled:true,error:String(e.message||'channel_health_failed')})}
   });
 

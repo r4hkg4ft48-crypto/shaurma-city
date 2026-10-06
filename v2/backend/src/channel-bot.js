@@ -502,8 +502,9 @@ function install(app){
       if(req.body?.my_chat_member){await bindChannel(req.body.my_chat_member.chat,true);return}
       if(req.body?.channel_post){
         const p=req.body.channel_post;
-        await bindChannel(p.chat,true);
-        if(/^#?bind$/i.test(String(p.text||'').trim())){
+        const isBind=/^#?bind$/i.test(String(p.text||'').trim());
+        await bindChannel(p.chat,isBind);
+        if(isBind){
           try{await call('deleteMessage',{chat_id:p.chat.id,message_id:p.message_id})}catch(e){console.warn('channel bind cleanup',e.message)}
         }
         return;

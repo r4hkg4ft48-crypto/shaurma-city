@@ -83,5 +83,15 @@
         (b.parts||[]).every(p=>{const pe=edges(p.ring,t.coordinates);return p.facades.every(f=>JSON.stringify(f.edge)===JSON.stringify(pe[f.edge_index]?.coordinates));});
     });
   }
-  return {ring,frame,edges,nearestEdge,bufferRing,geometryKey,bound,signedArea,containsRing};
+  function boundPhotoreal(model,marker,scene){
+    if(model?.schema!==1||model.status!=='ready'||model.engine!=='realcity-photoreal-v1'||!Array.isArray(model.chunks)||!model.chunks.length)return false;
+    const t=model.target||{},id=marker.id??marker.marker_id;
+    if(String(t.marker_id)!==String(id)||String(t.establishment_id)!==String(marker.establishment_id)||String(t.venue_id)!==String(marker.venue_id))return false;
+    if(!Array.isArray(model.origin)||model.origin.length!==3||!model.origin.every(finite))return false;
+    if(!Number.isFinite(Number(marker.lon))||!Number.isFinite(Number(marker.lat))||Math.abs(model.origin[0]-Number(marker.lon))>1e-7||Math.abs(model.origin[1]-Number(marker.lat))>1e-7)return false;
+    const anchor=model.anchor||{},base=scene?.buildings?.find(x=>String(x.id)===String(anchor.building_id));
+    if(!base||anchor.geometry_key!==geometryKey(base.ring))return false;
+    return model.chunks.every(c=>/^rcsp[12]-base64$/.test(String(c?.codec||''))&&Number.isInteger(c.point_count)&&c.point_count>0&&typeof c.data==='string'&&Array.isArray(c.bounds_min)&&Array.isArray(c.bounds_max));
+  }
+  return {ring,frame,edges,nearestEdge,bufferRing,geometryKey,bound,boundPhotoreal,signedArea,containsRing};
 });

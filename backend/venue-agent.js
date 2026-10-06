@@ -260,7 +260,8 @@ const ACTION_HEAD='(?:(?:временно|пока)\\s+)?(?:сделай|пос�
 
 function splitActionClauses(v){
   const raw=clean(v).replace(/[.;]+/g,',');
-  return raw.split(new RegExp('\\s*(?:,|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и|но))\\s*(?='+ACTION_HEAD+'\\b)','i'))
+  const separator='(?:,\\s*(?:(?:и|но|а)\\s+)?|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и|но|а)\\s+)';
+  return raw.split(new RegExp('\\s*'+separator+'(?='+ACTION_HEAD+'\\b)','i'))
     .map(clean).filter(Boolean);
 }
 function inferContextAction(text){
@@ -966,4 +967,4 @@ function createVenueDialogAgent({DB,commandBus}){
   return {handle,handleCallback,similarity,normalize};
 }
 
-module.exports={createVenueDialogAgent,similarity,normalize,inferFreeform};
+module.exports={createVenueDialogAgent,similarity,normalize,inferFreeform,inferContextAction,inferItemActionPlan,inferContextActionPlan,splitActionClauses};

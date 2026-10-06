@@ -6,7 +6,7 @@
   let astraLayer=null,astraScripts=null,quarterFrame=0,previewSignature='';
   const baseBuildingPaint=new Map();
   const baseLabelPaint=new Map();
-  let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='';
+  let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='',orderDetailId='';
   let pointsWarmPromise=null;
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
@@ -134,22 +134,140 @@
     $('#refCode').textContent=r.code||'—';$('#refInvited').textContent=String(r.invited||0);$('#refOrdered').textContent=String(r.ordered||0);$('#refQualified').textContent=String(r.qualified||0);
     currentReferralUrl=r.url||'';
   }
+  function orderDateParts(value){
+    const d=value?new Date(value):null;
+    if(!d||Number.isNaN(d.getTime()))return {date:'—',time:'—',full:'—'};
+    return {
+      date:d.toLocaleDateString('ru-RU',{day:'2-digit',month:'long',year:'numeric'}),
+      time:d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      full:d.toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+    };
+  }
+  function orderProgress(status){
+    return ({new:24,cooking:56,ready:84,done:100,cancelled:0})[String(status)]??18;
+  }
+  function orderStatusHint(status){
+    return ({new:'Заказ передан заведению',cooking:'Сейчас готовят',ready:'Можно получать',done:'Заказ получен',cancelled:'Заказ отменён'})[String(status)]||'Статус обновляется';
+  }
+  function orderReceiveInfo(o){
+    const updated=orderDateParts(o?.updated_at||o?.created_at);
+    if(o?.status==='done')return {label:'Время получения',value:updated.full};
+    if(o?.status==='ready')return {label:'Готов к получению',value:'с '+updated.time};
+    if(o?.status==='cancelled')return {label:'Получение',value:'Заказ отменён'};
+    return {label:'Время получения',value:o?.fulfillment_type==='delivery'?'После готовности':'По готовности'};
+  }
+  function orderAvatar(o,large=false){
+    const initial=esc(String(o?.venue_name||'Ш').trim().slice(0,1).toUpperCase()||'Ш');
+    if(!o?.marker_id)return '<span>'+initial+'</span>';
+    const src=api+'/map/markers/'+encodeURIComponent(o.marker_id)+'/avatar?order='+encodeURIComponent(o.order_number||'');
+    return '<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove();this.parentElement.classList.add(\'fallback\')"><span>'+initial+'</span>';
+  }
+  function paymentLabel(o){
+    const method=({on_receipt:'При получении',card:'Картой',cash:'Наличными'})[String(o?.payment_method)]||'При получении';
+    const status=({paid:'оплачено',pending:'ожидает оплаты',refunded:'возврат'})[String(o?.payment_status)]||'';
+    return status?method+' · '+status:method;
+  }
+  function ensureOrderDetail(){
+    let layer=$('#orderDetailOverlay');
+    if(layer)return layer;
+    layer=document.createElement('div');
+    layer.id='orderDetailOverlay';
+    layer.className='orderDetailOverlay';
+    layer.setAttribute('aria-hidden','true');
+    layer.innerHTML='<button class="orderDetailBackdrop" type="button" data-order-detail-close aria-label="Закрыть"></button><article class="orderDetailCard" role="dialog" aria-modal="true" aria-labelledby="orderDetailTitle"><div id="orderDetailContent"></div></article>';
+    document.body.appendChild(layer);
+    layer.addEventListener('click',e=>{
+      if(e.target.closest('[data-order-detail-close]'))closeOrderDetail();
+      const menu=e.target.closest('[data-order-detail-menu]');
+      if(menu){
+        const u=new URL('menu.html',location.href);
+        u.searchParams.set('marker',menu.dataset.orderDetailMenu);
+        u.searchParams.set('establishment',menu.dataset.orderDetailEst);
+        u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString());
+      }
+    });
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&orderDetailId)closeOrderDetail()});
+    return layer;
+  }
+  function renderOrderDetail(o){
+    if(!o)return;
+    const layer=ensureOrderDetail(),box=layer.querySelector('#orderDetailContent');
+    const created=orderDateParts(o.created_at),receive=orderReceiveInfo(o),items=Array.isArray(o.items)?o.items:[];
+    const status=String(o.status||'new'),active=['new','cooking','ready'].includes(status),cancelled=status==='cancelled';
+    const steps=['new','cooking','ready','done'],labels={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Получен'},current=steps.indexOf(status);
+    const timeline=cancelled?'<div class="orderTimeline cancelled"><b>Заказ отменён</b><span>При необходимости оформите новый заказ в заведении.</span></div>':
+      '<div class="orderTimeline"><div class="orderTimelineRail"><i style="width:'+orderProgress(status)+'%"></i></div><div class="orderTimelineSteps">'+steps.map((s,i)=>'<span class="'+(i<=current?'on ':'')+(s===status?'current':'')+'"><i></i><b>'+labels[s]+'</b></span>').join('')+'</div></div>';
+    box.innerHTML=
+      '<header class="orderDetailHead"><div class="orderDetailVenueAvatar">'+orderAvatar(o,true)+'</div><div class="orderDetailHeadCopy"><small>ЗАКАЗ · '+esc(o.order_number||'')+'</small><h2 id="orderDetailTitle">'+esc(o.venue_name||'Shaurmeg')+'</h2><span>'+esc(orderStatusHint(status))+'</span></div><button type="button" class="orderDetailClose" data-order-detail-close aria-label="Закрыть">×</button></header>'+
+      '<div class="orderDetailStatusRow"><span class="status status-'+esc(status)+'">'+esc(STATUS[status]||status)+'</span><b>'+money(o.total||0)+'</b></div>'+
+      timeline+
+      '<section class="orderDetailFacts">'+
+        '<article><small>Дата заказа</small><b>'+esc(created.date)+'</b><span>'+esc(created.time)+'</span></article>'+
+        '<article><small>'+esc(receive.label)+'</small><b>'+esc(receive.value)+'</b><span>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</span></article>'+
+      '</section>'+
+      '<section class="orderDetailSection"><div class="orderDetailSectionHead"><div><small>СОСТАВ</small><h3>Что в заказе</h3></div><b>'+items.reduce((s,x)=>s+(Number(x.q)||1),0)+' поз.</b></div>'+
+        '<div class="orderDetailItems">'+(items.length?items.map(x=>{const q=Math.max(1,Number(x.q)||1),price=Number(x.p)||0;return '<article><div><b>'+esc(x.n||x.name||'Позиция')+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+q+'</span><strong>'+money(price*q)+'</strong></article>'}).join(''):'<div class="orderDetailEmpty">Состав заказа не найден</div>')+'</div>'+
+      '</section>'+
+      '<section class="orderDetailSection orderDetailInfo"><div class="orderDetailSectionHead"><div><small>ПОЛУЧЕНИЕ</small><h3>Детали</h3></div></div>'+
+        '<div class="orderDetailInfoGrid">'+
+          '<div><small>Способ</small><b>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</b></div>'+
+          '<div><small>Оплата</small><b>'+esc(paymentLabel(o))+'</b></div>'+
+          (o.address?'<div class="wide"><small>Адрес</small><b>'+esc(o.address)+'</b></div>':'')+
+          (o.phone?'<div><small>Телефон</small><b>'+esc(o.phone)+'</b></div>':'')+
+          (o.comment?'<div class="wide"><small>Комментарий</small><b>'+esc(o.comment)+'</b></div>':'')+
+        '</div>'+
+      '</section>'+
+      '<footer class="orderDetailActions">'+
+        (o.marker_id&&o.establishment_id?'<button type="button" class="orderDetailPrimary" data-order-detail-menu="'+esc(o.marker_id)+'" data-order-detail-est="'+esc(o.establishment_id)+'">Открыть заведение <span>→</span></button>':'')+
+        '<button type="button" class="orderDetailSecondary" data-order-detail-close>Закрыть</button>'+
+      '</footer>';
+    layer.classList.toggle('isActive',active);
+  }
+  function openOrderDetail(id){
+    const o=(userOrders||[]).find(x=>String(x.id??x.order_number)===String(id));
+    if(!o)return;
+    orderDetailId=String(id);
+    const layer=ensureOrderDetail();renderOrderDetail(o);
+    requestAnimationFrame(()=>{layer.classList.add('show');layer.setAttribute('aria-hidden','false')});
+    tg?.HapticFeedback?.selectionChanged?.();
+  }
+  function closeOrderDetail(){
+    orderDetailId='';
+    const layer=$('#orderDetailOverlay');if(!layer)return;
+    layer.classList.remove('show');layer.setAttribute('aria-hidden','true');
+  }
+  function refreshOrderDetail(){
+    if(!orderDetailId)return;
+    const o=(userOrders||[]).find(x=>String(x.id??x.order_number)===String(orderDetailId));
+    if(o)renderOrderDetail(o);else closeOrderDetail();
+  }
   function renderOrdersPanel(){
     const box=$('#ordersPanelList');
     if(!session){box.innerHTML='<div class="panelEmpty"><b>Заказы привязаны к Telegram</b><span>Откройте Shaurmeg через @Shaurmeggbot, чтобы видеть историю и активные заказы.</span></div>';return}
-    let rows=userOrders;
+    let rows=[...(userOrders||[])];
     if(orderFilter==='active')rows=rows.filter(o=>['new','cooking','ready'].includes(o.status));
     if(orderFilter==='done')rows=rows.filter(o=>['done','cancelled'].includes(o.status));
-    box.innerHTML=rows.length?rows.map(o=>{
-      const count=(o.items||[]).reduce((s,x)=>s+(Number(x.q)||1),0);
-      const active=['new','cooking','ready'].includes(o.status);
-      return '<article class="mapOrderCard '+(active?'isActive':'')+'">'+
-        '<header><div><small>'+esc(o.venue_name||'SHAURMEG')+'</small><b>'+esc(o.order_number)+'</b></div><span class="status status-'+esc(o.status)+'">'+esc(STATUS[o.status]||o.status)+'</span></header>'+
-        '<div class="mapOrderMeta"><span>'+new Date(o.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+'</span><span>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</span></div>'+
-        '<div class="mapOrderItems">'+(o.items||[]).slice(0,3).map(x=>'<span>'+esc(x.n||x.name)+' × '+esc(x.q||1)+'</span>').join('')+((o.items||[]).length>3?'<small>ещё '+((o.items||[]).length-3)+'</small>':'')+'</div>'+
-        '<footer><span>'+count+' поз.</span><b>'+money(o.total)+'</b>'+(o.marker_id&&o.establishment_id?'<button data-order-menu="'+esc(o.marker_id)+'" data-order-est="'+esc(o.establishment_id)+'">Открыть</button>':'')+'</footer>'+
+    rows.sort((a,b)=>{
+      const aa=['new','cooking','ready'].includes(a.status)?1:0,bb=['new','cooking','ready'].includes(b.status)?1:0;
+      if(aa!==bb)return bb-aa;
+      return new Date(b.created_at||0)-new Date(a.created_at||0);
+    });
+    const active=(userOrders||[]).filter(o=>['new','cooking','ready'].includes(o.status));
+    const lead=active[0];
+    const summary='<div class="ordersPanelSummary '+(active.length?'hasActive':'')+'"><div><small>СЕЙЧАС</small><b>'+(active.length?(active.length+' активн'+(active.length===1?'ый заказ':'ых заказа')):'Активных заказов нет')+'</b><span>'+(lead?esc(lead.venue_name||'Shaurmeg')+' · '+esc(orderStatusHint(lead.status)):'Новые заказы появятся здесь сразу после оформления')+'</span></div><i>'+ (active.length?String(active.length):'✓') +'</i></div>';
+    box.innerHTML=summary+(rows.length?rows.map(o=>{
+      const count=(o.items||[]).reduce((s,x)=>s+(Number(x.q)||1),0),activeNow=['new','cooking','ready'].includes(o.status);
+      const created=orderDateParts(o.created_at),receive=orderReceiveInfo(o),id=String(o.id??o.order_number);
+      const first=(o.items||[])[0],more=Math.max(0,(o.items||[]).length-1);
+      return '<article class="mapOrderCard orderPreviewCard '+(activeNow?'isActive':'')+'" data-order-detail="'+esc(id)+'" role="button" tabindex="0" aria-label="Открыть заказ '+esc(o.order_number||'')+'">'+
+        '<div class="orderPreviewTop"><div class="orderPreviewVenue"><div class="orderPreviewAvatar">'+orderAvatar(o)+'</div><div><small>'+esc(o.venue_name||'SHAURMEG')+'</small><b>'+esc(o.order_number||'Заказ')+'</b><span>'+esc(created.full)+'</span></div></div><span class="status status-'+esc(o.status)+'">'+esc(STATUS[o.status]||o.status)+'</span></div>'+
+        '<div class="orderPreviewProgress"><i style="width:'+orderProgress(o.status)+'%"></i></div>'+
+        '<div class="orderPreviewMain"><div><small>Получение</small><b>'+esc(receive.value)+'</b></div><div><small>Способ</small><b>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</b></div></div>'+
+        '<div class="orderPreviewDish">'+(first?'<span>'+esc(first.n||first.name||'Позиция')+' × '+esc(first.q||1)+'</span>':'<span>Состав заказа</span>')+(more?'<small>+ ещё '+more+'</small>':'')+'</div>'+
+        '<footer><span>'+count+' поз.</span><b>'+money(o.total)+'</b>'+(o.marker_id&&o.establishment_id?'<button type="button" data-order-menu="'+esc(o.marker_id)+'" data-order-est="'+esc(o.establishment_id)+'">Заведение</button>':'')+'<em>Подробнее →</em></footer>'+
       '</article>';
-    }).join(''):'<div class="panelEmpty"><b>Здесь пока пусто</b><span>Выберите точку на карте и сделайте первый заказ.</span></div>';
+    }).join(''):'<div class="panelEmpty"><b>Здесь пока пусто</b><span>Выберите точку на карте и сделайте первый заказ.</span></div>');
+    refreshOrderDetail();
   }
   async function loadFavorites(){
     const box=$('#favoritesPanelList');
@@ -752,7 +870,15 @@
   $('#profileBtn').onclick=()=>openPanel('profile');
   $('#panelBackdrop').onclick=closePanels;document.querySelectorAll('[data-panel-close]').forEach(x=>x.onclick=closePanels);
   $('#orderFilter').onclick=e=>{const b=e.target.closest('[data-order-filter]');if(!b)return;orderFilter=b.dataset.orderFilter;document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===b));renderOrdersPanel()};
-  $('#ordersPanelList').onclick=e=>{const b=e.target.closest('[data-order-menu]');if(!b)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',b.dataset.orderMenu);u.searchParams.set('establishment',b.dataset.orderEst);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
+  $('#ordersPanelList').onclick=e=>{
+    const b=e.target.closest('[data-order-menu]');
+    if(b){const u=new URL('menu.html',location.href);u.searchParams.set('marker',b.dataset.orderMenu);u.searchParams.set('establishment',b.dataset.orderEst);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString());return}
+    const card=e.target.closest('[data-order-detail]');if(card)openOrderDetail(card.dataset.orderDetail);
+  };
+  $('#ordersPanelList').onkeydown=e=>{
+    if(e.key!=='Enter'&&e.key!==' ')return;
+    const card=e.target.closest('[data-order-detail]');if(!card)return;e.preventDefault();openOrderDetail(card.dataset.orderDetail);
+  };
   $('#activeOrderBadge').onclick=()=>{
     orderFilter='active';
     document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x.dataset.orderFilter==='active'));

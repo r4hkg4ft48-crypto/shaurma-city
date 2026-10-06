@@ -608,7 +608,7 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    const dimmed=astraLayer?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[data.heroFeature,...data.contextFeatures,...covered];
+    const dimmed=photoreal?covered:astraLayer?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[data.heroFeature,...data.contextFeatures,...covered];
     setBaseBuildingsDim(true,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:photoreal?[]:data.greens});
@@ -617,7 +617,7 @@
     const photoGround=!!(photoreal||(astraLayer&&authored?.environment?.roads?.length));
     setPhotoLabels(photoGround?p:null);
     document.body.classList.toggle('realCityPhotographic',photoGround);
-    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.035:photoGround?.86:daypart()==='night'?.16:.22)}catch{}
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#9c9b93':photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.9:photoGround?.86:daypart()==='night'?.16:.22)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoGround?.9:.34)}catch{}
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoGround?0:.16)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',photoGround?0:daypart()==='night'?.42:.56)}catch{}

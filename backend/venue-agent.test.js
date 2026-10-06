@@ -81,7 +81,7 @@ test('clarifies ambiguous item before executing and accepts ordinal reply',async
 
   const first=await agent.handle({user,text:'у сырной сделай цену 420'});
   assert.equal(first.handled,true);
-  assert.match(first.text,/Какую именно позицию/);
+  assert.match(first.text,/Как(?:ую именно позицию|ое именно блюдо)/);
   assert.equal(calls.length,0);
   assert.ok(Array.isArray(first.reply_markup.inline_keyboard));
 

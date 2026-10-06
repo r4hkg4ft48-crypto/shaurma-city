@@ -69,7 +69,7 @@ function sourcePackage(x){
     distance_m:finite(x.distance_m)?Number(x.distance_m):null,
     match:x.match&&typeof x.match==='object'?{
       building_id:clean(x.match.building_id,120),
-      edge_index:Number.isInteger(Number(x.match.edge_index))?Number(x.match.edge_index):null,
+      edge_index:x.match.edge_index!==null&&x.match.edge_index!==undefined&&Number.isInteger(Number(x.match.edge_index))?Number(x.match.edge_index):null,
       distance_m:finite(x.match.distance_m)?Number(x.match.distance_m):null,
       heading_error_deg:finite(x.match.heading_error_deg)?Number(x.match.heading_error_deg):null,
       quality:finite(x.match.quality)?Number(x.match.quality):null

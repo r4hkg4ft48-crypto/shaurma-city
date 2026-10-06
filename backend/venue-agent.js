@@ -593,6 +593,58 @@ function createVenueDialogAgent({DB,commandBus}){
     return new Set(['fixed_option_delete','fixed_option_price','fixed_option_toggle','fixed_option_default']).has(command?.intent);
   }
 
+
+  async function askMissingSlot(user,item,spec){
+    await patchContext(user.id,{
+      selected_item_id:String(item.id),
+      selected_group_id:null,
+      pending_kind:'slot_value',
+      pending_payload:{
+        slot:spec.slot,
+        type:spec.type,
+        question:spec.question,
+        command:spec.command,
+        item_id:String(item.id),
+        item_label:String(item.n||item.name||'Позиция')
+      },
+      pending_candidates:[]
+    });
+    return {handled:true,text:String(spec.question||'Уточните значение.')};
+  }
+  async function consumeSlotValue(user,payload,text){
+    const raw=clean(text);
+    if(!raw)return {handled:true,text:String(payload.question||'Уточните значение.')};
+    const active=await activeVenue(user);
+    if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
+    const item=(active.venue.menu||[]).find(x=>String(x.id)===String(payload.item_id||''));
+    if(!item){await clearPending(user.id);return {handled:true,text:'Позиция изменилась или удалена. Назовите её ещё раз.'}}
+    const cmd={...(payload.command||{}),target_item_id:String(item.id)};
+    const type=String(payload.type||'text'),slot=String(payload.slot||'value');
+
+    if(type==='money'||type==='count'){
+      const value=parseHumanNumber(raw);
+      if(value===null||!Number.isFinite(value)||value<0){
+        return {handled:true,text:'Не смог точно разобрать число. '+String(payload.question||'Укажите значение цифрами или словами.')};
+      }
+      cmd[slot]=type==='count'?Math.floor(value):value;
+    }else if(type==='category'){
+      const ranked=await rankCategories(active.venue,raw),hit=decisive(ranked);
+      if(hit){
+        cmd.category=hit.label;cmd.target_category_id=hit.id;
+      }else if(ranked.length){
+        await clearPending(user.id);
+        return askCommandEntity(user,cmd,'category',ranked,'Какую именно категорию выбрать?',item);
+      }else{
+        return {handled:true,text:'Категорию «'+raw+'» не нашёл. Ничего не меняю. '+String(payload.question||'Назовите существующую категорию.')};
+      }
+    }else{
+      cmd[slot]=raw;
+    }
+
+    await clearPending(user.id);
+    return resolveNestedCommand(user,active.venue,await context(user.id),cmd,item);
+  }
+
   async function askCommandEntity(user,command,slot,candidates,title,item){
     return ask(user.id,'command_entity',{
       command,slot,item_id:item?.id||'',item_label:String(item?.n||item?.name||'')

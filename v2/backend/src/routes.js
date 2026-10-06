@@ -234,7 +234,7 @@ router.get('/map/points',async(req,res)=>{
         CASE WHEN $1::boolean THEN jsonb_strip_nulls(jsonb_build_object(
           'version',m.realcity_profile->'version','camera',m.realcity_profile->'camera',
           'palette',m.realcity_profile->'palette'
-        )) ELSE (m.realcity_profile - 'astra') END realcity_profile,m.realcity_quality,m.updated_at,
+        )) ELSE (m.realcity_profile - ARRAY['astra','real_world']) END realcity_profile,m.realcity_quality,m.updated_at,
         (jsonb_array_length(v.menu)>0) has_menu
       FROM shaurmeg_markers m JOIN shaurma_venues v ON v.venue_id=m.venue_id
       WHERE m.is_active=TRUE AND v.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE
@@ -248,7 +248,7 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
     const q=await db.query('SELECT id,establishment_id,venue_id,lat,lon,realcity_profile,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
     const row=q.rows[0];if(!row)return res.sendStatus(404);
     const profile=row.realcity_profile||{};
-    if(Number(profile.version||0)<realcity.PROFILE_VERSION)realcity.queue(row.id)?.catch(()=>{});
+    if(realcity.needsRefresh(profile))realcity.queue(row.id)?.catch(()=>{});
     res.setHeader('Cache-Control','no-store');
     res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}

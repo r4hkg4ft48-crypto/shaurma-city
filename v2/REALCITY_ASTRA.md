@@ -111,7 +111,9 @@ When the user provides photos/video:
 7. verify from the expected camera angle;
 8. keep the non-photo map/OSM procedural fallback if Astra output is unavailable.
 
-The old map-editor photo-reference pipeline is retired. Generic RealCity fallback code must never analyze user photos, Astra photos, KartaView imagery, or other imagery to recolor/reconstruct facades.
+The old map-editor photo-reference pipeline is retired. The plain OSM/OpenFreeMap procedural fallback does not analyze imagery. Automatic public imagery is handled only by `realcity-open-world.js` and is persisted under `realcity_profile.real_world`; it never reads private Astra assets. Astra photo interpretation remains exclusively inside the Astra Studio pipeline.
+
+Runtime priority is: reviewed `realcity_profile.astra` → automatic `realcity_profile.real_world` → OSM/OpenFreeMap procedural fallback. See `REALCITY_OPEN_WORLD.md` for the public-source pipeline.
 
 ## Must not break
 

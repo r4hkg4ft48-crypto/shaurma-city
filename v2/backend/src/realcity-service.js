@@ -1,5 +1,6 @@
 'use strict';
 const db=require('./db');
+const config=require('./config');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const zhulebino=require('./realcity-releases/zhulebino');
 
@@ -17,6 +18,14 @@ async function installPhotoRelease(){
   });
 }
 
+function needsRefresh(profile){
+  if(Number(profile?.version||0)<PROFILE_VERSION)return true;
+  if(config.REALCITY_OPEN_WORLD_ENABLED===false)return false;
+  const stamp=profile?.real_world?.generated_at;if(!stamp)return true;
+  const t=new Date(stamp).getTime();if(!Number.isFinite(t))return true;
+  return Date.now()-t>config.REALCITY_OPEN_WORLD_REFRESH_DAYS*86400000;
+}
+
 const jobs=new Map();
 function queue(markerId){
   const id=String(markerId||'');if(!/^\d+$/.test(id)||!db.configured)return null;
@@ -30,7 +39,7 @@ function queue(markerId){
       if(Number(marker.astra_asset_count||0)>0)profile.astra_input={version:1,mode:'metadata_only',establishment_id:marker.establishment_id||'',asset_count:Number(marker.astra_asset_count||0),config:marker.realcity_astra_config||{}};
       // Merge only generated keys; keep the latest Astra output/input even if an
       // admin saved a reconstruction while the geometry request was in flight.
-      await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb || (realcity_profile - ARRAY['version','generated_at','quality','confidence','building_style','palette','neighborhood_palette','facade','texture','environment','camera','scene']),realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
+      await db.query("UPDATE shaurmeg_markers SET realcity_profile=$2::jsonb || (realcity_profile - ARRAY['version','generated_at','quality','confidence','building_style','palette','neighborhood_palette','facade','texture','environment','camera','scene','sources','real_world']),realcity_status='ready',realcity_quality=$3,realcity_updated_at=NOW() WHERE id=$1",[id,JSON.stringify(profile),profile.quality||'heuristic']);
       return profile;
     }catch(e){
       console.error('realcity',id,e.message);
@@ -43,7 +52,7 @@ function queue(markerId){
 async function bootstrap(){
   if(!db.configured)return;
   await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
-  const q=await db.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<$1) ORDER BY updated_at DESC LIMIT 8",[PROFILE_VERSION]).catch(()=>({rows:[]}));
-  q.rows.forEach(x=>queue(x.id)?.catch(()=>{}));
+  const q=await db.query("SELECT id,realcity_status,realcity_profile FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
+  q.rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8).forEach(x=>queue(x.id)?.catch(()=>{}));
 }
-module.exports={queue,bootstrap,installPhotoRelease,PROFILE_VERSION};
+module.exports={queue,bootstrap,installPhotoRelease,needsRefresh,PROFILE_VERSION};

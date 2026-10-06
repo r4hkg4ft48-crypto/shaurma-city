@@ -439,9 +439,10 @@ void main(){
     }
     return {vertices:out.slice(0,used),...coordinateFrame,triangles:lodCounts.reduce((a,b)=>a+b,0)};
   }
-  function create({marker,profile,reducedMotion=false,onError=()=>{}}){
-    if(!S?.bound(profile?.astra,marker,profile?.scene)||!root.earcut)return null;
-    const astra=profile.astra,atlas=makeAtlas(astra);
+  function create({marker,profile,model=null,layerId='realcity-astra-facades',reducedMotion=false,onError=()=>{}}){
+    const astra=model||profile?.astra;
+    if(!S?.bound(astra,marker,profile?.scene)||!root.earcut)return null;
+    const atlas=makeAtlas(astra);
     let mesh;
     try{mesh=buildMesh(marker,profile.scene,astra,atlas)}catch(e){
       if(e.message!=='astra_geometry_budget'){onError(e);return null;}
@@ -452,7 +453,7 @@ void main(){
       return S.edges(b.ring||base.ring,[Number(marker.lon),Number(marker.lat)]).map(e=>({building_id:parent.building_id,edge_index:e.index,role:b.role,evidence:b.facades.find(f=>f.edge_index===e.index)?.evidence||'inferred',vertices:[[...e.a,b.base_m],[...e.b,b.base_m],[...e.b,b.height_m],[...e.a,b.height_m]]}));
     }));
     if(mesh.triangles>180000){onError(new Error('astra_geometry_budget'));return null;}
-    const layer={id:'realcity-astra-facades',type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
+    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
       stats:{buildings:astra.buildings.length,triangles:mesh.triangles,bytes:mesh.vertices.byteLength,photo_atlas_scale:atlas.photos.scale,photo_materials:atlas.photos.slots.size},
       onAdd(map,gl){
         this.map=map;this.gl=gl;

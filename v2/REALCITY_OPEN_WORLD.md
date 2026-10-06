@@ -92,13 +92,15 @@ Open imagery is fetched only during reconstruction and is bounded by:
 - four concurrent image decodes globally.
 
 Raw source images and source image URLs are not persisted in the final RealCity
-model. They exist only for the bounded reconstruction request. For a sufficiently
-confident street-level observation the worker may create a **derived facade
-material**: it selects the angular sector looking at one concrete footprint edge,
-crops the facade band, normalizes orientation, scales it to that wall's metric
-aspect ratio, compresses it to WebP and stores only that bounded derivative plus
-license/provenance. The current budget is at most six 640px-wide materials per
-local world.
+model. They exist only for the bounded reconstruction request. A derived facade
+material is persisted only for KartaView, or for a Panoramax item whose adaptation
+license is explicitly recognized. Mapillary and Wikimedia remain semantic /
+geometric observation sources only. For an eligible sufficiently confident
+street-level observation the worker selects the angular sector looking at one
+concrete footprint edge, crops the facade band, normalizes orientation, scales it
+to that wall's metric aspect ratio, compresses it to WebP and stores only that
+bounded derivative plus attribution, license URL and an adaptation note. The
+current budget is at most six 640px-wide materials per local world.
 
 The stored record therefore contains:
 - semantic appearance observations;

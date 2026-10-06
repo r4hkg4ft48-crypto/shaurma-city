@@ -133,13 +133,13 @@ function licenseFromConfig(j){
 
 async function collectPanoramax(marker){
   const roots=[config.PANORAMAX_API_URL,'https://api.panoramax.xyz/api','https://panoramax.ign.fr/api'].filter(Boolean).map(x=>String(x).replace(/\/+$/,''));
-  const box=bbox(marker,220),out=[],seen=new Set();
+  const box=bbox(marker,380),out=[],seen=new Set();
   await Promise.allSettled([...new Set(roots)].map(async root=>{
     let cfg={};try{cfg=await fetchJson(root+'/configuration',{timeout:3500})}catch{}
     let j;
-    const query=root+'/search?bbox='+box.join(',')+'&limit=36';
+    const query=root+'/search?bbox='+box.join(',')+'&limit=96';
     try{j=await fetchJson(query,{timeout:5000})}
-    catch{j=await fetchJson(root+'/search',{method:'POST',body:{bbox:box,limit:36},timeout:5000})}
+    catch{j=await fetchJson(root+'/search',{method:'POST',body:{bbox:box,limit:96},timeout:5000})}
     for(const item of j?.features||[]){
       const id=String(item.id||'');if(!id||seen.has(id))continue;
       const p=item.properties||{},coords=item.geometry?.type==='Point'?item.geometry.coordinates:null,url=firstImageAsset(item);
@@ -177,7 +177,7 @@ async function collectKartaView(marker){
   let j;
   try{
     j=await fetchJson(KARTAVIEW_API+'/1.0/list/nearby-photos/',{
-      method:'POST',form:{lat:String(marker.lat),lng:String(marker.lon),radius:'220',ipp:'100',page:'1'},timeout:6000
+      method:'POST',form:{lat:String(marker.lat),lng:String(marker.lon),radius:'380',ipp:'200',page:'1'},timeout:6000
     });
   }catch{return[]}
   const apiCode=Number(j?.status?.apiCode);if(apiCode&&apiCode!==600)return[];
@@ -194,16 +194,16 @@ async function collectKartaView(marker){
       license:'CC BY-SA 4.0',license_url:'https://creativecommons.org/licenses/by-sa/4.0/',attribution:'© Grab and KartaView Contributors',
       sequence_id:row.sequenceId??row.sequence_id,panoramic:fov>=300,fov
     });if(c)out.push(c);
-    if(out.length>=48)break;
+    if(out.length>=96)break;
   }
   return out;
 }
 
 async function collectMapillary(marker){
   const token=String(config.MAPILLARY_ACCESS_TOKEN||'').trim();if(!token)return[];
-  const box=bbox(marker,48);
+  const box=bbox(marker,180);
   const u=new URL('https://graph.mapillary.com/images');
-  u.searchParams.set('bbox',box.join(','));u.searchParams.set('limit','60');
+  u.searchParams.set('bbox',box.join(','));u.searchParams.set('limit','100');
   u.searchParams.set('fields','id,computed_geometry,thumb_1024_url,captured_at,compass_angle,creator,is_pano');
   let j;try{j=await fetchJson(u.toString(),{timeout:5500,headers:{Authorization:'OAuth '+token}})}catch{return[]}
   const out=[];
@@ -220,7 +220,7 @@ async function collectMapillary(marker){
 
 async function collectWikimedia(marker){
   const u=new URL('https://commons.wikimedia.org/w/api.php');
-  const params={action:'query',format:'json',origin:'*',generator:'geosearch',ggsprimary:'all',ggsnamespace:'6',ggsradius:'220',ggscoord:marker.lat+'|'+marker.lon,ggslimit:'24',prop:'imageinfo|coordinates',iiprop:'url|extmetadata',iiurlwidth:'1024'};
+  const params={action:'query',format:'json',origin:'*',generator:'geosearch',ggsprimary:'all',ggsnamespace:'6',ggsradius:'500',ggscoord:marker.lat+'|'+marker.lon,ggslimit:'96',prop:'imageinfo|coordinates',iiprop:'url|extmetadata',iiurlwidth:'1024'};
   for(const [k,v] of Object.entries(params))u.searchParams.set(k,String(v));
   let j;try{j=await fetchJson(u.toString(),{timeout:5500})}catch{return[]}
   const out=[];

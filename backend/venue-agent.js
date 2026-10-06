@@ -266,7 +266,7 @@ function splitActionClauses(v){
 }
 function inferContextAction(text){
   let raw=clean(text);if(!raw)return null;
-  raw=raw.replace(/^(?:там|тут|здесь|у\\s+нее|у\\s+неё|у\\s+него|в\\s+ней|в\\s+нем|в\\s+нём)\\s*[,—:-]?\\s*/i,'');
+  raw=raw.replace(/^(?:там|тут|здесь|у\s+нее|у\s+неё|у\s+него|в\s+ней|в\s+нем|в\s+нём)\s*[,—:-]?\s*/i,'');
   const s=normalize(raw);let m;
 
   m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)?\s*(?:цен[ау])?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);

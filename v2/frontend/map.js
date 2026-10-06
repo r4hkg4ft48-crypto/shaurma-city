@@ -474,7 +474,7 @@
     }
   }
   function loadAstraRenderer(){
-    if(window.RealCityLayer)return Promise.resolve();
+    if(window.RealCityLayer&&window.RealCitySplatLayer)return Promise.resolve();
     if(astraScripts)return astraScripts;
     const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-open-world-1';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('realcity_renderer_unavailable'))};document.head.appendChild(s)});
     astraScripts=(window.RealCitySpatial?Promise.resolve():load('realcity-spatial.js')).then(()=>load('vendor/earcut.min.js')).then(()=>load('realcity-layer.js')).then(()=>load('realcity-splat-layer.js')).catch(e=>{astraScripts=null;throw e});

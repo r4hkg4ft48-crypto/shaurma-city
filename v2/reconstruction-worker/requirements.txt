@@ -6,3 +6,5 @@ torch>=2.5,<2.9
 transformers>=4.45,<5
 accelerate>=1.0,<2
 safetensors>=0.4
+pycolmap>=3.11,<4
+plyfile>=1.1,<2

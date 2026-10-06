@@ -89,7 +89,7 @@ async function readPrivateSource(markerId,assetId){
 function allowedOpenCandidate(c){
   return ['panoramax','kartaview','wikimedia'].includes(c.source)&&openWorld._internals.canPersistAdaptation(c);
 }
-function photorealCandidates(raw,marker,max=72){
+function photorealCandidates(raw,marker,max=72,maxDistance=360){
   const origin=[Number(marker.lon),Number(marker.lat)],weights={panoramax:150,kartaview:145,wikimedia:105};
   const caps={panoramax:56,kartaview:56,wikimedia:32},bins=new Map(),counts={},seen=new Set(),out=[];
   const scored=(raw||[]).filter(allowedOpenCandidate).map(c=>{
@@ -97,7 +97,7 @@ function photorealCandidates(raw,marker,max=72){
     const bearing=openWorld._internals.bearing(origin,c.coordinates);
     const heading=finite(c.heading)?10:0,pano=c.panoramic?8:0,source=weights[c.source]||80;
     return {c,d,bearing,score:source+heading+pano-Math.min(92,d*.13)};
-  }).sort((a,b)=>b.score-a.score);
+  }).filter(x=>x.d<=maxDistance).sort((a,b)=>b.score-a.score);
   for(const item of scored){
     const c=item.c,key=String(c.source)+':'+String(c.id);if(seen.has(key))continue;
     const cap=caps[c.source]||24;if((counts[c.source]||0)>=cap)continue;
@@ -109,7 +109,7 @@ function photorealCandidates(raw,marker,max=72){
   return out;
 }
 async function buildSources(marker,profile,assets){
-  const own=assets.slice(0,72).map(a=>({
+  const own=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,72).map(a=>({
     id:'owner:'+a.id,kind:'owner',url:sourceUrl(marker,a),asset_id:a.id,
     category:a.category||'main_building',subtype:a.subtype||'detail',priority:Number(a.priority)||3,
     direction_deg:finite(a.direction_deg)?Number(a.direction_deg):null,
@@ -117,7 +117,10 @@ async function buildSources(marker,profile,assets){
     license:'owner supplied',attribution:'Venue supplied source'
   })).filter(x=>x.url);
   let publicCandidates=[];
-  try{publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,72)}catch{}
+  try{
+    const maxDistance=Math.max(180,Math.min(380,(Number(profile?.scene?.radius_m)||190)*1.7));
+    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,72,maxDistance);
+  }catch{}
   const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
   const pub=publicCandidates.map(c=>{
     const ref=refs.get(String(c.source)+':'+String(c.id));

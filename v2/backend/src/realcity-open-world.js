@@ -204,12 +204,12 @@ async function collectMapillary(marker){
   const box=bbox(marker,48);
   const u=new URL('https://graph.mapillary.com/images');
   u.searchParams.set('bbox',box.join(','));u.searchParams.set('limit','60');
-  u.searchParams.set('fields','id,computed_geometry,thumb_1024_url,captured_at,compass_angle,creator,is_pano');
+  u.searchParams.set('fields','id,computed_geometry,thumb_2048_url,thumb_1024_url,captured_at,compass_angle,creator,is_pano');
   let j;try{j=await fetchJson(u.toString(),{timeout:5500,headers:{Authorization:'OAuth '+token}})}catch{return[]}
   const out=[];
   for(const row of j?.data||[]){
     const coords=row.computed_geometry?.coordinates,author=clean(row.creator?.username||row.creator?.name||'',100);
-    const c=candidateBase('mapillary',row.id,coords,row.thumb_1024_url,'https://www.mapillary.com/app/?pKey='+encodeURIComponent(row.id),{
+    const c=candidateBase('mapillary',row.id,coords,row.thumb_2048_url||row.thumb_1024_url,'https://www.mapillary.com/app/?pKey='+encodeURIComponent(row.id),{
       heading:row.compass_angle,captured_at:row.captured_at?new Date(Number(row.captured_at)).toISOString():null,
       license:'CC BY-SA (Mapillary imagery; Developer Terms also apply)',license_url:'https://www.mapillary.com/terms',
       attribution:author?'© Mapillary · '+author:'© Mapillary',panoramic:row.is_pano===true,fov:row.is_pano===true?360:78
@@ -220,7 +220,7 @@ async function collectMapillary(marker){
 
 async function collectWikimedia(marker){
   const u=new URL('https://commons.wikimedia.org/w/api.php');
-  const params={action:'query',format:'json',origin:'*',generator:'geosearch',ggsprimary:'all',ggsnamespace:'6',ggsradius:'220',ggscoord:marker.lat+'|'+marker.lon,ggslimit:'24',prop:'imageinfo|coordinates',iiprop:'url|extmetadata',iiurlwidth:'1024'};
+  const params={action:'query',format:'json',origin:'*',generator:'geosearch',ggsprimary:'all',ggsnamespace:'6',ggsradius:'220',ggscoord:marker.lat+'|'+marker.lon,ggslimit:'24',prop:'imageinfo|coordinates',iiprop:'url|extmetadata',iiurlwidth:'1600'};
   for(const [k,v] of Object.entries(params))u.searchParams.set(k,String(v));
   let j;try{j=await fetchJson(u.toString(),{timeout:5500})}catch{return[]}
   const out=[];

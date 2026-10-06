@@ -262,6 +262,117 @@ def encode_rcsp2(points:np.ndarray,colors:np.ndarray,conf:np.ndarray,scales:np.n
     rec[:,19]=opacity;rec[:,20]=confidence;rec[:,21]=semantic
     return base64.b64encode(rec.tobytes()).decode(),mn.tolist(),mx.tolist(),len(points)
 
+def refine_cameras_with_ba(images,depth_conf,points_3d,extrinsic,intrinsic,dtype):
+    if not USE_BA or len(extrinsic)<4:
+        return extrinsic,intrinsic,{"bundle_adjustment":False}
+    try:
+        import torch
+        import pycolmap
+        from vggt.dependency.track_predict import predict_tracks
+        from vggt.dependency.np_to_pycolmap import batch_np_matrix_to_pycolmap
+        amp=torch.autocast(device_type="cuda",dtype=dtype) if images.is_cuda else torch.no_grad()
+        with amp:
+            tracks,vis,track_conf,tracked_points,points_rgb=predict_tracks(
+                images,conf=depth_conf,points_3d=points_3d,masks=None,
+                max_query_pts=min(4096,max(1536,len(extrinsic)*192)),
+                query_frame_num=min(len(extrinsic),10),
+                keypoint_extractor="aliked+sp",fine_tracking=True)
+        mask=vis>.2
+        reconstruction,valid=batch_np_matrix_to_pycolmap(
+            tracked_points,extrinsic,intrinsic,tracks,np.array(images.shape[-2:]),
+            masks=mask,max_reproj_error=7.0,shared_camera=False,camera_type="PINHOLE",points_rgb=points_rgb)
+        if reconstruction is None: raise RuntimeError("ba_reconstruction_empty")
+        pycolmap.bundle_adjustment(reconstruction,pycolmap.BundleAdjustmentOptions())
+        out_e=[];out_i=[]
+        for i in range(len(extrinsic)):
+            im=reconstruction.images[i+1]
+            pose=np.asarray(im.cam_from_world().matrix(),dtype=np.float32)
+            cam=reconstruction.cameras[im.camera_id]
+            K=np.asarray(cam.calibration_matrix(),dtype=np.float32)
+            if pose.shape!=(3,4) or K.shape!=(3,3): raise RuntimeError("ba_camera_shape")
+            out_e.append(pose);out_i.append(K)
+        return np.stack(out_e),np.stack(out_i),{"bundle_adjustment":True,"tracks":int(mask.sum())}
+    except Exception as e:
+        return extrinsic,intrinsic,{"bundle_adjustment":False,"ba_error":str(e)[:160]}
+
+def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf):
+    if not USE_GSPLAT or len(points)<3000:
+        scales=np.full((len(points),3),.045,dtype=np.float32)
+        quats=np.zeros((len(points),4),dtype=np.float32);quats[:,0]=1
+        return points,colors,confidence,scales,quats,{"gaussian_optimized":False}
+    try:
+        import torch
+        import torch.nn.functional as F
+        from gsplat.rendering import rasterization
+        device=images.device
+        max_init=min(len(points),140000)
+        if len(points)>max_init:
+            ids=np.argpartition(confidence,-max_init)[-max_init:]
+            points,colors,confidence=points[ids],colors[ids],confidence[ids]
+        means=torch.nn.Parameter(torch.from_numpy(points).float().to(device))
+        initial=means.detach().clone()
+        color_logits=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(colors,.002,.998)).float().to(device)))
+        scene_extent=float(np.linalg.norm(np.percentile(points,97,axis=0)-np.percentile(points,3,axis=0)))
+        base=max(scene_extent/max(len(points)**(1/3),1)*.32,.0025)
+        scales=torch.nn.Parameter(torch.full((len(points),3),math.log(base),device=device))
+        quats=torch.nn.Parameter(torch.zeros((len(points),4),device=device));quats.data[:,0]=1
+        c=np.asarray(confidence,dtype=np.float32)
+        c=(c-c.min())/max(float(c.max()-c.min()),1e-6)
+        opacities=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(.22+.62*c,.08,.92)).float().to(device)))
+        opts=[
+            torch.optim.Adam([means],lr=1.2e-4),
+            torch.optim.Adam([scales],lr=3.5e-3),
+            torch.optim.Adam([quats],lr=8e-4),
+            torch.optim.Adam([opacities],lr=2.5e-2),
+            torch.optim.Adam([color_logits],lr=2e-3),
+        ]
+        view=torch.eye(4,device=device).repeat(len(extrinsic),1,1)
+        view[:,:3,:4]=torch.from_numpy(extrinsic).float().to(device)
+        Ks=torch.from_numpy(intrinsic).float().to(device)
+        targets=images.permute(0,2,3,1).contiguous().float().clamp(0,1)
+        conf_t=torch.from_numpy(depth_conf).float().to(device)
+        if conf_t.ndim==4:conf_t=conf_t[...,0]
+        H,W=targets.shape[1:3]
+        yy=torch.arange(H,device=device)[:,None].expand(H,W)
+        thresholds=torch.quantile(conf_t.reshape(len(conf_t),-1),.28,dim=1)
+        valid=(conf_t>thresholds[:,None,None])&(yy[None]>H*.07)
+        steps=max(120,min(GSPLAT_STEPS,len(extrinsic)*32))
+        losses=[]
+        for step in range(steps):
+            i=(step*7+step//max(1,len(extrinsic)))%len(extrinsic)
+            for opt in opts:opt.zero_grad(set_to_none=True)
+            render,alpha,_=rasterization(
+                means=means,quats=F.normalize(quats,dim=-1),scales=torch.exp(scales),
+                opacities=torch.sigmoid(opacities),colors=torch.sigmoid(color_logits),
+                viewmats=view[i:i+1],Ks=Ks[i:i+1],width=W,height=H,sh_degree=None,
+                packed=True,rasterize_mode="antialiased",near_plane=.005,far_plane=1e5)
+            mask=valid[i];rgb=render[0,...,:3]
+            if mask.any():
+                l1=torch.abs(rgb[mask]-targets[i][mask]).mean()
+                coverage=(1-alpha[0,...,0][mask]).mean()
+            else:
+                l1=torch.abs(rgb-targets[i]).mean();coverage=(1-alpha[0,...,0]).mean()
+            geom=((means-initial)**2).mean()
+            scale_reg=torch.relu(torch.exp(scales).max(dim=1).values-base*8).mean()
+            loss=l1+.018*coverage+2e-5*geom+5e-4*scale_reg
+            loss.backward()
+            for opt in opts:opt.step()
+            with torch.no_grad():
+                scales.clamp_(math.log(base*.18),math.log(base*10))
+                opacities.clamp_(-5.0,5.0);color_logits.clamp_(-7.0,7.0)
+            if step%40==0 or step==steps-1:losses.append(float(loss.detach().cpu()))
+        with torch.no_grad():
+            out_points=means.detach().cpu().numpy()
+            out_colors=torch.sigmoid(color_logits).detach().cpu().numpy()
+            out_conf=torch.sigmoid(opacities).detach().cpu().numpy()
+            out_scales=torch.exp(scales).detach().cpu().numpy()
+            out_quats=F.normalize(quats,dim=-1).detach().cpu().numpy()
+        return out_points,out_colors,out_conf,out_scales,out_quats,{"gaussian_optimized":True,"gaussian_steps":steps,"gaussian_loss":losses[-1] if losses else None,"gaussians":len(out_points)}
+    except Exception as e:
+        fallback_scales=np.full((len(points),3),.045,dtype=np.float32)
+        fallback_quats=np.zeros((len(points),4),dtype=np.float32);fallback_quats[:,0]=1
+        return points,colors,confidence,fallback_scales,fallback_quats,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.models.vggt import VGGT
@@ -293,7 +404,8 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     intr_np=intr.squeeze(0).detach().float().cpu().numpy()
     ex,intr_np,ba=refine_cameras_with_ba(images.squeeze(0),cf,p,ex,intr_np,dtype)
     if ba.get("bundle_adjustment"):
-        p=unproject_depth_map_to_point_map(cf*0+depth.squeeze(0).detach().float().cpu().numpy(),ex,intr_np)
+        depth_np=depth.squeeze(0).detach().float().cpu().numpy()
+        p=unproject_depth_map_to_point_map(depth_np,ex,intr_np)
     centers=camera_centers(ex)
     target=int(job.policy.get("max_points",150000))
     pts,cols,scores,frames=choose_samples(p,cf,ims,target*3)

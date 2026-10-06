@@ -1317,7 +1317,7 @@ app.get('/api/shaurmeg/realcity-profile/:id',async(req,res)=>{
   const q=await DB.query("SELECT id,venue_id,realcity_profile,realcity_status,realcity_quality,realcity_updated_at FROM shaurmeg_markers WHERE id=$1 AND is_active=TRUE LIMIT 1",[req.params.id]);
   const row=q.rows[0];if(!row)return res.sendStatus(404);
   const profile=row.realcity_profile&&typeof row.realcity_profile==='object'?row.realcity_profile:{};
-  if(row.realcity_status!=='ready'||Number(profile.version||0)<PROFILE_VERSION)queueRealCityProfile(row.id);
+  if(row.realcity_status!=='ready'||v2RealCity.needsRefresh(profile))queueRealCityProfile(row.id);
   res.setHeader('Cache-Control','public, max-age=60, stale-while-revalidate=600');
   res.json({marker_id:row.id,venue_id:row.venue_id,status:row.realcity_status||'pending',quality:row.realcity_quality||'heuristic',updated_at:row.realcity_updated_at||null,profile});
  }catch(e){res.status(500).json({error:'realcity_profile_failed'})}

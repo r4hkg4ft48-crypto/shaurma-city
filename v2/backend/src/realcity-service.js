@@ -1,5 +1,6 @@
 'use strict';
 const db=require('./db');
+const config=require('./config');
 const {PROFILE_VERSION,analyzeRealCityProfile}=require('./realcity-analyzer');
 const zhulebino=require('./realcity-releases/zhulebino');
 
@@ -15,6 +16,14 @@ async function installPhotoRelease(){
     console.log('RealCity photo release installed',zhulebino.RELEASE,row.establishment_id);
     return profile;
   });
+}
+
+function needsRefresh(profile){
+  if(Number(profile?.version||0)<PROFILE_VERSION)return true;
+  if(config.REALCITY_OPEN_WORLD_ENABLED===false)return false;
+  const stamp=profile?.real_world?.generated_at;if(!stamp)return true;
+  const t=new Date(stamp).getTime();if(!Number.isFinite(t))return true;
+  return Date.now()-t>config.REALCITY_OPEN_WORLD_REFRESH_DAYS*86400000;
 }
 
 const jobs=new Map();
@@ -43,7 +52,7 @@ function queue(markerId){
 async function bootstrap(){
   if(!db.configured)return;
   await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
-  const q=await db.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<$1) ORDER BY updated_at DESC LIMIT 8",[PROFILE_VERSION]).catch(()=>({rows:[]}));
-  q.rows.forEach(x=>queue(x.id)?.catch(()=>{}));
+  const q=await db.query("SELECT id,realcity_status,realcity_profile FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
+  q.rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8).forEach(x=>queue(x.id)?.catch(()=>{}));
 }
-module.exports={queue,bootstrap,installPhotoRelease,PROFILE_VERSION};
+module.exports={queue,bootstrap,installPhotoRelease,needsRefresh,PROFILE_VERSION};

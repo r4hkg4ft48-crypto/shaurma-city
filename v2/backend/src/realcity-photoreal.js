@@ -89,6 +89,25 @@ async function readPrivateSource(markerId,assetId){
 function allowedOpenCandidate(c){
   return ['panoramax','kartaview','wikimedia'].includes(c.source)&&openWorld._internals.canPersistAdaptation(c);
 }
+function photorealCandidates(raw,marker,max=72){
+  const origin=[Number(marker.lon),Number(marker.lat)],weights={panoramax:150,kartaview:145,wikimedia:105};
+  const caps={panoramax:56,kartaview:56,wikimedia:32},bins=new Map(),counts={},seen=new Set(),out=[];
+  const scored=(raw||[]).filter(allowedOpenCandidate).map(c=>{
+    const d=openWorld._internals.haversine(c.coordinates,origin);
+    const bearing=openWorld._internals.bearing(origin,c.coordinates);
+    const heading=finite(c.heading)?10:0,pano=c.panoramic?8:0,source=weights[c.source]||80;
+    return {c,d,bearing,score:source+heading+pano-Math.min(92,d*.13)};
+  }).sort((a,b)=>b.score-a.score);
+  for(const item of scored){
+    const c=item.c,key=String(c.source)+':'+String(c.id);if(seen.has(key))continue;
+    const cap=caps[c.source]||24;if((counts[c.source]||0)>=cap)continue;
+    const bin=Math.floor(((item.bearing+15)%360)/30),n=bins.get(bin)||0;
+    if(n>=8&&out.length>=Math.ceil(max*.55))continue;
+    seen.add(key);counts[c.source]=(counts[c.source]||0)+1;bins.set(bin,n+1);
+    out.push({...c,distance_m:item.d});if(out.length>=max)break;
+  }
+  return out;
+}
 async function buildSources(marker,profile,assets){
   const own=assets.slice(0,72).map(a=>({
     id:'owner:'+a.id,kind:'owner',url:sourceUrl(marker,a),asset_id:a.id,
@@ -98,15 +117,17 @@ async function buildSources(marker,profile,assets){
     license:'owner supplied',attribution:'Venue supplied source'
   })).filter(x=>x.url);
   let publicCandidates=[];
-  try{
-    const permitted=(await openWorld.collectCandidates(marker)).filter(allowedOpenCandidate);
-    publicCandidates=openWorld._internals.diversify(permitted,marker,72);
-  }catch{}
-  const pub=publicCandidates.map(c=>({
-    id:c.source+':'+c.id,kind:'open',url:c.image_url,provider:c.source,
-    coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,
-    captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url
-  }));
+  try{publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,72)}catch{}
+  const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
+  const pub=publicCandidates.map(c=>{
+    const ref=refs.get(String(c.source)+':'+String(c.id));
+    return {
+      id:c.source+':'+c.id,kind:'open',url:c.image_url,provider:c.source,
+      coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,distance_m:c.distance_m,
+      captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url,
+      match:ref?.match||null
+    };
+  });
   // Interleave geotagged public frames with owner close-ups. This gives the
   // reconstruction both absolute camera anchors and maximum facade detail even
   // when an owner uploaded dozens of photos.
@@ -226,4 +247,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates}};

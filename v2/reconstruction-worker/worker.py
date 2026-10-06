@@ -19,7 +19,9 @@ import io
 import json
 import math
 import os
+import shutil
 import struct
+import subprocess
 import tempfile
 import time
 import uuid
@@ -135,6 +137,132 @@ def sift_overlap(a:np.ndarray,b:np.ndarray)->float:
         return min(1.0,len(good)/80.0)
     except Exception:
         return 0.0
+
+def umeyama_similarity(source:np.ndarray,target:np.ndarray):
+    source=np.asarray(source,np.float64);target=np.asarray(target,np.float64)
+    if len(source)<3 or source.shape!=target.shape:return None
+    mx=source.mean(axis=0);my=target.mean(axis=0)
+    x=source-mx;y=target-my
+    var=float(np.mean(np.sum(x*x,axis=1)))
+    if var<1e-8:return None
+    cov=(y.T@x)/len(source)
+    u,s,vt=np.linalg.svd(cov)
+    d=np.eye(3)
+    if np.linalg.det(u@vt)<0:d[-1,-1]=-1
+    rot=u@d@vt
+    scale=float(np.sum(s*np.diag(d))/var)
+    if not np.isfinite(scale) or scale<=0:return None
+    trans=my-scale*(rot@mx)
+    return scale,rot,trans
+
+def run_colmap(args,timeout=900):
+    env=os.environ.copy()
+    # COLMAP uses CUDA automatically when built with it; a CPU build still
+    # follows the same pipeline and simply runs slower.
+    p=subprocess.run(["colmap",*args],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout,env=env)
+    if p.returncode:
+        raise RuntimeError("colmap_"+args[0]+":"+p.stdout[-1200:])
+    return p.stdout
+
+def try_colmap(frames:list[Frame],origin,radius,job_id):
+    empty=(np.empty((0,3),np.float32),np.empty((0,3),np.uint8),{"status":"unavailable"})
+    if len(frames)<3 or not shutil.which("colmap"):
+        return empty
+    try:
+        import pycolmap
+        from plyfile import PlyData
+    except Exception:
+        return empty
+    with tempfile.TemporaryDirectory(prefix="realcity-colmap-") as td:
+        root=Path(td);images=root/"images";sparse=root/"sparse";dense=root/"dense"
+        images.mkdir();sparse.mkdir()
+        frame_by_name={}
+        for i,f in enumerate(frames):
+            name=f"{i:03d}.jpg";frame_by_name[name]=f
+            Image.fromarray(f.image).save(images/name,"JPEG",quality=94,subsampling=0)
+        database=root/"database.db"
+        try:
+            try:
+                run_colmap(["feature_extractor","--database_path",str(database),"--image_path",str(images),
+                            "--ImageReader.single_camera","0","--SiftExtraction.use_gpu","1"],600)
+            except Exception:
+                run_colmap(["feature_extractor","--database_path",str(database),"--image_path",str(images),
+                            "--ImageReader.single_camera","0","--SiftExtraction.use_gpu","0"],600)
+            try:
+                run_colmap(["exhaustive_matcher","--database_path",str(database),"--SiftMatching.use_gpu","1"],600)
+            except Exception:
+                run_colmap(["exhaustive_matcher","--database_path",str(database),"--SiftMatching.use_gpu","0"],600)
+            run_colmap(["mapper","--database_path",str(database),"--image_path",str(images),"--output_path",str(sparse)],900)
+        except Exception as exc:
+            return empty[0],empty[1],{"status":"sfm_failed","error":str(exc)[:400]}
+        models=sorted([p for p in sparse.iterdir() if p.is_dir()])
+        if not models:return empty[0],empty[1],{"status":"no_sparse_model"}
+        # Choose the model that registered the most views.
+        choices=[]
+        for m in models:
+            try:
+                r=pycolmap.Reconstruction(str(m));choices.append((len(r.images),m,r))
+            except Exception:
+                pass
+        if not choices:return empty[0],empty[1],{"status":"sparse_parse_failed"}
+        _,model_dir,recon=max(choices,key=lambda x:x[0])
+        src=[];dst=[]
+        for image in recon.images.values():
+            f=frame_by_name.get(str(image.name))
+            coords=f.source.get("coordinates") if f else None
+            if not coords or len(coords)!=2:continue
+            try:
+                center=np.asarray(image.projection_center(),dtype=np.float64)
+            except Exception:
+                try:
+                    pose=image.cam_from_world() if callable(image.cam_from_world) else image.cam_from_world
+                    center=np.asarray(pose.inverse().translation,dtype=np.float64)
+                except Exception:
+                    continue
+            x,y=local_xy(origin,coords);src.append(center);dst.append([x,y,1.65])
+        similarity=umeyama_similarity(np.asarray(src),np.asarray(dst)) if len(src)>=3 else None
+        if similarity is None:
+            return empty[0],empty[1],{"status":"gps_alignment_failed","registered":len(recon.images),"gps_cameras":len(src)}
+        scale,rot,trans=similarity
+        def transform(points):
+            return (scale*(rot@np.asarray(points,dtype=np.float64).T)).T+trans
+        dense_points=np.empty((0,3),np.float32);dense_colors=np.empty((0,3),np.uint8)
+        try:
+            run_colmap(["image_undistorter","--image_path",str(images),"--input_path",str(model_dir),
+                        "--output_path",str(dense),"--output_type","COLMAP","--max_image_size","1800"],900)
+            run_colmap(["patch_match_stereo","--workspace_path",str(dense),"--workspace_format","COLMAP",
+                        "--PatchMatchStereo.geom_consistency","true"],1800)
+            fused=dense/"fused.ply"
+            run_colmap(["stereo_fusion","--workspace_path",str(dense),"--workspace_format","COLMAP",
+                        "--input_type","geometric","--output_path",str(fused)],1200)
+            ply=PlyData.read(str(fused));v=ply["vertex"].data
+            dense_points=np.column_stack([v["x"],v["y"],v["z"]]).astype(np.float64)
+            if {"red","green","blue"}.issubset(v.dtype.names):
+                dense_colors=np.column_stack([v["red"],v["green"],v["blue"]]).astype(np.uint8)
+            else:dense_colors=np.full((len(dense_points),3),180,np.uint8)
+            dense_points=transform(dense_points).astype(np.float32)
+        except Exception as exc:
+            # Sparse SfM is still useful as a metric pose/geometry confidence
+            # source when PatchMatch cannot finish.
+            pts=[];cols=[]
+            for p in recon.points3D.values():
+                try:
+                    pts.append(np.asarray(p.xyz));cols.append(np.asarray(p.color,dtype=np.uint8))
+                except Exception:
+                    pass
+            if pts:
+                dense_points=transform(np.asarray(pts)).astype(np.float32)
+                dense_colors=np.asarray(cols,dtype=np.uint8)
+            report_error=str(exc)[:400]
+        if len(dense_points):
+            rr=np.linalg.norm(dense_points[:,:2],axis=1)
+            keep=np.isfinite(dense_points).all(axis=1)&(rr<radius*1.2)&(dense_points[:,2]>-5)&(dense_points[:,2]<80)
+            dense_points=dense_points[keep];dense_colors=dense_colors[keep]
+        return dense_points,dense_colors,{
+            "status":"dense" if len(dense_points)>12000 else "sparse",
+            "registered":len(recon.images),"gps_cameras":len(src),"points":int(len(dense_points)),
+            "scale":round(float(scale),6),**({"warning":report_error} if 'report_error' in locals() else {})
+        }
 
 class DepthEngine:
     def __init__(self):
@@ -310,6 +438,9 @@ def reconstruct(job_id,package,engine:DepthEngine):
     frames=raw[:min(18,len(raw))]
     heartbeat(job_id,"matching",selected=len(frames),mean_overlap=float(np.mean([f.overlap for f in frames])))
 
+    colmap_points,colmap_colors,colmap_report=try_colmap(frames,origin,radius,job_id)
+    heartbeat(job_id,"colmap",**colmap_report)
+
     for i,f in enumerate(frames):
         f.depth=engine.infer(f.image)
         heartbeat(job_id,"depth",frame=i+1,total=len(frames))
@@ -321,9 +452,18 @@ def reconstruct(job_id,package,engine:DepthEngine):
         p,c=frame_points(f,origin,radius,per)
         if len(p):ps.append(p);cs.append(c)
         heartbeat(job_id,"unproject",frame=i+1,total=len(frames),raw_points=sum(len(x) for x in ps))
-    if not ps:raise RuntimeError("no_valid_dense_points")
-    points=np.concatenate(ps);colors=np.concatenate(cs)
-    points,colors,radii=voxel_fuse(points,colors,voxel=.105,max_points=target_total)
+    if not ps and not len(colmap_points):raise RuntimeError("no_valid_dense_points")
+    depth_points=np.concatenate(ps) if ps else np.empty((0,3),np.float32)
+    depth_colors=np.concatenate(cs) if cs else np.empty((0,3),np.uint8)
+    if len(colmap_points):
+        # MVS is geometrically stronger than monocular completion. Duplicate its
+        # samples before voxel averaging so overlapping voxels converge toward
+        # the multi-view solution while DA2 still fills vegetation/road gaps.
+        points=np.concatenate([colmap_points,colmap_points,depth_points])
+        colors=np.concatenate([colmap_colors,colmap_colors,depth_colors])
+    else:
+        points,colors=depth_points,depth_colors
+    points,colors,radii=voxel_fuse(points,colors,voxel=.09 if len(colmap_points)>12000 else .105,max_points=target_total)
     if len(points)<10000:raise RuntimeError("insufficient_dense_geometry")
 
     bounds={"min":points.min(axis=0).round(3).tolist(),"max":points.max(axis=0).round(3).tolist()}
@@ -332,9 +472,9 @@ def reconstruct(job_id,package,engine:DepthEngine):
     multi=sum(1 for f in frames if f.overlap>=.12)
     quality="high" if len(frames)>=10 and multi>=5 and len(points)>=180000 else "medium" if len(frames)>=4 and len(points)>=70000 else "limited"
     scene={
-        "schema":"shaurmeg.realcity.surfels.v1","engine":"depth-anything-v2-small+gps-multiview",
+        "schema":"shaurmeg.realcity.surfels.v1","engine":"colmap-mvs+depth-anything-v2-small",
         "origin":[origin[0],origin[1],0],"radius_m":radius,"point_count":int(len(points)),
-        "bounds":bounds,"sources":source_used,"quality":quality,
+        "bounds":bounds,"sources":source_used,"quality":quality,"colmap":colmap_report,
         "coordinate_system":"local ENU metres, x=east y=north z=up",
         "spatial_truth":"OSM/OpenFreeMap footprint and target coordinates"
     }
@@ -348,9 +488,9 @@ def reconstruct(job_id,package,engine:DepthEngine):
     except Exception:
         pass
     return {
-        "provider":"depth-anything-v2-small","pose_solver":"gps-heading+sift-overlap",
+        "provider":"colmap-mvs+depth-anything-v2-small","pose_solver":"colmap-bundle-adjustment+gps-similarity" if colmap_report.get("status") in ("dense","sparse") else "gps-heading+sift-overlap",
         "point_count":int(len(points)),"radius_m":radius,"bounds":bounds,"quality":quality,
-        "coverage":{"sources_downloaded":len(raw),"sources_used":len(frames),"multiview_sources":multi,"dense_points":int(len(points))},
+        "coverage":{"sources_downloaded":len(raw),"sources_used":len(frames),"multiview_sources":multi,"dense_points":int(len(points)),"colmap_points":int(len(colmap_points)),"colmap":colmap_report},
         "camera":{"zoom":18.55,"pitch":67,"bearing":-20}
     }
 

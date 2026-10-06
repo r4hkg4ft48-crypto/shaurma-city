@@ -38,7 +38,13 @@ function allAdminIds(){
   return out;
 }
 function isAdmin(userId){return allAdminIds().has(String(userId||''))}
-function channelChatId(){return String(runtimeChannelChatId||config.CHANNEL_CHAT_ID||'').trim()}
+function configuredChannelChatId(){
+  const raw=String(config.CHANNEL_CHAT_ID||'').trim();
+  if(!raw)return '';
+  if(/^@[-_A-Za-z0-9]{4,}$/.test(raw)||/^-100\d+$/.test(raw))return raw;
+  return '';
+}
+function channelChatId(){return String(runtimeChannelChatId||configuredChannelChatId()||'').trim()}
 function assetUrl(post){
   const base=String(config.CHANNEL_ASSET_BASE_URL||config.PUBLIC_API_URL||'').replace(/\/+$/,'');
   const path=String(post?.media?.path||'').replace(/^\/+/, '');
@@ -477,13 +483,14 @@ function install(app){
       const [me,webhook]=await Promise.all([call('getMe',{}),call('getWebhookInfo',{})]);
       runtimeUsername=String(me?.username||runtimeUsername||'');
       let channel_access={status:'not_checked'};
-      if(config.CHANNEL_CHAT_ID){
+      const target=channelChatId();
+      if(target){
         try{
-          const member=await call('getChatMember',{chat_id:config.CHANNEL_CHAT_ID,user_id:me.id});
+          const member=await call('getChatMember',{chat_id:target,user_id:me.id});
           channel_access={status:String(member?.status||'unknown'),can_post_messages:member?.can_post_messages!==false,can_edit_messages:member?.can_edit_messages!==false,can_delete_messages:member?.can_delete_messages!==false};
         }catch(e){channel_access={status:'not_added',error:String(e.message||'channel_access_failed')}}
       }
-      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:target||'',channel_admin_url:channelAdminUrl(),channel_access,webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
+      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:target||'',channel_source:runtimeChannelChatId?'bound':'environment',channel_admin_url:channelAdminUrl(),channel_access,webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
     }catch(e){res.status(503).json({ok:false,enabled:true,error:String(e.message||'channel_health_failed')})}
   });
 

@@ -86,6 +86,27 @@ function revision(marker,profile,sources){
   })).digest('hex');
 }
 
+function reconstructionCandidates(raw,marker,max=MAX_SOURCES){
+  const origin=[Number(marker.lon),Number(marker.lat)],bins=new Map(),perSource={},seen=new Set(),out=[];
+  const weights={panoramax:140,kartaview:134,wikimedia:92};
+  const scored=(raw||[]).filter(x=>x?.image_url&&Array.isArray(x.coordinates)&&x.coordinates.length===2&&openWorld._internals.canPersistAdaptation(x)).map(x=>{
+    const d=openWorld._internals.haversine(x.coordinates,origin);
+    const b=openWorld._internals.bearing(origin,x.coordinates);
+    const source=String(x.source||''),heading=Number.isFinite(Number(x.heading))?8:0,pano=x.panoramic?7:0;
+    return {x,d,b,score:(weights[source]||70)+heading+pano-Math.min(85,d*.14)};
+  }).sort((a,b)=>b.score-a.score);
+  const sourceCaps={panoramax:48,kartaview:48,wikimedia:28};
+  for(const item of scored){
+    const x=item.x,key=String(x.source)+':'+String(x.id);if(seen.has(key))continue;
+    const cap=sourceCaps[x.source]||20;if((perSource[x.source]||0)>=cap)continue;
+    const bin=Math.floor(((item.b+15)%360)/30),binCount=bins.get(bin)||0;
+    if(binCount>=8&&out.length>=Math.ceil(max*.55))continue;
+    seen.add(key);perSource[x.source]=(perSource[x.source]||0)+1;bins.set(bin,binCount+1);
+    out.push({...x,distance_m:item.d});if(out.length>=max)break;
+  }
+  return out;
+}
+
 function currentPhotoreal(profile){
   return profile?.photoreal&&profile.photoreal.status==='ready'?profile.photoreal:null;
 }
@@ -102,10 +123,10 @@ function shouldEnqueue(profile){
 async function buildPackage(marker,profile){
   const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
   const raw=await openWorld.collectCandidates(marker);
-  const candidates=openWorld._internals.diversify(raw.filter(x=>x?.image_url&&x?.coordinates?.length===2&&openWorld._internals.canPersistAdaptation(x)),marker,MAX_SOURCES);
+  const candidates=reconstructionCandidates(raw,marker,MAX_SOURCES);
   const sources=candidates.map(x=>{
     const ref=refs.get(String(x.source)+':'+String(x.id));
-    const distance=openWorld._internals.haversine(x.coordinates,[Number(marker.lon),Number(marker.lat)]);
+    const distance=Number.isFinite(Number(x.distance_m))?Number(x.distance_m):openWorld._internals.haversine(x.coordinates,[Number(marker.lon),Number(marker.lat)]);
     return sourcePackage({...x,distance_m:distance,match:ref?.match||null});
   });
   const scene=profile.scene||{};
@@ -283,4 +304,4 @@ function install(router){
   });
 }
 
-module.exports={ENGINE,ensureSchema,enqueue,shouldEnqueue,recoverStaleJobs,buildPackage,install,_internals:{revision,sourcePackage,tokenOk}};
+module.exports={ENGINE,ensureSchema,enqueue,shouldEnqueue,recoverStaleJobs,buildPackage,install,_internals:{revision,sourcePackage,tokenOk,reconstructionCandidates}};

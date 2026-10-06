@@ -575,8 +575,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {row:q.rows[0],builder:normalized,config:next};
   }
 
-  async function handle({user,text}){
-    const command=parseCommand(text);
+  async function handle({user,text,command:providedCommand}){
+    const command=providedCommand&&typeof providedCommand==='object'?{...providedCommand}:parseCommand(text);
     if(command.intent==='help')return {handled:true,text:helpText()};
     if(command.intent==='unknown')return {handled:false};
 
@@ -631,7 +631,9 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
 
     const editor=await editorContext(user.id);
     const contextItem=menu.find(x=>String(x.id)===String(editor.selected_item_id||''));
+    const explicitItem=command.target_item_id?menu.find(x=>String(x.id)===String(command.target_item_id)):null;
     const resolveItem=(query)=>{
+      if(explicitItem)return {item:explicitItem,matches:[explicitItem]};
       if(clean(query)){
         const found=findNamed(menu,query,x=>x.n||x.name);
         return {item:found.item,matches:found.matches||[]};
@@ -644,6 +646,10 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     };
     const resolveGroup=(item,query)=>{
       const groups=Array.isArray(item?.choice_groups)?item.choice_groups:[];
+      if(command.target_group_id){
+        const exact=groups.find(g=>String(g.id)===String(command.target_group_id));
+        if(exact)return {group:exact,matches:[exact]};
+      }
       if(clean(query)){
         const found=findNamed(groups,query,x=>x.name);
         return {group:found.item,matches:found.matches||[]};
@@ -711,7 +717,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'✅ Отображение фото: '+(item.image_fit==='contain'?'вписать целиком':'заполнять карточку')+'.'};
       }
       if(command.intent==='menu_category_move'){
-        let category=findNamed(sections,command.category,x=>x.name||x.id).item;
+        let category=command.target_category_id?sections.find(x=>String(x.id)===String(command.target_category_id)):findNamed(sections,command.category,x=>x.name||x.id).item;
         if(!category){
           category={id:slug(command.category),name:command.category,emoji:'',active:true,order:sections.length};
           sections.push(category);
@@ -802,7 +808,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         await saveMenu(access,user.id,menu,{...config,menu_sections:sections},'assistant_fixed_option_add',{item_id:item.id,group:key,option_id:id});
         return {handled:true,text:'✅ '+fixedGroupLabel(key)+': добавлен вариант «'+command.name+'»'+(Number(command.price)?' '+(Number(command.price)>0?'+':'')+Number(command.price)+' ₽':'')};
       }
-      const optFound=findNamed(list,command.option,x=>x.name);
+      const exactOption=command.target_option_id?list.find(x=>String(x.id)===String(command.target_option_id)):null;
+      const optFound=exactOption?{item:exactOption,matches:[exactOption]}:findNamed(list,command.option,x=>x.name);
       if(!optFound.item)return {handled:true,text:'Не нашёл вариант «'+String(command.option||'')+'» в разделе '+fixedGroupLabel(key)+'.'};
       const option=optFound.item;
       if(command.intent==='fixed_option_delete')item.options[key]=list.filter(x=>String(x.id)!==String(option.id));
@@ -899,7 +906,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
         return {handled:true,text:'✅ В «'+group.name+'» добавлен вариант «'+command.name+'»'+(Number(command.price_delta)?' '+(Number(command.price_delta)>0?'+':'')+Number(command.price_delta)+' ₽':'')};
       }
 
-      const optionFound=findNamed(options,command.option,x=>x.name);
+      const exactOption=command.target_option_id?options.find(x=>String(x.id)===String(command.target_option_id)):null;
+      const optionFound=exactOption?{item:exactOption,matches:[exactOption]}:findNamed(options,command.option,x=>x.name);
       const option=optionFound.item;
       if(!option){
         const hint=optionFound.matches.length?'\n'+optionFound.matches.map(o=>'• '+o.name).join('\n'):'';
@@ -919,7 +927,7 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     }
 
     if(command.intent==='menu_price'||command.intent==='menu_toggle'||command.intent==='menu_rename'||command.intent==='menu_description'){
-      const found=findNamed(menu,command.item,x=>x.n||x.name);
+      const found=resolveItem(command.item);
       if(!found.item){
         const hint=found.matches.length?'\nВозможно:\n'+found.matches.map(x=>'• '+(x.n||x.name)).join('\n'):'';
         return {handled:true,text:'Не нашёл позицию «'+command.item+'».'+hint};
@@ -972,7 +980,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     }
 
     if(command.intent==='category_delete'||command.intent==='category_emoji'||command.intent==='category_order'){
-      const found=findNamed(sections,command.category,x=>x.name||x.id);
+      const exactCategory=command.target_category_id?sections.find(x=>String(x.id)===String(command.target_category_id)):null;
+      const found=exactCategory?{item:exactCategory,matches:[exactCategory]}:findNamed(sections,command.category,x=>x.name||x.id);
       if(!found.item)return {handled:true,text:'Не нашёл категорию «'+command.category+'».'};
       const section=found.item;
       if(command.intent==='category_delete'){
@@ -994,7 +1003,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     }
 
     if(command.intent==='category_toggle'||command.intent==='category_rename'){
-      const found=findNamed(sections,command.category,x=>x.name||x.id);
+      const exactCategory=command.target_category_id?sections.find(x=>String(x.id)===String(command.target_category_id)):null;
+      const found=exactCategory?{item:exactCategory,matches:[exactCategory]}:findNamed(sections,command.category,x=>x.name||x.id);
       if(!found.item)return {handled:true,text:'Не нашёл категорию «'+command.category+'».'};
       const section=found.item;
       if(command.intent==='category_toggle'){
@@ -1157,7 +1167,8 @@ function createVenueCommandBus({DB,publishVenue,pushOwner}){
     return {handled:true,text:'✅ Фото позиции «'+String(found.item.n||found.item.name)+'» обновлено.'};
   }
 
-  return {handle,setItemImage};
+  const execute=({user,command})=>handle({user,command});
+  return {handle,execute,setItemImage};
 }
 
 module.exports={createVenueCommandBus,parseCommand,helpText,norm,slug,findNamed,venueShortKey,looseWords};

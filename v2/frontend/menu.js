@@ -966,7 +966,7 @@
   function goMap(){
     try{tg?.BackButton?.hide?.()}catch{}
     const fallback=new URL('index.html',location.href);if(marker)fallback.searchParams.set('marker',marker);fallback.hash=location.hash;
-    if(qs.get('from')==='map'&&history.length>1)history.back();else location.assign(fallback.toString());
+    if(['map','admin'].includes(qs.get('from'))&&history.length>1)history.back();else location.assign(fallback.toString());
   }
   $('#back').onclick=goMap;
   try{tg?.ready();tg?.expand();tg?.BackButton?.show();tg?.BackButton?.onClick(goMap)}catch{}

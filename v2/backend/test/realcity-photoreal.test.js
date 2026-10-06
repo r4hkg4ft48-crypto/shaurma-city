@@ -120,3 +120,15 @@ test('photoreal worker keeps commercial VGGT cache and metric fallback contracts
   assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
   assert.doesNotMatch(src,/def get_vggt\([\s\S]{0,500}?model=get_vggt\(device\)/);
 });
+
+
+test('Gaussian depth bucket order is back-to-front and deterministic',()=>{
+  const vertices=new Float32Array(3*16);
+  vertices[2]=-.5;
+  vertices[16+2]=.2;
+  vertices[32+2]=.8;
+  const I=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+  const order=R.depthBucketOrder(vertices,I,3,32);
+  assert.deepEqual([...order],[2,1,0]);
+  assert.deepEqual([...R.depthBucketOrder(vertices,I,3,32)],[...order]);
+});

@@ -19,9 +19,7 @@ import io
 import json
 import math
 import os
-import shutil
 import struct
-import subprocess
 import tempfile
 import time
 import uuid
@@ -155,114 +153,90 @@ def umeyama_similarity(source:np.ndarray,target:np.ndarray):
     trans=my-scale*(rot@mx)
     return scale,rot,trans
 
-def run_colmap(args,timeout=900):
-    env=os.environ.copy()
-    # COLMAP uses CUDA automatically when built with it; a CPU build still
-    # follows the same pipeline and simply runs slower.
-    p=subprocess.run(["colmap",*args],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=timeout,env=env)
-    if p.returncode:
-        raise RuntimeError("colmap_"+args[0]+":"+p.stdout[-1200:])
-    return p.stdout
-
 def try_colmap(frames:list[Frame],origin,radius,job_id):
     empty=(np.empty((0,3),np.float32),np.empty((0,3),np.uint8),{"status":"unavailable"})
-    if len(frames)<3 or not shutil.which("colmap"):
-        return empty
+    if len(frames)<3:return empty
     try:
         import pycolmap
         from plyfile import PlyData
-    except Exception:
-        return empty
-    with tempfile.TemporaryDirectory(prefix="realcity-colmap-") as td:
-        root=Path(td);images=root/"images";sparse=root/"sparse";dense=root/"dense"
-        images.mkdir();sparse.mkdir()
-        frame_by_name={}
-        for i,f in enumerate(frames):
-            name=f"{i:03d}.jpg";frame_by_name[name]=f
-            Image.fromarray(f.image).save(images/name,"JPEG",quality=94,subsampling=0)
-        database=root/"database.db"
-        try:
+    except Exception as exc:
+        return empty[0],empty[1],{"status":"unavailable","error":str(exc)[:180]}
+    try:
+        with tempfile.TemporaryDirectory(prefix="realcity-colmap-") as td:
+            root=Path(td);images=root/"images";sparse=root/"sparse";dense=root/"dense"
+            images.mkdir();sparse.mkdir()
+            frame_by_name={}
+            for i,f in enumerate(frames):
+                name=f"{i:03d}.jpg";frame_by_name[name]=f
+                Image.fromarray(f.image).save(images/name,"JPEG",quality=94,subsampling=0)
+            database=root/"database.db"
+            device=pycolmap.Device.cuda if DEVICE_PREF.startswith("cuda") else pycolmap.Device.cpu
+            extraction=pycolmap.FeatureExtractionOptions()
+            extraction.max_image_size=1600
+            extraction.use_gpu=device==pycolmap.Device.cuda
+            pycolmap.extract_features(database,images,extraction_options=extraction,device=device)
+            matching=pycolmap.FeatureMatchingOptions()
+            matching.use_gpu=device==pycolmap.Device.cuda
+            pycolmap.match_exhaustive(database,matching_options=matching,device=device)
+            opts=pycolmap.IncrementalPipelineOptions()
+            opts.mapper.init_min_num_inliers=35
+            opts.mapper.abs_pose_min_num_inliers=20
+            opts.mapper.ba_local_num_images=min(8,max(4,len(frames)))
+            models=pycolmap.incremental_mapping(database,images,sparse,options=opts)
+            if not models:return empty[0],empty[1],{"status":"no_sparse_model"}
+            recon=max(models.values(),key=lambda r:sum(1 for im in r.images.values() if im.has_pose))
+            registered=sum(1 for im in recon.images.values() if im.has_pose)
+            src=[];dst=[]
+            for image in recon.images.values():
+                f=frame_by_name.get(str(image.name))
+                coords=f.source.get("coordinates") if f else None
+                if not image.has_pose or not coords or len(coords)!=2:continue
+                center=np.asarray(image.projection_center(),dtype=np.float64).reshape(3)
+                x,y=local_xy(origin,coords);src.append(center);dst.append([x,y,1.65])
+            similarity=umeyama_similarity(np.asarray(src),np.asarray(dst)) if len(src)>=3 else None
+            if similarity is None:
+                return empty[0],empty[1],{"status":"gps_alignment_failed","registered":registered,"gps_cameras":len(src)}
+            scale,rot,trans=similarity
+            def transform(points):
+                return (scale*(rot@np.asarray(points,dtype=np.float64).T)).T+trans
+
+            dense_points=np.empty((0,3),np.float32);dense_colors=np.empty((0,3),np.uint8)
+            report_error=None
             try:
-                run_colmap(["feature_extractor","--database_path",str(database),"--image_path",str(images),
-                            "--ImageReader.single_camera","0","--SiftExtraction.use_gpu","1"],600)
-            except Exception:
-                run_colmap(["feature_extractor","--database_path",str(database),"--image_path",str(images),
-                            "--ImageReader.single_camera","0","--SiftExtraction.use_gpu","0"],600)
-            try:
-                run_colmap(["exhaustive_matcher","--database_path",str(database),"--SiftMatching.use_gpu","1"],600)
-            except Exception:
-                run_colmap(["exhaustive_matcher","--database_path",str(database),"--SiftMatching.use_gpu","0"],600)
-            run_colmap(["mapper","--database_path",str(database),"--image_path",str(images),"--output_path",str(sparse)],900)
-        except Exception as exc:
-            return empty[0],empty[1],{"status":"sfm_failed","error":str(exc)[:400]}
-        models=sorted([p for p in sparse.iterdir() if p.is_dir()])
-        if not models:return empty[0],empty[1],{"status":"no_sparse_model"}
-        # Choose the model that registered the most views.
-        choices=[]
-        for m in models:
-            try:
-                r=pycolmap.Reconstruction(str(m));choices.append((len(r.images),m,r))
-            except Exception:
-                pass
-        if not choices:return empty[0],empty[1],{"status":"sparse_parse_failed"}
-        _,model_dir,recon=max(choices,key=lambda x:x[0])
-        src=[];dst=[]
-        for image in recon.images.values():
-            f=frame_by_name.get(str(image.name))
-            coords=f.source.get("coordinates") if f else None
-            if not coords or len(coords)!=2:continue
-            try:
-                center=np.asarray(image.projection_center(),dtype=np.float64)
-            except Exception:
-                try:
-                    pose=image.cam_from_world() if callable(image.cam_from_world) else image.cam_from_world
-                    center=np.asarray(pose.inverse().translation,dtype=np.float64)
-                except Exception:
-                    continue
-            x,y=local_xy(origin,coords);src.append(center);dst.append([x,y,1.65])
-        similarity=umeyama_similarity(np.asarray(src),np.asarray(dst)) if len(src)>=3 else None
-        if similarity is None:
-            return empty[0],empty[1],{"status":"gps_alignment_failed","registered":len(recon.images),"gps_cameras":len(src)}
-        scale,rot,trans=similarity
-        def transform(points):
-            return (scale*(rot@np.asarray(points,dtype=np.float64).T)).T+trans
-        dense_points=np.empty((0,3),np.float32);dense_colors=np.empty((0,3),np.uint8)
-        try:
-            run_colmap(["image_undistorter","--image_path",str(images),"--input_path",str(model_dir),
-                        "--output_path",str(dense),"--output_type","COLMAP","--max_image_size","1800"],900)
-            run_colmap(["patch_match_stereo","--workspace_path",str(dense),"--workspace_format","COLMAP",
-                        "--PatchMatchStereo.geom_consistency","true"],1800)
-            fused=dense/"fused.ply"
-            run_colmap(["stereo_fusion","--workspace_path",str(dense),"--workspace_format","COLMAP",
-                        "--input_type","geometric","--output_path",str(fused)],1200)
-            ply=PlyData.read(str(fused));v=ply["vertex"].data
-            dense_points=np.column_stack([v["x"],v["y"],v["z"]]).astype(np.float64)
-            if {"red","green","blue"}.issubset(v.dtype.names):
-                dense_colors=np.column_stack([v["red"],v["green"],v["blue"]]).astype(np.uint8)
-            else:dense_colors=np.full((len(dense_points),3),180,np.uint8)
-            dense_points=transform(dense_points).astype(np.float32)
-        except Exception as exc:
-            # Sparse SfM is still useful as a metric pose/geometry confidence
-            # source when PatchMatch cannot finish.
-            pts=[];cols=[]
-            for p in recon.points3D.values():
-                try:
-                    pts.append(np.asarray(p.xyz));cols.append(np.asarray(p.color,dtype=np.uint8))
-                except Exception:
-                    pass
-            if pts:
-                dense_points=transform(np.asarray(pts)).astype(np.float32)
-                dense_colors=np.asarray(cols,dtype=np.uint8)
-            report_error=str(exc)[:400]
-        if len(dense_points):
-            rr=np.linalg.norm(dense_points[:,:2],axis=1)
-            keep=np.isfinite(dense_points).all(axis=1)&(rr<radius*1.2)&(dense_points[:,2]>-5)&(dense_points[:,2]<80)
-            dense_points=dense_points[keep];dense_colors=dense_colors[keep]
-        return dense_points,dense_colors,{
-            "status":"dense" if len(dense_points)>12000 else "sparse",
-            "registered":len(recon.images),"gps_cameras":len(src),"points":int(len(dense_points)),
-            "scale":round(float(scale),6),**({"warning":report_error} if 'report_error' in locals() else {})
-        }
+                und=pycolmap.UndistortCameraOptions();und.max_image_size=1800
+                pycolmap.undistort_images(dense,recon,images,output_type="COLMAP",undistort_options=und)
+                pm=pycolmap.PatchMatchOptions();pm.max_image_size=1800;pm.cache_size=8.0;pm.geom_consistency=True
+                pycolmap.patch_match_stereo(dense,workspace_format="COLMAP",options=pm)
+                fused=dense/"fused.ply"
+                fusion=pycolmap.StereoFusionOptions();fusion.max_image_size=1800;fusion.cache_size=8.0;fusion.min_num_pixels=3
+                pycolmap.stereo_fusion(fused,dense,workspace_format="COLMAP",input_type="geometric",options=fusion,output_type="ply")
+                ply=PlyData.read(str(fused));v=ply["vertex"].data
+                dense_points=np.column_stack([v["x"],v["y"],v["z"]]).astype(np.float64)
+                if {"red","green","blue"}.issubset(v.dtype.names):
+                    dense_colors=np.column_stack([v["red"],v["green"],v["blue"]]).astype(np.uint8)
+                else:dense_colors=np.full((len(dense_points),3),180,np.uint8)
+                dense_points=transform(dense_points).astype(np.float32)
+            except Exception as exc:
+                report_error=str(exc)[:400]
+                pts=[];cols=[]
+                for p in recon.points3D.values():
+                    try:
+                        pts.append(np.asarray(p.xyz));cols.append(np.asarray(p.color,dtype=np.uint8))
+                    except Exception:pass
+                if pts:
+                    dense_points=transform(np.asarray(pts)).astype(np.float32)
+                    dense_colors=np.asarray(cols,dtype=np.uint8)
+            if len(dense_points):
+                rr=np.linalg.norm(dense_points[:,:2],axis=1)
+                keep=np.isfinite(dense_points).all(axis=1)&(rr<radius*1.2)&(dense_points[:,2]>-5)&(dense_points[:,2]<80)
+                dense_points=dense_points[keep];dense_colors=dense_colors[keep]
+            return dense_points,dense_colors,{
+                "status":"dense" if len(dense_points)>12000 else "sparse",
+                "registered":registered,"gps_cameras":len(src),"points":int(len(dense_points)),
+                "scale":round(float(scale),6),**({"warning":report_error} if report_error else {})
+            }
+    except Exception as exc:
+        return empty[0],empty[1],{"status":"sfm_failed","error":str(exc)[:400]}
 
 class DepthEngine:
     def __init__(self):

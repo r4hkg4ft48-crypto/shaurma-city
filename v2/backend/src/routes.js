@@ -248,7 +248,7 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
     const q=await db.query('SELECT id,establishment_id,venue_id,lat,lon,realcity_profile,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
     const row=q.rows[0];if(!row)return res.sendStatus(404);
     const profile=row.realcity_profile||{};
-    if(Number(profile.version||0)<realcity.PROFILE_VERSION)realcity.queue(row.id)?.catch(()=>{});
+    if(realcity.needsRefresh(profile))realcity.queue(row.id)?.catch(()=>{});
     res.setHeader('Cache-Control','no-store');
     res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}

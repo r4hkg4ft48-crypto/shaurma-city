@@ -18,6 +18,7 @@ const crypto=require('crypto');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='open-world-v1';
+const KARTAVIEW_API='https://api.openstreetcam.org';
 const MAX_IMAGE_BYTES=7*1024*1024;
 const MAX_TEXTURES=6;
 const STREET_SOURCES=new Set(['panoramax','kartaview','mapillary']);
@@ -137,6 +138,7 @@ async function collectPanoramax(marker){
       const p=item.properties||{},coords=item.geometry?.type==='Point'?item.geometry.coordinates:null,url=firstImageAsset(item);
       const fov=Number(p['pers:interior_orientation']?.field_of_view)||Number(p.field_of_view)||78;
       const itemLicense=clean(p.license||'',100)||licenseFromConfig(cfg);
+      if(p.license&&!/cc[-\s]?by|licen[cs]e ouverte|etalab|odbl|public domain/i.test(String(p.license)))continue;
       const page='https://api.panoramax.xyz/#focus=pic&pic='+encodeURIComponent(id);
       const c=candidateBase('panoramax',id,coords,url,page,{
         heading:p['view:azimuth']??p['exif:GPSImgDirection']??p.compass_angle??p.heading,

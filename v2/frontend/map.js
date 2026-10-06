@@ -481,11 +481,17 @@
     return astraScripts;
   }
   function setRealCityAttribution(model){
-    const box=$('#realCityAttribution');if(!box)return;
-    const refs=Array.isArray(model?.references)?model.references:[],names=[];
-    for(const r of refs){const n=({panoramax:'Panoramax',kartaview:'KartaView',mapillary:'Mapillary',wikimedia:'Wikimedia Commons'})[r.source]||String(r.source||'');if(n&&!names.includes(n))names.push(n)}
-    box.textContent=names.length?' · RealCity: '+names.join(' · '):'';
-    box.title=[...new Set(refs.map(r=>r.attribution).filter(Boolean))].join('\n');
+    const box=$('#realCityAttribution');if(!box)return;box.replaceChildren();
+    const refs=Array.isArray(model?.references)?model.references:[],providers=new Map();
+    for(const r of refs){
+      const name=({panoramax:'Panoramax',kartaview:'KartaView',mapillary:'Mapillary',wikimedia:'Wikimedia Commons'})[r.source]||String(r.source||'');
+      if(name&&!providers.has(r.source))providers.set(r.source,{name,url:r.page_url||({panoramax:'https://panoramax.fr',kartaview:'https://kartaview.org',mapillary:'https://www.mapillary.com',wikimedia:'https://commons.wikimedia.org'})[r.source]});
+    }
+    if(providers.size){
+      box.append(document.createTextNode(' · RealCity: '));let i=0;
+      for(const p of providers.values()){if(i++)box.append(document.createTextNode(' · '));const a=document.createElement('a');a.textContent=p.name;a.href=p.url||'#';a.target='_blank';a.rel='noopener';box.append(a)}
+    }
+    box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
   function removeAstraLayer(){
     for(const id of ['realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
@@ -596,7 +602,8 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    setBaseBuildingsDim(true,astraLayer?[data.heroFeature].filter(Boolean):[data.heroFeature,...data.contextFeatures,...covered].filter(Boolean));
+    const dimmed=astraLayer?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[data.heroFeature,...data.contextFeatures,...covered];
+    setBaseBuildingsDim(true,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});

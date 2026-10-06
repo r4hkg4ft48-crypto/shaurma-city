@@ -7,9 +7,11 @@ const auth=require('./auth');
 const rt=require('./realtime');
 const D=require('./domain');
 const realcity=require('./realcity-service');
+const reconstruction=require('./realcity-reconstruction');
 const telegram=require('./telegram');
 
 const router=express.Router();
+reconstruction.install(router);
 const builderCinema=require('./builder-cinema').install(router,{db,access:venueAccess,apiUrl:config.PUBLIC_API_URL});
 
 function fail(res,e,fallback='server_error'){console.error(fallback,e);res.status(e.status||500).json({error:e.message||fallback})}
@@ -268,7 +270,12 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
             source_report:profile.sources?.open_world||null,
             diagnostics:rw.diagnostics||null,reconstruction:rw.reconstruction||null
           },
-          astra:{status:astra.status||null,coverage:astra.coverage||null}
+          astra:{status:astra.status||null,coverage:astra.coverage||null},
+          photoreal:profile.photoreal?{
+            status:profile.photoreal.status||null,engine:profile.photoreal.engine||null,quality:profile.photoreal.quality||null,
+            generated_at:profile.photoreal.generated_at||null,source_count:profile.photoreal.source_count||0,
+            point_count:profile.photoreal.point_count||0,coverage:profile.photoreal.coverage||null,job_id:profile.photoreal.job_id||null
+          }:null
         }
       });
     }

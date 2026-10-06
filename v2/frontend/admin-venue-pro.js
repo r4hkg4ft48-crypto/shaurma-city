@@ -376,7 +376,15 @@ function connectStream(){
 }
 function openClientPreview(){
   const markerId=accesses.find(x=>x.establishment_id===est)?.marker_id||data?.marker_id;if(!markerId)return toast('У точки нет marker_id');
-  window.open((window.SHAURMEG?.clientBase||location.origin)+'/menu.html?marker='+encodeURIComponent(markerId)+'&establishment='+encodeURIComponent(est),'_blank');
+  const u=new URL('menu.html',location.href);
+  u.search='';
+  u.searchParams.set('marker',markerId);
+  u.searchParams.set('establishment',est);
+  u.searchParams.set('from','admin');
+  // Keep the guest menu inside the same Telegram Mini App WebView and preserve Telegram launch auth.
+  if(tg?.initData)u.hash='tgWebAppData='+encodeURIComponent(tg.initData)+'&tgWebAppVersion='+encodeURIComponent(tg.version||'8.0')+'&tgWebAppPlatform='+encodeURIComponent(tg.platform||'unknown');
+  else if(location.hash)u.hash=location.hash;
+  location.href=u.toString();
 }
 function bind(){
   window.ShaurmegDesign.mount($('#view-design'),{compress:compressImage,onChange:()=>{designDirty=true;renderPreview();setSync('Есть неопубликованные изменения',false)},onError:toast});

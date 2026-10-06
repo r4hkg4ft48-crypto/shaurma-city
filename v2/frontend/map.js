@@ -558,7 +558,7 @@
   }
   function buildQuarterData(p,profile){
     const scene=profile?.scene||{},rawBuildings=Array.isArray(scene.buildings)?scene.buildings:[],heroId=scene.hero_building_id||profile?.scene?.hero_building_id;
-    const maxContext=reduceMotion?10:(innerWidth<430?22:30);
+    const maxContext=photorealLayer?(innerWidth<430?48:64):(reduceMotion?10:(innerWidth<430?22:30));
     const sorted=[...rawBuildings].sort((a,b)=>(a.distance||0)-(b.distance||0));
     let hero=sorted.find(x=>x.role==='hero'||String(x.id)===String(heroId))||sorted[0]||null;
     const context=sorted.filter(x=>x!==hero).slice(0,maxContext);

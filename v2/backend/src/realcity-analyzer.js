@@ -6,7 +6,7 @@ const crypto=require('crypto');
 const spatial=require('../../frontend/realcity-spatial');
 const openWorld=require('./realcity-open-world');
 
-const PROFILE_VERSION=12;
+const PROFILE_VERSION=13;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'

@@ -4,8 +4,9 @@ const {VectorTile}=require('@mapbox/vector-tile');
 const Pbf=require('pbf');
 const crypto=require('crypto');
 const spatial=require('../../frontend/realcity-spatial');
+const openWorld=require('./realcity-open-world');
 
-const PROFILE_VERSION=11;
+const PROFILE_VERSION=12;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
@@ -424,8 +425,9 @@ async function analyzeRealCityProfile(marker){
   const saved=marker.realcity_profile?.scene;
   const scene=Array.isArray(saved?.buildings)&&saved.buildings.length
     ?saved:buildScene(osmSeed,safe,osmPalette,osmPalette,style,facade,treeDensity);
-  const quality=osmSeed.buildings.length?'osm':'heuristic';
-  const confidence=osmSeed.buildings.length?.61:.38;
+  const open=await openWorld.reconstruct(safe,scene).catch(e=>{console.warn('RealCity open-world',safe.id,e.message);return null});
+  const quality=open?.quality||(osmSeed.buildings.length?'osm':'heuristic');
+  const confidence=open?.confidence||(osmSeed.buildings.length?.61:.38);
 
   return {
     version:PROFILE_VERSION,
@@ -439,7 +441,7 @@ async function analyzeRealCityProfile(marker){
     },
     neighborhood_palette:uniqColors([...(osmPalette.swatches||[]),osmPalette.wall,osmPalette.accent,osmPalette.roof],8),
     facade,
-    texture:{hero_data_url:null,source:'procedural_map_geometry'},
+    texture:{hero_data_url:null,source:open?'open_imagery_semantic_facades':'procedural_map_geometry'},
     environment:{
       tree_density:Number(treeDensity.toFixed(2)),
       vegetation_ratio:null,
@@ -448,12 +450,15 @@ async function analyzeRealCityProfile(marker){
       dominant_material:osmSeed.dominantMaterial||null,
       average_levels:osmSeed.avgLevels?Number(osmSeed.avgLevels.toFixed(1)):null
     },
-    camera:{zoom:18.35,pitch:61,bearing:-20},
+    camera:open?.model?.camera||{zoom:18.35,pitch:61,bearing:-20},
     scene,
+    ...(open?.model?{real_world:open.model}:{}),
     sources:{
-      mode:'map_geometry_only',
+      mode:open?'open_world_semantic_reconstruction':'map_geometry_only',
       photo_reconstruction:false,
-      openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length}
+      raw_images_persisted:false,
+      openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length},
+      open_world:open?.report||{engine:openWorld.ENGINE,status:'unavailable'}
     }
   };
 }

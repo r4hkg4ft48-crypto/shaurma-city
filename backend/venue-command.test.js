@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {parseCommand,findNamed,venueShortKey}=require('./venue-command');
+const {createVenueCommandBus,parseCommand,findNamed,venueShortKey}=require('./venue-command');
 
 test('parses menu commands',()=>{
   assert.deepEqual(parseCommand('цена Классическая шаурма 390'),{intent:'menu_price',item:'Классическая шаурма',price:390});
@@ -59,4 +59,47 @@ test('parses conversational deep menu editing',()=>{
   assert.deepEqual(parseCommand('добавь выбор Размер'),{intent:'choice_group_add',name:'Размер'});
   assert.deepEqual(parseCommand('добавь вариант Большая +80'),{intent:'choice_option_add',name:'Большая',price_delta:80});
   assert.deepEqual(parseCommand('добавь вариант мяса Говядина +100'),{intent:'fixed_option_add',group:'мяса',name:'Говядина',price:100});
+});
+
+
+test('structured executor changes exact item id without fuzzy re-resolution',async()=>{
+  const ctx={establishment_id:'SC-MSK-STRUCT1234',selected_item_id:''};
+  const venue={
+    establishment_id:'SC-MSK-STRUCT1234',
+    venue_id:'VENUE-1',
+    name:'Тестовая точка',
+    is_active:true,
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0},{id:'extras',name:'Добавки',active:true,order:1}]},
+    menu:[
+      {id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true},
+      {id:'cheese',n:'Сыр',c:'extras',p:50,active:true}
+    ]
+  };
+  let savedMenu=null;
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a JOIN shaurma_venues v'))return {rows:[{
+      establishment_id:venue.establishment_id,role:'owner',permissions:['menu'],name:venue.name,venue_id:venue.venue_id,config:venue.config,menu:venue.menu,marker_id:'m1'
+    }]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context')){ctx.establishment_id=String(args[1]||ctx.establishment_id);return {rows:[]}}
+    if(sql.startsWith('SELECT establishment_id,selected_item_id,selected_group_id FROM shaurma_owner_command_context'))return {rows:[{...ctx,selected_group_id:''}]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET selected_item_id=')){ctx.selected_item_id=String(args[1]||'');return {rows:[]}}
+    if(sql.includes('SELECT v.*,m.id marker_id'))return {rows:[{...venue,address:'',description:'',hours:'',marker_id:'m1'}]};
+    if(sql.startsWith('UPDATE shaurma_venues SET menu=')){
+      savedMenu=JSON.parse(args[1]);
+      return {rows:[{...venue,menu:savedMenu,config:JSON.parse(args[2])}]};
+    }
+    if(sql.startsWith('INSERT INTO shaurma_venue_audit'))return {rows:[]};
+    if(sql.startsWith('SELECT establishment_id FROM shaurma_owner_command_context'))return {rows:[{establishment_id:ctx.establishment_id}]};
+    throw new Error('Unexpected SQL in structured executor mock: '+sql);
+  }};
+  const bus=createVenueCommandBus({DB,publishVenue:()=>{},pushOwner:()=>{}});
+  const result=await bus.execute({
+    user:{id:77},
+    command:{intent:'menu_price_context',price:420,target_item_id:'cheese_shawarma'}
+  });
+
+  assert.equal(result.handled,true);
+  assert.ok(savedMenu);
+  assert.equal(savedMenu.find(x=>x.id==='cheese_shawarma').p,420);
+  assert.equal(savedMenu.find(x=>x.id==='cheese').p,50);
 });

@@ -9,7 +9,6 @@ const SYN=[
   [/шавух[а-яa-z0-9]*/g,'шаурма'],
   [/\bшава\b/g,'шаурма'],
   [/картош[а-яa-z0-9]*/g,'картофель'],
-  [/сырн[а-яa-z0-9]*/g,'сыр'],
   [/клас+ич[а-яa-z0-9]*/g,'классика'],
   [/говяж[а-яa-z0-9]*/g,'говядина'],
   [/курин[а-яa-z0-9]*/g,'курица'],
@@ -48,30 +47,35 @@ function similarity(a,b){
   const na=normalize(a),nb=normalize(b);
   if(!na||!nb)return 0;
   if(na===nb)return 1;
-  if(na.includes(nb)||nb.includes(na))return Math.min(.97,.80+Math.min(na.length,nb.length)/Math.max(na.length,nb.length)*.17);
   const at=[...new Set(tokens(na))],bt=[...new Set(tokens(nb))];
-  let overlap=0;
-  for(const x of at)if(bt.includes(x))overlap++;
-  const tokenScore=at.length?overlap/at.length:0;
-  const reverse=bt.length?overlap/bt.length:0;
+  if(!at.length||!bt.length)return 0;
+
+  const tokenSim=(x,y)=>{
+    if(x===y)return 1;
+    const edit=1-levenshtein(x,y)/Math.max(x.length,y.length);
+    if(x.length>=4&&y.length>=4&&(x.startsWith(y)||y.startsWith(x)))return Math.max(.92,edit);
+    return Math.max(0,edit);
+  };
+  const bestFor=(src,dst)=>src.map(x=>{
+    let best=0;
+    for(const y of dst)best=Math.max(best,tokenSim(x,y));
+    return best;
+  });
+
+  const qScores=bestFor(at,bt),cScores=bestFor(bt,at);
+  const queryCoverage=qScores.reduce((s,x)=>s+x,0)/at.length;
+  const candidateCoverage=cScores.reduce((s,x)=>s+x,0)/bt.length;
+  const strongQuery=qScores.filter(x=>x>=.88).length/at.length;
+  const strongCandidate=cScores.filter(x=>x>=.88).length/bt.length;
   const edit=1-levenshtein(na,nb)/Math.max(na.length,nb.length);
-  const fuzzy=at.length?at.map(x=>{
-    let best=0;
-    for(const y of bt){
-      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
-      if(s>best)best=s;
-    }
-    return best;
-  }).reduce((s,x)=>s+x,0)/at.length:0;
-  const fuzzyReverse=bt.length?bt.map(y=>{
-    let best=0;
-    for(const x of at){
-      const s=x===y?1:1-levenshtein(x,y)/Math.max(x.length,y.length);
-      if(s>best)best=s;
-    }
-    return best;
-  }).reduce((s,x)=>s+x,0)/bt.length:0;
-  return Math.max(edit*.72,tokenScore*.65+reverse*.25,tokenScore===1?.93:0,fuzzy*.72+fuzzyReverse*.20);
+  const exactContain=na.includes(nb)||nb.includes(na);
+
+  // Query coverage dominates: "сырная шаурма" must not collapse to an item matching only "сыр".
+  let score=queryCoverage*.67+candidateCoverage*.20+Math.max(0,edit)*.13;
+  if(strongQuery===1)score=Math.max(score,.90+strongCandidate*.08);
+  if(exactContain&&strongQuery>=.5)score=Math.max(score,.84+strongQuery*.10);
+  if(at.length>=2&&strongQuery<1)score*=.78;
+  return Math.max(0,Math.min(1,score));
 }
 function itemText(item,categoryName=''){
   return [
@@ -251,6 +255,112 @@ function inferFreeform(text){
   return null;
 }
 
+
+const ACTION_HEAD='(?:(?:временно|пока)\\s+)?(?:сделай|поставь|установи|измени|поменяй|подними|увеличь|снизь|уменьши|убери|сними|верни|добавь|оставь|скрой|покажи|выключи|включи|пометь|назначь|не\\s+скрывай)';
+
+function splitActionClauses(v){
+  const raw=clean(v).replace(/[.;]+/g,',');
+  const separator='(?:,\\s*(?:(?:и|но|а)\\s+)?|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и|но|а)\\s+)';
+  return raw.split(new RegExp('\\s*'+separator+'(?='+ACTION_HEAD+'(?:\\s|$))','i'))
+    .map(clean).filter(Boolean);
+}
+function inferContextAction(text){
+  let raw=clean(text);if(!raw)return null;
+  raw=raw.replace(/^(?:там|тут|здесь|у\s+нее|у\s+неё|у\s+него|в\s+ней|в\s+нем|в\s+нём)\s*[,—:-]?\s*/i,'');
+  const s=normalize(raw);let m;
+
+  m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)?\s*(?:цен[ау])?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_context',price:Number(String(m[1]).replace(',','.'))};
+
+  m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)\s+цен[ау]\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_context',price:Number(String(m[1]).replace(',','.'))};
+
+  m=raw.match(/^(?:подними|увеличь)\s+(?:цен[ау]\s+)?(?:на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_delta',delta:Math.abs(Number(String(m[1]).replace(',','.')))};
+
+  m=raw.match(/^(?:снизь|уменьши)\s+(?:цен[ау]\s+)?(?:на\s+)?(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
+  if(m)return {intent:'menu_price_delta',delta:-Math.abs(Number(String(m[1]).replace(',','.')))};
+
+  if(/^(?:(?:временно|пока)\s+)?(?:убери|сними|выключи)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:из\s+)?(?:продажи|наличия)$/i.test(raw)||
+     /^(?:пока\s+)?(?:не\s+продаем|не\s+продаём|не\s+продавай|нет\s+в\s+наличии|закончил[а-яa-z0-9]*)$/i.test(raw))
+    return {intent:'menu_available',available:false};
+
+  if(/^(?:верни|включи|добавь\s+обратно)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:в\s+)?(?:продажу|наличие)$/i.test(raw)||
+     /^(?:снова|опять)\s+(?:есть|продаем|продаём)\s*(?:в\s+наличии)?$/i.test(raw))
+    return {intent:'menu_available',available:true};
+
+  if(/^(?:скрой|убери)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:из\s+меню)?$/i.test(raw))return {intent:'menu_toggle',enabled:false};
+  if(/^(?:покажи|верни|включи)\s+(?:ее|её|его|позицию|блюдо)?\s*(?:в\s+меню)$/i.test(raw))return {intent:'menu_toggle',enabled:true};
+
+  m=raw.match(/^(?:остаток|оставь|пусть\s+останется)\s*(\d+)\s*(?:шт|штук|штуки)?$/i);
+  if(m)return {intent:'menu_stock',value:Number(m[1])};
+  if(/^(?:остаток|запас)\s+(?:безлимит|без\s+ограничений|не\s+считать)$/i.test(raw))return {intent:'menu_stock',value:null};
+
+  m=raw.match(/^(?:вес|сделай\s+вес|поставь\s+вес)\s*(.+)$/i);
+  if(m)return {intent:'menu_weight',value:clean(m[1])};
+
+  m=raw.match(/^(?:бейдж|метка|пометь\s+как)\s+(.+)$/i);
+  if(m)return {intent:'menu_badge',value:clean(m[1])};
+
+  if(/^(?:сделай\s+)?(?:рекомендованн[а-я]*|в\s+рекомендации)$/i.test(raw))return {intent:'menu_recommended',enabled:true};
+  if(/^(?:убери|сними)\s+(?:из\s+)?рекомендаци[йи]$/i.test(raw))return {intent:'menu_recommended',enabled:false};
+
+  m=raw.match(/^(?:состав|сделай\s+состав|поставь\s+состав)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_composition',value:clean(m[1])};
+
+  m=raw.match(/^(?:теги|метки)\s*(?:=|:)?\s*(.+)$/i);
+  if(m)return {intent:'menu_tags',value:clean(m[1]).split(/[,;]+/).map(clean).filter(Boolean)};
+
+  if(/^не\s+скрывай\s+(?:из\s+меню)?$/i.test(raw)||/^оставь\s+(?:ее|её|его)?\s*в\s+меню$/i.test(raw))
+    return {intent:'menu_toggle',enabled:true};
+
+  return null;
+}
+function inferItemActionPlan(text){
+  const raw=clean(text);if(!raw)return null;
+  let item='',rest='',m;
+
+  m=raw.match(new RegExp('^(?:у|для)\\s+(.+?)\\s+('+ACTION_HEAD+'(?:\\s|$).*)$','i'));
+  if(m){item=clean(m[1]);rest=clean(m[2])}
+
+  if(!item){
+    m=raw.match(/^(?:работаем\s+с|работать\s+с|возьми|открой|перейди\s+к)\s+(.+?)[,;]\s*(.+)$/i);
+    if(m){item=clean(m[1]);rest=clean(m[2])}
+  }
+
+  if(!item)return null;
+  const clauses=splitActionClauses(rest);
+  if(!clauses.length)return null;
+  const actions=[];
+  for(const clause of clauses){
+    const contextual=inferContextAction(clause);
+    const parsed=contextual?null:parseCommand(clause);
+    const action=contextual||(parsed&&parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:null);
+    if(!action)return null;
+    const copy={...action};
+    delete copy.item;
+    actions.push(copy);
+  }
+  return actions.length?{kind:'item_plan',item,actions,source:raw}:null;
+}
+
+
+function inferContextActionPlan(text){
+  const clauses=splitActionClauses(text);
+  if(clauses.length<2)return null;
+  const actions=[];
+  for(const clause of clauses){
+    const contextual=inferContextAction(clause);
+    const parsed=contextual?null:parseCommand(clause);
+    const action=contextual||(parsed&&parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:null);
+    if(!action)return null;
+    const copy={...action};
+    delete copy.item;
+    actions.push(copy);
+  }
+  return actions.length>1?{kind:'context_plan',actions,source:clean(text)}:null;
+}
+
 function createVenueDialogAgent({DB,commandBus}){
   async function accesses(userId){
     const q=await DB.query(
@@ -319,10 +429,11 @@ function createVenueDialogAgent({DB,commandBus}){
     return menu.map(item=>{
       const section=secs.find(x=>String(x.id)===String(item.c||item.category||''));
       const names=[item?.n,item?.name,...(aliasMap.get(String(item.id))||[])].filter(Boolean);
-      let score=0,source='';
-      for(const n of names){const s=similarity(query,n);if(s>score){score=s;source=n}}
-      score=Math.max(score,similarity(query,itemText(item,section?.name||''))*.82);
-      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,source,type:'item',category_id:String(item.c||item.category||'')};
+      let titleScore=0,source='';
+      for(const n of names){const s=similarity(query,n);if(s>titleScore){titleScore=s;source=n}}
+      const metadataScore=similarity(query,itemText(item,section?.name||''))*.72;
+      const score=Math.max(titleScore,metadataScore);
+      return {id:String(item.id),label:String(item.n||item.name||'Позиция'),score,titleScore,source,type:'item',category_id:String(item.c||item.category||'')};
     }).filter(x=>x.score>=.35).sort((a,b)=>b.score-a.score).slice(0,8);
   }
   async function rankCategories(venue,query){
@@ -338,8 +449,9 @@ function createVenueDialogAgent({DB,commandBus}){
   function decisive(ranked){
     if(!ranked.length)return null;
     const a=ranked[0],b=ranked[1];
-    if(a.score>=.985)return a;
-    if(a.score>=.94&&(!b||a.score-b.score>=.18))return a;
+    if(a.score>=.995)return a;
+    if(a.score>=.965&&(!b||a.score-b.score>=.12))return a;
+    if(a.titleScore>=.97&&(!b||a.titleScore-(b.titleScore||b.score)>=.16))return a;
     return null;
   }
   async function ask(userId,kind,payload,candidates,title){
@@ -426,12 +538,48 @@ function createVenueDialogAgent({DB,commandBus}){
     },candidates,title);
   }
 
+  function materializePlanAction(action,item){
+    const cmd={...action,target_item_id:String(item.id)};
+    if(cmd.intent==='menu_price_delta'){
+      const current=Number(item.p??item.price??0);
+      const next=Math.max(0,Math.min(100000,Math.round(current+Number(cmd.delta||0))));
+      return {intent:'menu_price_context',price:next,target_item_id:String(item.id)};
+    }
+    return cmd;
+  }
+  async function executeItemPlanOnResolved(user,item,actions){
+    const allowed=new Set([
+      'menu_price_context','menu_available','menu_toggle','menu_weight','menu_stock','menu_badge',
+      'menu_recommended','menu_composition','menu_tags'
+    ]);
+    const commands=(Array.isArray(actions)?actions:[]).map(a=>materializePlanAction(a,item));
+    if(!commands.length||commands.some(x=>!allowed.has(x.intent))){
+      return {handled:true,text:'В этой фразе есть изменение, которое пока нельзя безопасно объединить с остальными. Ничего не меняю — сформулируйте эту часть отдельно.'};
+    }
+    const results=[];
+    for(const command of commands){
+      const result=await executeResolved(user,command,String(item.n||item.name||''));
+      if(!result?.handled)return {handled:true,text:'Не удалось безопасно выполнить весь план. Остановился на текущем шаге.'};
+      results.push(String(result.text||'').replace(/<\/?(?:b|code)>/gi,''));
+    }
+    return {handled:true,text:results.join('\n')};
+  }
+  async function resolveAndExecuteItemPlan(user,venue,itemQuery,actions){
+    const picked=await chooseItem(user,venue,itemQuery,{plan:actions},'Какое именно блюдо вы имеете в виду для этих изменений?');
+    if(picked.error)return {handled:true,text:picked.error};
+    if(picked.ask)return picked.ask;
+    const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
+    if(!item)return {handled:true,text:'Позиция изменилась или удалена. Ничего не меняю — назовите её ещё раз.'};
+    await patchContext(user.id,{selected_item_id:String(item.id),selected_group_id:null,...(picked.item.category_id?{selected_category_id:picked.item.category_id}:{})});
+    return executeItemPlanOnResolved(user,item,actions);
+  }
+
   async function resolveNestedCommand(user,venue,ctx,command,item){
-    let cmd={...command};
+    let cmd={...command,...(item?.id?{target_item_id:String(item.id)}:{})};
 
     if(cmd.intent==='menu_category_move'&&clean(cmd.category)){
       const ranked=await rankCategories(venue,cmd.category),hit=decisive(ranked);
-      if(hit)cmd.category=hit.label;
+      if(hit){cmd.category=hit.label;cmd.target_category_id=hit.id;}
       else if(ranked.length)return askCommandEntity(user,cmd,'category',ranked,'В какую категорию перенести позицию?',item);
       else return {handled:true,text:'Категорию «'+cmd.category+'» не нашёл. Чтобы не создать лишний раздел из-за опечатки, сначала явно создайте её: «добавь категорию '+cmd.category+'».'};
     }
@@ -441,7 +589,7 @@ function createVenueDialogAgent({DB,commandBus}){
       let group=null;
       if(clean(cmd.group)){
         const ranked=rankNamed(groups,cmd.group,x=>x.name,'group'),hit=decisive(ranked);
-        if(hit){group=groups.find(x=>String(x.id)===hit.id);cmd.group=hit.label}
+        if(hit){group=groups.find(x=>String(x.id)===hit.id);cmd.group=hit.label;cmd.target_group_id=hit.id}
         else if(ranked.length)return askCommandEntity(user,cmd,'group',ranked,'Какую группу выбора вы имеете в виду?',item);
         else return {handled:true,text:'Группу «'+cmd.group+'» у позиции «'+String(item?.n||item?.name||'')+'» не нашёл. Ничего не меняю.'};
       }else{
@@ -454,7 +602,7 @@ function createVenueDialogAgent({DB,commandBus}){
         if(!group&&groups.length===0&&cmd.intent!=='choice_group_add'){
           return {handled:true,text:'У этой позиции пока нет произвольных групп выбора. Можно сказать: «добавь выбор Размер».'};
         }
-        if(group)cmd.group=String(group.name||group.id);
+        if(group){cmd.group=String(group.name||group.id);cmd.target_group_id=String(group.id)}
       }
       if(group)await patchContext(user.id,{selected_group_id:String(group.id)});
 
@@ -462,7 +610,7 @@ function createVenueDialogAgent({DB,commandBus}){
         const g=group||currentGroup(item,await context(user.id));
         if(!g)return {handled:true,text:'Сначала выберите группу параметров.'};
         const ranked=rankNamed(g.options||[],cmd.option,x=>x.name,'option'),hit=decisive(ranked);
-        if(hit)cmd.option=hit.label;
+        if(hit){cmd.option=hit.label;cmd.target_option_id=hit.id;}
         else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант изменить?',item);
         else return {handled:true,text:'Вариант «'+String(cmd.option||'')+'» в группе «'+String(g.name||'')+'» не найден. Ничего не меняю.'};
       }
@@ -472,7 +620,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const key=fixedGroupKey(cmd.group),list=Array.isArray(item?.options?.[key])?item.options[key]:[];
       if(!key)return {handled:true,text:'Не понял тип варианта. Уточните: мясо, размер, основа, соус или добавка.'};
       const ranked=rankNamed(list,cmd.option,x=>x.name,'fixed_option'),hit=decisive(ranked);
-      if(hit)cmd.option=hit.label;
+      if(hit){cmd.option=hit.label;cmd.target_option_id=hit.id;}
       else if(ranked.length)return askCommandEntity(user,cmd,'option',ranked,'Какой именно вариант '+normalize(cmd.group)+' изменить?',item);
       else return {handled:true,text:'Не нашёл вариант «'+String(cmd.option||'')+'». Ничего не меняю.'};
     }
@@ -484,7 +632,7 @@ function createVenueDialogAgent({DB,commandBus}){
   async function resolveCategoryCommand(user,venue,command){
     const ranked=await rankCategories(venue,command.category),hit=decisive(ranked);
     if(hit){
-      const cmd={...command,category:hit.label};
+      const cmd={...command,category:hit.label,target_category_id:hit.id};
       if(destructive(cmd))return confirmDanger(user,cmd,'');
       return executeResolved(user,cmd,'');
     }
@@ -492,7 +640,11 @@ function createVenueDialogAgent({DB,commandBus}){
     return {handled:true,text:'Категорию «'+String(command.category||'')+'» не нашёл. Ничего не меняю.'};
   }
   async function executeResolved(user,command,itemLabel=''){
-    const text=canonicalText(command,itemLabel);
+    const structured={...command};
+    if(itemLabel&&!structured.item)structured.item=itemLabel;
+    if(typeof commandBus.execute==='function')return commandBus.execute({user,command:structured});
+    // Compatibility fallback only; the dialog agent itself never reparses when execute() exists.
+    const text=canonicalText(structured,itemLabel);
     if(!text)return {handled:false};
     return commandBus.handle({user,text});
   }
@@ -558,6 +710,12 @@ function createVenueDialogAgent({DB,commandBus}){
       await clearPending(user.id);
       await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
       const cmd=payload.command;
+      if(payload.plan){
+        const active=await activeVenue(user);
+        const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
+        if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Ничего не меняю.'};
+        return executeItemPlanOnResolved(user,item,payload.plan);
+      }
       if(payload.alias){
         const active=await activeVenue(user);
         await addAlias(user.id,active.venue.establishment_id,'item',chosen.id,payload.alias);
@@ -567,9 +725,9 @@ function createVenueDialogAgent({DB,commandBus}){
         const active=await activeVenue(user),fresh=await context(user.id);
         const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
         if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
-        return resolveNestedCommand(user,active.venue,fresh,cmd,item);
+        return resolveNestedCommand(user,active.venue,fresh,{...cmd,target_item_id:chosen.id},item);
       }
-      return commandBus.handle({user,text:'работаем с '+chosen.label});
+      return executeResolved(user,{intent:'menu_item_select',item:chosen.label,target_item_id:chosen.id},chosen.label);
     }
 
     if(kind==='entity_nav'){
@@ -580,8 +738,8 @@ function createVenueDialogAgent({DB,commandBus}){
         const items=menu.filter(x=>String(x.c||x.category||'')===String(chosen.id)&&x.active!==false);
         return {handled:true,text:'Открыта категория «'+chosen.label+'».\n\n'+(items.length?items.slice(0,30).map(x=>'• '+String(x.n||x.name)+' · '+Number(x.p??x.price??0)+' ₽').join('\n'):'В категории пока пусто.')+'\n\nМожно написать название позиции.'};
       }
-      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null});
-      return commandBus.handle({user,text:'работаем с '+chosen.label});
+      await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
+      return executeResolved(user,{intent:'menu_item_select',item:chosen.label,target_item_id:chosen.id},chosen.label);
     }
 
     if(kind==='command_entity'){
@@ -589,19 +747,18 @@ function createVenueDialogAgent({DB,commandBus}){
       const active=await activeVenue(user);
       if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
       const cmd={...(payload.command||{})};
-      if(payload.slot==='category')cmd.category=chosen.label;
+      if(payload.slot==='category'){cmd.category=chosen.label;cmd.target_category_id=chosen.id;}
       if(payload.slot==='group'){
-        cmd.group=chosen.label;
+        cmd.group=chosen.label;cmd.target_group_id=chosen.id;
         await patchContext(user.id,{selected_group_id:chosen.id});
       }
-      if(payload.slot==='option')cmd.option=chosen.label;
+      if(payload.slot==='option'){cmd.option=chosen.label;cmd.target_option_id=chosen.id;}
       const fresh=await context(user.id);
       const item=(active.venue.menu||[]).find(x=>String(x.id)===String(payload.item_id||fresh.selected_item_id||''));
       if(item)return resolveNestedCommand(user,active.venue,fresh,cmd,item);
       if(needsCategoryResolution(cmd))return resolveCategoryCommand(user,active.venue,cmd);
       if(destructive(cmd))return confirmDanger(user,cmd,'');
-      const canonical=canonicalText(cmd,'');
-      return canonical?commandBus.handle({user,text:canonical}):{handled:false};
+      return executeResolved(user,cmd,'');
     }
 
     if(kind==='action'){
@@ -646,6 +803,16 @@ function createVenueDialogAgent({DB,commandBus}){
       return ask(user.id,'venue_select',{query:''},ranked,'Сначала выберите заведение:');
     }
     const {venue,ctx}=active;
+
+    const explicitPlan=inferItemActionPlan(raw);
+    if(explicitPlan)return resolveAndExecuteItemPlan(user,venue,explicitPlan.item,explicitPlan.actions);
+
+    const selected=currentItem(venue,ctx);
+    const contextPlan=selected?inferContextActionPlan(raw):null;
+    if(contextPlan)return executeItemPlanOnResolved(user,selected,contextPlan.actions);
+
+    const contextualAction=selected&&parsed.intent==='unknown'?inferContextAction(raw):null;
+    if(contextualAction)return executeResolved(user,materializePlanAction(contextualAction,selected),String(selected.n||selected.name||''));
 
     const free=parsed.intent==='unknown'?inferFreeform(raw):null;
 
@@ -735,7 +902,7 @@ function createVenueDialogAgent({DB,commandBus}){
       const ih=decisive(itemRank),ch=decisive(catRank);
       if(ih&&(!ch||ih.score>ch.score+.08)){
         await patchContext(user.id,{selected_item_id:ih.id,selected_group_id:null,...(ih.category_id?{selected_category_id:ih.category_id}:{})});
-        return commandBus.handle({user,text:'работаем с '+ih.label});
+        return executeResolved(user,{intent:'menu_item_select',item:ih.label,target_item_id:ih.id},ih.label);
       }
       if(ch&&(!ih||ch.score>ih.score+.08)){
         await patchContext(user.id,{selected_category_id:ch.id,selected_item_id:null,selected_group_id:null});
@@ -762,7 +929,7 @@ function createVenueDialogAgent({DB,commandBus}){
           const fresh=await context(user.id);
           const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
           if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Повторите запрос.'};
-          return resolveNestedCommand(user,venue,fresh,command,item);
+          return resolveNestedCommand(user,venue,fresh,{...command,target_item_id:picked.item.id},item);
         }
         const fresh=await context(user.id);
         if(!fresh.selected_item_id){
@@ -770,10 +937,11 @@ function createVenueDialogAgent({DB,commandBus}){
         }
         const current=(venue.menu||[]).find(x=>String(x.id)===String(fresh.selected_item_id));
         if(!current)return {handled:true,text:'Выбранная ранее позиция больше не найдена. Назовите блюдо ещё раз.'};
-        return resolveNestedCommand(user,venue,fresh,command,current);
+        return resolveNestedCommand(user,venue,fresh,{...command,target_item_id:String(current.id)},current);
       }
       if(needsCategoryResolution(command))return resolveCategoryCommand(user,venue,command);
       if(destructive(command))return confirmDanger(user,command,'');
+      if(typeof commandBus.execute==='function')return commandBus.execute({user,command});
       return commandBus.handle({user,text:raw});
     }
 
@@ -801,4 +969,4 @@ function createVenueDialogAgent({DB,commandBus}){
   return {handle,handleCallback,similarity,normalize};
 }
 
-module.exports={createVenueDialogAgent,similarity,normalize,inferFreeform};
+module.exports={createVenueDialogAgent,similarity,normalize,inferFreeform,inferContextAction,inferItemActionPlan,inferContextActionPlan,splitActionClauses};

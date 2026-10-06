@@ -23,7 +23,7 @@ test('RealCity RCSP2 Gaussian shader compiles and renders in Chromium WebGL',asy
       const v=new DataView(raw.buffer);
       v.setInt16(0,0,true);v.setInt16(0,2,true);v.setInt16(0,4,true);
       raw[6]=180;raw[7]=150;raw[8]=120;
-      v.setUint16(800,9,true);v.setUint16(350,11,true);v.setUint16(120,13,true);
+      v.setUint16(9,800,true);v.setUint16(11,350,true);v.setUint16(13,120,true);
       v.setInt8(127,15);v.setInt8(0,16);v.setInt8(0,17);v.setInt8(0,18);
       raw[19]=235;raw[20]=245;raw[21]=0;
       let binary='';for(const b of raw)binary+=String.fromCharCode(b);

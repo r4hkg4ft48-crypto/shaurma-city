@@ -33,6 +33,7 @@ module.exports={
   REALCITY_OPEN_WORLD_TEXTURES:clean(process.env.REALCITY_OPEN_WORLD_TEXTURES||'true').toLowerCase()!=='false',
   REALCITY_OPEN_WORLD_REFRESH_DAYS:Math.max(1,Math.min(90,Number(process.env.REALCITY_OPEN_WORLD_REFRESH_DAYS||21)||21)),
   REALCITY_PHOTOREAL_ENABLED:clean(process.env.REALCITY_PHOTOREAL_ENABLED||'true').toLowerCase()!=='false',
+  REALCITY_PHOTOREAL_USE_OWNER_ASSETS:clean(process.env.REALCITY_PHOTOREAL_USE_OWNER_ASSETS||'false').toLowerCase()==='true',
   REALCITY_RECONSTRUCTION_WORKER_URL:clean(process.env.REALCITY_RECONSTRUCTION_WORKER_URL).replace(/\/+$/,''),
   REALCITY_RECONSTRUCTION_WORKER_TOKEN:clean(process.env.REALCITY_RECONSTRUCTION_WORKER_TOKEN),
   REALCITY_RECONSTRUCTION_SECRET:clean(process.env.REALCITY_RECONSTRUCTION_SECRET),
@@ -47,5 +48,5 @@ module.exports={
   OWNER_PASSWORD:clean(process.env.OWNER_PASSWORD),
   ADMIN_IDS:new Set(csv([process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(','))),
   SESSION_TTL_SEC:7*24*60*60,
-  BUILD:'v2-realcity-photoreal-1'
+  BUILD:'v2-realcity-photoreal-2'
 };

@@ -291,3 +291,87 @@ test('multiword dish query scores far above ingredient-only item',()=>{
   assert.ok(similarity('сырной шаурмой','Шаурма сырная')>.95);
   assert.ok(similarity('сырной шаурмой','Сыр')<.75);
 });
+
+
+test('executes a natural multi-action sentence on one exact dish',async()=>{
+  const ctx={telegram_user_id:'601',establishment_id:'SC-MSK-PLAN001234'};
+  const venue={
+    establishment_id:'SC-MSK-PLAN001234',
+    name:'Тестовая точка',
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0},{id:'extras',name:'Добавки',active:true,order:1}]},
+    menu:[
+      {id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true,available:true},
+      {id:'cheese',n:'Сыр',c:'extras',p:50,active:true,available:true}
+    ]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'OK '+command.intent}},
+    async handle(){throw new Error('natural plan must not be reparsed as text')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus});
+  const result=await agent.handle({
+    user:{id:601},
+    text:'у сырной шаурмы поставь цену 420 и временно убери из продажи, но не скрывай из меню'
+  });
+
+  assert.equal(result.handled,true);
+  assert.deepEqual(executed.map(x=>x.intent),['menu_price_context','menu_available','menu_toggle']);
+  assert.ok(executed.every(x=>x.target_item_id==='cheese_shawarma'));
+  assert.equal(executed[0].price,420);
+  assert.equal(executed[1].available,false);
+  assert.equal(executed[2].enabled,true);
+});
+
+test('uses current dish for pronoun follow-up without asking again',async()=>{
+  const ctx={
+    telegram_user_id:'602',
+    establishment_id:'SC-MSK-CTX001234',
+    selected_item_id:'cheese_shawarma',
+    selected_category_id:'shawarma'
+  };
+  const venue={
+    establishment_id:'SC-MSK-CTX001234',
+    name:'Тестовая точка',
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0}]},
+    menu:[{id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true,available:true}]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m)ctx[m[1]]=args[1];
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'OK'}},
+    async handle(){throw new Error('contextual action must stay structured')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus});
+  const result=await agent.handle({user:{id:602},text:'там сделай цену 430 и временно убери из продажи'});
+
+  assert.equal(result.handled,true);
+  assert.deepEqual(executed.map(x=>x.intent),['menu_price_context','menu_available']);
+  assert.ok(executed.every(x=>x.target_item_id==='cheese_shawarma'));
+});

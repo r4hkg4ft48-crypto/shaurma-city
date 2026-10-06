@@ -15,6 +15,7 @@
  */
 const config=require('./config');
 const crypto=require('crypto');
+const sharp=require('sharp');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='open-world-v1';

@@ -256,16 +256,17 @@ function inferFreeform(text){
 }
 
 
-const ACTION_HEAD='(?:сделай|поставь|установи|измени|поменяй|подними|увеличь|снизь|уменьши|убери|сними|верни|добавь|оставь|скрой|покажи|выключи|включи|пометь|назначь)';
+const ACTION_HEAD='(?:(?:временно|пока)\\s+)?(?:сделай|поставь|установи|измени|поменяй|подними|увеличь|снизь|уменьши|убери|сними|верни|добавь|оставь|скрой|покажи|выключи|включи|пометь|назначь|не\\s+скрывай)';
 
 function splitActionClauses(v){
   const raw=clean(v).replace(/[.;]+/g,',');
-  return raw.split(new RegExp('\\s*(?:,|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и))\\s*(?='+ACTION_HEAD+'\\b)','i'))
+  return raw.split(new RegExp('\\s*(?:,|\\s+(?:и\\s+потом|а\\s+потом|потом|затем|а\\s+еще|а\\s+ещё|и|но))\\s*(?='+ACTION_HEAD+'\\b)','i'))
     .map(clean).filter(Boolean);
 }
 function inferContextAction(text){
-  const raw=clean(text),s=normalize(raw);let m;
-  if(!raw)return null;
+  let raw=clean(text);if(!raw)return null;
+  raw=raw.replace(/^(?:там|тут|здесь|у\\s+нее|у\\s+неё|у\\s+него|в\\s+ней|в\\s+нем|в\\s+нём)\\s*[,—:-]?\\s*/i,'');
+  const s=normalize(raw);let m;
 
   m=raw.match(/^(?:сделай|поставь|установи|измени|поменяй)?\s*(?:цен[ау])?\s*(?:на|до|по)?\s*(\d+(?:[.,]\d+)?)\s*(?:₽|р\.?|руб[а-я]*)?$/i);
   if(m)return {intent:'menu_price_context',price:Number(String(m[1]).replace(',','.'))};

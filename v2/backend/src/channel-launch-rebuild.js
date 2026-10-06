@@ -151,4 +151,5 @@ async function run(){
   return {enabled:true,published,removed,version:VERSION};
 }
 
+// startup-detach validated
 module.exports={run,VERSION};

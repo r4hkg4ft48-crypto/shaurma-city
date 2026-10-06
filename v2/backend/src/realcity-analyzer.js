@@ -441,7 +441,7 @@ async function analyzeRealCityProfile(marker){
     },
     neighborhood_palette:uniqColors([...(osmPalette.swatches||[]),osmPalette.wall,osmPalette.accent,osmPalette.roof],8),
     facade,
-    texture:{hero_data_url:null,source:open?'open_imagery_semantic_facades':'procedural_map_geometry'},
+    texture:{hero_data_url:null,source:open?.model?.materials?.length?'open_imagery_derived_facade_materials':open?'open_imagery_semantic_facades':'procedural_map_geometry'},
     environment:{
       tree_density:Number(treeDensity.toFixed(2)),
       vegetation_ratio:null,
@@ -454,8 +454,9 @@ async function analyzeRealCityProfile(marker){
     scene,
     ...(open?.model?{real_world:open.model}:{}),
     sources:{
-      mode:open?'open_world_semantic_reconstruction':'map_geometry_only',
-      photo_reconstruction:false,
+      mode:open?.model?.materials?.length?'open_world_textured_reconstruction':open?'open_world_semantic_reconstruction':'map_geometry_only',
+      photo_reconstruction:!!open?.model?.materials?.length,
+      derived_facade_materials:Number(open?.model?.materials?.length||0),
       raw_images_persisted:false,
       openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length},
       open_world:open?.report||{engine:openWorld.ENGINE,status:'unavailable'}

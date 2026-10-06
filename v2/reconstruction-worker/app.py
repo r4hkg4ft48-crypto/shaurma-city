@@ -20,7 +20,7 @@ USE_BA=os.getenv("REALCITY_USE_BA","true").lower() not in ("0","false","off","no
 USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","off","no")
 GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
 ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() not in ("0","false","off","no")
-DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Small-hf")
+DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
 _DEPTH_CACHE=None
@@ -64,6 +64,26 @@ def local_xy(lon:float,lat:float,origin:list[float])->tuple[float,float]:
     x=(lon-origin[0])*111320.0*max(.15,math.cos(lat0))
     y=(lat-origin[1])*110540.0
     return x,y
+
+def bearing_deg(a:list[float],b:list[float])->float:
+    lon1,lat1=map(math.radians,a[:2]);lon2,lat2=map(math.radians,b[:2]);dl=lon2-lon1
+    y=math.sin(dl)*math.cos(lat2)
+    x=math.cos(lat1)*math.sin(lat2)-math.sin(lat1)*math.cos(lat2)*math.cos(dl)
+    return (math.degrees(math.atan2(y,x))+360)%360
+
+def source_target(source:dict,job:Job):
+    match=source.get("match") if isinstance(source.get("match"),dict) else None
+    if match:
+        bid=str(match.get("building_id") or "")
+        try:edge=int(match.get("edge_index"))
+        except Exception:edge=-1
+        for building in job.map_anchor.get("buildings",[]):
+            if str(building.get("building_id"))!=bid:continue
+            ring=building.get("ring") or []
+            if 0<=edge<len(ring)-1:
+                a,b=ring[edge],ring[edge+1]
+                return [(float(a[0])+float(b[0]))/2,(float(a[1])+float(b[1]))/2]
+    return job.target.get("coordinates") or job.map_anchor.get("origin",[])[:2]
 
 async def download(url:str)->bytes:
     async with httpx.AsyncClient(timeout=25,follow_redirects=True,headers={"User-Agent":"Shaurmeg-RealCity-Photoreal/1.0"}) as c:
@@ -394,9 +414,9 @@ def get_vggt(device):
     global _VGGT_CACHE
     if _VGGT_CACHE is not None:return _VGGT_CACHE
     from vggt.models.vggt import VGGT
-    # Hugging Face reads HF_TOKEN automatically. Keeping the model resident is
-    # essential: reloading a 1B checkpoint for every venue wastes minutes and VRAM.
-    model=get_vggt(device)
+    # Hugging Face reads HF_TOKEN automatically. Keep the commercial model
+    # resident so a successful gated download is paid only once per worker.
+    model=VGGT.from_pretrained(VGGT_MODEL).to(device).eval()
     _VGGT_CACHE=model
     return model
 
@@ -438,20 +458,25 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
             else:
                 pred=model(**inputs).predicted_depth
         d=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
-        finite=np.isfinite(d)
+        finite=np.isfinite(d)&(d>.05)
         if not finite.any():continue
-        lo,hi=np.percentile(d[finite],[3,97])
-        disparity=np.clip((d-lo)/max(float(hi-lo),1e-6),0,1)
+        # Metric Outdoor predicts absolute outdoor depth. Keep it metric; only
+        # permit a bounded scale correction when this exact image was matched
+        # to a known OSM facade edge.
+        depth=np.clip(np.nan_to_num(d,nan=0.0,posinf=80.0,neginf=0.0),.55,min(radius*1.25,80.0))
+        match=source.get("match") if isinstance(source.get("match"),dict) else {}
+        anchor=match.get("distance_m") if isinstance(match.get("distance_m"),(int,float)) else source.get("distance_m")
+        if isinstance(anchor,(int,float)) and math.isfinite(float(anchor)) and float(anchor)>3:
+            roi=depth[int(h*.32):int(h*.72),int(w*.34):int(w*.66)]
+            valid_depth=roi[np.isfinite(roi)&(roi>.6)&(roi<80)]
+            if valid_depth.size>100:
+                ratio=float(anchor)/max(float(np.median(valid_depth)),.5)
+                if .5<=ratio<=2.0:depth=np.clip(depth*ratio,.55,min(radius*1.25,100.0))
         cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
-        camera_distance=max(5.0,min(80.0,math.hypot(cx,cy)))
-        inv=.12+.88*disparity
-        median=float(np.median(inv[finite]))
-        depth=np.clip(camera_distance*median/np.maximum(inv,.05),1.2,min(radius*1.25,180.0))
+        camera_distance=max(5.0,min(100.0,float(anchor) if isinstance(anchor,(int,float)) else math.hypot(cx,cy)))
         heading=source.get("heading")
         if not isinstance(heading,(int,float)):
-            # Point the camera approximately toward the venue only when source
-            # metadata lacks a compass bearing.
-            heading=(math.degrees(math.atan2(-cx,-cy))+360)%360
+            heading=bearing_deg(coords,source_target(source,job))
         yaw=math.radians(float(heading))
         forward=np.array([math.sin(yaw),math.cos(yaw),0.0],np.float32)
         right=np.array([math.cos(yaw),-math.sin(yaw),0.0],np.float32)
@@ -487,7 +512,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     quats=np.zeros((len(pts),4),dtype=np.float32);quats[:,0]=1
     alignment={"method":"gps-depth-fallback","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
-    return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-small-gps","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
+    return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-metric-outdoor-gps-osm","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
 
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
@@ -499,7 +524,7 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     device="cuda" if torch.cuda.is_available() else "cpu"
     # Hugging Face reads HF_TOKEN from the environment for gated checkpoints.
     # Do not pass provider-specific kwargs through the model constructor.
-    model=VGGT.from_pretrained(VGGT_MODEL).to(device).eval()
+    model=get_vggt(device)
     images=load_and_preprocess_images(image_paths).to(device)
     if images.ndim==4: images=images[None]
     major=torch.cuda.get_device_capability()[0] if device=="cuda" else 0

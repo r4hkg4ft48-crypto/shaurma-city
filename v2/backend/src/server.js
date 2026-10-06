@@ -6,6 +6,7 @@ const {ensureSchema}=require('./schema');
 const {router}=require('./routes');
 const telegram=require('./telegram');
 const channelBot=require('./channel-bot');
+const channelAssets=require('./channel-assets');
 const realcity=require('./realcity-service');
 
 const app=express();
@@ -20,6 +21,7 @@ app.use((req,res,next)=>{
 app.use('/api/v2',router);
 telegram.install(app);
 channelBot.install(app);
+channelAssets.install(app);
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
 ensureSchema()
@@ -28,4 +30,4 @@ ensureSchema()
  .then(()=>telegram.sync())
  .then(()=>channelBot.sync())
  .catch(e=>console.error('bootstrap',e.message))
- .finally(()=>app.listen(config.PORT,()=>console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured)));
+ .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);channelBot.publishLaunchMissing().then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel launch publish',e.message))}));

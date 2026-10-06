@@ -98,14 +98,21 @@ async function buildSources(marker,profile,assets){
     license:'owner supplied',attribution:'Venue supplied source'
   })).filter(x=>x.url);
   let publicCandidates=[];
-  try{publicCandidates=(await openWorld.collectCandidates(marker)).filter(allowedOpenCandidate).slice(0,40)}catch{}
+  try{
+    const permitted=(await openWorld.collectCandidates(marker)).filter(allowedOpenCandidate);
+    publicCandidates=openWorld._internals.diversify(permitted,marker,72);
+  }catch{}
   const pub=publicCandidates.map(c=>({
     id:c.source+':'+c.id,kind:'open',url:c.image_url,provider:c.source,
     coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,
     captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url
   }));
+  // Interleave geotagged public frames with owner close-ups. This gives the
+  // reconstruction both absolute camera anchors and maximum facade detail even
+  // when an owner uploaded dozens of photos.
+  const ordered=[];for(let i=0;i<Math.max(own.length,pub.length);i++){if(pub[i])ordered.push(pub[i]);if(own[i])ordered.push(own[i])}
   const seen=new Set(),out=[];
-  for(const s of [...own,...pub]){
+  for(const s of ordered){
     if(!s.url||seen.has(s.id))continue;seen.add(s.id);out.push(s);if(out.length>=MAX_SOURCES)break;
   }
   return out;

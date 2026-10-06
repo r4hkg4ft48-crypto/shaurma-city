@@ -38,6 +38,9 @@ OpenFreeMap vector building geometry + OSM
                   |
         exact footprint-edge binding
                   |
+    directional facade crop/rectification
+      bounded derived WebP material
+                  |
        constrained facade compiler
                   |
    realcity_profile.real_world (v2 model)
@@ -88,13 +91,24 @@ Open imagery is fetched only during reconstruction and is bounded by:
 - configurable image-count budget (default 10, hard max 18);
 - four concurrent image decodes globally.
 
-Raw images and external image URLs are not persisted in the final RealCity model.
-The stored record contains derived appearance observations and provenance:
-source, source item ID, page URL, license/attribution, capture metadata, matched
-building/edge and quality score.
+Raw source images and source image URLs are not persisted in the final RealCity
+model. They exist only for the bounded reconstruction request. For a sufficiently
+confident street-level observation the worker may create a **derived facade
+material**: it selects the angular sector looking at one concrete footprint edge,
+crops the facade band, normalizes orientation, scales it to that wall's metric
+aspect ratio, compresses it to WebP and stores only that bounded derivative plus
+license/provenance. The current budget is at most six 640px-wide materials per
+local world.
 
-This keeps runtime independent from third-party image hosts and avoids turning a
-street photograph into a billboard texture.
+The stored record therefore contains:
+- semantic appearance observations;
+- source/item ID, page URL, license and attribution;
+- capture position/heading and the matched building/edge;
+- optional bounded derived WebP facade material.
+
+The material is never a free-floating billboard. It is rendered as the material
+of the exact edge that was selected from the stored footprint. If matching
+confidence is insufficient, that edge stays geometry-constrained procedural.
 
 ## Geometry contract
 
@@ -153,6 +167,8 @@ On selection:
 \`\`\`
 REALCITY_OPEN_WORLD_ENABLED=true
 REALCITY_OPEN_WORLD_MAX_IMAGES=10
+REALCITY_OPEN_WORLD_TEXTURES=true
+REALCITY_OPEN_WORLD_REFRESH_DAYS=21
 PANORAMAX_API_URL=
 MAPILLARY_ACCESS_TOKEN=
 \`\`\`

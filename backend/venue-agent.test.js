@@ -5,7 +5,7 @@ const {createVenueDialogAgent,similarity,normalize,inferFreeform}=require('./ven
 const {parseCommand}=require('./venue-command');
 
 test('normalization tolerates common food slang and inflection',()=>{
-  assert.equal(normalize('Сырной шавухой'),'сыр шаурма');
+  assert.equal(normalize('Сырной шавухой'),'сырной шаурма');
   assert.ok(similarity('сырной шаурмой','Шаурма сырная')>.9);
   assert.ok(similarity('класическая шаурма','Шаурма классическая')>.75);
   assert.ok(similarity('чесночный','Чесночный соус')>.75);
@@ -239,4 +239,55 @@ test('unknown venue query falls back to accessible venue list',async()=>{
   assert.equal(result.handled,true);
   assert.match(result.text,/Выберите из доступных/);
   assert.equal(result.reply_markup.inline_keyboard.length,3);
+});
+
+
+test('full dish phrase beats ingredient-only item and executes exact item id',async()=>{
+  const ctx={telegram_user_id:'501',establishment_id:'SC-MSK-FOOD001234'};
+  const venue={
+    establishment_id:'SC-MSK-FOOD001234',
+    name:'Тестовая точка',
+    config:{menu_sections:[
+      {id:'shawarma',name:'Шаурма',active:true,order:0},
+      {id:'extras',name:'Добавки',active:true,order:1}
+    ]},
+    menu:[
+      {id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true},
+      {id:'cheese',n:'Сыр',c:'extras',p:50,active:true},
+      {id:'classic',n:'Шаурма классическая',c:'shawarma',p:350,active:true}
+    ]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'OK'}},
+    async handle(){throw new Error('resolved action must not be reparsed as text')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus});
+  const result=await agent.handle({user:{id:501},text:'работаем с сырной шаурмой'});
+
+  assert.equal(result.handled,true);
+  assert.equal(executed.length,1);
+  assert.equal(executed[0].intent,'menu_item_select');
+  assert.equal(executed[0].target_item_id,'cheese_shawarma');
+  assert.equal(ctx.selected_item_id,'cheese_shawarma');
+});
+
+test('multiword dish query scores far above ingredient-only item',()=>{
+  assert.ok(similarity('сырной шаурмой','Шаурма сырная')>.95);
+  assert.ok(similarity('сырной шаурмой','Сыр')<.75);
 });

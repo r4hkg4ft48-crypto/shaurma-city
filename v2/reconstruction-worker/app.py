@@ -16,6 +16,7 @@ VGGT_MODEL=os.getenv("REALCITY_VGGT_MODEL","facebook/VGGT-1B-Commercial")
 HF_TOKEN=os.getenv("HF_TOKEN","")
 MAX_DOWNLOAD=20*1024*1024
 WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
+USE_BA=os.getenv("REALCITY_USE_BA","true").lower() not in ("0","false","off","no")
 SEM=asyncio.Semaphore(WORKERS)
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
@@ -150,30 +151,51 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
     return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"geo_cameras":len(geo_src)}
 
 def choose_samples(point_maps:np.ndarray,conf:np.ndarray,images:np.ndarray,target:int):
-    # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence static-looking
-    # pixels. Upper sky band and invalid/extreme depths are rejected.
+    # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence pixels while
+    # retaining frame IDs so unstable single-view geometry can be rejected.
     N,H,W,_=point_maps.shape
     colors=np.clip(images.transpose(0,2,3,1),0,1)
-    pts=[];cols=[];scores=[]
-    per=max(2500,target//max(1,N))
+    pts=[];cols=[];scores=[];frames=[]
+    per=max(3500,target//max(1,N))
     for i in range(N):
         p=point_maps[i].reshape(-1,3)
         c=colors[i].reshape(-1,3)
         cf=conf[i].reshape(-1)
         yy=np.repeat(np.arange(H),W)
-        finite=np.isfinite(p).all(1)&np.isfinite(cf)&(cf>0)&(yy>H*.08)
-        # Reject gross depth outliers before confidence ranking.
+        valid=np.isfinite(p).all(1)&np.isfinite(cf)&(cf>0)&(yy>H*.08)
         d=np.linalg.norm(p,axis=1)
-        goodd=d[finite]
+        goodd=d[valid]
         if goodd.size:
-            lo,hi=np.percentile(goodd,[1,98.5]);finite&=(d>=lo)&(d<=hi)
-        ids=np.flatnonzero(finite)
+            lo,hi=np.percentile(goodd,[1,98.5]);valid&=(d>=lo)&(d<=hi)
+        ids=np.flatnonzero(valid)
         if not len(ids): continue
         k=min(per,len(ids))
         best=ids[np.argpartition(cf[ids],-k)[-k:]]
-        pts.append(p[best]);cols.append(c[best]);scores.append(cf[best])
+        pts.append(p[best]);cols.append(c[best]);scores.append(cf[best]);frames.append(np.full(k,i,dtype=np.int16))
     if not pts: raise RuntimeError("no_confident_points")
-    return np.concatenate(pts),np.concatenate(cols),np.concatenate(scores)
+    return np.concatenate(pts),np.concatenate(cols),np.concatenate(scores),np.concatenate(frames)
+
+def multiview_filter(points:np.ndarray,colors:np.ndarray,conf:np.ndarray,frames:np.ndarray):
+    frame_count=len(np.unique(frames))
+    if frame_count<5 or len(points)<8000:
+        return points,colors,conf,frames,0
+    mn=points.min(0)
+    voxel=.24
+    key=np.floor((points-mn)/voxel).astype(np.int32)
+    support={}
+    for k,f in zip(map(tuple,key),frames):
+        s=support.get(k)
+        if s is None:support[k]={int(f)}
+        elif len(s)<3:s.add(int(f))
+    views=np.fromiter((len(support[tuple(k)]) for k in key),dtype=np.int16,count=len(key))
+    high=conf>=np.percentile(conf,92)
+    keep=(views>=2)|high
+    # Never let a registration mismatch erase the reconstruction. If support is
+    # unexpectedly low, retain the best half and surface that lower confidence.
+    if keep.mean()<.28:
+        keep=conf>=np.percentile(conf,45)
+    removed=int((~keep).sum())
+    return points[keep],colors[keep],conf[keep],frames[keep],removed
 
 def voxel_reduce(points,colors,conf,max_points:int):
     good=np.isfinite(points).all(1)&np.isfinite(colors).all(1)&np.isfinite(conf)
@@ -213,6 +235,39 @@ def encode_rcsp(points:np.ndarray,colors:np.ndarray,conf:np.ndarray):
     rec[:,6:9]=rgb;rec[:,9]=radius;rec[:,10]=cu;rec[:,11]=semantic
     return base64.b64encode(rec.tobytes()).decode(),mn.tolist(),mx.tolist(),len(points)
 
+def refine_cameras_with_ba(images,depth_conf,points_3d,extrinsic,intrinsic,dtype):
+    if not USE_BA or len(extrinsic)<4:
+        return extrinsic,intrinsic,{"bundle_adjustment":False}
+    try:
+        import torch
+        import pycolmap
+        from vggt.dependency.track_predict import predict_tracks
+        from vggt.dependency.np_to_pycolmap import batch_np_matrix_to_pycolmap
+        with torch.autocast(device_type="cuda",dtype=dtype):
+            tracks,vis,track_conf,tracked_points,points_rgb=predict_tracks(
+                images,conf=depth_conf,points_3d=points_3d,masks=None,
+                max_query_pts=min(4096,max(1536,len(extrinsic)*192)),
+                query_frame_num=min(len(extrinsic),10),
+                keypoint_extractor="aliked+sp",fine_tracking=True)
+        mask=vis>.2
+        reconstruction,valid=batch_np_matrix_to_pycolmap(
+            tracked_points,extrinsic,intrinsic,tracks,np.array(images.shape[-2:]),
+            masks=mask,max_reproj_error=7.0,shared_camera=False,camera_type="PINHOLE",points_rgb=points_rgb)
+        if reconstruction is None: raise RuntimeError("ba_reconstruction_empty")
+        opts=pycolmap.BundleAdjustmentOptions()
+        pycolmap.bundle_adjustment(reconstruction,opts)
+        out_e=[];out_i=[]
+        for i in range(len(extrinsic)):
+            im=reconstruction.images[i+1]
+            pose=np.asarray(im.cam_from_world().matrix(),dtype=np.float32)
+            cam=reconstruction.cameras[im.camera_id]
+            K=np.asarray(cam.calibration_matrix(),dtype=np.float32)
+            if pose.shape!=(3,4) or K.shape!=(3,3): raise RuntimeError("ba_camera_shape")
+            out_e.append(pose);out_i.append(K)
+        return np.stack(out_e),np.stack(out_i),{"bundle_adjustment":True,"tracks":int(mask.sum())}
+    except Exception as e:
+        return extrinsic,intrinsic,{"bundle_adjustment":False,"ba_error":str(e)[:160]}
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.models.vggt import VGGT
@@ -241,16 +296,21 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     cf=depth_conf.squeeze(0).detach().float().cpu().numpy()
     ims=images.squeeze(0).detach().float().cpu().numpy()
     ex=extr.squeeze(0).detach().float().cpu().numpy()
+    intr_np=intr.squeeze(0).detach().float().cpu().numpy()
+    ex,intr_np,ba=refine_cameras_with_ba(images.squeeze(0),cf,p,ex,intr_np,dtype)
+    if ba.get("bundle_adjustment"):
+        p=unproject_depth_map_to_point_map(cf*0+depth.squeeze(0).detach().float().cpu().numpy(),ex,intr_np)
     centers=camera_centers(ex)
     target=int(job.policy.get("max_points",150000))
-    pts,cols,scores=choose_samples(p,cf,ims,target*2)
+    pts,cols,scores,frames=choose_samples(p,cf,ims,target*3)
     pts,centers,alignment=anchor_points(pts,centers,sources,job.map_anchor["origin"],job.map_anchor)
     radius=float(job.map_anchor.get("radius_m",190))*1.15
     m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<160)
-    pts,cols,scores=pts[m],cols[m],scores[m]
+    pts,cols,scores,frames=pts[m],cols[m],scores[m],frames[m]
+    pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
     pts,cols,scores=voxel_reduce(pts,cols,scores,target)
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
-    return pts,cols,scores,alignment,{"backend":"vggt-1b-commercial","gpu":gpu,"frames":len(image_paths)}
+    return pts,cols,scores,alignment,{"backend":"vggt-1b-commercial+colmap-ba" if ba.get("bundle_adjustment") else "vggt-1b-commercial","gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba}
 
 def artifact_for(job:Job,points,colors,conf,alignment,stats):
     data,mn,mx,count=encode_rcsp(points,colors,conf)
@@ -268,7 +328,7 @@ def artifact_for(job:Job,points,colors,conf,alignment,stats):
       "representation":"photometric-splats-v1",
       "chunks":[{"id":"near","lod":0,"codec":"rcsp1-base64","point_count":count,"data":data,"bounds_min":mn,"bounds_max":mx,"min_zoom":16.7,"max_zoom":24}],
       "alignment":alignment,"quality":quality,"sources":source_meta,
-      "stats":{**stats,"points":count,"confidence_mean":quality["confidence_mean"],"dynamic_removed":0}
+      "stats":{**stats,"points":count,"confidence_mean":quality["confidence_mean"],"dynamic_removed":int(stats.get("dynamic_removed",0))}
     }
 
 async def callback(job:Job,status:str,artifact=None,error=None):

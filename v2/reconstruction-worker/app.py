@@ -29,8 +29,27 @@ class Job(BaseModel):
     policy:dict=Field(default_factory=dict)
     callback:dict
 
+def artifact_digest(artifact:dict)->str:
+    parts=[]
+    for chunk in artifact.get("chunks",[]):
+        raw=base64.b64decode(chunk.get("data",""),validate=True)
+        parts.append(f"{chunk.get('id','')}:{int(chunk.get('point_count',0))}:{hashlib.sha256(raw).hexdigest()}")
+    value="|".join([
+        str(artifact.get("engine","")),
+        str(artifact.get("input_signature","")),
+        str(artifact.get("target",{}).get("marker_id","")),
+        ",".join(str(v) for v in artifact.get("origin",[])),
+        ";".join(parts)
+    ])
+    return hashlib.sha256(value.encode()).hexdigest()
+
+def callback_digest(body:dict)->str:
+    if body.get("status")=="ready":
+        return artifact_digest(body.get("artifact") or {})
+    return hashlib.sha256(str(body.get("error",""))[:500].strip().encode()).hexdigest()
+
 def sign_callback(body:dict)->str:
-    raw="callback:"+json.dumps(body,separators=(",",":"),ensure_ascii=False)
+    raw=":".join(["callback",str(body.get("job_id","")),str(body.get("input_signature","")),str(body.get("status","")),callback_digest(body)])
     return hmac.new(CALLBACK_SECRET.encode(),raw.encode(),hashlib.sha256).hexdigest()
 
 def local_xy(lon:float,lat:float,origin:list[float])->tuple[float,float]:
@@ -203,7 +222,9 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     if not torch.cuda.is_available() and os.getenv("REALCITY_ALLOW_CPU_VGGT","false").lower()!="true":
         raise RuntimeError("cuda_required_for_photoreal_vggt")
     device="cuda" if torch.cuda.is_available() else "cpu"
-    model=VGGT.from_pretrained(VGGT_MODEL,token=HF_TOKEN or None).to(device).eval()
+    # Hugging Face reads HF_TOKEN from the environment for gated checkpoints.
+    # Do not pass provider-specific kwargs through the model constructor.
+    model=VGGT.from_pretrained(VGGT_MODEL).to(device).eval()
     images=load_and_preprocess_images(image_paths).to(device)
     if images.ndim==4: images=images[None]
     major=torch.cuda.get_device_capability()[0] if device=="cuda" else 0

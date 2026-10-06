@@ -400,7 +400,7 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
 def frame_budget(requested:int)->int:
     try:
         import torch
-        if not torch.cuda.is_available():return min(requested,8)
+        if not torch.cuda.is_available():return min(requested,6)
         total=torch.cuda.get_device_properties(0).total_memory/(1024**3)
         if total>=75:return min(requested,48)
         if total>=46:return min(requested,28)
@@ -446,7 +446,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         im=Image.open(path).convert("RGB")
         # One common raster size keeps inference bounded and preserves enough
         # detail for windows, curbs and vegetation on the fallback path.
-        im.thumbnail((768,576),Image.Resampling.LANCZOS)
+        im.thumbnail((768,576) if device=="cuda" else (518,392),Image.Resampling.LANCZOS)
         rgb=np.asarray(im)
         h,w=rgb.shape[:2]
         inputs=processor(images=im,return_tensors="pt")
@@ -508,9 +508,11 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
     pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
     pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,140000))
-    scales=np.full((len(pts),3),.075,dtype=np.float32)
+    radial=np.linalg.norm(pts[:,:2],axis=1)
+    base=np.clip(.045+radial*.0016,.045,.22).astype(np.float32)
+    scales=np.column_stack([base,base,np.clip(base*.42,.018,.11)]).astype(np.float32)
     quats=np.zeros((len(pts),4),dtype=np.float32);quats[:,0]=1
-    alignment={"method":"gps-depth-fallback","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
+    alignment={"method":"gps-metric-depth+osm-facade-heading","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
     return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-metric-outdoor-gps-osm","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
 

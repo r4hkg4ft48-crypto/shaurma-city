@@ -143,7 +143,7 @@ jobs:
         working-directory: backend
         run: npm install --ignore-scripts
       - name: RealCity spatial and persistence contract
-        run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js v2/backend/test/realcity-open-world.test.js v2/backend/test/realcity-photoreal.test.js
+        run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js v2/backend/test/realcity-open-world.test.js v2/backend/test/realcity-photoreal.test.js v2/backend/test/realcity-reconstruction.test.js
       - name: Reconstruction worker syntax
         run: python3 -m py_compile v2/reconstruction-worker/worker.py
       - name: Menu catalog and deep editor contract

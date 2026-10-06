@@ -152,6 +152,8 @@ function validateChunk(c){
   if(!c||!/^rcsp[12]-base64$/.test(c.codec||'')||!/^[a-z0-9_-]{1,60}$/i.test(String(c.id||'')))throw new Error('photoreal_invalid_chunk');
   if(!Number.isInteger(c.point_count)||c.point_count<100||c.point_count>config.REALCITY_RECONSTRUCTION_MAX_POINTS)throw new Error('photoreal_invalid_points');
   if(typeof c.data!=='string'||!/^[A-Za-z0-9+/=]+$/.test(c.data)||c.data.length>MAX_ARTIFACT_B64)throw new Error('photoreal_invalid_data');
+  const record=c.codec==='rcsp2-base64'?22:12,raw=Buffer.from(c.data,'base64');
+  if(raw.length!==c.point_count*record)throw new Error('photoreal_invalid_bytes');
   if(!Array.isArray(c.bounds_min)||!Array.isArray(c.bounds_max)||c.bounds_min.length!==3||c.bounds_max.length!==3||[...c.bounds_min,...c.bounds_max].some(v=>!finite(v)))throw new Error('photoreal_invalid_bounds');
   return {id:String(c.id),lod:Math.max(0,Math.min(3,Number(c.lod)||0)),codec:String(c.codec),point_count:c.point_count,data:c.data,
     bounds_min:c.bounds_min.map(Number),bounds_max:c.bounds_max.map(Number),byte_size:Math.ceil(c.data.length*.75),
@@ -166,7 +168,7 @@ function validateArtifact(body,row){
   const chunks=(a.chunks||[]).slice(0,MAX_CHUNKS).map(validateChunk);if(!chunks.length)throw new Error('photoreal_chunks_required');
   if(chunks.reduce((n,c)=>n+c.data.length,0)>MAX_ARTIFACT_B64)throw new Error('photoreal_artifact_too_large');
   return {
-    schema:SCHEMA,status:'ready',engine:ENGINE,representation:'photometric-splats-v1',generated_at:new Date().toISOString(),
+    schema:SCHEMA,status:'ready',engine:ENGINE,representation:String(a.representation||'gaussian-splats-v2'),generated_at:new Date().toISOString(),
     input_signature:a.input_signature,target:{marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id},
     origin:a.origin.map(Number),anchor:a.anchor,chunks,
     camera:a.camera||null,alignment:a.alignment||{},quality:a.quality||{},environment:a.environment||{},

@@ -17,6 +17,8 @@ HF_TOKEN=os.getenv("HF_TOKEN","")
 MAX_DOWNLOAD=20*1024*1024
 WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
 USE_BA=os.getenv("REALCITY_USE_BA","true").lower() not in ("0","false","off","no")
+USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","off","no")
+GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
 SEM=asyncio.Semaphore(WORKERS)
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
@@ -215,7 +217,7 @@ def voxel_reduce(points,colors,conf,max_points:int):
     ids=np.fromiter(packed.values(),dtype=np.int64)
     return points[ids],colors[ids],conf[ids]
 
-def encode_rcsp(points:np.ndarray,colors:np.ndarray,conf:np.ndarray):
+def encode_rcsp(points:np.ndarray,colors:np.ndarray,conf:np.ndarray,radii:np.ndarray|None=None):
     mn=np.percentile(points,.2,axis=0).astype(np.float32)
     mx=np.percentile(points,99.8,axis=0).astype(np.float32)
     pad=np.maximum((mx-mn)*.015,.05);mn-=pad;mx+=pad
@@ -226,8 +228,13 @@ def encode_rcsp(points:np.ndarray,colors:np.ndarray,conf:np.ndarray):
     rgb=np.clip(np.round(colors*255),0,255).astype(np.uint8)
     cf=np.clip((conf-np.percentile(conf,5))/max(np.percentile(conf,95)-np.percentile(conf,5),1e-6),0,1)
     cu=np.round(cf*255).astype(np.uint8)
-    # radius encodes 2cm..34cm, larger for lower confidence to close tiny holes.
-    radius=np.clip(np.round((.035+(1-cf)*.09)/.0015),1,255).astype(np.uint8)
+    # Learned Gaussian scale is preferred; the deterministic fallback enlarges
+    # low-confidence surfels slightly to close tiny holes.
+    if radii is not None:
+        learned=np.asarray(radii)[keep]
+        radius=np.clip(np.round(np.clip(learned,.004,.34)/.0015),1,255).astype(np.uint8)
+    else:
+        radius=np.clip(np.round((.035+(1-cf)*.09)/.0015),1,255).astype(np.uint8)
     semantic=np.zeros(len(points),dtype=np.uint8)
     semantic[points[:,2]<.35]=2
     rec=np.empty((len(points),12),dtype=np.uint8)
@@ -268,6 +275,80 @@ def refine_cameras_with_ba(images,depth_conf,points_3d,extrinsic,intrinsic,dtype
     except Exception as e:
         return extrinsic,intrinsic,{"bundle_adjustment":False,"ba_error":str(e)[:160]}
 
+def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf):
+    if not USE_GSPLAT or len(points)<3000:
+        radius=np.full(len(points),.045,dtype=np.float32)
+        return points,colors,confidence,radius,{"gaussian_optimized":False}
+    try:
+        import torch
+        import torch.nn.functional as F
+        from gsplat.rendering import rasterization
+        device=images.device
+        max_init=min(len(points),120000)
+        if len(points)>max_init:
+            ids=np.argpartition(confidence,-max_init)[-max_init:]
+            points,colors,confidence=points[ids],colors[ids],confidence[ids]
+        means=torch.nn.Parameter(torch.from_numpy(points).float().to(device))
+        initial=means.detach().clone()
+        color_logits=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(colors,.002,.998)).float().to(device)))
+        scene_extent=float(np.linalg.norm(np.percentile(points,97,axis=0)-np.percentile(points,3,axis=0)))
+        base=max(scene_extent/max(len(points)**(1/3),1)*.32,.0025)
+        scales=torch.nn.Parameter(torch.full((len(points),3),math.log(base),device=device))
+        quats=torch.nn.Parameter(torch.zeros((len(points),4),device=device));quats.data[:,0]=1
+        opacities=torch.nn.Parameter(torch.logit(torch.from_numpy(np.clip(.22+.62*(confidence-confidence.min())/max(float(confidence.max()-confidence.min()),1e-6),.08,.92)).float().to(device)))
+        opts=[
+          torch.optim.Adam([means],lr=1.2e-4),
+          torch.optim.Adam([scales],lr=3.5e-3),
+          torch.optim.Adam([quats],lr=8e-4),
+          torch.optim.Adam([opacities],lr=2.5e-2),
+          torch.optim.Adam([color_logits],lr=2e-3)
+        ]
+        view=torch.eye(4,device=device).repeat(len(extrinsic),1,1)
+        view[:,:3,:4]=torch.from_numpy(extrinsic).float().to(device)
+        Ks=torch.from_numpy(intrinsic).float().to(device)
+        targets=images.permute(0,2,3,1).contiguous().float().clamp(0,1)
+        conf_t=torch.from_numpy(depth_conf).float().to(device)
+        H,W=targets.shape[1:3]
+        yy=torch.arange(H,device=device)[:,None].expand(H,W)
+        thresholds=torch.quantile(conf_t.reshape(len(conf_t),-1),.28,dim=1)
+        valid=(conf_t>thresholds[:,None,None])&(yy[None]>H*.07)
+        steps=max(120,min(GSPLAT_STEPS,len(extrinsic)*32))
+        losses=[]
+        for step in range(steps):
+            i=(step*7+step//max(1,len(extrinsic)))%len(extrinsic)
+            for opt in opts: opt.zero_grad(set_to_none=True)
+            render,alpha,_=rasterization(
+              means=means,quats=F.normalize(quats,dim=-1),scales=torch.exp(scales),
+              opacities=torch.sigmoid(opacities),colors=torch.sigmoid(color_logits),
+              viewmats=view[i:i+1],Ks=Ks[i:i+1],width=W,height=H,sh_degree=None,
+              packed=True,rasterize_mode="antialiased",near_plane=.005,far_plane=1e5)
+            mask=valid[i]
+            rgb=render[0,...,:3]
+            if mask.any():
+                l1=torch.abs(rgb[mask]-targets[i][mask]).mean()
+                coverage=(1-alpha[0,...,0][mask]).mean()
+            else:
+                l1=torch.abs(rgb-targets[i]).mean();coverage=(1-alpha[0,...,0]).mean()
+            geom=((means-initial)**2).mean()
+            scale_reg=torch.relu(torch.exp(scales).max(dim=1).values-base*8).mean()
+            loss=l1+.018*coverage+2e-5*geom+5e-4*scale_reg
+            loss.backward()
+            for opt in opts: opt.step()
+            with torch.no_grad():
+                scales.clamp_(math.log(base*.18),math.log(base*10))
+                opacities.clamp_(-5.0,5.0)
+                color_logits.clamp_(-7.0,7.0)
+            if step%40==0 or step==steps-1:losses.append(float(loss.detach().cpu()))
+        with torch.no_grad():
+            out_points=means.detach().cpu().numpy()
+            out_colors=torch.sigmoid(color_logits).detach().cpu().numpy()
+            out_conf=torch.sigmoid(opacities).detach().cpu().numpy()
+            out_radius=torch.exp(scales).mean(1).detach().cpu().numpy()
+        return out_points,out_colors,out_conf,out_radius,{"gaussian_optimized":True,"gaussian_steps":steps,"gaussian_loss":losses[-1] if losses else None,"gaussians":len(out_points)}
+    except Exception as e:
+        radius=np.full(len(points),.045,dtype=np.float32)
+        return points,colors,confidence,radius,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.models.vggt import VGGT
@@ -303,17 +384,20 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     centers=camera_centers(ex)
     target=int(job.policy.get("max_points",150000))
     pts,cols,scores,frames=choose_samples(p,cf,ims,target*3)
+    pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
+    pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,120000))
+    pts,cols,scores,radii,gs=gsplat_refine(pts,cols,scores,images.squeeze(0),ex,intr_np,cf)
     pts,centers,alignment=anchor_points(pts,centers,sources,job.map_anchor["origin"],job.map_anchor)
+    radii=radii*float(alignment.get("scale",1.0))
     radius=float(job.map_anchor.get("radius_m",190))*1.15
     m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<160)
-    pts,cols,scores,frames=pts[m],cols[m],scores[m],frames[m]
-    pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
-    pts,cols,scores=voxel_reduce(pts,cols,scores,target)
+    pts,cols,scores,radii=pts[m],cols[m],scores[m],radii[m]
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
-    return pts,cols,scores,alignment,{"backend":"vggt-1b-commercial+colmap-ba" if ba.get("bundle_adjustment") else "vggt-1b-commercial","gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba}
+    backend="vggt-1b-commercial"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
+    return pts,cols,scores,radii,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba,**gs}
 
-def artifact_for(job:Job,points,colors,conf,alignment,stats):
-    data,mn,mx,count=encode_rcsp(points,colors,conf)
+def artifact_for(job:Job,points,colors,conf,radii,alignment,stats):
+    data,mn,mx,count=encode_rcsp(points,colors,conf,radii)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
@@ -354,9 +438,9 @@ async def run_job(job:Job):
                     continue
             if len(paths)<3: raise RuntimeError("not_enough_decodable_views")
             loop=asyncio.get_running_loop()
-            points,colors,conf,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+            points,colors,conf,radii,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
-            artifact=artifact_for(job,points,colors,conf,alignment,stats)
+            artifact=artifact_for(job,points,colors,conf,radii,alignment,stats)
             await callback(job,"ready",artifact=artifact)
         except Exception as e:
             traceback.print_exc()

@@ -3952,3 +3952,217 @@ body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodBody,body.venue
 body.venuePage[data-menu-layout="uniform-3"] .otherDishGrid .foodTitle h3,body.venuePage[data-menu-layout="hero-2-3"] .otherDishGrid .foodTitle h3{font-size:12px!important;min-height:32px}
 body.venuePage[data-card-style="glass"] .foodCardRef .foodBody{background:#102636c9!important;backdrop-filter:blur(22px) saturate(150%)}
 body.venuePage[data-card-style="solid"] .foodCardRef .foodBody{background:#102232!important}
+
+
+/* ===== Shaurmeg v2 · cinematic client orders ===== */
+.ordersPanelSummary{
+  position:relative;overflow:hidden;min-height:96px;margin:1px 0 10px;padding:17px 18px;border-radius:24px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  background:
+    radial-gradient(circle at 88% 8%,rgba(232,101,101,.16),transparent 34%),
+    radial-gradient(circle at 10% 110%,rgba(89,128,181,.13),transparent 42%),
+    linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));
+  border:1px solid rgba(241,245,249,.085);box-shadow:0 18px 44px rgba(0,0,0,.18)
+}
+.ordersPanelSummary:after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(110deg,transparent 25%,rgba(255,255,255,.045) 46%,transparent 64%);
+  transform:translateX(-120%);animation:orderSummarySheen 7s ease-in-out infinite
+}
+.ordersPanelSummary>div{position:relative;z-index:1;min-width:0}
+.ordersPanelSummary small{display:block;color:#E86A6A;font-size:8px;font-weight:900;letter-spacing:.16em}
+.ordersPanelSummary b{display:block;margin-top:5px;color:#F8FAFC;font-size:20px;letter-spacing:-.035em}
+.ordersPanelSummary span{display:block;margin-top:4px;color:#8E9BAD;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ordersPanelSummary>i{
+  position:relative;z-index:1;flex:0 0 48px;width:48px;height:48px;border-radius:17px;display:grid;place-items:center;
+  font-style:normal;font-size:18px;font-weight:1000;color:#13233B;
+  background:linear-gradient(145deg,#F8FAFC,#DDE5ED);box-shadow:0 13px 32px rgba(0,0,0,.25)
+}
+.ordersPanelSummary.hasActive>i{
+  color:white;background:linear-gradient(145deg,#F07A70,#D94343 58%,#A82C32);
+  box-shadow:0 12px 34px rgba(217,67,67,.31)
+}
+@keyframes orderSummarySheen{0%,72%,100%{transform:translateX(-120%)}84%{transform:translateX(120%)}}
+
+.orderPreviewCard{
+  position:relative;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:transform .18s ease,border-color .22s ease,box-shadow .22s ease,background .22s ease
+}
+.orderPreviewCard:before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:radial-gradient(circle at 88% 0,rgba(232,101,101,.10),transparent 34%);
+  transition:opacity .22s ease
+}
+.orderPreviewCard.isActive:before{opacity:1}
+.orderPreviewCard:active{transform:scale(.988)}
+.orderPreviewCard:focus-visible{outline:2px solid rgba(232,101,101,.75);outline-offset:2px}
+.mapApp .orderPreviewCard{
+  padding:15px;border-radius:24px;background:linear-gradient(155deg,rgba(255,255,255,.052),rgba(255,255,255,.024));
+  border:1px solid rgba(239,244,249,.085);box-shadow:0 14px 38px rgba(0,0,0,.18)
+}
+.mapApp .orderPreviewCard.isActive{border-color:rgba(232,101,101,.24);box-shadow:inset 0 0 0 1px rgba(232,101,101,.025),0 18px 44px rgba(0,0,0,.22)}
+.orderPreviewTop{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.orderPreviewVenue{display:flex;align-items:center;gap:11px;min-width:0}
+.orderPreviewVenue>div:last-child{min-width:0}
+.orderPreviewVenue small,.orderPreviewVenue b,.orderPreviewVenue span{display:block}
+.orderPreviewVenue small{font-size:8px;line-height:1.1;letter-spacing:.12em;font-weight:900;color:#E86A6A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orderPreviewVenue b{margin-top:4px;font-size:16px;letter-spacing:-.02em}
+.orderPreviewVenue span{margin-top:3px;color:#8493A5;font-size:9px}
+.orderPreviewAvatar,.orderDetailVenueAvatar{
+  position:relative;overflow:hidden;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(145deg,#263D5A,#13243B);border:1px solid rgba(255,255,255,.09);
+  color:#F8FAFC;font-weight:1000;box-shadow:0 10px 28px rgba(0,0,0,.22)
+}
+.orderPreviewAvatar{width:48px;height:48px;border-radius:16px;font-size:17px}
+.orderPreviewAvatar img,.orderDetailVenueAvatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2}
+.orderPreviewAvatar span,.orderDetailVenueAvatar span{position:relative;z-index:1}
+.orderPreviewAvatar:not(.fallback):has(img) span,.orderDetailVenueAvatar:not(.fallback):has(img) span{opacity:0}
+.orderPreviewTop>.status{flex:0 0 auto;border:1px solid currentColor;background:rgba(255,255,255,.035);font-weight:900;letter-spacing:.02em}
+.orderPreviewProgress{
+  position:relative;z-index:1;height:4px;margin:13px 0 12px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.055)
+}
+.orderPreviewProgress>i{
+  display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#D94343,#E88562 60%,#8ED7A6);
+  box-shadow:0 0 13px rgba(232,101,101,.28);transition:width .5s cubic-bezier(.2,.8,.2,1)
+}
+.orderPreviewCard:not(.isActive) .orderPreviewProgress>i{filter:saturate(.42);opacity:.58}
+.orderPreviewMain{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.orderPreviewMain>div{
+  min-width:0;padding:10px 11px;border-radius:14px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.055)
+}
+.orderPreviewMain small,.orderPreviewMain b{display:block}
+.orderPreviewMain small{font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:#748397}
+.orderPreviewMain b{margin-top:4px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orderPreviewDish{
+  position:relative;z-index:1;margin-top:8px;padding:9px 11px;border-radius:13px;display:flex;align-items:center;gap:8px;
+  color:#C7D0DA;background:rgba(255,255,255,.018);border:1px solid rgba(255,255,255,.045)
+}
+.orderPreviewDish span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
+.orderPreviewDish small{margin-left:auto;flex:0 0 auto;color:#7E8B9B;font-size:9px}
+.orderPreviewCard footer{
+  position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.06)
+}
+.orderPreviewCard footer>span{font-size:9px;color:#7B899A}
+.orderPreviewCard footer>b{margin-left:auto;font-size:20px;letter-spacing:-.03em}
+.orderPreviewCard footer button{
+  min-height:34px;padding:0 10px;border-radius:11px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.035);color:inherit;font-size:9px;font-weight:900
+}
+.orderPreviewCard footer em{font-style:normal;color:#A9B5C3;font-size:9px;font-weight:800}
+.orderHistorySectionLabel{margin:13px 2px 7px;color:#8795A6;font-size:9px;font-weight:900;letter-spacing:.12em}
+
+.venuePage .ordersPanelSummary{margin:0 0 11px;background:linear-gradient(145deg,rgba(37,32,46,.93),rgba(23,19,30,.96));border-color:rgba(255,255,255,.08)}
+.venuePage .orderPreviewCard{
+  padding:14px;border-radius:22px;background:rgba(255,255,255,.74)!important;border:1px solid rgba(72,46,83,.09)!important;
+  color:#2D2135;box-shadow:0 13px 32px rgba(50,30,64,.08)
+}
+.venuePage .orderPreviewCard.isActive{border-color:color-mix(in srgb,var(--venue-accent) 34%,rgba(72,46,83,.1))!important}
+.venuePage .orderPreviewMain>div,.venuePage .orderPreviewDish{background:rgba(71,52,81,.035);border-color:rgba(71,52,81,.06)}
+.venuePage .orderPreviewProgress{background:rgba(71,52,81,.07)}
+.venuePage .orderPreviewVenue span,.venuePage .orderPreviewMain small,.venuePage .orderPreviewDish small,.venuePage .orderPreviewCard footer>span{color:#8A7C8C}
+.venuePage .orderPreviewDish{color:#4C4053}
+.venuePage .orderPreviewVenue small{color:var(--venue-accent)}
+.venuePage .orderPreviewCard footer{border-top-color:rgba(71,52,81,.07)}
+.venuePage .orderPreviewCard footer button{border-color:rgba(71,52,81,.08);background:rgba(71,52,81,.035);color:#4A3C51}
+.venuePage[data-tone="dark"] .orderPreviewCard{
+  background:rgba(255,255,255,.04)!important;border-color:rgba(255,255,255,.075)!important;color:#F7F9FC;
+  box-shadow:0 14px 38px rgba(0,0,0,.18)
+}
+.venuePage[data-tone="dark"] .orderPreviewMain>div,.venuePage[data-tone="dark"] .orderPreviewDish{background:rgba(255,255,255,.025);border-color:rgba(255,255,255,.055)}
+.venuePage[data-tone="dark"] .orderPreviewProgress{background:rgba(255,255,255,.055)}
+.venuePage[data-tone="dark"] .orderPreviewDish{color:#C7D0DA}
+.venuePage[data-tone="dark"] .orderPreviewVenue span,.venuePage[data-tone="dark"] .orderPreviewMain small,.venuePage[data-tone="dark"] .orderPreviewDish small,.venuePage[data-tone="dark"] .orderPreviewCard footer>span{color:#8391A2}
+.venuePage[data-tone="dark"] .orderPreviewCard footer{border-top-color:rgba(255,255,255,.06)}
+.venuePage[data-tone="dark"] .orderPreviewCard footer button{border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#E7EDF4}
+
+/* full order card */
+.orderDetailOverlay{
+  position:fixed;inset:0;z-index:180;opacity:0;pointer-events:none;transition:opacity .24s ease;
+  color:#F8FAFC;font-family:inherit
+}
+.orderDetailOverlay.show{opacity:1;pointer-events:auto}
+.orderDetailBackdrop{
+  position:absolute;inset:0;border:0;background:rgba(3,8,15,.62);backdrop-filter:blur(12px) saturate(.9);
+  -webkit-backdrop-filter:blur(12px) saturate(.9)
+}
+.orderDetailCard{
+  position:absolute;left:50%;bottom:0;width:min(560px,100%);max-height:min(92dvh,860px);overflow:auto;overscroll-behavior:contain;
+  transform:translate(-50%,34px) scale(.985);opacity:.94;transition:.34s cubic-bezier(.2,.8,.2,1);
+  padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 18px);border-radius:32px 32px 0 0;
+  background:
+    radial-gradient(circle at 90% 0,rgba(217,67,67,.14),transparent 27%),
+    radial-gradient(circle at 4% 24%,rgba(67,105,158,.13),transparent 31%),
+    linear-gradient(180deg,rgba(20,39,63,.985),rgba(7,19,33,.995) 75%);
+  border:1px solid rgba(241,245,249,.1);border-bottom:0;box-shadow:0 -32px 100px rgba(0,0,0,.58);
+  scrollbar-width:none
+}
+.orderDetailCard::-webkit-scrollbar{display:none}
+.orderDetailOverlay.show .orderDetailCard{transform:translate(-50%,0) scale(1);opacity:1}
+.orderDetailCard:before{content:"";display:block;width:42px;height:4px;border-radius:999px;background:#4B5A6D;margin:0 auto 14px}
+.orderDetailHead{display:flex;align-items:center;gap:12px;padding:2px 1px 12px}
+.orderDetailVenueAvatar{width:58px;height:58px;border-radius:19px;font-size:20px}
+.orderDetailHeadCopy{min-width:0;flex:1}
+.orderDetailHeadCopy small{display:block;color:#E86A6A;font-size:8px;font-weight:900;letter-spacing:.14em}
+.orderDetailHeadCopy h2{margin:4px 0 3px;font-size:25px;line-height:1;letter-spacing:-.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orderDetailHeadCopy span{display:block;color:#8D9AAC;font-size:10px}
+.orderDetailClose{
+  flex:0 0 40px;width:40px;height:40px;border-radius:14px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);color:#EAF0F6;font-size:22px;line-height:1
+}
+.orderDetailStatusRow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:17px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.065)}
+.orderDetailStatusRow .status{border:1px solid currentColor;background:rgba(255,255,255,.025);font-weight:900}
+.orderDetailStatusRow>b{margin-left:auto;font-size:25px;letter-spacing:-.045em}
+.orderTimeline{position:relative;margin:15px 4px 4px;padding:7px 2px 2px}
+.orderTimelineRail{height:3px;margin:0 15px;border-radius:999px;background:rgba(255,255,255,.075);overflow:hidden}
+.orderTimelineRail i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#D94343,#E7865F 58%,#82D5A0);box-shadow:0 0 14px rgba(232,101,101,.34);transition:width .5s ease}
+.orderTimelineSteps{display:grid;grid-template-columns:repeat(4,1fr);margin-top:-8px}
+.orderTimelineSteps span{display:grid;justify-items:center;gap:5px;color:#6E7C8F;font-size:8px;font-weight:800;text-align:center}
+.orderTimelineSteps span>i{width:11px;height:11px;border-radius:50%;background:#304156;border:3px solid #13263E;box-shadow:0 0 0 1px rgba(255,255,255,.07)}
+.orderTimelineSteps span.on{color:#B9C4CF}.orderTimelineSteps span.on>i{background:#E16A5D}
+.orderTimelineSteps span.current>i{box-shadow:0 0 0 4px rgba(225,106,93,.13),0 0 18px rgba(225,106,93,.34)}
+.orderTimeline.cancelled{margin:13px 0 0;padding:12px 13px;border-radius:16px;background:rgba(205,67,87,.08);border:1px solid rgba(225,94,111,.14)}
+.orderTimeline.cancelled b,.orderTimeline.cancelled span{display:block}.orderTimeline.cancelled b{color:#F08A9A;font-size:12px}.orderTimeline.cancelled span{margin-top:3px;color:#8D99A8;font-size:9px}
+.orderDetailFacts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.orderDetailFacts article{min-width:0;padding:12px;border-radius:17px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.065)}
+.orderDetailFacts small,.orderDetailFacts b,.orderDetailFacts span{display:block}
+.orderDetailFacts small{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#738397}
+.orderDetailFacts b{margin-top:5px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orderDetailFacts span{margin-top:3px;color:#8796A7;font-size:9px}
+.orderDetailSection{margin-top:10px;padding:14px;border-radius:21px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.065)}
+.orderDetailSectionHead{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.orderDetailSectionHead small{display:block;color:#E86A6A;font-size:8px;font-weight:900;letter-spacing:.14em}
+.orderDetailSectionHead h3{margin:3px 0 0;font-size:17px;letter-spacing:-.025em}
+.orderDetailSectionHead>b{color:#9EABBA;font-size:9px}
+.orderDetailItems{display:grid;gap:7px;margin-top:11px}
+.orderDetailItems article{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:11px;border-radius:15px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05)}
+.orderDetailItems article>div{min-width:0}
+.orderDetailItems b,.orderDetailItems small{display:block}
+.orderDetailItems b{font-size:12px}.orderDetailItems small{margin-top:3px;color:#8290A0;font-size:9px;line-height:1.35}
+.orderDetailItems article>span{color:#8392A3;font-size:10px}.orderDetailItems strong{font-size:12px;white-space:nowrap}
+.orderDetailEmpty{padding:15px;text-align:center;color:#8090A1;font-size:10px}
+.orderDetailInfoGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}
+.orderDetailInfoGrid>div{min-width:0;padding:10px 11px;border-radius:14px;background:rgba(255,255,255,.022);border:1px solid rgba(255,255,255,.045)}
+.orderDetailInfoGrid>div.wide{grid-column:1/-1}
+.orderDetailInfoGrid small,.orderDetailInfoGrid b{display:block}
+.orderDetailInfoGrid small{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:#738397}
+.orderDetailInfoGrid b{margin-top:4px;font-size:10px;line-height:1.35;overflow-wrap:anywhere}
+.orderDetailActions{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,.65fr);gap:8px;margin-top:11px}
+.orderDetailActions button{min-height:49px;border-radius:16px;font-weight:900;font-size:11px}
+.orderDetailPrimary{border:0;background:linear-gradient(135deg,#E86565,#D94343 60%,#BC3030);color:white;box-shadow:0 13px 34px rgba(217,67,67,.27)}
+.orderDetailPrimary span{margin-left:7px}
+.orderDetailSecondary{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);color:#DCE4EC}
+@media(max-width:390px){
+  .ordersPanelSummary{padding:15px;min-height:90px}.ordersPanelSummary b{font-size:18px}.ordersPanelSummary>i{width:44px;height:44px;flex-basis:44px;border-radius:15px}
+  .orderPreviewMain{grid-template-columns:1fr 1fr}.orderPreviewAvatar{width:44px;height:44px;border-radius:15px}
+  .orderPreviewTop>.status{font-size:8px;padding:5px 6px}.orderPreviewCard footer em{display:none}
+  .orderDetailCard{border-radius:28px 28px 0 0;padding-left:11px;padding-right:11px}.orderDetailHeadCopy h2{font-size:22px}
+  .orderDetailFacts{grid-template-columns:1fr 1fr}.orderDetailInfoGrid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:340px){
+  .orderPreviewMain,.orderDetailFacts,.orderDetailInfoGrid,.orderDetailActions{grid-template-columns:1fr}
+  .orderDetailInfoGrid>div.wide{grid-column:auto}.orderPreviewTop{gap:7px}.orderPreviewTop>.status{max-width:82px;overflow:hidden;text-overflow:ellipsis}
+}
+@media(prefers-reduced-motion:reduce){
+  .ordersPanelSummary:after{animation:none}.orderPreviewCard,.orderDetailOverlay,.orderDetailCard,.orderPreviewProgress>i,.orderTimelineRail i{transition:none}
+}

@@ -1,7 +1,7 @@
 (() => {
   const {api,money,esc}=SHAURMEG,tg=SHAURMEG.telegram,$=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search),marker=qs.get('marker'),est=qs.get('establishment');
-  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],favoriteIds=new Set(),pendingItem=null,itemSelectionState={},itemChoiceState={},builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
+  let ctx=null,session=sessionStorage.getItem('shaurmeg_client_session')||'',cart=[],category='all',fulfillment='cafe',builder=null,siteCustomization=null,pendingBuilt=null,builderResultOrigin='custom',builderMode='custom',signatureItems=[],signatureIndex=0,signatureAnimating=false,signaturePointerX=null,menuStream=null,orderStream=null,menuReloadTimer=null,activeOrderRows=[],orderHistoryRows=[],orderDetailId='',favoriteIds=new Set(),pendingItem=null,itemSelectionState={},itemChoiceState={},builderState={type:'',bread:'',meat:'',sauces:[],extras:[]};
 
   let cinema=null,builderStep=0,building=false,buildAttempt=0;
   const cinemaForType=()=>ctx?.venue?.config?.builder_cinema?.find(x=>x.type_id===builderState.type);
@@ -701,6 +701,95 @@
   }
 
   const STATUS_LABELS={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Выполнен',cancelled:'Отменён'};
+  function orderDateParts(value){
+    const d=value?new Date(value):null;
+    if(!d||Number.isNaN(d.getTime()))return {date:'—',time:'—',full:'—'};
+    return {
+      date:d.toLocaleDateString('ru-RU',{day:'2-digit',month:'long',year:'numeric'}),
+      time:d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      full:d.toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+    };
+  }
+  function orderProgress(status){return ({new:24,cooking:56,ready:84,done:100,cancelled:0})[String(status)]??18}
+  function orderStatusHint(status){
+    return ({new:'Заказ передан заведению',cooking:'Сейчас готовят',ready:'Можно получать',done:'Заказ получен',cancelled:'Заказ отменён'})[String(status)]||'Статус обновляется';
+  }
+  function orderReceiveInfo(o){
+    const updated=orderDateParts(o?.updated_at||o?.created_at);
+    if(o?.status==='done')return {label:'Время получения',value:updated.full};
+    if(o?.status==='ready')return {label:'Готов к получению',value:'с '+updated.time};
+    if(o?.status==='cancelled')return {label:'Получение',value:'Заказ отменён'};
+    return {label:'Время получения',value:o?.fulfillment_type==='delivery'?'После готовности':'По готовности'};
+  }
+  function orderAvatar(o){
+    const initial=esc(String(o?.venue_name||'Ш').trim().slice(0,1).toUpperCase()||'Ш');
+    if(!o?.marker_id)return '<span>'+initial+'</span>';
+    const src=api+'/map/markers/'+encodeURIComponent(o.marker_id)+'/avatar?order='+encodeURIComponent(o.order_number||'');
+    return '<img src="'+esc(src)+'" alt="" loading="lazy" onerror="this.remove();this.parentElement.classList.add(\'fallback\')"><span>'+initial+'</span>';
+  }
+  function orderPaymentLabel(o){
+    const method=({on_receipt:'При получении',card:'Картой',cash:'Наличными'})[String(o?.payment_method)]||'При получении';
+    const status=({paid:'оплачено',pending:'ожидает оплаты',refunded:'возврат'})[String(o?.payment_status)]||'';
+    return status?method+' · '+status:method;
+  }
+  function ensureOrderDetail(){
+    let layer=$('#orderDetailOverlay');
+    if(layer)return layer;
+    layer=document.createElement('div');layer.id='orderDetailOverlay';layer.className='orderDetailOverlay';layer.setAttribute('aria-hidden','true');
+    layer.innerHTML='<button class="orderDetailBackdrop" type="button" data-order-detail-close aria-label="Закрыть"></button><article class="orderDetailCard" role="dialog" aria-modal="true" aria-labelledby="orderDetailTitle"><div id="orderDetailContent"></div></article>';
+    document.body.appendChild(layer);
+    layer.addEventListener('click',e=>{
+      if(e.target.closest('[data-order-detail-close]'))closeOrderDetail();
+      const menu=e.target.closest('[data-order-detail-menu]');
+      if(menu){
+        const u=new URL('menu.html',location.href);
+        u.searchParams.set('marker',menu.dataset.orderDetailMenu);
+        u.searchParams.set('establishment',menu.dataset.orderDetailEst);
+        u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString());
+      }
+    });
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&orderDetailId)closeOrderDetail()});
+    return layer;
+  }
+  function renderOrderDetail(o){
+    if(!o)return;
+    const layer=ensureOrderDetail(),box=layer.querySelector('#orderDetailContent');
+    const created=orderDateParts(o.created_at),receive=orderReceiveInfo(o),items=Array.isArray(o.items)?o.items:[];
+    const status=String(o.status||'new'),cancelled=status==='cancelled',steps=['new','cooking','ready','done'],labels={new:'Принят',cooking:'Готовится',ready:'Готово',done:'Получен'},current=steps.indexOf(status);
+    const timeline=cancelled?'<div class="orderTimeline cancelled"><b>Заказ отменён</b><span>При необходимости оформите новый заказ в заведении.</span></div>':
+      '<div class="orderTimeline"><div class="orderTimelineRail"><i style="width:'+orderProgress(status)+'%"></i></div><div class="orderTimelineSteps">'+steps.map((s,i)=>'<span class="'+(i<=current?'on ':'')+(s===status?'current':'')+'"><i></i><b>'+labels[s]+'</b></span>').join('')+'</div></div>';
+    box.innerHTML=
+      '<header class="orderDetailHead"><div class="orderDetailVenueAvatar">'+orderAvatar(o)+'</div><div class="orderDetailHeadCopy"><small>ЗАКАЗ · '+esc(o.order_number||'')+'</small><h2 id="orderDetailTitle">'+esc(o.venue_name||'Shaurmeg')+'</h2><span>'+esc(orderStatusHint(status))+'</span></div><button type="button" class="orderDetailClose" data-order-detail-close aria-label="Закрыть">×</button></header>'+
+      '<div class="orderDetailStatusRow"><span class="status status-'+esc(status)+'">'+esc(STATUS_LABELS[status]||status)+'</span><b>'+money(o.total||0)+'</b></div>'+
+      timeline+
+      '<section class="orderDetailFacts"><article><small>Дата заказа</small><b>'+esc(created.date)+'</b><span>'+esc(created.time)+'</span></article><article><small>'+esc(receive.label)+'</small><b>'+esc(receive.value)+'</b><span>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</span></article></section>'+
+      '<section class="orderDetailSection"><div class="orderDetailSectionHead"><div><small>СОСТАВ</small><h3>Что в заказе</h3></div><b>'+items.reduce((s,x)=>s+(Number(x.q)||1),0)+' поз.</b></div>'+
+      '<div class="orderDetailItems">'+(items.length?items.map(x=>{const q=Math.max(1,Number(x.q)||1),price=Number(x.p)||0;return '<article><div><b>'+esc(x.n||x.name||'Позиция')+'</b>'+(x.detail?'<small>'+esc(x.detail)+'</small>':'')+'</div><span>× '+q+'</span><strong>'+money(price*q)+'</strong></article>'}).join(''):'<div class="orderDetailEmpty">Состав заказа не найден</div>')+'</div></section>'+
+      '<section class="orderDetailSection orderDetailInfo"><div class="orderDetailSectionHead"><div><small>ПОЛУЧЕНИЕ</small><h3>Детали</h3></div></div><div class="orderDetailInfoGrid">'+
+        '<div><small>Способ</small><b>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</b></div>'+
+        '<div><small>Оплата</small><b>'+esc(orderPaymentLabel(o))+'</b></div>'+
+        (o.address?'<div class="wide"><small>Адрес</small><b>'+esc(o.address)+'</b></div>':'')+
+        (o.phone?'<div><small>Телефон</small><b>'+esc(o.phone)+'</b></div>':'')+
+        (o.comment?'<div class="wide"><small>Комментарий</small><b>'+esc(o.comment)+'</b></div>':'')+
+      '</div></section>'+
+      '<footer class="orderDetailActions">'+(o.marker_id&&o.establishment_id?'<button type="button" class="orderDetailPrimary" data-order-detail-menu="'+esc(o.marker_id)+'" data-order-detail-est="'+esc(o.establishment_id)+'">Открыть заведение <span>→</span></button>':'')+'<button type="button" class="orderDetailSecondary" data-order-detail-close>Закрыть</button></footer>';
+  }
+  function openOrderDetail(id){
+    const o=(orderHistoryRows||[]).find(x=>String(x.id??x.order_number)===String(id));
+    if(!o)return;
+    orderDetailId=String(id);const layer=ensureOrderDetail();renderOrderDetail(o);
+    requestAnimationFrame(()=>{layer.classList.add('show');layer.setAttribute('aria-hidden','false')});
+    tg?.HapticFeedback?.selectionChanged?.();
+  }
+  function closeOrderDetail(){
+    orderDetailId='';const layer=$('#orderDetailOverlay');if(!layer)return;layer.classList.remove('show');layer.setAttribute('aria-hidden','true');
+  }
+  function refreshOrderDetail(){
+    if(!orderDetailId)return;
+    const o=(orderHistoryRows||[]).find(x=>String(x.id??x.order_number)===String(orderDetailId));
+    if(o)renderOrderDetail(o);else closeOrderDetail();
+  }
+
   const ACTIVE_ORDER_STATUSES=new Set(['new','cooking','ready']);
   function renderActiveOrderBadge(){
     const badge=$('#activeOrderBadge');if(!badge)return;
@@ -737,15 +826,27 @@
     }catch{}
   }
   async function myOrders(){
-    if(!session){$('#myOrders').innerHTML='<div class="empty">Откройте Mini App внутри Telegram, чтобы видеть историю заказов.</div>';return}
+    if(!session){orderHistoryRows=[];$('#myOrders').innerHTML='<div class="empty">Откройте Mini App внутри Telegram, чтобы видеть историю заказов.</div>';return}
     try{
-      const r=await fetch(api+'/me/orders',{headers:{Authorization:'Bearer '+session}});if(!r.ok)throw 0;
-      const rows=await r.json();
-      $('#myOrders').innerHTML=rows.length?rows.map(o=>'<article class="orderCard historyCard"><header><div><small>'+esc(o.venue_name||'Shaurmeg')+'</small><b>'+esc(o.order_number)+'</b></div><span class="status status-'+esc(o.status)+'">'+esc(STATUS_LABELS[o.status]||o.status)+'</span></header>'+
-        '<div class="historyMeta">'+new Date(o.created_at).toLocaleString('ru-RU')+' · '+(o.fulfillment_type==='cafe'?'в заведении':'доставка')+'</div>'+
-        '<div class="historyBottom"><span>'+((o.items||[]).reduce((s,x)=>s+(x.q||1),0))+' поз.</span><b>'+money(o.total)+'</b></div></article>').join('')
-        :'<div class="empty">Заказов пока нет</div>';
-    }catch{$('#myOrders').innerHTML='<div class="empty">Не удалось загрузить историю</div>'}
+      const r=await fetch(api+'/me/orders',{headers:{Authorization:'Bearer '+session},cache:'no-store'});if(!r.ok)throw 0;
+      const rows=await r.json();orderHistoryRows=Array.isArray(rows)?rows:[];
+      const active=orderHistoryRows.filter(o=>['new','cooking','ready'].includes(o.status));
+      const sorted=[...orderHistoryRows].sort((a,b)=>{
+        const aa=['new','cooking','ready'].includes(a.status)?1:0,bb=['new','cooking','ready'].includes(b.status)?1:0;
+        if(aa!==bb)return bb-aa;return new Date(b.created_at||0)-new Date(a.created_at||0);
+      });
+      const summary='<div class="ordersPanelSummary '+(active.length?'hasActive':'')+'"><div><small>МОИ ЗАКАЗЫ</small><b>'+(active.length?(active.length+' активн'+(active.length===1?'ый заказ':'ых заказа')):'Сейчас всё получено')+'</b><span>'+(active[0]?esc(active[0].venue_name||'Shaurmeg')+' · '+esc(orderStatusHint(active[0].status)):'История заказов остаётся здесь')+'</span></div><i>'+(active.length?String(active.length):'✓')+'</i></div>';
+      $('#myOrders').innerHTML=summary+(sorted.length?sorted.map(o=>{
+        const created=orderDateParts(o.created_at),receive=orderReceiveInfo(o),count=(o.items||[]).reduce((s,x)=>s+(Number(x.q)||1),0),id=String(o.id??o.order_number),first=(o.items||[])[0],more=Math.max(0,(o.items||[]).length-1);
+        return '<article class="orderCard historyCard orderPreviewCard '+(['new','cooking','ready'].includes(o.status)?'isActive':'')+'" data-order-detail="'+esc(id)+'" role="button" tabindex="0">'+
+          '<div class="orderPreviewTop"><div class="orderPreviewVenue"><div class="orderPreviewAvatar">'+orderAvatar(o)+'</div><div><small>'+esc(o.venue_name||'Shaurmeg')+'</small><b>'+esc(o.order_number||'Заказ')+'</b><span>'+esc(created.full)+'</span></div></div><span class="status status-'+esc(o.status)+'">'+esc(STATUS_LABELS[o.status]||o.status)+'</span></div>'+
+          '<div class="orderPreviewProgress"><i style="width:'+orderProgress(o.status)+'%"></i></div>'+
+          '<div class="orderPreviewMain"><div><small>Получение</small><b>'+esc(receive.value)+'</b></div><div><small>Способ</small><b>'+(o.fulfillment_type==='cafe'?'В заведении':'Доставка')+'</b></div></div>'+
+          '<div class="orderPreviewDish">'+(first?'<span>'+esc(first.n||first.name||'Позиция')+' × '+esc(first.q||1)+'</span>':'<span>Состав заказа</span>')+(more?'<small>+ ещё '+more+'</small>':'')+'</div>'+
+          '<footer><span>'+count+' поз.</span><b>'+money(o.total)+'</b><em>Подробнее →</em></footer></article>';
+      }).join(''):'<div class="empty">Заказов пока нет</div>');
+      refreshOrderDetail();
+    }catch{orderHistoryRows=[];$('#myOrders').innerHTML='<div class="empty">Не удалось загрузить историю</div>';refreshOrderDetail()}
   }
   async function submitOrder(){
     const btn=$('#placeOrder');btn.disabled=true;
@@ -845,6 +946,8 @@
   $('#cartBtn').onclick=()=>openSheet('cartSheet');
   $('#checkoutBtn').onclick=()=>openSheet('checkoutSheet');
   $('#profileBtn').onclick=()=>{openSheet('profileSheet');myOrders()};
+  $('#myOrders').onclick=e=>{const card=e.target.closest('[data-order-detail]');if(card)openOrderDetail(card.dataset.orderDetail)};
+  $('#myOrders').onkeydown=e=>{if(e.key!=='Enter'&&e.key!==' ')return;const card=e.target.closest('[data-order-detail]');if(!card)return;e.preventDefault();openOrderDetail(card.dataset.orderDetail)};
   $('#builderStepNext').onclick=()=>changeBuilderStep(1);
   $('#builderStepBack').onclick=()=>changeBuilderStep(-1);
   $('#backdrop').onclick=closeSheets;

@@ -143,7 +143,9 @@ jobs:
         working-directory: backend
         run: npm install --ignore-scripts
       - name: RealCity spatial and persistence contract
-        run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js v2/backend/test/realcity-open-world.test.js
+        run: node --test v2/backend/test/realcity-astra.test.js v2/backend/test/realcity-photo.test.js v2/backend/test/realcity-studio.test.js v2/backend/test/realcity-open-world.test.js v2/backend/test/realcity-photoreal.test.js
+      - name: Reconstruction worker syntax
+        run: python3 -m py_compile v2/reconstruction-worker/worker.py
       - name: Menu catalog and deep editor contract
         run: node --test v2/backend/test/menu-domain.test.js v2/backend/test/admin-design-contract.test.js
       - name: Photographic builder contract
@@ -173,10 +175,10 @@ jobs:
           if-no-files-found: ignore
       - name: Load production adapter modules
         working-directory: backend
-        run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/routes')"
+        run: node -e "require('../v2/backend/src/domain');require('../v2/backend/src/auth');require('../v2/backend/src/schema');require('../v2/backend/src/realtime');require('../v2/backend/src/realcity-service');require('../v2/backend/src/realcity-reconstruction');require('../v2/backend/src/routes')"
       - name: Load API modules
         working-directory: v2/backend
-        run: node -e "require('./src/domain');require('./src/auth');require('./src/schema');require('./src/realtime');require('./src/realcity-service');require('./src/routes')"
+        run: node -e "require('./src/domain');require('./src/auth');require('./src/schema');require('./src/realtime');require('./src/realcity-service');require('./src/realcity-reconstruction');require('./src/routes')"
       - name: Boot API and healthcheck
         working-directory: v2/backend
         run: |

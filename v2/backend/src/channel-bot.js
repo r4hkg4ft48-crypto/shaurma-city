@@ -6,6 +6,7 @@ const content=require('./channel-content');
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let runtimeUsername='';
+let runtimeChannelChatId='';
 
 async function call(method,body={},attempt=0){
   const token=config.CHANNEL_BOT_TOKEN;
@@ -37,6 +38,7 @@ function allAdminIds(){
   return out;
 }
 function isAdmin(userId){return allAdminIds().has(String(userId||''))}
+function channelChatId(){return String(runtimeChannelChatId||config.CHANNEL_CHAT_ID||'').trim()}
 function assetUrl(post){
   const base=String(config.CHANNEL_ASSET_BASE_URL||config.PUBLIC_API_URL||'').replace(/\/+$/,'');
   const path=String(post?.media?.path||'').replace(/^\/+/, '');
@@ -102,7 +104,15 @@ async function bootstrap(){
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_channel_leads_status ON shaurmeg_channel_leads(status,updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS shaurmeg_channel_settings(
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
+  const q=await db.query("SELECT value FROM shaurmeg_channel_settings WHERE key='channel_chat_id' LIMIT 1");
+  runtimeChannelChatId=String(q.rows[0]?.value||'').trim();
 }
 
 async function sendText(chatId,text,replyMarkup=null,opts={}){
@@ -113,8 +123,8 @@ async function sendText(chatId,text,replyMarkup=null,opts={}){
 }
 
 async function postToChannel(post,publishedBy=''){
-  if(!config.CHANNEL_CHAT_ID)throw new Error('channel_chat_id_not_configured');
-  const chatId=config.CHANNEL_CHAT_ID;
+  const chatId=channelChatId();
+  if(!chatId)throw new Error('channel_chat_id_not_configured');
   const text=String(post.text||'');
   const media=assetUrl(post);
   const buttons=post.cta==='connect'?connectKeyboard():null;
@@ -287,9 +297,10 @@ async function adminStatusText(){
       lines.push('Webhook: '+String(webhook?.url||'not set'));
       lines.push('Pending updates: '+Number(webhook?.pending_update_count||0));
       if(webhook?.last_error_message)lines.push('Last error: '+String(webhook.last_error_message));
-      if(config.CHANNEL_CHAT_ID){
+      const target=channelChatId();
+      if(target){
         try{
-          const member=await call('getChatMember',{chat_id:config.CHANNEL_CHAT_ID,user_id:me.id});
+          const member=await call('getChatMember',{chat_id:target,user_id:me.id});
           lines.push('Channel access: '+String(member?.status||'unknown'));
           if(member?.status==='administrator'){
             lines.push('Can post: '+(member.can_post_messages!==false?'yes':'no'));
@@ -377,6 +388,34 @@ async function handleMessage(msg){
   return handlePublicMessage(msg);
 }
 
+async function bindChannel(chat,triggerPublish=false){
+  if(!chat?.id||!['channel','supergroup'].includes(String(chat.type||'')))return false;
+  runtimeChannelChatId=String(chat.id);
+  if(db.configured){
+    await db.query(`INSERT INTO shaurmeg_channel_settings(key,value,updated_at) VALUES('channel_chat_id',$1,NOW())
+      ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[runtimeChannelChatId]);
+  }
+  console.log('Shaurmeg channel bound · '+runtimeChannelChatId+' · '+String(chat.title||chat.username||''));
+  try{await call('setChatDescription',{chat_id:runtimeChannelChatId,description:'Шаурмег — карта, меню, заказы, live-статусы и управление заведением в одной Telegram-экосистеме. Подключение — через бота канала.'})}catch(e){console.warn('channel description',e.message)}
+  if(triggerPublish)setTimeout(()=>publishLaunchMissing().then(r=>console.log('Channel launch after bind · '+(r.published||0)+' published · '+(r.failed||0)+' failed')).catch(e=>console.error('channel launch after bind',e.message)),1200);
+  return true;
+}
+
+async function discoverPendingChannel(){
+  try{
+    await call('deleteWebhook',{drop_pending_updates:false});
+    const updates=await call('getUpdates',{timeout:0,limit:100,allowed_updates:['my_chat_member','channel_post']})||[];
+    for(const u of updates){
+      const chat=u?.my_chat_member?.chat||u?.channel_post?.chat;
+      if(chat&&['channel','supergroup'].includes(String(chat.type||''))){
+        await bindChannel(chat,false);
+        return true;
+      }
+    }
+  }catch(e){console.warn('channel discovery',e.message)}
+  return false;
+}
+
 async function sync(){
   if(!config.CHANNEL_BOT_TOKEN)return {enabled:false};
   try{
@@ -386,8 +425,10 @@ async function sync(){
   try{await call('setMyName',{name:'Шаурмег • подключение'})}catch(e){console.warn('channel bot name',e.message)}
   try{await call('setMyDescription',{description:'Официальный бот Шаурмега: подключение заведения, возможности продукта и заявки на запуск.'})}catch(e){console.warn('channel bot description',e.message)}
   try{await call('setMyShortDescription',{short_description:'Подключение заведения к Шаурмегу'})}catch(e){console.warn('channel bot short description',e.message)}
-  if(config.CHANNEL_CHAT_ID){
-    try{await call('setChatDescription',{chat_id:config.CHANNEL_CHAT_ID,description:'Шаурмег — карта, меню, заказы, live-статусы и управление заведением в одной Telegram-экосистеме. Подключение — через бота канала.'})}
+  await discoverPendingChannel();
+  const boundChat=channelChatId();
+  if(boundChat){
+    try{await call('setChatDescription',{chat_id:boundChat,description:'Шаурмег — карта, меню, заказы, live-статусы и управление заведением в одной Telegram-экосистеме. Подключение — через бота канала.'})}
     catch(e){console.warn('channel description',e.message)}
   }
 
@@ -425,7 +466,7 @@ async function sync(){
       {command:'help',description:'Команды управления'}
     ]})}catch(e){console.warn('channel admin commands',adminId,e.message)}
   }
-  await call('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/channel',allowed_updates:['message','callback_query']});
+  await call('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/channel',allowed_updates:['message','callback_query','my_chat_member','channel_post']});
   return {enabled:true,username:runtimeUsername};
 }
 
@@ -442,7 +483,7 @@ function install(app){
           channel_access={status:String(member?.status||'unknown'),can_post_messages:member?.can_post_messages!==false,can_edit_messages:member?.can_edit_messages!==false,can_delete_messages:member?.can_delete_messages!==false};
         }catch(e){channel_access={status:'not_added',error:String(e.message||'channel_access_failed')}}
       }
-      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:config.CHANNEL_CHAT_ID||'',channel_admin_url:channelAdminUrl(),channel_access,webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
+      res.json({ok:true,enabled:true,bot:{id:String(me?.id||''),username:runtimeUsername},channel:target||'',channel_admin_url:channelAdminUrl(),channel_access,webhook:{url:String(webhook?.url||''),pending_update_count:Number(webhook?.pending_update_count||0),last_error_message:String(webhook?.last_error_message||'')}});
     }catch(e){res.status(503).json({ok:false,enabled:true,error:String(e.message||'channel_health_failed')})}
   });
 
@@ -450,6 +491,8 @@ function install(app){
     res.sendStatus(200);
     if(!config.CHANNEL_BOT_TOKEN)return;
     try{
+      if(req.body?.my_chat_member){await bindChannel(req.body.my_chat_member.chat,true);return}
+      if(req.body?.channel_post){await bindChannel(req.body.channel_post.chat,true);return}
       if(req.body?.callback_query)return handleCallback(req.body.callback_query);
       if(req.body?.message)return handleMessage(req.body.message);
     }catch(e){console.error('channel webhook',e.message)}
@@ -458,10 +501,11 @@ function install(app){
 
 async function publishLaunchMissing(){
   if(!config.CHANNEL_AUTO_PUBLISH_LAUNCH)return {enabled:false,published:0};
-  if(!config.CHANNEL_CHAT_ID)return {enabled:true,published:0,error:'channel_chat_id_not_configured'};
+  const target=channelChatId();
+  if(!target)return {enabled:true,published:0,error:'channel_chat_id_not_configured'};
   const existing=new Set();
   if(db.configured){
-    const q=await db.query('SELECT DISTINCT slug FROM shaurmeg_channel_publications WHERE channel_chat_id=$1',[String(config.CHANNEL_CHAT_ID)]);
+    const q=await db.query('SELECT DISTINCT slug FROM shaurmeg_channel_publications WHERE channel_chat_id=$1',[target]);
     for(const row of q.rows)existing.add(String(row.slug));
   }
   let published=0,failed=0;

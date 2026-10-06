@@ -14,10 +14,12 @@
  * image count and deterministic geometry generation.
  */
 const config=require('./config');
+const crypto=require('crypto');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='open-world-v1';
 const MAX_IMAGE_BYTES=7*1024*1024;
+const MAX_TEXTURES=6;
 const STREET_SOURCES=new Set(['panoramax','kartaview','mapillary']);
 const SOURCE_WEIGHT={panoramax:1,kartaview:.92,mapillary:.96,wikimedia:.58};
 const ALLOWED_LICENSE_HINTS=['CC BY-SA 4.0','CC-BY-SA-4.0','CC BY-SA','Licence Ouverte 2.0','etalab-2.0','ODbL'];
@@ -61,11 +63,13 @@ function safeUrl(value){
     return u.toString();
   }catch{return null}
 }
-async function fetchJson(url,{method='GET',body=null,timeout=5000,headers={}}={}){
+async function fetchJson(url,{method='GET',body=null,form=null,timeout=5000,headers={}}={}){
   const safe=safeUrl(url);if(!safe)throw new Error('unsafe_open_world_url');
   const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeout);
+  const payload=form?new URLSearchParams(form):body?JSON.stringify(body):undefined;
+  const contentType=form?'application/x-www-form-urlencoded;charset=UTF-8':body?'application/json':null;
   try{
-    const r=await fetch(safe,{method,headers:{'Accept':'application/json','User-Agent':'Shaurmeg-RealCity-OpenWorld/1.0',...headers},body:body?JSON.stringify(body):undefined,signal:ac.signal,redirect:'follow'});
+    const r=await fetch(safe,{method,headers:{'Accept':'application/json','User-Agent':'Shaurmeg-RealCity-OpenWorld/1.0',...(contentType?{'Content-Type':contentType}:{}),...headers},body:payload,signal:ac.signal,redirect:'follow'});
     if(!r.ok)throw new Error('http_'+r.status);
     return await r.json();
   }finally{clearTimeout(timer)}
@@ -93,7 +97,7 @@ function candidateBase(source,id,coords,imageUrl,pageUrl,extra={}){
     image_url:image,page_url:page||null,heading:finite(extra.heading)?((Number(extra.heading)%360)+360)%360:null,
     captured_at:extra.captured_at||null,license:clean(extra.license,100)||null,
     attribution:clean(extra.attribution,300)||source,sequence_id:clean(extra.sequence_id,120)||null,
-    panoramic:extra.panoramic===true
+    panoramic:extra.panoramic===true,fov:finite(extra.fov)?clamp(Number(extra.fov),25,360):(extra.panoramic===true?360:78)
   };
 }
 function firstImageAsset(item){
@@ -131,12 +135,14 @@ async function collectPanoramax(marker){
     for(const item of j?.features||[]){
       const id=String(item.id||'');if(!id||seen.has(id))continue;
       const p=item.properties||{},coords=item.geometry?.type==='Point'?item.geometry.coordinates:null,url=firstImageAsset(item);
-      const page=(item.links||[]).find(l=>['alternate','self'].includes(l.rel)&&safeUrl(l.href))?.href;
+      const fov=Number(p['pers:interior_orientation']?.field_of_view)||Number(p.field_of_view)||78;
+      const itemLicense=clean(p.license||'',100)||licenseFromConfig(cfg);
+      const page='https://api.panoramax.xyz/#focus=pic&pic='+encodeURIComponent(id);
       const c=candidateBase('panoramax',id,coords,url,page,{
         heading:p['view:azimuth']??p['exif:GPSImgDirection']??p.compass_angle??p.heading,
-        captured_at:p.datetime||p.datetimetz||null,license:licenseFromConfig(cfg),
+        captured_at:p.datetime||p.datetimetz||null,license:itemLicense,
         attribution:producer(item)?'Panoramax · '+producer(item):'Panoramax contributors',
-        sequence_id:item.collection||p.collection,pano:!!p['pers:interior_orientation']
+        sequence_id:item.collection||p.collection,panoramic:fov>=300,fov
       });
       if(c){seen.add(id);out.push(c)}
     }
@@ -144,31 +150,42 @@ async function collectPanoramax(marker){
   return out;
 }
 
-function arrayFromKarta(j){
-  if(Array.isArray(j))return j;
-  for(const v of [j?.result?.data,j?.result?.photos,j?.result,j?.data,j?.photos])if(Array.isArray(v))return v;
-  return [];
+function deepObjects(value,out=[]){
+  if(!value||typeof value!=='object')return out;
+  if(Array.isArray(value)){for(const v of value)deepObjects(v,out);return out}
+  out.push(value);for(const v of Object.values(value))if(v&&typeof v==='object')deepObjects(v,out);return out;
 }
 function kartaImage(row){
-  for(const k of ['fileurlProc','fileurlLTh','procUrl','imageProcUrl','thumbUrl','thumbnailUrl','image_url','url']){
-    const v=safeUrl(row?.[k]);if(v)return v;
+  for(const k of ['fileurlProc','fileurlLTh','procUrl','imageProcUrl','thumbUrl','thumbnailUrl','image_url','url','lth_name','name','fileName','filepath','path']){
+    const raw=String(row?.[k]||'').trim();if(!raw)continue;
+    const direct=safeUrl(raw);if(direct)return direct;
+    if(/^http:\/\//i.test(raw)){const https=safeUrl(raw.replace(/^http:/i,'https:'));if(https)return https}
+    if(!/^[a-z]+:/i.test(raw)){const joined=safeUrl(KARTAVIEW_API+'/'+raw.replace(/^\/+/,''));if(joined)return joined}
   }
   return null;
 }
 async function collectKartaView(marker){
-  const u=new URL('https://api.openstreetcam.org/2.0/photo/');
-  u.searchParams.set('lat',String(marker.lat));u.searchParams.set('lng',String(marker.lon));u.searchParams.set('zoomLevel','17');
-  u.searchParams.set('join','1');u.searchParams.set('orderBy','date_added');u.searchParams.set('orderDirection','desc');
-  let j;try{j=await fetchJson(u.toString(),{timeout:5500})}catch{return[]}
-  const out=[];
-  for(const row of arrayFromKarta(j).slice(0,48)){
-    const coords=[num(row.lng??row.lon??row.longitude),num(row.lat??row.latitude)],id=row.id??row.photoId??row.sequenceId+'-'+row.sequenceIndex;
-    const c=candidateBase('kartaview',id,coords,kartaImage(row),'https://kartaview.org/map/@'+coords[1]+','+coords[0]+',18z',{
+  let j;
+  try{
+    j=await fetchJson(KARTAVIEW_API+'/1.0/list/nearby-photos/',{
+      method:'POST',form:{lat:String(marker.lat),lng:String(marker.lon),radius:'220',ipp:'100',page:'1'},timeout:6000
+    });
+  }catch{return[]}
+  const apiCode=Number(j?.status?.apiCode);if(apiCode&&apiCode!==600)return[];
+  const out=[],seen=new Set();
+  for(const row of deepObjects(j)){
+    const coords=[num(row.lng??row.lon??row.longitude),num(row.lat??row.latitude)],image=kartaImage(row);
+    if(!finite(coords[0])||!finite(coords[1])||!image)continue;
+    const id=row.id??row.photoId??row.photo_id??((row.sequenceId??row.sequence_id)+'-'+(row.sequenceIndex??row.sequence_index));
+    const key=String(id||image);if(seen.has(key))continue;seen.add(key);
+    const fov=Number(row.fieldOfView??row.fov??row.hFoV)||78;
+    const c=candidateBase('kartaview',key,coords,image,'https://kartaview.org/map/@'+coords[1]+','+coords[0]+',18z',{
       heading:row.heading??row.compass??row.cameraHeading??row.direction,
-      captured_at:row.date_added??row.dateAdded??row.createdAt??null,
+      captured_at:row.date_added??row.dateAdded??row.createdAt??row.timestamp??null,
       license:'CC BY-SA 4.0',attribution:'© Grab and KartaView Contributors',
-      sequence_id:row.sequenceId??row.sequence_id
+      sequence_id:row.sequenceId??row.sequence_id,panoramic:fov>=300,fov
     });if(c)out.push(c);
+    if(out.length>=48)break;
   }
   return out;
 }
@@ -186,7 +203,7 @@ async function collectMapillary(marker){
     const c=candidateBase('mapillary',row.id,coords,row.thumb_1024_url,'https://www.mapillary.com/app/?pKey='+encodeURIComponent(row.id),{
       heading:row.compass_angle,captured_at:row.captured_at?new Date(Number(row.captured_at)).toISOString():null,
       license:'CC BY-SA (Mapillary imagery; Developer Terms also apply)',
-      attribution:author?'© Mapillary · '+author:'© Mapillary',panoramic:row.is_pano===true
+      attribution:author?'© Mapillary · '+author:'© Mapillary',panoramic:row.is_pano===true,fov:row.is_pano===true?360:78
     });if(c)out.push(c);
   }
   return out;
@@ -288,6 +305,32 @@ async function analyzeImage(buffer){
   };
 }
 
+async function buildFacadeMaterial(buffer,candidate,assignment,referenceId){
+  if(config.REALCITY_OPEN_WORLD_TEXTURES===false||candidate.source==='wikimedia')return null;
+  const base=await sharp(buffer,{limitInputPixels:32000000}).rotate().jpeg({quality:92}).toBuffer();
+  const meta=await sharp(base).metadata(),w=Number(meta.width),h=Number(meta.height);if(!w||!h||w<256||h<160)return null;
+  const a=assignment.edge.coordinates?.[0],b=assignment.edge.coordinates?.[1];if(!a||!b)return null;
+  const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2],target=bearing(candidate.coordinates,mid);
+  const heading=candidate.heading===null?target:candidate.heading,delta=((target-heading+540)%360)-180,fov=candidate.panoramic?360:(Number(candidate.fov)||78);
+  let center=.5+delta/fov;if(candidate.panoramic)center=((center%1)+1)%1;else center=clamp(center,.08,.92);
+  const angular=2*Math.atan((assignment.edge.length/2)/Math.max(2,assignment.distance))*180/Math.PI;
+  const ratio=clamp(angular/fov*1.65,candidate.panoramic?.1:.22,candidate.panoramic?.42:.78);
+  const cropW=clamp(Math.round(w*ratio),Math.min(w,260),w),cropH=clamp(Math.round(h*(candidate.panoramic?.62:.82)),Math.min(h,220),h);
+  const top=clamp(Math.round(h*(candidate.panoramic?.19:.07)),0,h-cropH);
+  let source;
+  if(candidate.panoramic){
+    const doubled=await sharp({create:{width:w*2,height:h,channels:3,background:'#000'}}).composite([{input:base,left:0,top:0},{input:base,left:w,top:0}]).jpeg({quality:91}).toBuffer();
+    const left=((Math.round(center*w-cropW/2)%w)+w)%w;source=sharp(doubled).extract({left,top,width:cropW,height:cropH});
+  }else{
+    const left=clamp(Math.round(center*w-cropW/2),0,w-cropW);source=sharp(base).extract({left,top,width:cropW,height:cropH});
+  }
+  const facadeHeight=Math.max(3,Number(assignment.building.height)||9)-Math.max(0,Number(assignment.building.base_m)||0);
+  const outW=640,outH=clamp(Math.round(outW*facadeHeight/Math.max(3,assignment.edge.length)),300,960);
+  const data=await source.resize({width:outW,height:outH,fit:'fill'}).sharpen(.38).webp({quality:74,effort:4}).toBuffer();
+  const id='ow_'+crypto.createHash('sha1').update(referenceId+':'+assignment.building.id+':'+assignment.edge.index).digest('hex').slice(0,14);
+  return {id,mode:'facade',data_url:'data:image/webp;base64,'+data.toString('base64'),width:outW,height:outH,roughness:.9,metalness:0,lighting_mix:.18,source_asset_ids:[referenceId],license:candidate.license,attribution:candidate.attribution};
+}
+
 function nearestAssignment(candidate,analysis,scene){
   let best=null;
   for(const b of scene.buildings||[]){
@@ -345,15 +388,16 @@ function bestObservation(list,buildingId,edgeIndex){
 function compileModel(marker,scene,observations,references){
   const point=[Number(marker.lon),Number(marker.lat)],selected=(scene.buildings||[]).filter(b=>b.role==='hero'||b.role==='nearby'||Number(b.distance)<115).slice(0,22);
   if(!selected.length)return null;
-  const buildings=[],refUsed=new Set();let observedEdges=0,totalEdges=0;
+  const buildings=[],refUsed=new Set(),materialMap=new Map();let observedEdges=0,totalEdges=0;
   for(const b of selected){
     const edges=S.edges(b.ring,point),facades=[];
     for(const e of edges){
       totalEdges++;const obs=bestObservation(observations,b.id,e.index);if(obs){observedEdges++;refUsed.add(obs.reference_id)}
-      const parts=modulesForFacade(b,e,obs,e.index);
+      const parts=modulesForFacade(b,e,obs,e.index);if(obs?.material_id)parts.modules=[];
+      if(obs?.material)materialMap.set(obs.material.id,obs.material);
       facades.push({
         edge_index:e.index,edge:e.coordinates,evidence:obs?'observed':'inferred',
-        reference_ids:obs?[obs.reference_id]:[],wall:parts.wall,material_id:null,surfaces:[],modules:parts.modules
+        reference_ids:obs?[obs.reference_id]:[],wall:parts.wall,material_id:obs?.material_id||null,surfaces:[],modules:parts.modules
       });
     }
     const observed=observations.filter(o=>o.building_id===String(b.id));
@@ -368,7 +412,7 @@ function compileModel(marker,scene,observations,references){
   const roads=(scene.roads||[]).slice(0,42).map((coordinates,i)=>({coordinates,class:i<4?'minor':'service'}));
   return {
     version:2,status:'ready',engine:ENGINE,target:{marker_id:String(marker.id),establishment_id:marker.establishment_id,venue_id:marker.venue_id,coordinates:point},
-    generated_at:new Date().toISOString(),buildings,materials:[],
+    generated_at:new Date().toISOString(),buildings,materials:[...materialMap.values()],
     camera:{bearing:camBearing,pitch:64,zoom:18.55,views:[
       {label:'Фасад',bearing:camBearing,pitch:64,zoom:18.65},
       {label:'Слева',bearing:(camBearing-38+360)%360,pitch:62,zoom:18.45},
@@ -401,14 +445,16 @@ function referenceOf(c,analysis,assignment){
 async function reconstruct(marker,scene){
   if(config.REALCITY_OPEN_WORLD_ENABLED===false||!Array.isArray(scene?.buildings)||!scene.buildings.length)return null;
   const max=clamp(Number(config.REALCITY_OPEN_WORLD_MAX_IMAGES)||10,2,18),candidates=diversify(await collectCandidates(marker),marker,max);
-  const observations=[],references=[];
+  const observations=[],references=[];let textureBudget=MAX_TEXTURES;
   const jobs=candidates.map(c=>imageSlot(async()=>{
     try{
       const buffer=await fetchImage(c.image_url),analysis=await analyzeImage(buffer);
       const min=c.source==='wikimedia'?.38:.16;if(analysis.facade_likelihood<min)return;
       const assignment=nearestAssignment(c,analysis,scene);if(!assignment||assignment.quality<.08)return;
       const ref=referenceOf(c,analysis,assignment);references.push(ref);
-      observations.push({reference_id:ref.id,building_id:String(assignment.building.id),edge_index:assignment.edge.index,quality:assignment.quality,analysis});
+      let material=null;
+      if(textureBudget>0&&assignment.quality>=.13&&STREET_SOURCES.has(c.source)){textureBudget--;try{material=await buildFacadeMaterial(buffer,c,assignment,ref.id)}catch{}}
+      observations.push({reference_id:ref.id,building_id:String(assignment.building.id),edge_index:assignment.edge.index,quality:assignment.quality,analysis,material_id:material?.id||null,material});
     }catch{}
   }));
   await Promise.allSettled(jobs);
@@ -417,11 +463,11 @@ async function reconstruct(marker,scene){
   const confidence=Number(clamp(.48+model.coverage.ratio*.34+(model.coverage.observed_buildings>1?.08:0),.45,.9).toFixed(2));
   return {
     model,quality,confidence,
-    report:{engine:ENGINE,candidates:candidates.length,images_analyzed:observations.length,references_persisted:references.length,raw_images_persisted:false,sources:[...new Set(candidates.map(c=>c.source))],mapillary_configured:!!config.MAPILLARY_ACCESS_TOKEN}
+    report:{engine:ENGINE,candidates:candidates.length,images_analyzed:observations.length,references_persisted:references.length,derived_textures:model.materials.length,raw_images_persisted:false,sources:[...new Set(candidates.map(c=>c.source))],mapillary_configured:!!config.MAPILLARY_ACCESS_TOKEN}
   };
 }
 
 module.exports={
-  ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,
+  ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
   _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig}
 };

@@ -74,22 +74,26 @@ test('clarifies ambiguous item before executing and accepts ordinal reply',async
       throw new Error('Unexpected SQL in mock: '+sql);
     }
   };
-  const calls=[];
-  const commandBus={async handle(x){calls.push(x.text);return {handled:true,text:'EXEC '+x.text}}};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'EXEC '+command.intent}},
+    async handle(x){return {handled:true,text:'LEGACY '+String(x.text||'')}}
+  };
   const agent=createVenueDialogAgent({DB,commandBus});
   const user={id:123};
 
   const first=await agent.handle({user,text:'у сырной сделай цену 420'});
   assert.equal(first.handled,true);
   assert.match(first.text,/Как(?:ую именно позицию|ое именно блюдо)/);
-  assert.equal(calls.length,0);
+  assert.equal(executed.length,0);
   assert.ok(Array.isArray(first.reply_markup.inline_keyboard));
 
   const second=await agent.handle({user,text:'вторая'});
   assert.equal(second.handled,true);
-  assert.equal(calls.length,1);
-  assert.equal(calls[0],'поставь цену на Шаурма сырная XL 420');
-  assert.equal(parseCommand(calls[0]).intent,'menu_price');
+  assert.equal(executed.length,1);
+  assert.equal(executed[0].intent,'menu_price_context');
+  assert.equal(executed[0].target_item_id,'cheese_xl');
+  assert.equal(executed[0].price,420);
 });
 
 test('ambiguous remove action asks whether to hide or mark unavailable',async()=>{

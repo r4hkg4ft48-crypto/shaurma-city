@@ -36,14 +36,14 @@ const MAP_CONFIG=readMapConfig();
 
 
 function queueRealCityProfile(markerId){
- const job=require('../v2/backend/src/realcity-service').queue(markerId);
+ const job=v2RealCity.queue(markerId);
  job?.catch(()=>{});return job;
 }
 async function bootstrapRealCityProfiles(){
  if(!DB)return;
  try{
-  const q=await DB.query("SELECT id FROM shaurmeg_markers WHERE is_active=TRUE AND (COALESCE(auto_imported,FALSE)=FALSE OR realcity_profile<>'{}'::jsonb) AND (realcity_status<>'ready' OR COALESCE((realcity_profile->>'version')::int,0)<$1) ORDER BY updated_at DESC LIMIT 24",[PROFILE_VERSION]);
-  q.rows.forEach(row=>queueRealCityProfile(row.id));
+  const q=await DB.query("SELECT id,realcity_status,realcity_profile FROM shaurmeg_markers WHERE is_active=TRUE AND (COALESCE(auto_imported,FALSE)=FALSE OR realcity_profile<>'{}'::jsonb) ORDER BY updated_at DESC LIMIT 32");
+  q.rows.filter(row=>row.realcity_status!=='ready'||v2RealCity.needsRefresh(row.realcity_profile||{})).slice(0,8).forEach(row=>queueRealCityProfile(row.id));
  }catch(e){console.error('RealCity bootstrap:',e.message)}
 }
 

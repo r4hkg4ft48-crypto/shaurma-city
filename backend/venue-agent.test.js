@@ -491,3 +491,96 @@ test('selected dish keeps conversational pronoun context for follow-up plan',asy
   assert.equal(plans[0].actions[1].intent,'menu_available');
   assert.equal(plans[0].actions[1].available,false);
 });
+
+
+test('asks only for missing price and accepts spoken Russian number',async()=>{
+  const ctx={telegram_user_id:'701',establishment_id:'SC-MSK-HUMAN01234'};
+  const venue={
+    establishment_id:'SC-MSK-HUMAN01234',
+    name:'Человеческий диалог',
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0}]},
+    menu:[
+      {id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true},
+      {id:'cheese',n:'Сыр',c:'shawarma',p:50,active:true}
+    ]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'OK'}},
+    async handle(){throw new Error('missing-slot flow must not reparse text')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus}),user={id:701};
+
+  const first=await agent.handle({user,text:'у сырной шаурмы поменяй цену'});
+  assert.equal(first.handled,true);
+  assert.match(first.text,/На какую цену/);
+  assert.equal(ctx.pending_kind,'slot_value');
+  assert.equal(ctx.selected_item_id,'cheese_shawarma');
+  assert.equal(executed.length,0);
+
+  const second=await agent.handle({user,text:'четыреста двадцать'});
+  assert.equal(second.handled,true);
+  assert.equal(executed.length,1);
+  assert.equal(executed[0].intent,'menu_price_context');
+  assert.equal(executed[0].target_item_id,'cheese_shawarma');
+  assert.equal(executed[0].price,420);
+  assert.equal(ctx.pending_kind,null);
+});
+
+test('selected dish can ask targeted follow-up without repeating its name',async()=>{
+  const ctx={
+    telegram_user_id:'702',
+    establishment_id:'SC-MSK-HUMAN01234',
+    selected_item_id:'cheese_shawarma',
+    selected_category_id:'shawarma'
+  };
+  const venue={
+    establishment_id:'SC-MSK-HUMAN01234',
+    name:'Человеческий диалог',
+    config:{menu_sections:[{id:'shawarma',name:'Шаурма',active:true,order:0}]},
+    menu:[{id:'cheese_shawarma',n:'Шаурма сырная',c:'shawarma',p:390,active:true}]
+  };
+  const DB={async query(sql,args=[]){
+    if(sql.includes('FROM shaurma_venue_admins a'))return {rows:[{...venue,role:'owner',permissions:['menu']}]};
+    if(sql.startsWith('SELECT * FROM shaurma_owner_command_context'))return {rows:[{...ctx}]};
+    if(sql.startsWith('INSERT INTO shaurma_owner_command_context'))return {rows:[]};
+    if(sql.startsWith('UPDATE shaurma_owner_command_context SET ')){
+      const m=sql.match(/^UPDATE shaurma_owner_command_context SET ([a-z_]+)=/);
+      if(m){
+        const key=m[1];
+        ctx[key]=(key==='pending_payload'||key==='pending_candidates')&&typeof args[1]==='string'?JSON.parse(args[1]):args[1];
+      }
+      return {rows:[]};
+    }
+    if(sql.startsWith('SELECT entity_id,alias,normalized_alias FROM shaurma_menu_aliases'))return {rows:[]};
+    throw new Error('Unexpected SQL in mock: '+sql);
+  }};
+  const executed=[];
+  const commandBus={
+    async execute({command}){executed.push(command);return {handled:true,text:'OK'}},
+    async handle(){throw new Error('context follow-up must stay structured')}
+  };
+  const agent=createVenueDialogAgent({DB,commandBus}),user={id:702};
+
+  const first=await agent.handle({user,text:'поменяй цену'});
+  assert.match(first.text,/На какую цену/);
+  const second=await agent.handle({user,text:'на 410 рублей'});
+  assert.equal(second.handled,true);
+  assert.equal(executed[0].target_item_id,'cheese_shawarma');
+  assert.equal(executed[0].price,410);
+});

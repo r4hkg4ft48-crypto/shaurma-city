@@ -361,6 +361,67 @@ function inferContextActionPlan(text){
   return actions.length>1?{kind:'context_plan',actions,source:clean(text)}:null;
 }
 
+
+function parseHumanNumber(v){
+  const raw=normalize(v).replace(/\b(?:рубл[а-я]*|руб|р|штук[а-я]*|шт)\b/g,' ').replace(/\s+/g,' ').trim();
+  const numeric=raw.match(/-?\d+(?:[.,]\d+)?/);
+  if(numeric)return Number(numeric[0].replace(',','.'));
+  const units={ноль:0,один:1,одна:1,одно:1,два:2,две:2,три:3,четыре:4,пять:5,шесть:6,семь:7,восемь:8,девять:9};
+  const teens={десять:10,одиннадцать:11,двенадцать:12,тринадцать:13,четырнадцать:14,пятнадцать:15,шестнадцать:16,семнадцать:17,восемнадцать:18,девятнадцать:19};
+  const tens={двадцать:20,тридцать:30,сорок:40,пятьдесят:50,шестьдесят:60,семьдесят:70,восемьдесят:80,девяносто:90};
+  const hundreds={сто:100,двести:200,триста:300,четыреста:400,пятьсот:500,шестьсот:600,семьсот:700,восемьсот:800,девятьсот:900};
+  const words=raw.split(' ').filter(Boolean);
+  let total=0,chunk=0,seen=false;
+  for(const word of words){
+    if(Object.prototype.hasOwnProperty.call(units,word)){chunk+=units[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(teens,word)){chunk+=teens[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(tens,word)){chunk+=tens[word];seen=true;continue}
+    if(Object.prototype.hasOwnProperty.call(hundreds,word)){chunk+=hundreds[word];seen=true;continue}
+    if(/^тысяч/.test(word)){total+=(chunk||1)*1000;chunk=0;seen=true;continue}
+    if(!['примерно','около','где','то','гдето'].includes(word))return null;
+  }
+  return seen?total+chunk:null;
+}
+function incompleteSpec(slot,command,question,type='text'){
+  return {slot,command,question,type};
+}
+function inferIncompleteItemRequest(text){
+  const raw=clean(text);let m;
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:сделай|поставь|измени|поменяй|установи)\s+цен[ау]\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('price',{intent:'menu_price_context'},'На какую цену поставить?','money')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|измени|поменяй|установи)?\s*(?:остаток|количество)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_stock'},'Какой остаток поставить?','count')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|измени|поменяй|установи)?\s*вес\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_weight'},'Какой вес указать?','text')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поменяй|измени|обнови)\s+состав\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_composition'},'Какой состав записать?','text')};
+  m=raw.match(/^(?:у|для)\s+(.+?)\s+(?:поставь|добавь|измени)\s+(?:бейдж|метку)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('value',{intent:'menu_badge'},'Какую метку поставить?','text')};
+  m=raw.match(/^(?:переименуй|назови\s+по\s+другому)\s+(?:блюдо|позицию)?\s*(.+?)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('name',{intent:'menu_rename'},'Как теперь назвать эту позицию?','text')};
+  m=raw.match(/^(?:перенеси|перемести)\s+(.+?)\s+(?:в\s+другой\s+раздел|в\s+другую\s+категорию|в\s+раздел|в\s+категорию)\s*$/i);
+  if(m)return {item:clean(m[1]),...incompleteSpec('category',{intent:'menu_category_move'},'В какую категорию перенести?','category')};
+  return null;
+}
+function inferIncompleteContextRequest(text){
+  const raw=clean(text);
+  if(/^(?:сделай|поставь|измени|поменяй|установи)\s+цен[ау]\s*$/i.test(raw)||/^цен[ау]\s*$/i.test(raw))
+    return incompleteSpec('price',{intent:'menu_price_context'},'На какую цену поставить?','money');
+  if(/^(?:поставь|измени|поменяй|установи)?\s*(?:остаток|количество)\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_stock'},'Какой остаток поставить?','count');
+  if(/^(?:поставь|измени|поменяй|установи)?\s*вес\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_weight'},'Какой вес указать?','text');
+  if(/^(?:поменяй|измени|обнови)\s+состав\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_composition'},'Какой состав записать?','text');
+  if(/^(?:поставь|добавь|измени)\s+(?:бейдж|метку)\s*$/i.test(raw))
+    return incompleteSpec('value',{intent:'menu_badge'},'Какую метку поставить?','text');
+  if(/^(?:переименуй|назови\s+по\s+другому)(?:\s+(?:ее|её|его|позицию|блюдо))?\s*$/i.test(raw))
+    return incompleteSpec('name',{intent:'menu_rename'},'Как теперь назвать эту позицию?','text');
+  if(/^(?:перенеси|перемести)(?:\s+(?:ее|её|его|позицию|блюдо))?\s+(?:в\s+другой\s+раздел|в\s+другую\s+категорию|в\s+раздел|в\s+категорию)\s*$/i.test(raw))
+    return incompleteSpec('category',{intent:'menu_category_move'},'В какую категорию перенести?','category');
+  return null;
+}
+
 function createVenueDialogAgent({DB,commandBus}){
   async function accesses(userId){
     const q=await DB.query(
@@ -532,6 +593,58 @@ function createVenueDialogAgent({DB,commandBus}){
     return new Set(['fixed_option_delete','fixed_option_price','fixed_option_toggle','fixed_option_default']).has(command?.intent);
   }
 
+
+  async function askMissingSlot(user,item,spec){
+    await patchContext(user.id,{
+      selected_item_id:String(item.id),
+      selected_group_id:null,
+      pending_kind:'slot_value',
+      pending_payload:{
+        slot:spec.slot,
+        type:spec.type,
+        question:spec.question,
+        command:spec.command,
+        item_id:String(item.id),
+        item_label:String(item.n||item.name||'Позиция')
+      },
+      pending_candidates:[]
+    });
+    return {handled:true,text:String(spec.question||'Уточните значение.')};
+  }
+  async function consumeSlotValue(user,payload,text){
+    const raw=clean(text);
+    if(!raw)return {handled:true,text:String(payload.question||'Уточните значение.')};
+    const active=await activeVenue(user);
+    if(!active.venue)return {handled:true,text:'Активная точка не найдена.'};
+    const item=(active.venue.menu||[]).find(x=>String(x.id)===String(payload.item_id||''));
+    if(!item){await clearPending(user.id);return {handled:true,text:'Позиция изменилась или удалена. Назовите её ещё раз.'}}
+    const cmd={...(payload.command||{}),target_item_id:String(item.id)};
+    const type=String(payload.type||'text'),slot=String(payload.slot||'value');
+
+    if(type==='money'||type==='count'){
+      const value=parseHumanNumber(raw);
+      if(value===null||!Number.isFinite(value)||value<0){
+        return {handled:true,text:'Не смог точно разобрать число. '+String(payload.question||'Укажите значение цифрами или словами.')};
+      }
+      cmd[slot]=type==='count'?Math.floor(value):value;
+    }else if(type==='category'){
+      const ranked=await rankCategories(active.venue,raw),hit=decisive(ranked);
+      if(hit){
+        cmd.category=hit.label;cmd.target_category_id=hit.id;
+      }else if(ranked.length){
+        await clearPending(user.id);
+        return askCommandEntity(user,cmd,'category',ranked,'Какую именно категорию выбрать?',item);
+      }else{
+        return {handled:true,text:'Категорию «'+raw+'» не нашёл. Ничего не меняю. '+String(payload.question||'Назовите существующую категорию.')};
+      }
+    }else{
+      cmd[slot]=raw;
+    }
+
+    await clearPending(user.id);
+    return resolveNestedCommand(user,active.venue,await context(user.id),cmd,item);
+  }
+
   async function askCommandEntity(user,command,slot,candidates,title,item){
     return ask(user.id,'command_entity',{
       command,slot,item_id:item?.id||'',item_label:String(item?.n||item?.name||'')
@@ -667,6 +780,7 @@ function createVenueDialogAgent({DB,commandBus}){
     const candidates=Array.isArray(ctx.pending_candidates)?ctx.pending_candidates:[];
     if(callbackToken&&payload.token!==callbackToken)return {handled:true,text:'Это уточнение уже устарело. Напишите запрос ещё раз.'};
     if(isCancel(text)||callbackIndex==='x'){await clearPending(user.id);return {handled:true,text:'Хорошо, ничего не меняю.'}}
+    if(kind==='slot_value')return consumeSlotValue(user,payload,text);
 
     let idx=callbackIndex===null?ordinal(text):Number(callbackIndex);
     if(kind==='confirm'&&callbackIndex===null&&isYes(text))idx=candidates.findIndex(x=>x.id==='yes');
@@ -713,6 +827,12 @@ function createVenueDialogAgent({DB,commandBus}){
       await clearPending(user.id);
       await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
       const cmd=payload.command;
+      if(payload.missing){
+        const active=await activeVenue(user);
+        const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
+        if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Назовите её ещё раз.'};
+        return askMissingSlot(user,item,payload.missing);
+      }
       if(payload.plan){
         const active=await activeVenue(user);
         const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
@@ -806,6 +926,20 @@ function createVenueDialogAgent({DB,commandBus}){
       return ask(user.id,'venue_select',{query:''},ranked,'Сначала выберите заведение:');
     }
     const {venue,ctx}=active;
+
+    const incompleteItem=inferIncompleteItemRequest(raw);
+    if(incompleteItem){
+      const picked=await chooseItem(user,venue,incompleteItem.item,{missing:incompleteItem},'Какое именно блюдо вы хотите изменить?');
+      if(picked.error)return {handled:true,text:picked.error};
+      if(picked.ask)return picked.ask;
+      const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
+      if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Назовите её ещё раз.'};
+      return askMissingSlot(user,item,incompleteItem);
+    }
+
+    const selectedForMissing=currentItem(venue,ctx);
+    const incompleteContext=selectedForMissing?inferIncompleteContextRequest(raw):null;
+    if(incompleteContext)return askMissingSlot(user,selectedForMissing,incompleteContext);
 
     const explicitPlan=inferItemActionPlan(raw);
     if(explicitPlan)return resolveAndExecuteItemPlan(user,venue,explicitPlan.item,explicitPlan.actions);

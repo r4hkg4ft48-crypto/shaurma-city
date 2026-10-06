@@ -341,6 +341,22 @@ function inferItemActionPlan(text){
   return actions.length?{kind:'item_plan',item,actions,source:raw}:null;
 }
 
+
+function inferContextActionPlan(text){
+  const clauses=splitActionClauses(text);
+  if(clauses.length<2)return null;
+  const actions=[];
+  for(const clause of clauses){
+    const parsed=parseCommand(clause);
+    let action=parsed.intent!=='unknown'&&commandNeedsItem(parsed)?parsed:inferContextAction(clause);
+    if(!action)return null;
+    const copy={...action};
+    delete copy.item;
+    actions.push(copy);
+  }
+  return actions.length>1?{kind:'context_plan',actions,source:clean(text)}:null;
+}
+
 function createVenueDialogAgent({DB,commandBus}){
   async function accesses(userId){
     const q=await DB.query(
@@ -518,6 +534,42 @@ function createVenueDialogAgent({DB,commandBus}){
     },candidates,title);
   }
 
+  function materializePlanAction(action,item){
+    const cmd={...action,target_item_id:String(item.id)};
+    if(cmd.intent==='menu_price_delta'){
+      const current=Number(item.p??item.price??0);
+      const next=Math.max(0,Math.min(100000,Math.round(current+Number(cmd.delta||0))));
+      return {intent:'menu_price_context',price:next,target_item_id:String(item.id)};
+    }
+    return cmd;
+  }
+  async function executeItemPlanOnResolved(user,item,actions){
+    const allowed=new Set([
+      'menu_price_context','menu_available','menu_toggle','menu_weight','menu_stock','menu_badge',
+      'menu_recommended','menu_composition','menu_tags'
+    ]);
+    const commands=(Array.isArray(actions)?actions:[]).map(a=>materializePlanAction(a,item));
+    if(!commands.length||commands.some(x=>!allowed.has(x.intent))){
+      return {handled:true,text:'В этой фразе есть изменение, которое пока нельзя безопасно объединить с остальными. Ничего не меняю — сформулируйте эту часть отдельно.'};
+    }
+    const results=[];
+    for(const command of commands){
+      const result=await executeResolved(user,command,String(item.n||item.name||''));
+      if(!result?.handled)return {handled:true,text:'Не удалось безопасно выполнить весь план. Остановился на текущем шаге.'};
+      results.push(String(result.text||'').replace(/<\/?(?:b|code)>/gi,''));
+    }
+    return {handled:true,text:results.join('\n')};
+  }
+  async function resolveAndExecuteItemPlan(user,venue,itemQuery,actions){
+    const picked=await chooseItem(user,venue,itemQuery,{plan:actions},'Какое именно блюдо вы имеете в виду для этих изменений?');
+    if(picked.error)return {handled:true,text:picked.error};
+    if(picked.ask)return picked.ask;
+    const item=(venue.menu||[]).find(x=>String(x.id)===String(picked.item.id));
+    if(!item)return {handled:true,text:'Позиция изменилась или удалена. Ничего не меняю — назовите её ещё раз.'};
+    await patchContext(user.id,{selected_item_id:String(item.id),selected_group_id:null,...(picked.item.category_id?{selected_category_id:picked.item.category_id}:{})});
+    return executeItemPlanOnResolved(user,item,actions);
+  }
+
   async function resolveNestedCommand(user,venue,ctx,command,item){
     let cmd={...command,...(item?.id?{target_item_id:String(item.id)}:{})};
 
@@ -654,6 +706,12 @@ function createVenueDialogAgent({DB,commandBus}){
       await clearPending(user.id);
       await patchContext(user.id,{selected_item_id:chosen.id,selected_group_id:null,...(chosen.category_id?{selected_category_id:chosen.category_id}:{})});
       const cmd=payload.command;
+      if(payload.plan){
+        const active=await activeVenue(user);
+        const item=(active.venue?.menu||[]).find(x=>String(x.id)===String(chosen.id));
+        if(!item)return {handled:true,text:'Позиция уже изменилась или удалена. Ничего не меняю.'};
+        return executeItemPlanOnResolved(user,item,payload.plan);
+      }
       if(payload.alias){
         const active=await activeVenue(user);
         await addAlias(user.id,active.venue.establishment_id,'item',chosen.id,payload.alias);
@@ -741,6 +799,16 @@ function createVenueDialogAgent({DB,commandBus}){
       return ask(user.id,'venue_select',{query:''},ranked,'Сначала выберите заведение:');
     }
     const {venue,ctx}=active;
+
+    const explicitPlan=inferItemActionPlan(raw);
+    if(explicitPlan)return resolveAndExecuteItemPlan(user,venue,explicitPlan.item,explicitPlan.actions);
+
+    const selected=currentItem(venue,ctx);
+    const contextPlan=selected?inferContextActionPlan(raw):null;
+    if(contextPlan)return executeItemPlanOnResolved(user,selected,contextPlan.actions);
+
+    const contextualAction=selected&&parsed.intent==='unknown'?inferContextAction(raw):null;
+    if(contextualAction)return executeResolved(user,materializePlanAction(contextualAction,selected),String(selected.n||selected.name||''));
 
     const free=parsed.intent==='unknown'?inferFreeform(raw):null;
 

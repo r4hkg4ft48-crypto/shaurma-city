@@ -4,6 +4,9 @@ const assert=require('node:assert/strict');
 const config=require('../src/config');
 const P=require('../src/realcity-photoreal');
 const S=require('../../frontend/realcity-spatial');
+global.RealCitySpatial=S;
+require('../../frontend/realcity-splat-layer');
+const R=global.RealCitySplatLayer;
 
 const ring=[[37,55],[37.0001,55],[37.0001,55.0001],[37,55.0001],[37,55]];
 const marker={id:'7',establishment_id:'SC-MSK-TEST000001',venue_id:'venue-7',lon:37,lat:55,name:'Test',realcity_astra_assets:[]};
@@ -62,4 +65,23 @@ test('public summary never contains binary splat payload',()=>{
   const summary=P.publicSummary(a);
   assert.equal(summary.points,100);assert.equal(summary.frames,9);
   assert.equal(JSON.stringify(summary).includes(a.chunks[0].data),false);
+});
+
+
+test('RCSP2 browser decoder preserves anisotropic scale and quaternion',()=>{
+  const raw=Buffer.alloc(22);
+  raw.writeInt16LE(0,0);raw.writeInt16LE(0,2);raw.writeInt16LE(0,4);
+  raw[6]=128;raw[7]=64;raw[8]=32;
+  raw.writeUInt16LE(1200,9);raw.writeUInt16LE(450,11);raw.writeUInt16LE(90,13);
+  raw.writeInt8(127,15);raw.writeInt8(0,16);raw.writeInt8(0,17);raw.writeInt8(0,18);
+  raw[19]=220;raw[20]=240;raw[21]=2;
+  const out=R.decodeChunk({id:'x',codec:'rcsp2-base64',point_count:1,data:raw.toString('base64'),bounds_min:[-2,-4,0],bounds_max:[2,4,8]});
+  assert.equal(out.length,16);
+  assert.equal(out[0],0);assert.equal(out[1],0);assert.equal(out[2],4);
+  assert.ok(Math.abs(out[6]-1.2)<1e-5);
+  assert.ok(Math.abs(out[7]-.45)<1e-5);
+  assert.ok(Math.abs(out[8]-.09)<1e-5);
+  assert.ok(Math.abs(out[9]-1)<1e-5);
+  assert.ok(out[13]>.85&&out[14]>.9);
+  assert.equal(out[15],2);
 });

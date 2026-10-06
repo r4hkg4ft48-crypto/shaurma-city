@@ -13,6 +13,7 @@ ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
 VGGT_MODEL=os.getenv("REALCITY_VGGT_MODEL","facebook/VGGT-1B-Commercial")
+DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 HF_TOKEN=os.getenv("HF_TOKEN","")
 MAX_DOWNLOAD=20*1024*1024
 WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
@@ -422,6 +423,105 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     backend="vggt-1b-commercial"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
     return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba,**gs}
 
+def bearing_deg(a:list[float],b:list[float])->float:
+    lon1,lat1=map(math.radians,a[:2]);lon2,lat2=map(math.radians,b[:2]);dl=lon2-lon1
+    y=math.sin(dl)*math.cos(lat2)
+    x=math.cos(lat1)*math.sin(lat2)-math.sin(lat1)*math.cos(lat2)*math.cos(dl)
+    return (math.degrees(math.atan2(y,x))+360)%360
+
+def source_target(source:dict,job:Job):
+    match=source.get("match") if isinstance(source.get("match"),dict) else None
+    if match:
+        bid=str(match.get("building_id") or "")
+        try:edge=int(match.get("edge_index"))
+        except Exception:edge=-1
+        for b in job.map_anchor.get("buildings",[]):
+            if str(b.get("building_id"))!=bid:continue
+            ring=b.get("ring") or []
+            if 0<=edge<len(ring)-1:
+                a,z=ring[edge],ring[edge+1]
+                return [(float(a[0])+float(z[0]))/2,(float(a[1])+float(z[1]))/2]
+    return job.target.get("coordinates") or job.map_anchor.get("origin",[])[:2]
+
+def metric_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job,reason:str=""):
+    import torch
+    from transformers import AutoImageProcessor,AutoModelForDepthEstimation
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    processor=AutoImageProcessor.from_pretrained(DEPTH_MODEL)
+    model=AutoModelForDepthEstimation.from_pretrained(DEPTH_MODEL).to(device).eval()
+    origin=job.map_anchor["origin"][:2]
+    radius=float(job.map_anchor.get("radius_m",190))
+    target_points=int(job.policy.get("max_points",150000))
+    pts_all=[];cols_all=[];conf_all=[];used=[]
+    for path,source in zip(image_paths,sources):
+        coords=source.get("coordinates")
+        if not isinstance(coords,list) or len(coords)<2 or not all(isinstance(v,(int,float)) for v in coords[:2]):
+            continue
+        im=Image.open(path).convert("RGB")
+        arr=np.asarray(im,dtype=np.uint8);h,w=arr.shape[:2]
+        inputs=processor(images=im,return_tensors="pt")
+        inputs={k:v.to(device) for k,v in inputs.items()}
+        with torch.inference_mode():
+            ctx=torch.autocast("cuda",dtype=torch.float16) if device=="cuda" else torch.no_grad()
+            with ctx:pred=model(**inputs).predicted_depth
+        depth=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
+        depth=np.clip(np.nan_to_num(depth,nan=0.0,posinf=80.0,neginf=0.0),.55,80.0)
+        match=source.get("match") if isinstance(source.get("match"),dict) else {}
+        anchor=match.get("distance_m") if isinstance(match.get("distance_m"),(int,float)) else source.get("distance_m")
+        if isinstance(anchor,(int,float)) and math.isfinite(float(anchor)) and float(anchor)>3:
+            roi=depth[int(h*.32):int(h*.72),int(w*.34):int(w*.66)]
+            valid=roi[(roi>.6)&(roi<80)]
+            if valid.size>100:
+                ratio=float(anchor)/max(float(np.median(valid)),.5)
+                if .5<=ratio<=2.0:depth=np.clip(depth*ratio,.55,100)
+        target=source_target(source,job)
+        heading=source.get("heading")
+        if not isinstance(heading,(int,float)) or not math.isfinite(float(heading)):
+            heading=bearing_deg(coords,target)
+        fov=float(source.get("fov") or (90 if source.get("panoramic") else 78))
+        fov=max(38,min(110,fov))
+        fx=w/(2*math.tan(math.radians(fov)/2));fy=fx
+        yaw=math.radians(float(heading))
+        forward=np.array([math.sin(yaw),math.cos(yaw),0],np.float32)
+        right=np.array([math.cos(yaw),-math.sin(yaw),0],np.float32)
+        up=np.array([0,0,1],np.float32)
+        desired=max(18000,min(70000,int(target_points*2/max(1,len(image_paths)))))
+        stride=max(1,int(math.sqrt((w*h)/desired)))
+        ys=np.arange(stride//2,h,stride,dtype=np.int32);xs=np.arange(stride//2,w,stride,dtype=np.int32)
+        xx,yy=np.meshgrid(xs,ys);z=depth[yy,xx]
+        xn=(xx.astype(np.float32)-(w-1)/2)/fx;yn=(yy.astype(np.float32)-(h-1)/2)/fy
+        rays=forward[None,None,:]+xn[...,None]*right[None,None,:]-yn[...,None]*up[None,None,:]
+        rays/=np.maximum(np.linalg.norm(rays,axis=2,keepdims=True),1e-6)
+        cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        pts=np.array([cx,cy,1.65],np.float32)[None,None,:]+rays*z[...,None]
+        col=arr[yy,xx].astype(np.float32)/255.0
+        rr=np.linalg.norm(pts[...,:2],axis=2)
+        upper=yy<h*.48;blue=(col[...,2]>col[...,0]*1.08)&(col[...,2]>col[...,1]*1.03)&(col[...,2]>.42)
+        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-3)&(pts[...,2]<70)&~(upper&blue&(z>25))
+        if valid.any():
+            p=pts[valid];co=col[valid];cf=np.clip(1.0-z[valid]/150.0,.35,.98).astype(np.float32)
+            pts_all.append(p);cols_all.append(co);conf_all.append(cf);used.append(source)
+    if not pts_all:raise RuntimeError("metric_fallback_no_geotagged_views")
+    points=np.concatenate(pts_all);colors=np.concatenate(cols_all);conf=np.concatenate(conf_all)
+    points,colors,conf=voxel_reduce(points,colors,conf,min(target_points,180000))
+    if len(points)<4000:raise RuntimeError("metric_fallback_too_sparse")
+    dist=np.linalg.norm(points[:,:2],axis=1)
+    s=np.clip(.045+dist*.0018,.045,.24).astype(np.float32)
+    scales=np.column_stack([s,s,np.clip(s*.42,.018,.11)]).astype(np.float32)
+    quats=np.zeros((len(points),4),np.float32);quats[:,0]=1
+    alignment={"method":"gps-metric-depth+osm-facade-heading","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":len(used)}
+    gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
+    stats={"backend":"depth-anything-v2-metric-outdoor-fallback","gpu":gpu,"frames":len(used),"dynamic_removed":0,
+           "gaussian_optimized":False,"fallback_reason":str(reason)[:180]}
+    return points,colors,conf,scales,quats,alignment,stats
+
+def reconstruct_best(image_paths:list[str],sources:list[dict],job:Job):
+    try:
+        return vggt_reconstruct(image_paths,sources,job)
+    except Exception as exc:
+        print("VGGT commercial path unavailable; using metric fallback:",repr(exc),flush=True)
+        return metric_depth_reconstruct(image_paths,sources,job,reason=str(exc))
+
 def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
@@ -464,7 +564,7 @@ async def run_job(job:Job):
                     continue
             if len(paths)<3: raise RuntimeError("not_enough_decodable_views")
             loop=asyncio.get_running_loop()
-            points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+            points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,reconstruct_best,paths,kept,job)
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
@@ -483,7 +583,7 @@ async def health():
         gpu=torch.cuda.get_device_name(0) if cuda else ""
     except Exception:
         cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":VGGT_MODEL,"commercial_checkpoint_required":True}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":VGGT_MODEL,"fallback_model":DEPTH_MODEL,"commercial_checkpoint_required_for_max_quality":True}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

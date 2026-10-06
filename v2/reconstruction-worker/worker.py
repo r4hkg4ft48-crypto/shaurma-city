@@ -184,7 +184,10 @@ def try_colmap(frames:list[Frame],origin,radius,job_id):
             opts.mapper.ba_local_num_images=min(8,max(4,len(frames)))
             models=pycolmap.incremental_mapping(database,images,sparse,options=opts)
             if not models:return empty[0],empty[1],{"status":"no_sparse_model"}
-            recon=max(models.values(),key=lambda r:sum(1 for im in r.images.values() if im.has_pose))
+            model_id,recon=max(models.items(),key=lambda kv:sum(1 for im in kv[1].images.values() if im.has_pose))
+            model_dir=sparse/str(model_id)
+            if not model_dir.exists():
+                model_dir=sparse/"0"
             registered=sum(1 for im in recon.images.values() if im.has_pose)
             src=[];dst=[]
             for image in recon.images.values():
@@ -204,7 +207,7 @@ def try_colmap(frames:list[Frame],origin,radius,job_id):
             report_error=None
             try:
                 und=pycolmap.UndistortCameraOptions();und.max_image_size=1800
-                pycolmap.undistort_images(dense,recon,images,output_type="COLMAP",undistort_options=und)
+                pycolmap.undistort_images(dense,model_dir,images,output_type="COLMAP",undistort_options=und)
                 pm=pycolmap.PatchMatchOptions();pm.max_image_size=1800;pm.cache_size=8.0;pm.geom_consistency=True
                 pycolmap.patch_match_stereo(dense,workspace_format="COLMAP",options=pm)
                 fused=dense/"fused.ply"

@@ -35,7 +35,6 @@ const rgbHex=(r,g,b)=>'#'+hex(r)+hex(g)+hex(b);
 const hexRgb=v=>{const m=String(v||'').match(/^#([0-9a-f]{6})$/i);return m?[parseInt(m[1].slice(0,2),16),parseInt(m[1].slice(2,4),16),parseInt(m[1].slice(4,6),16)]:null};
 const shade=(v,d)=>{const c=hexRgb(v);return c?rgbHex(c[0]+d,c[1]+d,c[2]+d):v};
 const sourceWeight=s=>SOURCE_WEIGHT[s]||.5;
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 function bbox(marker,radius=210){
   const lat=Number(marker.lat),lon=Number(marker.lon),dy=radius/110540,dx=radius/(111320*Math.max(.2,Math.cos(lat*Math.PI/180)));
@@ -422,7 +421,7 @@ function compileModel(marker,scene,observations,references){
     ]},
     environment:{trees,fences:[],lamps:[],roads,greens:(scene.greens||[]).slice(0,30),placement_note:'Open-world environment constrained to map/OSM geometry.'},
     references:refs,coverage:{observed_edges:observedEdges,total_edges:totalEdges,observed_buildings:observedBuildings,buildings:buildings.length,ratio:Number(ratio.toFixed(3))},
-    reconstruction:{mode:observedEdges?'open_imagery_semantic_facades':'constrained_generated_facades',photogrammetry:'worker_not_configured',raw_images_persisted:false}
+    reconstruction:{mode:materialMap.size?'open_imagery_textured_facades':observedEdges?'open_imagery_semantic_facades':'constrained_generated_facades',photogrammetry:'worker_not_configured',raw_images_persisted:false,derived_textures:materialMap.size}
   };
 }
 

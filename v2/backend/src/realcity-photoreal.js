@@ -185,8 +185,13 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return {queued:false,reason:'current'};
   const sources=await buildSources(marker,profile,assets);
   if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return {queued:false,reason:'insufficient_views',sources:sources.length};
+  // A GPU process can disappear without a callback. Do not let one dead job
+  // permanently block a venue; fail stale work, then apply a short retry backoff.
+  await db.query("UPDATE realcity_reconstruction_jobs SET status='failed',last_error='worker_timeout',updated_at=NOW() WHERE marker_id=$1 AND status IN ('queued','processing') AND updated_at<NOW()-INTERVAL '2 hours'",[marker.id]);
   const existing=await db.query("SELECT job_id,status FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status IN ('queued','processing') ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
   if(existing.rows[0])return {queued:false,reason:'already_queued',job_id:existing.rows[0].job_id};
+  const recentFailure=await db.query("SELECT job_id,last_error,updated_at FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status='failed' AND updated_at>NOW()-INTERVAL '10 minutes' ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
+  if(recentFailure.rows[0])return {queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error};
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);
   await db.query("INSERT INTO realcity_reconstruction_jobs(job_id,marker_id,input_signature,status,source_count,attempts) VALUES($1,$2,$3,'queued',$4,1)",[jobId,marker.id,inputSignature,sources.length]);
   await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'queued',input_signature:inputSignature,source_count:sources.length,submitted_at:new Date().toISOString()})]);

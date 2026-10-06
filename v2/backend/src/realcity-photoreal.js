@@ -125,7 +125,19 @@ function buildPayload(marker,profile,assets,sources,inputSignature,jobId){
     callback:{url:config.PUBLIC_API_URL+'/api/v2/realcity/reconstruction/callback',algorithm:'hmac-sha256'}
   };
 }
-function resultSignature(body){return hmac('callback:'+JSON.stringify(body))}
+function artifactDigest(artifact){
+  const chunks=(artifact?.chunks||[]).map(c=>{
+    let digest='';try{digest=hash(Buffer.from(String(c?.data||''),'base64'))}catch{}
+    return [String(c?.id||''),Number(c?.point_count)||0,digest].join(':');
+  }).join(';');
+  return hash([String(artifact?.engine||''),String(artifact?.input_signature||''),String(artifact?.target?.marker_id||''),(artifact?.origin||[]).join(','),chunks].join('|'));
+}
+function callbackDigest(body){
+  return body?.status==='ready'?artifactDigest(body?.artifact):hash(clean(body?.error||'',500));
+}
+function resultSignature(body){
+  return hmac(['callback',String(body?.job_id||''),String(body?.input_signature||''),String(body?.status||''),callbackDigest(body)].join(':'));
+}
 function verifyCallback(body,sig){
   return !!config.REALCITY_RECONSTRUCTION_SECRET&&safeEqual(resultSignature(body),sig);
 }
@@ -205,4 +217,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk}};

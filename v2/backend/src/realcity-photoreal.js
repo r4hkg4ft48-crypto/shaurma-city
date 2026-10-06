@@ -172,10 +172,10 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   await ensureSchema();
   if(!db.configured||!config.REALCITY_PHOTOREAL_ENABLED||!config.REALCITY_RECONSTRUCTION_WORKER_URL||!config.REALCITY_RECONSTRUCTION_SECRET)return {queued:false,reason:'worker_not_configured'};
   const assets=Array.isArray(marker.realcity_astra_assets)?marker.realcity_astra_assets:[];
-  const sources=await buildSources(marker,profile,assets);
-  if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return {queued:false,reason:'insufficient_views',sources:sources.length};
   const inputSignature=sceneSignature(marker,profile,assets);
   if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return {queued:false,reason:'current'};
+  const sources=await buildSources(marker,profile,assets);
+  if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return {queued:false,reason:'insufficient_views',sources:sources.length};
   const existing=await db.query("SELECT job_id,status FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status IN ('queued','processing') ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
   if(existing.rows[0])return {queued:false,reason:'already_queued',job_id:existing.rows[0].job_id};
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);

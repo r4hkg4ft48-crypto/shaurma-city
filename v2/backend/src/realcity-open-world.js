@@ -295,7 +295,7 @@ async function analyzeImage(buffer){
   else if(variance>.22)material='stone';
   const storefront=lowerN?lowerDark/lowerN:0,balcony=clamp((rows.slice(Math.round(h*.22),Math.round(h*.7)).reduce((a,b)=>a+b,0)/(edgeSum||1))*1.8,0,1);
   const structure=clamp((cp.length/7+rp.length/10)*.45+Math.min(1,edge/.16)*.35,0,1);
-  const valid=used/(w*h*.78),likelihood=clamp(valid*.35+structure*.5+(STREET_SOURCES?0:.0)+.15,0,1);
+  const valid=used/(w*h*.78),likelihood=clamp(valid*.35+structure*.5+.15,0,1);
   return {
     width:w,height:h,wall,accent,windows:mean<130?'#2b353b':'#36434a',material,
     row_peaks:clamp(rp.length,2,24),col_peaks:clamp(cp.length,2,16),

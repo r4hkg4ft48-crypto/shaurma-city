@@ -1097,8 +1097,9 @@ function astraManifest(row){
   },
   config,readiness,
   references:{
-   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
-   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
+   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   world:assets.filter(x=>!['main_building','panorama'].includes(x.category)).map(x=>({asset_id:x.id,category:x.category,subtype:x.subtype,role:x.role,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
   },
   requested_output:{
    hero_building:'accurate facade, entrance, signage, windows, balconies, roof and storefront mapped to the correct footprint',

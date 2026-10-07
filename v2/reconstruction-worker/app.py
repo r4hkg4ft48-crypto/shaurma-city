@@ -447,7 +447,10 @@ def frame_budget(requested:int)->int:
     if LIGHTWEIGHT_CPU:return min(requested,12)
     try:
         import torch
-        if not torch.cuda.is_available():return min(requested,6)
+        if not torch.cuda.is_available():
+            if os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()=="true":
+                return min(requested,max(2,min(32,int(os.getenv("REALCITY_CPU_MAX_FRAMES","20")))))
+            return min(requested,6)
         total=torch.cuda.get_device_properties(0).total_memory/(1024**3)
         if total>=75:return min(requested,48)
         if total>=46:return min(requested,28)
@@ -871,7 +874,7 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
-      "geometry":"osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth"),
+      "geometry":"metric_multiview_mapanything" if stats.get("universal_3d") else ("osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth")),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),

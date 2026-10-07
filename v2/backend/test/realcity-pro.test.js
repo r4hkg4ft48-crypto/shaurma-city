@@ -57,3 +57,14 @@ test('RealCity Pro renderer and Mini App honor approved photo-only data',()=>{
  assert.match(admin,/RealCity Pro · Фото/);
  assert.match(server,/realcity-pro'\)\.install/);
 });
+
+test('RealCity Pro editor inline JavaScript parses and avoids all-photo marker payload',()=>{
+ const vm=require('node:vm');
+ const adminPage=fs.readFileSync(path.join(__dirname,'../../../backend/realcity-pro.html'),'utf8');
+ const found=adminPage.match(/<script>([\s\S]*?)<\/script>/);
+ assert.ok(found,'RealCity Pro UI must have executable client code');
+ assert.doesNotThrow(()=>new vm.Script(found[1],{filename:'realcity-pro.html'}));
+ const routes=fs.readFileSync(path.join(__dirname,'../src/routes.js'),'utf8');
+ assert.match(routes,/m\.realcity_profile - ARRAY\['astra','real_world','pro','photoreal'\]/);
+ assert.match(routes,/router\.get\('\/map\/markers\/:id\/realcity'/);
+});

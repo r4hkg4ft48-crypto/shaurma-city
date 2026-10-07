@@ -3,6 +3,7 @@
 // the recipe; this module never invents unseen walls or depth from brightness.
 const sharp=require('sharp');
 const crypto=require('crypto');
+const exifr=require('exifr');
 const {homography}=require('./realcity-material');
 const METHOD='photo-facades-v3';
 const fail=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
@@ -30,9 +31,14 @@ function inside([x,y],p){
 }
 async function inspect(buffer){
  if(!Buffer.isBuffer(buffer)||!buffer.length||buffer.length>16*1024*1024)fail('photo_file_limit_16mb');
- let meta,sample,preview;
+ let meta,sample,preview,exif={},gps=null;
  try{
-  meta=await sharp(buffer,{limitInputPixels:60000000}).metadata();
+  [meta,exif,gps]=await Promise.all([
+   sharp(buffer,{limitInputPixels:60000000}).metadata(),
+   exifr.parse(buffer,['Make','Model','LensModel','FocalLength','FocalLengthIn35mmFormat','GPSImgDirection','GPSImgDirectionRef','DateTimeOriginal','CreateDate']).catch(()=>({})),
+   exifr.gps(buffer).catch(()=>null)
+  ]);
+  exif=exif||{};gps=gps||null;
   if(!['jpeg','png','webp','heif','avif','tiff'].includes(meta.format)||(meta.pages||1)>1)fail('photo_still_image_required');
   sample=await sharp(buffer,{limitInputPixels:60000000}).rotate().resize(512,512,{fit:'inside',withoutEnlargement:true}).removeAlpha().greyscale().raw().toBuffer({resolveWithObject:true});
   preview=await sharp(buffer,{limitInputPixels:60000000}).rotate().resize(1000,1000,{fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer();
@@ -49,7 +55,18 @@ async function inspect(buffer){
  if(clipped/data.length>.2)warnings.push('clipped_exposure');
  const sharpness=lap/Math.max(1,(info.width-2)*(info.height-2));
  if(sharpness<35)warnings.push('check_focus');
- return {sha256:hash(buffer),mime:{jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heif:'image/heic',avif:'image/avif',tiff:'image/tiff'}[meta.format],preview:'data:image/webp;base64,'+preview.toString('base64'),metadata:{width,height,bytes:buffer.length,format:meta.format,orientation:meta.orientation||1,has_exif:!!meta.exif,sharpness:Math.round(sharpness),contrast:Math.round(contrast),clipped_fraction:Number((clipped/data.length).toFixed(3)),warnings,method:METHOD,quality_note:'Screening metrics at 512px; not a reconstruction accuracy score. Original EXIF remains in the original file.'}};
+ const latitude=Number(gps?.latitude),longitude=Number(gps?.longitude),heading=Number(exif.GPSImgDirection),focal=Number(exif.FocalLength),focal35=Number(exif.FocalLengthIn35mmFormat);
+ const captured=exif.DateTimeOriginal||exif.CreateDate||null;
+ return {sha256:hash(buffer),mime:{jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heif:'image/heic',avif:'image/avif',tiff:'image/tiff'}[meta.format],preview:'data:image/webp;base64,'+preview.toString('base64'),metadata:{
+  width,height,bytes:buffer.length,format:meta.format,orientation:meta.orientation||1,has_exif:!!meta.exif,
+  sharpness:Math.round(sharpness),contrast:Math.round(contrast),clipped_fraction:Number((clipped/data.length).toFixed(3)),warnings,method:METHOD,
+  camera_make:String(exif.Make||'').slice(0,80),camera_model:String(exif.Model||'').slice(0,100),lens_model:String(exif.LensModel||'').slice(0,120),
+  focal_length_mm:Number.isFinite(focal)?Number(focal.toFixed(3)):null,focal_length_35mm:Number.isFinite(focal35)?Number(focal35.toFixed(2)):null,
+  gps:Number.isFinite(latitude)&&Number.isFinite(longitude)?{lat:latitude,lon:longitude}:null,
+  heading_deg:Number.isFinite(heading)?((heading%360)+360)%360:null,
+  captured_at:captured instanceof Date?captured.toISOString():(captured?String(captured).slice(0,60):null),
+  quality_note:'Screening metrics at 512px; reconstruction uses the stored original. GPS/camera EXIF is retained when present.'
+ }};
 }
 async function buildMaterial(spec,readSource,cache){
  if(!spec||!/^[a-z0-9_-]{1,60}$/i.test(spec.id))fail('photo_material_id');

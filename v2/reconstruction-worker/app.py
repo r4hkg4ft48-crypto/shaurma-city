@@ -967,31 +967,27 @@ async def run_job(job:Job):
             if LIGHTWEIGHT_CPU:
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
                 stats["primary_error"]="cpu_memory_safe_photoplane";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
-            elif len(paths)<3:
-                if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("not_enough_views_for_multiview")
-                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                stats["primary_error"]="partial_view_metric_fallback";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
-                primary_errors=[]
+                primary_errors=[];points=None
+                # MapAnything is metric and explicitly supports monocular as well
+                # as multi-view reconstruction, so it must be attempted before
+                # the one/two-view fallback.
                 if MAX_BACKEND in ("mapanything","auto"):
                     try:
                         points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,mapanything_reconstruct,paths,kept,job)
                     except Exception as exc:
-                        primary_errors.append("mapanything:"+str(exc)[:160])
-                        points=None
-                else:
-                    points=None
-                if points is None and MAX_BACKEND in ("vggt","auto","mapanything"):
+                        primary_errors.append("mapanything:"+str(exc)[:160]);points=None
+                if points is None and len(paths)>=3 and MAX_BACKEND in ("vggt","auto","mapanything"):
                     try:
                         points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
                     except Exception as exc:
-                        primary_errors.append("vggt:"+str(exc)[:160])
-                        points=None
+                        primary_errors.append("vggt:"+str(exc)[:160]);points=None
                 if points is None:
                     if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("; ".join(primary_errors) or "max_reconstruction_unavailable")
                     print("MAX paths unavailable; using metric depth fallback:",primary_errors,flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    stats["primary_error"]="; ".join(primary_errors)[:360];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+                    stats["primary_error"]="; ".join(primary_errors)[:360] or ("partial_view_metric_fallback" if len(paths)<3 else "metric_depth_fallback")
+                    stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)

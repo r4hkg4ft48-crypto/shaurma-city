@@ -298,7 +298,7 @@ test('MAX source sweep reaches beyond the old narrow street radius',()=>{
   const open=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
   const photo=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   assert.match(open,/bbox\(marker,520\)/);
-  assert.match(open,/radius:'520'/);
+  assert.match(open,/radius','1000'/);
   assert.match(open,/ggsradius:'650'/);
   assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
   assert.match(photo,/openWorld\.collectCandidates\(marker\)\.catch\(\(\)=>\[\]\)/);
@@ -339,7 +339,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v19 photo-first revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v19-photo-first-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
 });
 
 
@@ -364,7 +364,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v19-photo-first-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
 });
 
 

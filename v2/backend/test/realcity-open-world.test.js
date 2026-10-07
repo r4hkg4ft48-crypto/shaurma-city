@@ -201,3 +201,15 @@ test('persisted Wikimedia references can be deterministically re-resolved withou
   assert.equal(u.searchParams.get('iiprop'),'url|extmetadata');
   assert.equal(typeof O.resolveReferences,'function');
 });
+
+
+test('KartaView collector probes both current and anonymous APIs and accepts fileUrl',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
+  assert.match(src,/\/2\.0\/photo\//);
+  assert.match(src,/\/1\.0\/list\/nearby-photos\//);
+  assert.match(src,/radius','1000'/);
+  assert.match(src,/fileUrl/);
+  assert.match(src,/Promise\.allSettled/);
+  assert.match(src,/out\.length>=220/);
+});

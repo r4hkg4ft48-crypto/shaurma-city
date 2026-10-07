@@ -127,3 +127,44 @@ test('Wikimedia candidate preserves an original-image fallback for reconstructio
   assert.equal(candidate.fallback_image_url,'https://upload.wikimedia.org/wikipedia/commons/a/a0/example.jpg');
   assert.equal(O._internals.canPersistAdaptation(candidate),true);
 });
+
+
+test('environment v16 refreshes roads independently while preserving saved building anchors',()=>{
+  const A=require('../src/realcity-analyzer');
+  assert.equal(A.PROFILE_VERSION,16);
+  const saved={
+    radius_m:190,hero_building_id:'hero',
+    buildings:[{id:'hero',ring:[[37,55],[37.0001,55],[37.0001,55.0001],[37,55.0001],[37,55]],height:18}],
+    roads:[],greens:[],trees:[]
+  };
+  const fresh={
+    radius_m:190,hero_building_id:'fresh-hero',
+    buildings:[{id:'other'}],
+    roads:[[[37,55],[37.001,55.001]]],
+    sidewalks:[[[37,55.0001],[37.001,55.0001]]],
+    greens:[[[37,55],[37.0002,55],[37.0002,55.0002],[37,55]]],
+    trees:[{lon:37.0001,lat:55.0001,source:'osm'}],
+    barriers:[{kind:'fence',coordinates:[[37,55],[37.0001,55]]}],
+    street_objects:[{kind:'street_lamp',lon:37.0001,lat:55.0001,source:'osm'}],
+    environment_revision:2
+  };
+  const merged=A._internals.mergeFreshEnvironment(saved,fresh);
+  assert.deepEqual(merged.buildings,saved.buildings);
+  assert.equal(merged.hero_building_id,'hero');
+  assert.deepEqual(merged.roads,fresh.roads);
+  assert.deepEqual(merged.sidewalks,fresh.sidewalks);
+  assert.deepEqual(merged.greens,fresh.greens);
+  assert.deepEqual(merged.barriers,fresh.barriers);
+  assert.deepEqual(merged.street_objects,fresh.street_objects);
+  assert.equal(merged.environment_revision,2);
+});
+
+test('photoreal map keeps real environment visible instead of blanking it',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.doesNotMatch(src,/features:photoreal\?\[\]:data\.greens/);
+  assert.doesNotMatch(src,/features:photoreal\?\[\]:data\.roads/);
+  assert.match(src,/realcity-barriers/);
+  assert.match(src,/visibleTrees=photoreal\?data\.trees\.filter/);
+  assert.match(src,/fill-opacity',photoreal\?\.18/);
+});

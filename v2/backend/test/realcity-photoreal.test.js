@@ -280,7 +280,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v4/);
+  assert.match(src,/realcity-photoreal-worker-v5/);
 });
 
 

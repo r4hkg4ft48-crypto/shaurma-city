@@ -51,7 +51,7 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 <h2>5 · Проверки</h2><div id="report">После калибровки запусти сборку.</div>
 <div class="actions"><button id="build" class="primary">Собрать черновик</button><button id="preview" disabled>Просмотр на карте</button></div>
 <label><input type="checkbox" id="visualOk"> Я лично сравнил черновик с фотографиями на карте</label>
-<div class="actions"><button id="review" disabled>Подтвердить проверку</button><button id="publish" disabled>Опубликовать в Mini App</button></div>
+<div class="actions"><button id="review" disabled>Подтвердить проверку</button><button id="publish" disabled>Опубликовать в Mini App</button><button id="unpublish">Снять публикацию Pro</button></div>
 </section>
 </div>
 <div id="previewBox"><div class="actions"><button id="closePreview">Закрыть просмотр</button><span class="tag">Черновик · не опубликовано</span></div><iframe id="previewFrame" title="Проверка на карте" src="about:blank"></iframe></div>
@@ -169,6 +169,7 @@ function updateButtons(){
 $('#preview').disabled=!state?.draft||state.draft.revision!==state.revision;
 $('#review').disabled=!previewOpened||!state?.draft||state.draft.revision!==state.revision;
 $('#publish').disabled=!state?.draft?.report?.ready||state.draft.reviewed_revision!==state.revision;
+$('#unpublish').disabled=!state?.published;
 }
 $('#build').onclick=async()=>{
 $('#build').disabled=true;status('Выпрямление фотографических текстур…');
@@ -196,6 +197,12 @@ if(!$('#visualOk').checked)return status('Сначала сравните фас
 try{await api(endpoint('/review'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision,visually_verified:true})});
 status('Визуальная проверка зафиксирована');await load();
 }catch(e){status('Не подтверждено: '+e.message)}
+};
+$('#unpublish').onclick=async()=>{
+ if(!state?.published||!confirm('Снять публикацию RealCity Pro для этой метки? Сохранённые оригиналы и привязки останутся.'))return;
+ try{await api(endpoint('/unpublish'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,confirm_unpublish:true})});
+ status('Опубликованный слой Pro отключён. Исходники и черновик сохранены.');await load();
+ }catch(e){status('Не удалось отключить публикацию: '+e.message)}
 };
 $('#publish').onclick=async()=>{
 if(!confirm('Опубликовать только подтверждённые фотофасады в Mini App?'))return;

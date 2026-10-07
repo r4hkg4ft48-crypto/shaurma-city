@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Шаурмег · RealCity Pro</title><script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#e9f2f7;background:#08111c}
+*{box-sizing:border-box}body{margin:0;padding:18px;max-width:1320px;margin:auto}h1{font-size:clamp(24px,4vw,36px);letter-spacing:-.04em;margin:5px 0}h2{font-size:18px;margin:0 0 9px}
+p{line-height:1.5;color:#9eafc0}small,.muted{color:#91a4b9}label{font-size:13px;color:#aebdd0}button,select,input,textarea{font:inherit;color:#edf4fb}button{padding:10px 13px;border:1px solid #3b536b;border-radius:13px;background:#15293d;cursor:pointer;font-weight:600}
+button.primary{background:#d9454c;color:white;border-color:transparent}button:disabled{opacity:.45;cursor:not-allowed}
+select,input,textarea{width:100%;margin:5px 0 10px;background:#0b1b2b;border:1px solid #39506a;border-radius:10px;padding:11px}
+input[type=file]{border-style:dashed}input[type=checkbox]{width:auto;margin:0 6px}
+section{border:1px solid #243c52;background:#0d1d2d;border-radius:20px;padding:18px;margin:12px 0;min-width:0}
+.heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}.tag{padding:7px 10px;background:#213e50;border-radius:999px;color:#d5edf3;font-size:12px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.photo{border:1px solid #34485d;border-radius:12px;padding:8px;background:#132537;text-align:left;min-width:0}
+.photo img{width:100%;height:100px;object-fit:cover;border-radius:7px}.photo.active{border-color:#59cbd1;box-shadow:0 0 0 2px #214e54}
+.photo b,.photo small{display:block;overflow-wrap:anywhere}.stage{position:relative;width:100%;max-width:760px;margin:auto}
+.stage img{width:100%;display:block;cursor:crosshair;border:1px solid #517188;border-radius:10px}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}.actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+#status{min-height:34px;padding:9px 13px;border-radius:10px;background:#142c39;color:#b2d0d6}
+#previewBox{position:fixed;inset:0;z-index:9;background:#05111c;display:none;padding:8px}#previewBox.open{display:flex;flex-direction:column}
+#previewFrame{flex:1;border:0;width:100%}#report{white-space:pre-wrap;font-size:13px;line-height:1.6}
+code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-template-columns:1fr}section{padding:12px}}
+</style></head>
+<body>
+<div class="heading"><div><small>ШАУРМЕГ · ОТДЕЛЬНЫЙ КОНТУР, НЕ ASTRA</small><h1>RealCity Pro</h1><p>Фотографическая реконструкция без домыслов: оригиналы → карта → фасадные привязки → контроль → публикация.</p></div><span class="tag" id="buildTag">PHOTO TRUTH · v1</span></div>
+<div id="status" role="status">Подключение к суперадминке…</div>
+<section><h2>1 · Выбрать точку</h2><div class="fields"><label>Заведение<select id="venue"></select></label><label>Метка на карте<select id="marker"></select></label><label>Состояние модели<div class="tag" id="published">Ещё нет публикации</div></label></div>
+<p class="muted">Для тестового объекта: главное здание с синим сердцем. Перенос всегда закреплён за конкретным marker ID и реальной геометрией, а не за названием.</p></section>
+<section><h2>2 · Загрузить исходные фотографии</h2><div class="fields"><label>Роль фотографии<select id="role">
+<option value="hero_front">Главный фасад</option><option value="hero_oblique">Угловой фасад</option>
+<option value="hero_side">Боковой фасад</option><option value="hero_distance">Дальний вид главного</option>
+<option value="neighbor">Соседнее здание</option><option value="panorama">Панорама округа</option>
+<option value="road">Дороги и тротуары</option><option value="vegetation">Деревья и озеленение</option>
+<option value="landmark">Городской объект</option><option value="environment">Общий вид</option></select></label>
+<label>Оригиналы JPG/PNG/HEIC/WebP<input type="file" id="photos" accept="image/*" multiple></label>
+<div><small>Исходные файлы сохраняются отдельно от Astra, проверяются размер, фокус, контраст и EXIF. Панорамы никогда не натягиваются на фасады.</small></div></div>
+<div id="photosList" class="list"></div></section>
+<div class="grid">
+<section><h2>3 · Калибровка поверхности</h2>
+<p>Выбери фотокарточку, здание и грань. На фото нажми четыре угла <b>одной плоскости</b> по порядку: верх-лево → верх-право → низ-право → низ-лево. Не отмечай всю картинку, если в кадре есть небо и другие дома.</p>
+<div class="fields"><label>Здание<select id="building"></select></label><label>Сторона здания<select id="edge"></select></label><label>Размещение изображения<label><input type="checkbox" id="flip"> Развернуть горизонтально</label></label></div>
+<div id="stage" class="stage"><img id="workingPhoto" alt="Выбранная фотография"><svg id="overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div>
+<div class="actions"><button id="resetQuad">Начать 4 точки заново</button><button id="maskMode">Маска: исключить объект</button><button id="finishMask">Закончить маску</button></div>
+<p id="pointsInfo" class="muted">Выбери фотографию для разметки.</p>
+<label><input type="checkbox" id="confirmed"> Подтверждаю, что углы принадлежат именно выбранной стене</label>
+<div class="actions"><button class="primary" id="saveCalibration">Сохранить привязку</button></div>
+</section>
+<section><h2>4 · Строгие ограничения</h2>
+<div id="settings"></div>
+<p>Система не заполняет недоступную сторону здания выдуманными окнами или текстурами. Фотографии окружения сохраняются как контекстные наблюдения; для их пространственного построения нужны собственные привязки объектов.</p>
+<h2>5 · Проверки</h2><div id="report">После калибровки запусти сборку.</div>
+<div class="actions"><button id="build" class="primary">Собрать черновик</button><button id="preview" disabled>Просмотр на карте</button></div>
+<label><input type="checkbox" id="visualOk"> Я лично сравнил черновик с фотографиями на карте</label>
+<div class="actions"><button id="review" disabled>Подтвердить проверку</button><button id="publish" disabled>Опубликовать в Mini App</button></div>
+</section>
+</div>
+<div id="previewBox"><div class="actions"><button id="closePreview">Закрыть просмотр</button><span class="tag">Черновик · не опубликовано</span></div><iframe id="previewFrame" title="Проверка на карте" src="about:blank"></iframe></div>
+<script>
+(() => {
+const $=s=>document.querySelector(s),esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const launch=new URL(location.href),tg=window.Telegram?.WebApp;
+let session=sessionStorage.getItem('sc_admin_tg_session')||'',owner=sessionStorage.getItem('sc_owner_token')||'',state=null,selected=null,quad=[],masks=[],workingMask=[],masking=false,previewOpened=false;
+const sourceMap={
+'IMG_7096':'hero_front','IMG_7094':'hero_oblique','IMG_7099':'hero_distance','IMG_7110':'hero_side',
+'IMG_7097':'neighbor','IMG_7105':'panorama','IMG_7095':'panorama','IMG_7100':'panorama',
+'IMG_7103':'panorama','IMG_7106':'panorama'
+};
+function status(t){$('#status').textContent=t}
+async function api(path,opt={}){
+const headers={...(opt.headers||{})};if(!headers['Content-Type']&&!(opt.body instanceof File))headers['Content-Type']='application/json';
+if(session)headers.Authorization='Bearer '+session;else if(owner)headers['X-Owner-Token']=owner;
+const r=await fetch(path,{...opt,headers,cache:'no-store'}),j=await r.json().catch(()=>({}));
+if(!r.ok)throw Error(j.error||('HTTP '+r.status));return j;
+}
+const endpoint=tail=>'/api/shaurma/admin/realcity-pro/'+encodeURIComponent($('#venue').value)+tail+'?marker_id='+encodeURIComponent($('#marker').value);
+async function init(){
+try{
+ if(!session&&!owner&&tg?.initData){
+   const r=await fetch('/api/shaurma/admin-telegram-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})});
+   const j=await r.json();if(r.ok){session=j.session;sessionStorage.setItem('sc_admin_tg_session',session);}
+ }
+ const venues=await api('/api/shaurma/admin/venues');
+ $('#venue').innerHTML=(venues||[]).filter(v=>v.establishment_id).map(v=>'<option value="'+esc(v.establishment_id)+'">'+esc(v.name)+' · '+esc(v.establishment_id)+'</option>').join('');
+ if(launch.searchParams.get('establishment'))$('#venue').value=launch.searchParams.get('establishment');
+ await markers();
+ status('Раздел RealCity Pro готов к работе');
+}catch(e){status('Вход в суперадминку необходим: '+e.message)}
+}
+async function markers(){
+try{
+ const e=$('#venue').value;if(!e)return;
+ const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(e));
+ $('#marker').innerHTML=(j.markers||[]).map(m=>'<option value="'+esc(m.marker_id)+'">'+esc(m.name)+' · #'+esc(m.marker_id)+'</option>').join('');
+ if(launch.searchParams.get('marker'))$('#marker').value=launch.searchParams.get('marker');
+ await load();
+}catch(e){status('Не удаётся загрузить метки: '+e.message)}
+}
+async function load(){
+try{state=await api(endpoint(''));selected=null;quad=[];masks=[];workingMask=[];previewOpened=false;
+$('#published').textContent=state.published?'Опубликована · '+state.published.input_revision.slice(0,10):'Нет публикации';
+$('#settings').innerHTML=Object.entries(state.settings).map(([k,v])=>'<p><code>'+esc(k)+'</code> · '+esc(String(v))+'</p>').join('');
+$('#building').innerHTML=state.manifest.buildings.map(b=>'<option value="'+esc(b.building_id)+'">'+esc(b.role)+' · '+esc(b.building_id)+' · '+b.height_m+' м</option>').join('');
+$('#building').value=state.manifest.hero_building_id;edges();renderPhotos();updateButtons();
+$('#report').textContent=state.draft?JSON.stringify(state.draft.report,null,2):'Черновик не создан.';
+}catch(e){status('Ошибка загрузки RealCity Pro: '+e.message)}
+}
+function edges(){
+const b=state?.manifest.buildings.find(b=>b.building_id===$('#building').value);
+$('#edge').innerHTML=(b?.edges||[]).map(e=>'<option value="'+e.edge_index+'">Грань '+e.edge_index+' · '+e.length_m+' м · '+Math.round(e.bearing)+'°</option>').join('');
+}
+function renderPhotos(){
+$('#photosList').innerHTML=(state?.assets||[]).map(a=>'<button type="button" class="photo '+(selected?.asset_id===a.asset_id?'active':'')+'" data-id="'+esc(a.asset_id)+'"><img src="'+a.preview+'" alt=""><b>'+esc(a.filename)+'</b><small>'+esc(a.role)+'</small><small>'+esc((a.metadata?.warnings||[]).join(' · ')||'EXIF / качество проверены')+'</small></button>').join('');
+}
+function choose(id){
+selected=state.assets.find(a=>a.asset_id===id)||null;const c=state.calibrations.find(c=>c.asset_id===id);
+quad=c?.source_quad?c.source_quad.map(p=>[...p]):[];masks=c?.exclude||[];workingMask=[];
+if(c){$('#building').value=c.building_id;edges();$('#edge').value=String(c.edge_index);$('#flip').checked=c.flip_u;$('#confirmed').checked=c.confirmed;}
+else{$('#confirmed').checked=false;$('#flip').checked=false;}
+$('#workingPhoto').src=selected?.preview||'';draw();renderPhotos();
+}
+function draw(){
+const all=quad.map(([x,y])=>[x*100,y*100]);
+let html=all.map(([x,y],i)=>'<circle cx="'+x+'" cy="'+y+'" r="1.1" fill="#51e0d1" stroke="#102631" stroke-width=".3"/><text x="'+(x+1.2)+'" y="'+(y-1.1)+'" fill="white" font-size="3">'+(i+1)+'</text>').join('');
+if(all.length>=2)html+='<polyline points="'+all.map(p=>p.join(',')).join(' ')+'" fill="none" stroke="#55e6d8" stroke-width=".5"/>';
+if(all.length===4)html+='<polygon points="'+all.map(p=>p.join(',')).join(' ')+'" fill="#29dabb" fill-opacity=".08" stroke="#55e6d8" stroke-width=".5"/>';
+for(const mask of [...masks,workingMask])if(mask.length>1)html+='<polygon points="'+mask.map(p=>(p[0]*100)+','+(p[1]*100)).join(' ')+'" fill="#ed4252" fill-opacity=".28" stroke="#f45566" stroke-width=".5"/>';
+$('#overlay').innerHTML=html;
+$('#pointsInfo').textContent=selected?(masking?'Отмечай контур закрывающего объекта; заверши маску кнопкой':quad.length+'/4 точек · '+masks.length+' масок · '+selected.filename):'Выбери фото';
+}
+$('#workingPhoto').onclick=e=>{
+if(!selected)return;
+const box=e.target.getBoundingClientRect(),p=[Math.max(0,Math.min(1,(e.clientX-box.left)/box.width)),Math.max(0,Math.min(1,(e.clientY-box.top)/box.height))];
+if(masking){if(workingMask.length<40)workingMask.push(p);}else if(quad.length<4)quad.push(p);draw();
+};
+$('#resetQuad').onclick=()=>{quad=[];draw()};
+$('#maskMode').onclick=()=>{masking=!masking;$('#maskMode').textContent=masking?'Режим маски активен':'Маска: исключить объект';draw()};
+$('#finishMask').onclick=()=>{if(workingMask.length>=3)masks.push(workingMask);workingMask=[];masking=false;$('#maskMode').textContent='Маска: исключить объект';draw()};
+$('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)choose(b.dataset.id)};
+$('#building').onchange=edges;
+$('#venue').onchange=markers;$('#marker').onchange=load;
+$('#photos').onchange=async e=>{
+const files=[...e.target.files];if(!files.length||!state)return;
+$('#photos').disabled=true;
+try{for(let i=0;i<files.length;i++){
+const f=files[i],guess=Object.entries(sourceMap).find(([name])=>f.name.startsWith(name)),role=guess?.[1]||$('#role').value;
+status('Загрузка '+(i+1)+'/'+files.length+': '+f.name);
+if(f.size>16*1024*1024)throw Error('Оригинал больше 16 МБ');
+state=await api(endpoint('/assets')+'&role='+encodeURIComponent(role)+'&filename='+encodeURIComponent(f.name),{method:'POST',body:f,headers:{'Content-Type':'application/octet-stream'}});
+renderPhotos();}status('Оригиналы сохранены в RealCity Pro · '+files.length);
+}catch(err){status('Не удалось загрузить: '+err.message)}finally{$('#photos').disabled=false;e.target.value='';updateButtons()}
+};
+$('#saveCalibration').onclick=async()=>{
+if(!selected||quad.length!==4)return status('Нужна выбранная фотография и 4 угла одной поверхности');
+const b=state.manifest.buildings.find(b=>b.building_id===$('#building').value);
+try{state=await api(endpoint('/calibrations'),{method:'PUT',body:JSON.stringify({
+marker_id:state.marker.id,asset_id:selected.asset_id,building_id:b.building_id,geometry_key:b.geometry_key,
+edge_index:Number($('#edge').value),source_quad:quad,exclude:masks,flip_u:$('#flip').checked,confirmed:$('#confirmed').checked})});
+status('Привязка сохранена · '+selected.filename);renderPhotos();updateButtons();
+}catch(e){status('Привязка отклонена: '+e.message)}
+};
+function updateButtons(){
+$('#preview').disabled=!state?.draft||state.draft.revision!==state.revision;
+$('#review').disabled=!previewOpened||!state?.draft||state.draft.revision!==state.revision;
+$('#publish').disabled=!state?.draft?.report?.ready||state.draft.reviewed_revision!==state.revision;
+}
+$('#build').onclick=async()=>{
+$('#build').disabled=true;status('Выпрямление фотографических текстур…');
+try{const j=await api(endpoint('/build'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision})});status('Сборка завершена. '+(j.report.ready?'Можно проверить на карте.':'Есть проблемы качества.'));await load();
+}catch(e){status('Сборка остановлена: '+e.message)}finally{$('#build').disabled=false}
+};
+window.RealCityProStudio={previewData:null};
+$('#preview').onclick=async()=>{
+try{
+const j=await api(endpoint('/preview'));window.RealCityProStudio.previewData=j;
+$('#previewBox').classList.add('open');
+$('#previewFrame').src='/realcity-preview/index.html?marker='+encodeURIComponent(state.marker.id)+'&realcity_preview=1&pro='+Date.now();
+previewOpened=true;updateButtons();status('Проверьте геометрию и материалы с разных углов перед подтверждением.');
+}catch(e){status('Предпросмотр не работает: '+e.message)}
+};
+$('#closePreview').onclick=()=>{$('#previewFrame').src='about:blank';$('#previewBox').classList.remove('open');};
+$('#review').onclick=async()=>{
+if(!$('#visualOk').checked)return status('Сначала сравните фасады на карте и поставьте отметку проверки.');
+try{await api(endpoint('/review'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision,visually_verified:true})});
+status('Визуальная проверка зафиксирована');await load();
+}catch(e){status('Не подтверждено: '+e.message)}
+};
+$('#publish').onclick=async()=>{
+if(!confirm('Опубликовать только подтверждённые фотофасады в Mini App?'))return;
+try{await api(endpoint('/publish'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision})});
+status('RealCity Pro опубликован в Mini App');await load();
+}catch(e){status('Публикация заблокирована: '+e.message)}
+};
+init();
+})();
+</script></body></html>

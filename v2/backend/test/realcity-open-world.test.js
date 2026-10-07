@@ -165,8 +165,8 @@ test('photoreal map keeps real environment visible instead of blanking it',()=>{
   assert.doesNotMatch(src,/features:photoreal\?\[\]:data\.greens/);
   assert.doesNotMatch(src,/features:photoreal\?\[\]:data\.roads/);
   assert.match(src,/realcity-barriers/);
-  assert.match(src,/visibleTrees=photoreal\?data\.trees\.filter/);
-  assert.match(src,/fill-opacity',photoreal\?\.045/);
+  assert.match(src,/visibleTrees=referenceMaster\?\[\]:\(photoreal\?data\.trees\.filter/);
+  assert.match(src,/fill-opacity',referenceMaster\?0:photoreal\?\.045/);
 });
 
 

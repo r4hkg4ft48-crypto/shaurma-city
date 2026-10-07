@@ -566,3 +566,21 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
   assert.match(src,/RealCity photoreal bootstrap/);
   assert.match(src,/waiting for a human to open a marker/);
 });
+
+
+test('cold-start worker submission is warmed and retried safely',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(api,/async function warmWorker\(base\)/);
+  assert.match(api,/const waits=\[20000,35000,50000\]/);
+  assert.match(api,/await warmWorker\(base\)/);
+  assert.match(api,/attempt===0\?20000:35000/);
+  assert.match(api,/transientWorkerStatus/);
+  assert.doesNotMatch(api,/setTimeout\(\(\)=>ac\.abort\(\),12000\)/);
+  assert.match(worker,/_ACTIVE_JOBS=set\(\)/);
+  assert.match(worker,/if job\.job_id in _ACTIVE_JOBS:/);
+  assert.match(worker,/"duplicate":True/);
+  assert.match(worker,/tasks\.add_task\(run_job_guarded,job\)/);
+  assert.match(worker,/_ACTIVE_JOBS\.discard\(job\.job_id\)/);
+});

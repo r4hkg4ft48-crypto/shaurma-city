@@ -916,7 +916,7 @@ def synthetic_camera_for_wall(building:dict,edge:int,origin:list,distance_m:floa
 def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor.get("origin") or job.target.get("coordinates")
     if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
-    max_points=min(int(job.policy.get("max_points",80000)),80000)
+    max_points=min(int(job.policy.get("max_points",48000)),48000)
     all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
     used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set()
     per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))

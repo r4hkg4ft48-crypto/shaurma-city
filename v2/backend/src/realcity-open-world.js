@@ -96,6 +96,16 @@ async function fetchImage(url,timeout=5500){
   }finally{clearTimeout(timer)}
 }
 
+async function fetchCandidateImage(candidate,timeout=6500){
+  let last=null;
+  const urls=[candidate?.image_url,candidate?.fallback_image_url].filter((u,i,a)=>u&&a.indexOf(u)===i);
+  for(const url of urls){
+    try{return await fetchImage(url,timeout)}
+    catch(e){last=e}
+  }
+  throw last||new Error('open_world_image_missing');
+}
+
 function candidateBase(source,id,coords,imageUrl,pageUrl,extra={}){
   if(!Array.isArray(coords)||coords.length<2||!finite(coords[0])||!finite(coords[1]))return null;
   const image=safeUrl(imageUrl),page=safeUrl(pageUrl),fallbackImage=safeUrl(extra.fallback_image_url);
@@ -459,7 +469,7 @@ async function reconstruct(marker,scene){
   const observations=[],references=[];let textureBudget=MAX_TEXTURES;
   const jobs=candidates.map(c=>imageSlot(async()=>{
     try{
-      const buffer=await fetchImage(c.image_url),analysis=await analyzeImage(buffer);
+      const buffer=await fetchCandidateImage(c),analysis=await analyzeImage(buffer);
       const min=c.source==='wikimedia'?.38:.16;if(analysis.facade_likelihood<min)return;
       const assignment=nearestAssignment(c,analysis,scene);if(!assignment||assignment.quality<.08)return;
       const ref=referenceOf(c,analysis,assignment);references.push(ref);
@@ -481,5 +491,5 @@ async function reconstruct(marker,scene){
 
 module.exports={
   ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
-  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation}
+  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation,candidateBase,fetchCandidateImage}
 };

@@ -206,10 +206,11 @@ test('partial photoreal distinguishes flat fallback from measured volumetric sup
   assert.match(src,/realcity-photoreal-shell/);
   assert.match(src,/isTruePhotogrammetry=isCompletePhotogrammetry\(authored\.model\)/);
   assert.match(src,/isVolumetricDepth=isMeasuredVolumetric\(authored\.model\)/);
-  assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
+  assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth&&!referenceMaster\)/);
   assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
   assert.match(src,/REAL CITY · PHOTO 3D/);
+  assert.match(src,/REAL CITY · PHOTO MASTER/);
 });
 
 
@@ -272,7 +273,7 @@ test('RealCity world palette visibly replaces the dark city theme and restores o
   assert.match(src,/background-color','#9da5a7'/);
   assert.match(src,/fill-color','#7898a5'/);
   assert.match(src,/line-color','#55585a'/);
-  assert.match(src,/setRealCityWorldPalette\(!!astraLayer\)/);
+  assert.match(src,/setRealCityWorldPalette\(!!astraLayer&&!referenceMaster\)/);
   assert.match(src,/setRealCityWorldPalette\(false\)/);
   assert.match(src,/zoom:19\.05,pitch:67/);
 });

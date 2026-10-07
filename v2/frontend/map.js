@@ -685,6 +685,10 @@
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-barriers-line','line-opacity',0)}catch{}
+    try{map.setPaintProperty('realcity-context-extrude','fill-extrusion-opacity',.78)}catch{}
+    try{map.setPaintProperty('focus-building-extrude','fill-extrusion-opacity',.97)}catch{}
+    try{map.setPaintProperty('realcity-context-edge','line-opacity',['case',['==',['get','role'],'nearby'],.45,.22])}catch{}
+    try{map.setPaintProperty('focus-building-edge','line-opacity',.78)}catch{}
     setBaseBuildingsDim(false);setPhotoLabels(null);setRealCityWorldPalette(false);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
@@ -696,15 +700,21 @@
     }
     const authored=astraLayer?activeRealCityModel:null,photoreal=!!(authored&&activeRealCityMode==='photoreal');
     const completePhotogrammetry=photoreal&&isCompletePhotogrammetry(authored);
-    const reconstructedRadius=completePhotogrammetry?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190)):0;
-    // Only a verified metric photogrammetry scene may remove native 3D buildings.
-    // Depth-estimated splats are photographic surface evidence, not a complete
-    // replacement mesh. Keeping the mapped extrusion behind them prevents the
-    // exact "flattened houses" failure when source coverage is incomplete.
+    const volumetricPhoto3D=photoreal&&!completePhotogrammetry&&authored?.quality?.volumetric_reconstruction===true;
+    const reconstructedRadius=completePhotogrammetry
+      ?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190))
+      :volumetricPhoto3D?Math.max(70,Math.min(220,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||170)):0;
+    // A measured volumetric PHOTO-3D scene must visibly take over the local
+    // quarter. Native OpenFreeMap buildings are hidden only where an exact OSM
+    // support volume is rendered in their place, so incomplete photographic
+    // coverage never collapses a building to a flat or empty footprint.
+    const supportIds=new Set([data.heroFeature,...data.contextFeatures].filter(Boolean).map(f=>String(f.properties?.id||'')));
     const replaced=new Set(completePhotogrammetry
       ?(profile.scene?.buildings||[]).filter(b=>Number(b.distance||0)<=reconstructedRadius).map(b=>String(b.id))
-      :photoreal?[]
-      :(authored?.buildings||[]).map(b=>String(b.building_id)));
+      :volumetricPhoto3D
+        ?(profile.scene?.buildings||[]).filter(b=>supportIds.has(String(b.id))&&Number(b.distance||0)<=reconstructedRadius).map(b=>String(b.id))
+        :photoreal?[]
+        :(authored?.buildings||[]).map(b=>String(b.building_id)));
     if(authored&&!photoreal)for(const b of profile.scene.buildings){
       if(replaced.has(String(b.id)))continue;
       // Some vector tiles contain both the building envelope and its inner
@@ -717,7 +727,7 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    const dimmed=completePhotogrammetry?covered:
+    const dimmed=(completePhotogrammetry||volumetricPhoto3D)?covered:
       (astraLayer&&!photoreal?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[]);
     setBaseBuildingsDim(dimmed.length>0,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
@@ -741,7 +751,17 @@
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
     const duration=reduceMotion?1:980,started=performance.now();
-    const context=astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=astraLayer?null:(data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null);
+    const neutralSupport=f=>f?{...f,properties:{...f.properties,wall:f.properties?.role==='hero'?'#777873':'#858680',accent:'#666762',windows:'#30383b'}}:null;
+    const context=volumetricPhoto3D
+      ?data.contextFeatures.filter(f=>replaced.has(String(f.properties?.id))).map(neutralSupport)
+      :astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id));
+    const hero=volumetricPhoto3D
+      ?(data.heroFeature&&replaced.has(String(data.heroFeature.properties?.id))?neutralSupport(data.heroFeature):null)
+      :astraLayer?null:(data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null);
+    try{map.setPaintProperty('realcity-context-extrude','fill-extrusion-opacity',volumetricPhoto3D?.54:.78)}catch{}
+    try{map.setPaintProperty('focus-building-extrude','fill-extrusion-opacity',volumetricPhoto3D?.6:.97)}catch{}
+    try{map.setPaintProperty('realcity-context-edge','line-opacity',volumetricPhoto3D?.16:['case',['==',['get','role'],'nearby'],.45,.22])}catch{}
+    try{map.setPaintProperty('focus-building-edge','line-opacity',volumetricPhoto3D?.3:.78)}catch{}
     if(!hero)heroSource?.setData(emptyGeo());
     const render=(now)=>{
       if(token!==focusToken)return;

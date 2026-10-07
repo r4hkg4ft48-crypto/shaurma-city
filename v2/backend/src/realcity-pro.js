@@ -6,7 +6,7 @@ const P=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 const fail=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
-const surfaceId=c=>'pro_'+hash([c.asset_id,c.building_id,c.edge_index].join(':')).slice(0,24);
+const surfaceId=c=>'pro_'+hash([c.building_id,c.edge_index].join(':')).slice(0,24);
 const ROLES=new Set(['hero_front','hero_oblique','hero_side','hero_distance','neighbor','panorama','road','vegetation','landmark','environment']);
 const settings=Object.freeze({mode:'realcity-pro',geometry:'mapped-only',facade:'source-pixels',
   procedural_facades:false,synthetic_windows:false,synthetic_vegetation:false,
@@ -64,7 +64,7 @@ function outputModel(row,cals,mats,rev,report){
   if(!e||!available.has(matId))continue;
   const arr=grouped.get(b.building_id)||[];
   if(arr.some(f=>f.edge_index===e.edge_index))continue;
-  arr.push({edge_index:e.edge_index,edge:e.edge,evidence:'observed',reference_ids:[c.asset_id],
+  arr.push({edge_index:e.edge_index,edge:e.edge,evidence:'observed',reference_ids:[...new Set(cals.filter(x=>x.building_id===c.building_id&&x.edge_index===c.edge_index).map(x=>x.asset_id))],
     wall:{color:'#ffffff',finish:'panel',module_m:3,joint_color:'#ffffff'},modules:[],
     surfaces:[{material_id:matId,u_m:0,z_m:b.base_m,width_m:e.length_m,
       height_m:Number((b.height_m-b.base_m).toFixed(3)),depth_m:0,
@@ -141,19 +141,35 @@ function install(app,{db,authorize}){
    const [a,c]=await Promise.all([assets(row,false),cals(row)]),rev=revision(row,a,c),mani=manifest(row);
    if(req.body?.expected_revision!==rev)fail('pro_sources_changed',409);
    const usable=c.filter(x=>x.confirmed&&a.some(v=>v.asset_id===x.asset_id));
-   if(!usable.length||usable.length>12)fail('pro_confirmed_facade_count');
-   const materials=[],used=[];
+   if(!usable.length||usable.length>48)fail('pro_confirmed_facade_count');
+   const groups=new Map();
    for(const c of usable){
     const b=mani.buildings.find(x=>x.building_id===c.building_id),e=b?.edges.find(x=>x.edge_index===c.edge_index);
     if(!e||b.geometry_key!==c.geometry_key)fail('pro_geometry_changed',409);
-    if(materials.some(m=>m.edge_key===c.building_id+':'+c.edge_index))continue;
-    const src=await db.query('SELECT content FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,c.asset_id]);
-    if(!src.rows[0])fail('pro_original_missing',409);
+    const key=c.building_id+':'+c.edge_index,list=groups.get(key)||[];
+    if(list.length>=4)fail('pro_max_four_views_per_surface');
+    list.push(c);groups.set(key,list);
+   }
+   if(groups.size>12)fail('pro_facade_surface_limit_12');
+   const materials=[],used=[];
+   const photos=new Map();
+   for(const [edgeKey,views] of groups){
+    const c=views[0],b=mani.buildings.find(x=>x.building_id===c.building_id);
+    const e=b.edges.find(x=>x.edge_index===c.edge_index);
+    for(const view of views)if(!photos.has(view.asset_id)){
+      const q=await db.query('SELECT content FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,view.asset_id]);
+      if(!q.rows[0])fail('pro_original_missing',409);
+      photos.set(view.asset_id,q.rows[0].content);
+    }
+    // Explicit projective quads align every source to the SAME measured wall.
+    // Masked people/cars/trees are replaced from a confirmed alternate view,
+    // never synthesized or averaged into doubled ghost windows.
     const m=await P.buildMaterial({id:surfaceId(c),width_m:e.length_m,height_m:b.height_m-b.base_m,
       pixels_per_m:80,sharpen:0,roughness:1,metalness:0,lighting_mix:0,
-      views:[{source_asset_id:c.asset_id,source_quad:c.source_quad,exclude:c.exclude,exposure_ev:0,white_balance:[1,1,1]}]},
-      async()=>src.rows[0].content);
-    m.edge_key=c.building_id+':'+c.edge_index;materials.push(m);used.push(c);
+      views:views.map(v=>({source_asset_id:v.asset_id,source_quad:v.source_quad,exclude:v.exclude,
+        exposure_ev:0,white_balance:[1,1,1]}))},
+      async id=>photos.get(id));
+    m.edge_key=edgeKey;materials.push(m);used.push(...views);
    }
    const report=qualityGate(row,used,materials),output=outputModel(row,used,materials,rev,report);
    if(JSON.stringify(output).length>16*1024*1024)fail('pro_material_budget');

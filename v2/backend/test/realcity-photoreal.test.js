@@ -188,8 +188,9 @@ test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>
   assert.match(src,/def mapanything_reconstruct/);
   assert.match(src,/memory_efficient_inference=True/);
   assert.match(src,/minibatch_size=1/);
-  assert.match(src,/pred\["pts3d"\]/);
-  assert.match(src,/pred\["camera_poses"\]/);
+  assert.match(src,/arr\("pts3d"\)/);
+  assert.match(src,/arr\("camera_poses"\)/);
+  assert.match(src,/arr\("intrinsics"\)/);
   assert.match(src,/mapanything-apache-1b/);
   assert.match(src,/MAX_BACKEND in \("mapanything","auto"\)/);
   assert.match(req,/facebookresearch\/map-anything\.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9/);

@@ -114,3 +114,16 @@ test('licensed Commons imagery may become a bounded facade derivative',async()=>
   assert.match(material.data_url,/^data:image\/webp;base64,/);
   assert.equal(material.license,'CC BY-SA 4.0');
 });
+
+
+test('Wikimedia candidate preserves an original-image fallback for reconstruction',()=>{
+  const candidate=O._internals.candidateBase(
+    'wikimedia','commons-42',[37,55],
+    'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a0/example.jpg/1600px-example.jpg',
+    'https://commons.wikimedia.org/wiki/File:Example.jpg',
+    {fallback_image_url:'https://upload.wikimedia.org/wikipedia/commons/a/a0/example.jpg',license:'CC BY-SA 4.0'}
+  );
+  assert.equal(candidate.image_url.includes('thumb.wikimedia.org'),true);
+  assert.equal(candidate.fallback_image_url,'https://upload.wikimedia.org/wikipedia/commons/a/a0/example.jpg');
+  assert.equal(O._internals.canPersistAdaptation(candidate),true);
+});

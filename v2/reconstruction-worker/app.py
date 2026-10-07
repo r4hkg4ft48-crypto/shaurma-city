@@ -2,6 +2,7 @@ from __future__ import annotations
 import os, io, json, math, base64, hmac, hashlib, asyncio, tempfile, shutil, traceback
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 import numpy as np
 import httpx
 from PIL import Image
@@ -85,17 +86,39 @@ def source_target(source:dict,job:Job):
                 return [(float(a[0])+float(b[0]))/2,(float(a[1])+float(b[1]))/2]
     return job.target.get("coordinates") or job.map_anchor.get("origin",[])[:2]
 
-async def download(url:str)->bytes:
-    async with httpx.AsyncClient(timeout=25,follow_redirects=True,headers={"User-Agent":"Shaurmeg-RealCity-Photoreal/1.0"}) as c:
-        r=await c.get(url)
-        r.raise_for_status()
-        ct=r.headers.get("content-type","").lower()
-        if not ct.startswith("image/"):
-            raise RuntimeError("source_not_image")
-        data=r.content
-        if not data or len(data)>MAX_DOWNLOAD:
-            raise RuntimeError("source_too_large")
-        return data
+def source_host(url:str)->str:
+    try:return (urlparse(str(url)).hostname or "unknown").lower()
+    except Exception:return "invalid"
+
+async def download(url:str,provider:str="")->bytes:
+    headers={
+      "User-Agent":"ShaurmegRealCity/1.0 (+https://github.com/r4hkg4ft48-crypto/shaurma-city)",
+      "Accept":"image/avif,image/webp,image/jpeg,image/png,image/*;q=.9,*/*;q=.2",
+      "Accept-Language":"en-US,en;q=.8",
+      "Cache-Control":"no-cache",
+    }
+    if provider=="wikimedia":headers["Referer"]="https://commons.wikimedia.org/"
+    timeout=httpx.Timeout(32.0,connect=12.0)
+    async with httpx.AsyncClient(timeout=timeout,follow_redirects=True,headers=headers) as client:
+        last=None
+        for attempt in range(2):
+            try:
+                r=await client.get(url)
+                if r.status_code in (429,500,502,503,504) and attempt==0:
+                    await asyncio.sleep(.55)
+                    continue
+                r.raise_for_status()
+                ct=r.headers.get("content-type","").split(";")[0].strip().lower()
+                data=r.content
+                if not data:raise RuntimeError("source_empty")
+                if len(data)>MAX_DOWNLOAD:raise RuntimeError("source_too_large")
+                if ct.startswith("text/") or ct in ("application/json","application/xml","text/html"):
+                    raise RuntimeError("source_not_image:"+ct)
+                return data
+            except Exception as exc:
+                last=exc
+                if attempt==0:await asyncio.sleep(.35)
+        raise RuntimeError(str(last)[:180] if last else "source_fetch_failed")
 
 def prepare_image(data:bytes,path:Path,max_side:int=1600)->dict:
     im=Image.open(io.BytesIO(data)).convert("RGB")
@@ -105,6 +128,25 @@ def prepare_image(data:bytes,path:Path,max_side:int=1600)->dict:
         im=im.resize((max(32,round(w*scale)),max(32,round(h*scale))),Image.Resampling.LANCZOS)
     im.save(path,quality=94,subsampling=0)
     return {"width":im.width,"height":im.height,"original_width":w,"original_height":h}
+
+async def load_source_image(source:dict,path:Path)->dict:
+    provider=str(source.get("provider") or source.get("kind") or "unknown")
+    sid=str(source.get("id") or "unknown")
+    urls=[]
+    for raw in (source.get("url"),source.get("fallback_url")):
+        u=str(raw or "").strip()
+        if u and u not in urls:urls.append(u)
+    errors=[]
+    for idx,url in enumerate(urls):
+        host=source_host(url)
+        try:
+            data=await download(url,provider)
+            meta=prepare_image(data,path)
+            return {"meta":meta,"host":host,"fallback_used":idx>0}
+        except Exception as exc:
+            errors.append(f"{host}:{type(exc).__name__}:{str(exc)[:110]}")
+    detail="|".join(errors[:3]) or "no_source_url"
+    raise RuntimeError(f"source_fetch_failed[{provider}:{sid}] {detail}")
 
 def camera_centers(extrinsic:np.ndarray)->np.ndarray:
     # OpenCV world->camera [R|t]
@@ -600,19 +642,25 @@ async def run_job(job:Job):
         try:
             requested=max(1,min(int(job.policy.get("max_frames",24)),len(job.sources)))
             selected=job.sources[:frame_budget(requested)]
-            paths=[];kept=[]
+            paths=[];kept=[];source_errors=[];fallback_sources=0
             for i,s in enumerate(selected):
                 try:
-                    data=await download(str(s["url"]))
-                    p=root/f"{i:03d}.jpg";prepare_image(data,p);paths.append(str(p));kept.append(s)
-                except Exception:
-                    continue
-            if len(paths)<1: raise RuntimeError("no_decodable_views")
+                    p=root/f"{i:03d}.jpg"
+                    loaded=await load_source_image(s,p)
+                    paths.append(str(p));kept.append(s)
+                    fallback_sources+=1 if loaded.get("fallback_used") else 0
+                    print("RealCity source ready",{"provider":s.get("provider"),"id":s.get("id"),"host":loaded.get("host"),"fallback":loaded.get("fallback_used")},flush=True)
+                except Exception as exc:
+                    msg=str(exc)[:240];source_errors.append(msg)
+                    print("RealCity source rejected",msg,flush=True)
+            if len(paths)<1:
+                raise RuntimeError("no_decodable_views: "+"; ".join(source_errors[:4]))
+
             loop=asyncio.get_running_loop()
             if len(paths)<3:
                 if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("not_enough_views_for_multiview")
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                stats["primary_error"]="partial_view_metric_fallback"
+                stats["primary_error"]="partial_view_metric_fallback";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
                 try:
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
@@ -620,7 +668,7 @@ async def run_job(job:Job):
                     if not ALLOW_DEPTH_FALLBACK:raise
                     print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    stats["primary_error"]=str(primary)[:180]
+                    stats["primary_error"]=str(primary)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)

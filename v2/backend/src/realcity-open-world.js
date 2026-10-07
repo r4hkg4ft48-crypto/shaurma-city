@@ -96,13 +96,23 @@ async function fetchImage(url,timeout=5500){
   }finally{clearTimeout(timer)}
 }
 
+async function fetchCandidateImage(candidate,timeout=6500){
+  let last=null;
+  const urls=[candidate?.image_url,candidate?.fallback_image_url].filter((u,i,a)=>u&&a.indexOf(u)===i);
+  for(const url of urls){
+    try{return await fetchImage(url,timeout)}
+    catch(e){last=e}
+  }
+  throw last||new Error('open_world_image_missing');
+}
+
 function candidateBase(source,id,coords,imageUrl,pageUrl,extra={}){
   if(!Array.isArray(coords)||coords.length<2||!finite(coords[0])||!finite(coords[1]))return null;
-  const image=safeUrl(imageUrl),page=safeUrl(pageUrl);
+  const image=safeUrl(imageUrl),page=safeUrl(pageUrl),fallbackImage=safeUrl(extra.fallback_image_url);
   if(!image)return null;
   return {
     source,id:clean(id,120),coordinates:[Number(coords[0]),Number(coords[1])],
-    image_url:image,page_url:page||null,heading:finite(extra.heading)?((Number(extra.heading)%360)+360)%360:null,
+    image_url:image,fallback_image_url:fallbackImage&&fallbackImage!==image?fallbackImage:null,page_url:page||null,heading:finite(extra.heading)?((Number(extra.heading)%360)+360)%360:null,
     captured_at:extra.captured_at||null,license:clean(extra.license,100)||null,license_url:safeUrl(extra.license_url)||licenseUrlFor(extra.license),
     attribution:clean(extra.attribution,300)||source,sequence_id:clean(extra.sequence_id,120)||null,
     panoramic:extra.panoramic===true,fov:finite(extra.fov)?clamp(Number(extra.fov),25,360):(extra.panoramic===true?360:78)
@@ -230,6 +240,7 @@ async function collectWikimedia(marker){
     const author=clean(meta.Artist?.value||meta.Credit?.value||'',140),lic=clean(meta.LicenseShortName?.value||meta.License?.value||'',100);
     if(lic&&!/CC|public domain|PD/i.test(lic))continue;
     const c=candidateBase('wikimedia',page.pageid,[c0.lon,c0.lat],info.thumburl||info.url,info.descriptionurl,{
+      fallback_image_url:info.url||null,
       captured_at:meta.DateTimeOriginal?.value||meta.DateTime?.value||null,license:lic||'Wikimedia Commons',license_url:meta.LicenseUrl?.value||licenseUrlFor(lic),
       attribution:author?'Wikimedia Commons · '+author:'Wikimedia Commons contributors'
     });if(c)out.push(c);
@@ -458,7 +469,7 @@ async function reconstruct(marker,scene){
   const observations=[],references=[];let textureBudget=MAX_TEXTURES;
   const jobs=candidates.map(c=>imageSlot(async()=>{
     try{
-      const buffer=await fetchImage(c.image_url),analysis=await analyzeImage(buffer);
+      const buffer=await fetchCandidateImage(c),analysis=await analyzeImage(buffer);
       const min=c.source==='wikimedia'?.38:.16;if(analysis.facade_likelihood<min)return;
       const assignment=nearestAssignment(c,analysis,scene);if(!assignment||assignment.quality<.08)return;
       const ref=referenceOf(c,analysis,assignment);references.push(ref);
@@ -480,5 +491,5 @@ async function reconstruct(marker,scene){
 
 module.exports={
   ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
-  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation}
+  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation,candidateBase,fetchCandidateImage}
 };

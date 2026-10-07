@@ -145,8 +145,19 @@ test('transient worker outages bypass retry cooldown policy',()=>{
 test('worker contract permits one-view metric fallback but keeps three-view MAX path',()=>{
   const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/requested=max\(1,min\(/);
-  assert.match(src,/if len\(paths\)<1: raise RuntimeError\("no_decodable_views"\)/);
+  assert.match(src,/if len\(paths\)<1:/);
+  assert.match(src,/no_decodable_views/);
   assert.match(src,/if len\(paths\)<3:/);
   assert.match(src,/len\(job\.sources\)<1/);
   assert.match(src,/partial_view_metric_fallback/);
+});
+
+
+test('worker retries preview and original source URLs with diagnostics',()=>{
+  const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/source\.get\("fallback_url"\)/);
+  assert.match(src,/async def load_source_image/);
+  assert.match(src,/RealCity source rejected/);
+  assert.match(src,/no_decodable_views:/);
+  assert.match(src,/ShaurmegRealCity\/1\.0/);
 });

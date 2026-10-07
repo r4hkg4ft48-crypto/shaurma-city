@@ -567,6 +567,7 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
   assert.match(src,/photoreal\.queue\(x,x\.realcity_profile\|\|\{\}\)/);
   assert.match(src,/RealCity photoreal bootstrap/);
   assert.match(src,/waiting for a human to open a marker/);
+  assert.match(src,/id=3139 OR lower\(replace\(name,'ё','е'\)\) LIKE '%лепешк%'/);
 });
 
 

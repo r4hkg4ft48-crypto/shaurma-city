@@ -214,7 +214,10 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   const existing=await db.query("SELECT job_id,status FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status IN ('queued','processing') ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
   if(existing.rows[0])return {queued:false,reason:'already_queued',job_id:existing.rows[0].job_id};
   const recentFailure=await db.query("SELECT job_id,last_error,updated_at FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status='failed' AND updated_at>NOW()-INTERVAL '10 minutes' ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
-  if(recentFailure.rows[0])return {queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error};
+  if(recentFailure.rows[0]){
+    const transient=/^(worker_http_(502|503|504)|worker_timeout|fetch failed|ECONNREFUSED|UND_ERR_CONNECT_TIMEOUT)/i.test(String(recentFailure.rows[0].last_error||''));
+    if(!transient)return {queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error};
+  }
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);
   await db.query("INSERT INTO realcity_reconstruction_jobs(job_id,marker_id,input_signature,status,source_count,attempts) VALUES($1,$2,$3,'queued',$4,1)",[jobId,marker.id,inputSignature,sources.length]);
   await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'queued',input_signature:inputSignature,source_count:sources.length,submitted_at:new Date().toISOString()})]);

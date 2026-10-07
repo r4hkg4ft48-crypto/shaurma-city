@@ -75,7 +75,7 @@ async function inspect(buffer){
  const latitude=Number(gps?.latitude),longitude=Number(gps?.longitude),heading=Number(exif.GPSImgDirection),focal=Number(exif.FocalLength),focal35=Number(exif.FocalLengthIn35mmFormat);
  const captured=exif.DateTimeOriginal||exif.CreateDate||null;
  return {sha256:hash(buffer),mime:{jpeg:'image/jpeg',png:'image/png',webp:'image/webp',heif:'image/heic',avif:'image/avif',tiff:'image/tiff'}[meta.format],preview:'data:image/webp;base64,'+preview.toString('base64'),metadata:{
-  width,height,bytes:buffer.length,format:meta.format,orientation:meta.orientation||1,has_exif:!!meta.exif,
+  width,height,bytes:buffer.length,format:meta.format,orientation:meta.orientation||1,has_exif:!!meta.exif,exif_pose_v:1,
   sharpness:Math.round(sharpness),contrast:Math.round(contrast),clipped_fraction:Number((clipped/data.length).toFixed(3)),warnings,method:METHOD,
   camera_make:String(exif.Make||'').slice(0,80),camera_model:String(exif.Model||'').slice(0,100),lens_model:String(exif.LensModel||'').slice(0,120),
   focal_length_mm:Number.isFinite(focal)?Number(focal.toFixed(3)):null,focal_length_35mm:Number.isFinite(focal35)?Number(focal35.toFixed(2)):null,

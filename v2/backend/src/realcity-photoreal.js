@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v21-open-only-measured-3d-v1';
+const PIPELINE_REVISION='v22-visible-world-depth-sanity-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -29,49 +29,6 @@ const safeEqual=(a,b)=>{
 };
 function transientWorkerFailure(error){
   return /^(worker_http_(502|503|504)|worker_timeout|fetch failed|ECONNREFUSED|UND_ERR_CONNECT_TIMEOUT|AbortError|This operation was aborted|The operation was aborted)/i.test(String(error||''));
-}
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function fetchTimed(url,options={},timeoutMs=30000){
-  const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),timeoutMs);
-  try{return await fetch(url,{...options,signal:ac.signal})}
-  finally{clearTimeout(timer)}
-}
-function transientWorkerStatus(status){return [502,503,504].includes(Number(status))}
-async function warmWorker(base){
-  let last='worker_warmup_failed';
-  const waits=[20000,35000,50000];
-  for(let i=0;i<waits.length;i++){
-    try{
-      const r=await fetchTimed(base+'/health',{headers:{'Cache-Control':'no-cache'}},waits[i]);
-      if(r.ok)return {ok:true,attempts:i+1};
-      last='worker_health_http_'+r.status;
-      if(!transientWorkerStatus(r.status))break;
-    }catch(e){last=clean(e?.name==='AbortError'?'worker_health_timeout':e?.message||'worker_health_failed',180)}
-    if(i<waits.length-1)await sleep(1200*(i+1));
-  }
-  throw new Error(last);
-}
-async function submitWorkerJob(payload){
-  const base=config.REALCITY_RECONSTRUCTION_WORKER_URL.replace(/\/+$/,'');
-  await warmWorker(base);
-  let last='worker_submit_failed';
-  for(let attempt=0;attempt<2;attempt++){
-    try{
-      const r=await fetchTimed(base+'/v1/jobs',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.REALCITY_RECONSTRUCTION_WORKER_TOKEN},
-        body:JSON.stringify(payload)
-      },attempt===0?20000:35000);
-      if(r.ok)return await r.json();
-      last='worker_http_'+r.status;
-      if(!transientWorkerStatus(r.status))throw new Error(last);
-    }catch(e){
-      last=e?.name==='AbortError'?'worker_timeout':clean(e?.message||'worker_submit_failed',180);
-      if(!transientWorkerFailure(last)||attempt===1)throw new Error(last);
-    }
-    await sleep(1500);
-  }
-  throw new Error(last);
 }
 function sceneSignature(marker,profile,assets=[]){
   const scene=profile?.scene||{},hero=(scene.buildings||[]).find(b=>String(b.id)===String(scene.hero_building_id)||b.role==='hero');
@@ -345,8 +302,10 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   await db.query("INSERT INTO realcity_reconstruction_jobs(job_id,marker_id,input_signature,status,source_count,attempts) VALUES($1,$2,$3,'queued',$4,1)",[jobId,marker.id,inputSignature,sources.length]);
   await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'queued',input_signature:inputSignature,source_count:sources.length,source_mix:sourceMix(sources),submitted_at:new Date().toISOString()})]);
   try{
-    const j=await submitWorkerJob(payload);
-    await db.query("UPDATE realcity_reconstruction_jobs SET status='processing',worker_job_id=$2,updated_at=NOW() WHERE job_id=$1",[jobId,clean(j.job_id||jobId,140)]);
+    const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),12000);
+    const r=await fetch(config.REALCITY_RECONSTRUCTION_WORKER_URL.replace(/\/+$/,'')+'/v1/jobs',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.REALCITY_RECONSTRUCTION_WORKER_TOKEN},body:JSON.stringify(payload)});clearTimeout(timer);
+    if(!r.ok)throw new Error('worker_http_'+r.status);
+    const j=await r.json();await db.query("UPDATE realcity_reconstruction_jobs SET status='processing',worker_job_id=$2,updated_at=NOW() WHERE job_id=$1",[jobId,clean(j.job_id||jobId,140)]);
     return {queued:true,job_id:jobId,sources:sources.length};
   }catch(e){
     await db.query("UPDATE realcity_reconstruction_jobs SET status='failed',last_error=$2,updated_at=NOW() WHERE job_id=$1",[jobId,clean(e.message,500)]).catch(()=>{});
@@ -392,4 +351,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics}};

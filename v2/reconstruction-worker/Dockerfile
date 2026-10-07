@@ -15,12 +15,13 @@ RUN python - <<'PY'
 import torch
 import pycolmap
 from vggt.models.vggt import VGGT
+from mapanything.models import MapAnything
 from gsplat.rendering import rasterization
 from transformers import AutoImageProcessor,AutoModelForDepthEstimation
 model='depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf'
 AutoImageProcessor.from_pretrained(model)
 AutoModelForDepthEstimation.from_pretrained(model)
-print('gpu worker imports ok',torch.__version__,pycolmap.__version__)
+print('gpu worker imports ok',torch.__version__,pycolmap.__version__,MapAnything.__name__)
 print('cached',model)
 PY
 

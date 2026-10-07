@@ -261,7 +261,7 @@ function validateArtifact(body,row){
     input_signature:a.input_signature,target:{marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id},
     origin:a.origin.map(Number),anchor:a.anchor,chunks,
     camera:a.camera||null,alignment:a.alignment||{},quality:a.quality||{},environment:a.environment||{},
-    sources:(a.sources||[]).slice(0,96).map(s=>({id:clean(s.id,140),kind:clean(s.kind,30),provider:clean(s.provider,50),license:clean(s.license,120),license_url:clean(s.license_url,800),attribution:clean(s.attribution,300),page_url:clean(s.page_url,1200)})),
+    sources:(a.sources||[]).slice(0,96).map(s=>({id:clean(s.id,140),kind:clean(s.kind,30),provider:clean(s.provider,50),category:clean(s.category,40),subtype:clean(s.subtype,60),role:clean(s.role,50),captured_at:clean(s.captured_at,80),license:clean(s.license,120),license_url:clean(s.license_url,800),attribution:clean(s.attribution,300),page_url:clean(s.page_url,1200)})),
     stats:{frames:Number(a.stats?.frames)||0,points:chunks.reduce((n,c)=>n+c.point_count,0),dynamic_removed:Number(a.stats?.dynamic_removed)||0,confidence_mean:Number(a.stats?.confidence_mean)||0,
       backend:clean(a.stats?.backend,80),gpu:clean(a.stats?.gpu,120)}
   };

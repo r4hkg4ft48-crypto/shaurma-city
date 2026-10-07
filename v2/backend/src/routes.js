@@ -281,6 +281,16 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
     res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile:responseProfile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}
 });
+router.get('/realcity/reference/:slug',async(req,res)=>{
+  try{
+    const asset=photoreal.readReferenceAsset(req.params.slug);
+    if(!asset)return res.sendStatus(404);
+    res.setHeader('Cache-Control','public,max-age=31536000,immutable');
+    res.setHeader('ETag','"'+asset.etag+'"');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.type(asset.mime).send(asset.content);
+  }catch(e){fail(res,e,'realcity_reference_failed')}
+});
 router.get('/realcity/reconstruction/source/:markerId/:assetId',async(req,res)=>{
   try{
     if(!photoreal.verifySource(req.params.markerId,req.params.assetId,req.query.expires,req.query.sig))return res.sendStatus(401);

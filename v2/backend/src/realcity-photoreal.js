@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v25-owner-surface-routing-v1';
+const PIPELINE_REVISION='v26-lepeshka-master-reference-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -21,6 +21,34 @@ const MAX_ARTIFACT_B64=12*1024*1024;
 let schemaReady=null;
 
 const clean=(v,n=300)=>String(v??'').trim().slice(0,n);
+const LEPESHKA_MASTER_B64=[1,2,3,4,5,6,7,8]
+  .map(i=>String(process.env['REALCITY_LEPESHKA_MASTER_WEBP_B64_'+i]||'').trim())
+  .join('');
+const LEPESHKA_MASTER_SHA=LEPESHKA_MASTER_B64?crypto.createHash('sha256').update(LEPESHKA_MASTER_B64).digest('hex'):'';
+function isLepeshka(marker){
+  const name=String(marker?.name||'').toLowerCase().replace(/ё/g,'е');
+  return String(marker?.id||'')==='3139'||name.includes('в лепешке')||name==='лепешка'||name.includes('лепешк');
+}
+function readReferenceAsset(slug){
+  if(slug!=='lepeshka-master.webp'||!LEPESHKA_MASTER_B64)return null;
+  try{
+    const content=Buffer.from(LEPESHKA_MASTER_B64,'base64');
+    if(content.length<4096)return null;
+    return {content,mime:'image/webp',etag:LEPESHKA_MASTER_SHA};
+  }catch{return null}
+}
+function lepeshkaMasterSource(marker){
+  if(!isLepeshka(marker)||!LEPESHKA_MASTER_B64)return null;
+  return {
+    id:'reference:lepeshka-master-'+LEPESHKA_MASTER_SHA.slice(0,12),
+    kind:'owner',provider:'venue_reference',
+    url:config.PUBLIC_API_URL+'/api/v2/realcity/reference/lepeshka-master.webp?v='+LEPESHKA_MASTER_SHA.slice(0,12),
+    category:'main_building',subtype:'generated_master',role:'hero',angle:'front',
+    priority:10,primary:true,heading:null,pitch:0,fov:86,panoramic:false,
+    coordinates:null,distance_m:24,license:'venue reference',attribution:'RealCity master reference',
+    photo_first:true,reference_master:true
+  };
+}
 const finite=v=>Number.isFinite(Number(v));
 const hash=v=>crypto.createHash('sha256').update(typeof v==='string'?v:JSON.stringify(v)).digest('hex');
 const hmac=v=>crypto.createHmac('sha256',config.REALCITY_RECONSTRUCTION_SECRET).update(v).digest('hex');
@@ -76,7 +104,7 @@ async function submitWorkerJob(payload){
 function sceneSignature(marker,profile,assets=[]){
   const scene=profile?.scene||{},hero=(scene.buildings||[]).find(b=>String(b.id)===String(scene.hero_building_id)||b.role==='hero');
   return hash({
-    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,...(config.REALCITY_RECONSTRUCTION_TIER?{reconstruction_tier:config.REALCITY_RECONSTRUCTION_TIER}:{}),
+    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,reference_master:isLepeshka(marker)?LEPESHKA_MASTER_SHA:null,...(config.REALCITY_RECONSTRUCTION_TIER?{reconstruction_tier:config.REALCITY_RECONSTRUCTION_TIER}:{}),
     target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
@@ -205,7 +233,8 @@ function photorealCandidates(raw,marker,max=72,maxDistance=360){
 }
 async function buildSources(marker,profile,assets){
   const ownerAssets=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,96).sort((a,b)=>ownerPriority(b)-ownerPriority(a));
-  const own=ownerAssets.map(a=>{
+  const seeded=lepeshkaMasterSource(marker);
+  const own=[...(seeded?[seeded]:[]),...ownerAssets.map(a=>{
     const camera=a.camera||{},coordinates=ownerCameraCoordinates(marker,a);
     const heading=finite(camera.heading_deg)?Number(camera.heading_deg):(finite(a.direction_deg)?Number(a.direction_deg):(finite(a.metadata?.heading_deg)?Number(a.metadata.heading_deg):null));
     return {
@@ -218,7 +247,7 @@ async function buildSources(marker,profile,assets){
       focal_length_mm:finite(a.metadata?.focal_length_mm)?Number(a.metadata.focal_length_mm):null,
       license:'owner supplied',attribution:'Venue supplied original',photo_first:true
     };
-  }).filter(x=>x.url);
+  }).filter(x=>x.url)];
   let publicCandidates=[];
   const persistedRefs=profile?.real_world?.references||[];
   try{
@@ -374,11 +403,11 @@ async function acceptResult(body){
   const marker={...row,id:row.marker_id,realcity_profile:row.realcity_profile||{}},artifact=validateArtifact(body,marker);
   const currentSig=sceneSignature(marker,marker.realcity_profile,marker.realcity_astra_assets||[]);
   if(currentSig!==body.input_signature)throw Object.assign(new Error('photoreal_inputs_changed'),{status:409});
-  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,volume:volumeDiagnostics(artifact.chunks),source_mix:sourceMix(artifact.sources)};
+  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,volume:volumeDiagnostics(artifact.chunks),source_mix:sourceMix(artifact.sources),reference_master:artifact.quality?.reference_master===true,reference_master_frames:Number(artifact.quality?.reference_master_frames)||0};
   console.log('RealCity reconstruction accepted',JSON.stringify({
     marker_id:Number(row.marker_id),job_id:body.job_id,backend:summary.backend,
     frames:summary.frames,points:summary.points,volume:summary.volume,
-    source_mix:summary.source_mix,alignment:summary.alignment
+    source_mix:summary.source_mix,reference_master:summary.reference_master,reference_master_frames:summary.reference_master_frames,alignment:summary.alignment
   }));
   await db.tx(async client=>{
     await client.query("UPDATE realcity_reconstruction_jobs SET status='ready',result_summary=$2::jsonb,updated_at=NOW() WHERE job_id=$1",[body.job_id,JSON.stringify(summary)]);
@@ -401,4 +430,4 @@ function publicSummary(p){
     alignment:p.alignment||{},quality:p.quality||{},display_safe:p.quality?.display_safe===true,map_registered_surface:p.quality?.map_registered_surface===true,
     volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,readReferenceAsset,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob,isLepeshka,lepeshkaMasterSource}};

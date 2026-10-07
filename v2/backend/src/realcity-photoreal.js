@@ -158,7 +158,7 @@ async function buildSources(marker,profile,assets){
     const camera=a.camera||{},coordinates=ownerCameraCoordinates(marker,a);
     const heading=finite(camera.heading_deg)?Number(camera.heading_deg):(finite(a.direction_deg)?Number(a.direction_deg):(finite(a.metadata?.heading_deg)?Number(a.metadata.heading_deg):null));
     return {
-      id:'owner:'+a.id,kind:'owner',provider:'owner',url:sourceUrl(marker,a),asset_id:a.id,
+      id:'owner:'+a.id,kind:'owner',provider:'owner',url:(a.kind==='external_file'&&/^https:\/\//i.test(String(a.src||''))?String(a.src):sourceUrl(marker,a)),asset_id:a.id,
       category:a.category||'main_building',subtype:a.subtype||'detail',role:a.role||'environment',priority:Number(a.priority)||3,primary:!!a.primary,
       coordinates,heading,pitch:finite(camera.pitch_deg)?Number(camera.pitch_deg):null,fov:fovFromAsset(a),
       distance_m:finite(camera.distance_m)?Number(camera.distance_m):null,altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,

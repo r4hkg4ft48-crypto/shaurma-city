@@ -9,11 +9,13 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v2"
+APP_VERSION="realcity-photoreal-worker-v4"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
 VGGT_MODEL=os.getenv("REALCITY_VGGT_MODEL","facebook/VGGT-1B-Commercial")
+MAPANYTHING_MODEL=os.getenv("REALCITY_MAPANYTHING_MODEL","facebook/map-anything-apache")
+MAX_BACKEND=os.getenv("REALCITY_MAX_BACKEND","mapanything").strip().lower()
 HF_TOKEN=os.getenv("HF_TOKEN","")
 MAX_DOWNLOAD=20*1024*1024
 WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
@@ -22,9 +24,11 @@ USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","
 GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
 ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() not in ("0","false","off","no")
 LIGHTWEIGHT_CPU=os.getenv("REALCITY_LIGHTWEIGHT_CPU","false").lower() in ("1","true","on","yes")
+HIGH_MEMORY_CPU=os.getenv("REALCITY_HIGH_MEMORY_CPU","false").lower() in ("1","true","on","yes")
 DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
+_MAPANYTHING_CACHE=None
 _DEPTH_CACHE=None
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
@@ -225,6 +229,98 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
         yaw_deg=0.0
     return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"yaw_deg":yaw_deg,"geo_cameras":len(geo_src)}
 
+def source_target_from_anchor(source:dict,map_anchor:dict,origin:list[float]):
+    match=source.get("match") if isinstance(source.get("match"),dict) else None
+    if match:
+        bid=str(match.get("building_id") or "")
+        try:edge=int(match.get("edge_index"))
+        except Exception:edge=-1
+        for building in map_anchor.get("buildings",[]):
+            if str(building.get("building_id"))!=bid:continue
+            ring=building.get("ring") or []
+            if 0<=edge<len(ring)-1:
+                a,b=ring[edge],ring[edge+1]
+                return [(float(a[0])+float(b[0]))/2,(float(a[1])+float(b[1]))/2]
+    return list(origin[:2])
+
+def desired_camera_basis(source:dict,map_anchor:dict,origin:list[float]):
+    coords=source.get("coordinates")
+    heading=source.get("heading")
+    if not isinstance(heading,(int,float)) or not math.isfinite(float(heading)):
+        if isinstance(coords,list) and len(coords)>=2:
+            heading=bearing_deg(coords,source_target_from_anchor(source,map_anchor,origin))
+        else:
+            heading=0.0
+    pitch=source.get("pitch")
+    pitch=float(pitch) if isinstance(pitch,(int,float)) and math.isfinite(float(pitch)) else 0.0
+    pitch=max(-30.0,min(30.0,pitch))
+    yaw=math.radians(float(heading));pit=math.radians(pitch)
+    # OpenCV camera axes are +X right, +Y down, +Z forward. Build the
+    # corresponding East/North/Up basis for this observed camera heading.
+    forward=np.array([math.sin(yaw)*math.cos(pit),math.cos(yaw)*math.cos(pit),math.sin(pit)],dtype=np.float64)
+    right=np.array([math.cos(yaw),-math.sin(yaw),0.0],dtype=np.float64)
+    right/=max(float(np.linalg.norm(right)),1e-9)
+    forward/=max(float(np.linalg.norm(forward)),1e-9)
+    down=np.cross(forward,right)
+    down/=max(float(np.linalg.norm(down)),1e-9)
+    return np.column_stack([right,down,forward])
+
+def anchor_metric_points(points:np.ndarray,centers:np.ndarray,c2w:np.ndarray,sources:list[dict],origin:list[float],map_anchor:dict):
+    geo=[]
+    for i,s in enumerate(sources[:len(centers)]):
+        coords=s.get("coordinates")
+        if isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2]):
+            x,y=local_xy(float(coords[0]),float(coords[1]),origin)
+            geo.append((i,np.array([x,y],dtype=np.float64)))
+
+    if not geo:
+        return anchor_points(points,centers,sources,origin,map_anchor)
+
+    # Align the complete MapAnything world basis, not only XY. MapAnything
+    # camera_poses use OpenCV cam2world: columns are camera right/down/forward.
+    # Without this basis transform genuine depth can appear rotated onto the
+    # ground plane when rendered in the ENU map frame.
+    ref_i=next((i for i,_ in geo if isinstance(sources[i].get("heading"),(int,float))),geo[0][0])
+    model_basis=np.asarray(c2w[ref_i][:3,:3],dtype=np.float64)
+    desired_basis=desired_camera_basis(sources[ref_i],map_anchor,origin)
+    Rbase=desired_basis@model_basis.T
+    if np.linalg.det(Rbase)<0:
+        desired_basis[:,1]*=-1.0
+        Rbase=desired_basis@model_basis.T
+    points=(Rbase@points.astype(np.float64).T).T
+    centers=(Rbase@centers.astype(np.float64).T).T
+
+    Rtotal=Rbase.copy()
+    if len(geo)>=2:
+        src=np.stack([centers[i,:2] for i,_ in geo]).astype(np.float64)
+        dst=np.stack([xy for _,xy in geo]).astype(np.float64)
+        sm,dm=src.mean(0),dst.mean(0);X=src-sm;Y=dst-dm
+        U,_,Vt=np.linalg.svd(X.T@Y);R2=Vt.T@U.T
+        if np.linalg.det(R2)<0:
+            Vt[-1,:]*=-1;R2=Vt.T@U.T
+        t=dm-R2@sm
+        points[:,:2]=(R2@points[:,:2].T).T+t
+        centers[:,:2]=(R2@centers[:,:2].T).T+t
+        Rz3=np.eye(3,dtype=np.float64);Rz3[:2,:2]=R2
+        Rtotal=Rz3@Rbase
+        zref=float(np.median([centers[i,2] for i,_ in geo]))
+        zshift=1.65-zref;points[:,2]+=zshift;centers[:,2]+=zshift
+        pred=(R2@src.T).T+t;rms=float(np.sqrt(np.mean(np.sum((pred-dst)**2,axis=1))))
+        yaw=float(math.degrees(math.atan2(R2[1,0],R2[0,0])))
+        return points.astype(np.float32),centers.astype(np.float32),{
+            "method":"gps-rigid-metric-3d","rms_m":rms,"scale":1.0,"yaw_deg":yaw,
+            "geo_cameras":len(geo),"rotation_matrix":Rtotal.tolist()
+        }
+
+    i,target_xy=geo[0]
+    delta_xy=target_xy-centers[i,:2]
+    points[:,:2]+=delta_xy;centers[:,:2]+=delta_xy
+    zshift=1.65-float(centers[i,2]);points[:,2]+=zshift;centers[:,2]+=zshift
+    return points.astype(np.float32),centers.astype(np.float32),{
+        "method":"gps-heading-metric-3d","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,
+        "geo_cameras":1,"rotation_matrix":Rtotal.tolist()
+    }
+
 def choose_samples(point_maps:np.ndarray,conf:np.ndarray,images:np.ndarray,target:int):
     # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence pixels while
     # retaining frame IDs so unstable single-view geometry can be rejected.
@@ -289,6 +385,28 @@ def voxel_reduce(points,colors,conf,max_points:int):
         if len(packed)>=max_points: break
     ids=np.fromiter(packed.values(),dtype=np.int64)
     return points[ids],colors[ids],conf[ids]
+
+def rotate_quats_matrix(quats:np.ndarray,R:np.ndarray)->np.ndarray:
+    if not len(quats):return quats
+    M=np.asarray(R,dtype=np.float64).reshape(3,3)
+    tr=float(np.trace(M))
+    if tr>0:
+        s=math.sqrt(tr+1.0)*2.0;qw=.25*s;qx=(M[2,1]-M[1,2])/s;qy=(M[0,2]-M[2,0])/s;qz=(M[1,0]-M[0,1])/s
+    elif M[0,0]>M[1,1] and M[0,0]>M[2,2]:
+        s=math.sqrt(max(1e-12,1.0+M[0,0]-M[1,1]-M[2,2]))*2.0;qw=(M[2,1]-M[1,2])/s;qx=.25*s;qy=(M[0,1]+M[1,0])/s;qz=(M[0,2]+M[2,0])/s
+    elif M[1,1]>M[2,2]:
+        s=math.sqrt(max(1e-12,1.0+M[1,1]-M[0,0]-M[2,2]))*2.0;qw=(M[0,2]-M[2,0])/s;qx=(M[0,1]+M[1,0])/s;qy=.25*s;qz=(M[1,2]+M[2,1])/s
+    else:
+        s=math.sqrt(max(1e-12,1.0+M[2,2]-M[0,0]-M[1,1]))*2.0;qw=(M[1,0]-M[0,1])/s;qx=(M[0,2]+M[2,0])/s;qy=(M[1,2]+M[2,1])/s;qz=.25*s
+    q=np.array([qw,qx,qy,qz],dtype=np.float64);q/=max(float(np.linalg.norm(q)),1e-9)
+    w,x,y,z=quats[:,0],quats[:,1],quats[:,2],quats[:,3]
+    out=np.empty_like(quats,dtype=np.float64)
+    out[:,0]=q[0]*w-q[1]*x-q[2]*y-q[3]*z
+    out[:,1]=q[0]*x+q[1]*w+q[2]*z-q[3]*y
+    out[:,2]=q[0]*y-q[1]*z+q[2]*w+q[3]*x
+    out[:,3]=q[0]*z+q[1]*y-q[2]*x+q[3]*w
+    out/=np.maximum(np.linalg.norm(out,axis=1,keepdims=True),1e-9)
+    return out.astype(np.float32)
 
 def rotate_quats_z(quats:np.ndarray,yaw_deg:float)->np.ndarray:
     if not len(quats) or abs(yaw_deg)<1e-7:return quats
@@ -441,10 +559,16 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
         return points,colors,confidence,fallback_scales,fallback_quats,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
 
 def frame_budget(requested:int)->int:
-    if LIGHTWEIGHT_CPU:return min(requested,12)
+    if LIGHTWEIGHT_CPU:
+        return min(requested,12)
+    if HIGH_MEMORY_CPU:
+        return min(requested,32)
     try:
         import torch
-        if not torch.cuda.is_available():return min(requested,6)
+        if not torch.cuda.is_available():
+            if os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()=="true":
+                return min(requested,max(2,min(32,int(os.getenv("REALCITY_CPU_MAX_FRAMES","20")))))
+            return min(requested,6)
         total=torch.cuda.get_device_properties(0).total_memory/(1024**3)
         if total>=75:return min(requested,48)
         if total>=46:return min(requested,28)
@@ -716,6 +840,120 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     }
     return pts,cols,conf,scales,quats,alignment,stats
 
+def get_mapanything(device):
+    global _MAPANYTHING_CACHE
+    if _MAPANYTHING_CACHE is not None:return _MAPANYTHING_CACHE
+    from mapanything.models import MapAnything
+    model=MapAnything.from_pretrained(MAPANYTHING_MODEL).to(device).eval()
+    _MAPANYTHING_CACHE=model
+    return model
+
+def invert_c2w(c2w:np.ndarray)->np.ndarray:
+    out=[]
+    for pose in c2w:
+        inv=np.linalg.inv(pose.astype(np.float64)).astype(np.float32)
+        out.append(inv[:3,:4])
+    return np.stack(out)
+
+def invert_w2c(extrinsic:np.ndarray)->np.ndarray:
+    out=[]
+    for pose in np.asarray(extrinsic):
+        E=np.asarray(pose,dtype=np.float64)
+        if E.shape!=(3,4):raise RuntimeError("extrinsic_shape")
+        R=E[:,:3];t=E[:,3]
+        H=np.eye(4,dtype=np.float64);H[:3,:3]=R.T;H[:3,3]=-R.T@t
+        out.append(H.astype(np.float32))
+    return np.stack(out)
+
+
+def unproject_depth_np(depth:np.ndarray,extrinsic:np.ndarray,intrinsic:np.ndarray)->np.ndarray:
+    maps=[]
+    for d,E,K in zip(depth,extrinsic,intrinsic):
+        if d.ndim==3:d=d[...,0]
+        h,w=d.shape
+        yy,xx=np.meshgrid(np.arange(h,dtype=np.float32),np.arange(w,dtype=np.float32),indexing="ij")
+        z=d.astype(np.float32)
+        fx,fy=max(float(K[0,0]),1e-6),max(float(K[1,1]),1e-6)
+        x=(xx-float(K[0,2]))/fx*z
+        y=(yy-float(K[1,2]))/fy*z
+        cam=np.stack([x,y,z],axis=-1).reshape(-1,3)
+        R=E[:,:3].astype(np.float32);t=E[:,3].astype(np.float32)
+        world=(R.T@(cam-t[None,:]).T).T.reshape(h,w,3)
+        maps.append(world)
+    return np.stack(maps)
+
+def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
+    import torch
+    from mapanything.utils.image import load_images
+    if len(image_paths)<1:raise RuntimeError("mapanything_requires_one_view")
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    if device=="cpu" and not HIGH_MEMORY_CPU and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
+        raise RuntimeError("high_memory_compute_required_for_mapanything")
+    model=get_mapanything(device)
+    views=load_images(image_paths,resolution_set=518,norm_type="dinov2",patch_size=14)
+    with torch.inference_mode():
+        preds=model.infer(
+            views,
+            memory_efficient_inference=True,
+            minibatch_size=1,
+            use_amp=device=="cuda",
+            amp_dtype="bf16",
+            apply_mask=True,
+            mask_edges=True,
+            apply_confidence_mask=False,
+            confidence_percentile=8,
+            use_multiview_confidence=len(views)>1,
+        )
+    if not preds:raise RuntimeError("mapanything_empty")
+    points=[];confs=[];images=[];poses=[];intr=[];depths=[]
+    for pred in preds:
+        def arr(name):
+            x=pred[name]
+            if hasattr(x,"detach"):x=x.detach().float().cpu().numpy()
+            return np.asarray(x)
+        p=arr("pts3d");cf=arr("conf");im=arr("img_no_norm");pose=arr("camera_poses");K=arr("intrinsics");dep=arr("depth_z")
+        if p.ndim==4:p=p[0]
+        if cf.ndim==3:cf=cf[0]
+        if im.ndim==4:im=im[0]
+        if pose.ndim==3:pose=pose[0]
+        if K.ndim==3:K=K[0]
+        if dep.ndim==4:dep=dep[0]
+        points.append(p.astype(np.float32));confs.append(cf.astype(np.float32));images.append(im.astype(np.float32))
+        poses.append(pose.astype(np.float32));intr.append(K.astype(np.float32));depths.append(dep.astype(np.float32))
+    p=np.stack(points);cf=np.stack(confs);ims_hwc=np.stack(images);c2w=np.stack(poses);intr_np=np.stack(intr);depth_np=np.stack(depths)
+    if ims_hwc.max()>1.5:ims_hwc=ims_hwc/255.0
+    ims_hwc=np.clip(ims_hwc,0,1)
+    ex=invert_c2w(c2w)
+    torch_images=torch.from_numpy(ims_hwc).permute(0,3,1,2).contiguous().float().to(device)
+    dtype=torch.bfloat16 if device=="cuda" and torch.cuda.get_device_capability()[0]>=8 else (torch.float16 if device=="cuda" else torch.float32)
+    ex2,intr2,ba=refine_cameras_with_ba(torch_images,cf,p,ex,intr_np,dtype)
+    if ba.get("bundle_adjustment"):
+        p=unproject_depth_np(depth_np,ex2,intr2)
+        ex,intr_np=ex2,intr2
+    anchor_c2w=invert_w2c(ex)
+    centers=camera_centers(ex)
+    target=int(job.policy.get("max_points",150000))
+    ims_chw=ims_hwc.transpose(0,3,1,2)
+    pts,cols,scores,frames=choose_samples(p,cf,ims_chw,target*4)
+    pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
+    pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,180000))
+    pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,torch_images,ex,intr_np,cf)
+    pts,centers,alignment=anchor_metric_points(pts,centers,anchor_c2w,sources,job.map_anchor["origin"],job.map_anchor)
+    world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
+    if alignment.get("rotation_matrix") is not None:
+        quats=rotate_quats_matrix(quats,np.asarray(alignment["rotation_matrix"],dtype=np.float64))
+    else:
+        quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
+    radius=float(job.map_anchor.get("radius_m",190))*1.18
+    m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<180)
+    pts,cols,scores,scales_xyz,quats=pts[m],cols[m],scores[m],scales_xyz[m],quats[m]
+    hardware=torch.cuda.get_device_name(0) if device=="cuda" else "CPU-high-memory"
+    backend="mapanything-apache-1b"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
+    return pts,cols,scores,scales_xyz,quats,alignment,{
+        "backend":backend,"gpu":hardware,"frames":len(image_paths),"dynamic_removed":dynamic_removed,
+        "metric":True,"universal_3d":True,**ba,**gs
+    }
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.utils.load_fn import load_and_preprocess_images
@@ -768,13 +1006,19 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
+    radial=np.linalg.norm(np.asarray(points,dtype=np.float32)[:,:2],axis=1) if len(points) else np.array([0.0],dtype=np.float32)
+    observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
+    declared_radius=float(job.map_anchor.get("radius_m",190))
+    coverage_radius=max(12.0,min(declared_radius,observed_radius+6.0))
     quality={
-      "geometry":"osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth"),
+      "geometry":"metric_multiview_mapanything" if stats.get("universal_3d") else ("osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth")),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
-      "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
+      "coverage_radius_m":coverage_radius,
+      "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
-      "photogrammetric":not bool(stats.get("fallback"))
+      "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
+      "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,
@@ -818,18 +1062,27 @@ async def run_job(job:Job):
             if LIGHTWEIGHT_CPU:
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
                 stats["primary_error"]="cpu_memory_safe_photoplane";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
-            elif len(paths)<3:
-                if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("not_enough_views_for_multiview")
-                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                stats["primary_error"]="partial_view_metric_fallback";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
-                try:
-                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
-                except Exception as primary:
-                    if not ALLOW_DEPTH_FALLBACK:raise
-                    print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
+                primary_errors=[];points=None
+                # MapAnything is metric and explicitly supports monocular as well
+                # as multi-view reconstruction, so it must be attempted before
+                # the one/two-view fallback.
+                if MAX_BACKEND in ("mapanything","auto"):
+                    try:
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,mapanything_reconstruct,paths,kept,job)
+                    except Exception as exc:
+                        primary_errors.append("mapanything:"+str(exc)[:160]);points=None
+                if points is None and len(paths)>=3 and MAX_BACKEND in ("vggt","auto","mapanything"):
+                    try:
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+                    except Exception as exc:
+                        primary_errors.append("vggt:"+str(exc)[:160]);points=None
+                if points is None:
+                    if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("; ".join(primary_errors) or "max_reconstruction_unavailable")
+                    print("MAX paths unavailable; using metric depth fallback:",primary_errors,flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    stats["primary_error"]=str(primary)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+                    stats["primary_error"]="; ".join(primary_errors)[:360] or ("partial_view_metric_fallback" if len(paths)<3 else "metric_depth_fallback")
+                    stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
@@ -851,7 +1104,7 @@ async def health():
             gpu=torch.cuda.get_device_name(0) if cuda else ""
         except Exception:
             cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else VGGT_MODEL,"commercial_checkpoint_required":not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

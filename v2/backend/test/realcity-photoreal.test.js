@@ -144,14 +144,16 @@ test('transient worker outages bypass retry cooldown policy',()=>{
   assert.equal(P._internals.transientWorkerFailure('metric_fallback_too_sparse'),false);
 });
 
-test('worker contract permits one-view metric fallback but keeps three-view MAX path',()=>{
+test('worker contract tries MapAnything from one view and keeps VGGT for three-plus views',()=>{
   const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/requested=max\(1,min\(/);
   assert.match(src,/if len\(paths\)<1:/);
   assert.match(src,/no_decodable_views/);
-  assert.match(src,/if len\(paths\)<3:/);
+  assert.match(src,/mapanything_reconstruct/);
+  assert.match(src,/len\(paths\)>=3/);
+  assert.match(src,/vggt_reconstruct/);
   assert.match(src,/len\(job\.sources\)<1/);
-  assert.match(src,/partial_view_metric_fallback/);
+  assert.match(src,/MAX paths unavailable; using metric depth fallback/);
 });
 
 
@@ -177,4 +179,140 @@ test('lightweight CPU photoplane avoids ML runtime while MAX GPU path remains av
   assert.doesNotMatch(req,/torch|transformers|safetensors/i);
   assert.match(src,/def vggt_reconstruct/);
   assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
+});
+
+
+test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements.txt'),'utf8');
+  const docker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/Dockerfile'),'utf8');
+  assert.match(src,/facebook\/map-anything-apache/);
+  assert.match(src,/def mapanything_reconstruct/);
+  assert.match(src,/memory_efficient_inference=True/);
+  assert.match(src,/minibatch_size=1/);
+  assert.match(src,/arr\("pts3d"\)/);
+  assert.match(src,/arr\("camera_poses"\)/);
+  assert.match(src,/arr\("intrinsics"\)/);
+  assert.match(src,/mapanything-apache-1b/);
+  assert.match(src,/MAX_BACKEND in \("mapanything","auto"\)/);
+  assert.match(docker,/pip install --no-deps git\+https:\/\/github\.com\/facebookresearch\/map-anything\.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9/);
+  assert.doesNotMatch(req,/rerun-sdk|tensorboard/i);
+});
+
+test('partial photoreal uses a volumetric support shell while true photogrammetry stays pure',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/realcity-photoreal-shell/);
+  assert.match(src,/isTruePhotogrammetry=authored\.model\?\.quality\?\.photogrammetric===true/);
+  assert.match(src,/if\(!isTruePhotogrammetry\)/);
+  assert.match(src,/setProgress\(v\)\{shell\.setProgress\?\.\(v\);splat\.setProgress\?\.\(v\)\}/);
+  assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
+  assert.match(src,/REAL CITY · PHOTO 3D/);
+});
+
+
+test('MapAnything single-view stays metric and is attempted before low-view fallback',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/mapanything_requires_one_view/);
+  assert.match(src,/def anchor_metric_points/);
+  assert.match(src,/gps-heading-metric/);
+  assert.match(src,/gps-rigid-metric/);
+  assert.match(src,/metric_reconstruction/);
+  const dispatch=src.indexOf('MapAnything is metric and explicitly supports monocular');
+  const lowFallback=src.indexOf('MAX paths unavailable; using metric depth fallback');
+  assert.ok(dispatch>0&&lowFallback>dispatch);
+  assert.doesNotMatch(src,/elif len\(paths\)<3:[\s\S]{0,260}?gps_depth_reconstruct/);
+});
+
+
+test('compute tier invalidates a photoreal signature only when explicitly set',()=>{
+  const before=config.REALCITY_RECONSTRUCTION_TIER;
+  try{
+    config.REALCITY_RECONSTRUCTION_TIER='';
+    const base=P.sceneSignature(marker,profile,[]);
+    config.REALCITY_RECONSTRUCTION_TIER='max';
+    const max=P.sceneSignature(marker,profile,[]);
+    assert.notEqual(base,max);
+    config.REALCITY_RECONSTRUCTION_TIER='lite';
+    assert.notEqual(max,P.sceneSignature(marker,profile,[]));
+  }finally{config.REALCITY_RECONSTRUCTION_TIER=before}
+});
+
+
+test('MapAnything applies full OpenCV-to-ENU 3D basis alignment to points and splat rotations',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/OpenCV camera axes are \+X right, \+Y down, \+Z forward/);
+  assert.match(src,/desired_basis=desired_camera_basis/);
+  assert.match(src,/Rbase=desired_basis@model_basis\.T/);
+  assert.match(src,/gps-heading-metric-3d/);
+  assert.match(src,/gps-rigid-metric-3d/);
+  assert.match(src,/rotation_matrix/);
+  assert.match(src,/def rotate_quats_matrix/);
+  assert.match(src,/quats=rotate_quats_matrix/);
+});
+
+
+test('bundle-adjusted camera basis feeds final ENU alignment',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/def invert_w2c/);
+  assert.match(src,/anchor_c2w=invert_w2c\(ex\)/);
+  assert.match(src,/anchor_metric_points\(pts,centers,anchor_c2w/);
+});
+
+
+test('RealCity world palette visibly replaces the dark city theme and restores on exit',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/function setRealCityWorldPalette\(active\)/);
+  assert.match(src,/background-color','#9da5a7'/);
+  assert.match(src,/fill-color','#7898a5'/);
+  assert.match(src,/line-color','#55585a'/);
+  assert.match(src,/setRealCityWorldPalette\(!!astraLayer\)/);
+  assert.match(src,/setRealCityWorldPalette\(false\)/);
+  assert.match(src,/zoom:19\.05,pitch:67/);
+});
+
+test('MapAnything does not request multiview confidence for a single observation',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/use_multiview_confidence=len\(views\)>1/);
+  assert.match(src,/realcity-photoreal-worker-v4/);
+});
+
+
+test('high-memory CPU MAX removes the six-frame ceiling',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/HIGH_MEMORY_CPU/);
+  assert.match(src,/if HIGH_MEMORY_CPU:\s*return min\(requested,32\)/);
+  assert.match(src,/not HIGH_MEMORY_CPU and os\.getenv\("REALCITY_ALLOW_CPU_MAPANYTHING"/);
+  assert.match(src,/"high_memory_cpu":HIGH_MEMORY_CPU/);
+});
+
+test('MAX source sweep reaches beyond the old narrow street radius',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const open=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
+  const photo=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(open,/bbox\(marker,520\)/);
+  assert.match(open,/radius:'520'/);
+  assert.match(open,/ggsradius:'650'/);
+  assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
+  assert.match(photo,/photorealCandidates\(await openWorld\.collectCandidates\(marker\),marker,88,maxDistance\)/);
+});
+
+
+test('96GB CPU launch profile enables MapAnything without the lightweight photoplane',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const sh=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/run-max-cpu.sh'),'utf8');
+  assert.match(sh,/REALCITY_LIGHTWEIGHT_CPU=false/);
+  assert.match(sh,/REALCITY_HIGH_MEMORY_CPU=true/);
+  assert.match(sh,/REALCITY_ALLOW_CPU_MAPANYTHING=true/);
+  assert.match(sh,/REALCITY_MAX_BACKEND=mapanything/);
+  assert.match(sh,/REALCITY_CPU_MAX_FRAMES=.*32/);
+  assert.match(sh,/REALCITY_USE_GSPLAT=false/);
+  assert.match(sh,/uvicorn app:app/);
 });

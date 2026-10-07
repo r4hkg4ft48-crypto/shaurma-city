@@ -32,7 +32,8 @@ function transientWorkerFailure(error){
 function sceneSignature(marker,profile,assets=[]){
   const scene=profile?.scene||{},hero=(scene.buildings||[]).find(b=>String(b.id)===String(scene.hero_building_id)||b.role==='hero');
   return hash({
-    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
+    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,...(config.REALCITY_RECONSTRUCTION_TIER?{reconstruction_tier:config.REALCITY_RECONSTRUCTION_TIER}:{}),
+    target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
     assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.priority]),
@@ -121,8 +122,8 @@ async function buildSources(marker,profile,assets){
   })).filter(x=>x.url);
   let publicCandidates=[];
   try{
-    const maxDistance=Math.max(180,Math.min(380,(Number(profile?.scene?.radius_m)||190)*1.7));
-    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,72,maxDistance);
+    const maxDistance=Math.max(220,Math.min(520,(Number(profile?.scene?.radius_m)||190)*2.35));
+    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,88,maxDistance);
   }catch{}
   const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
   const pub=publicCandidates.map(c=>{

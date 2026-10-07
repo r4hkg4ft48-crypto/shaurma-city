@@ -404,4 +404,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),physical_envelope:p.quality?.physical_envelope||null,source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,physicalEnvelope,transientWorkerStatus,warmWorker,submitWorkerJob}};

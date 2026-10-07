@@ -115,8 +115,22 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
     if(Number(total.rows[0].bytes)+req.body.length>256*1024*1024)error('photo_dataset_limit_256mb');
     await client.query('INSERT INTO realcity_astra_originals(marker_id,asset_id,sha256,mime,content,metadata,preview) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)',[row.id,id,photo.sha256,photo.mime,req.body,JSON.stringify(photo.metadata),photo.preview]);
    }
-   const category=req.query.category==='panorama'?'panorama':'main_building';
-   assets.push({id,src:photo.preview,stored:true,sha256:photo.sha256,metadata:photo.metadata,kind:'image',category,subtype:category==='panorama'?'district':'main_facade',role:category==='panorama'?'environment':'hero_facade',filename:String(req.query.filename||'photo').slice(0,180),label:'',notes:'',angle:'unknown',direction_deg:null,priority:3,primary:!assets.some(a=>a.category===category),created_at:new Date().toISOString()});
+   const categories=new Set(['main_building','panorama','landscape','road_ground','neighbor_building','vegetation','street_object']);
+   const category=categories.has(String(req.query.category||''))?String(req.query.category):'main_building';
+   const defaults={main_building:'main_facade',panorama:'district',landscape:'terrain',road_ground:'road',neighbor_building:'front',vegetation:'trees',street_object:'detail'};
+   const roles={main_building:'hero_facade',panorama:'environment',landscape:'landscape',road_ground:'ground',neighbor_building:'context_building',vegetation:'vegetation',street_object:'street_object'};
+   const qnum=(name,min,max)=>{const n=Number(req.query[name]);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):null};
+   const camera={
+    ...(Number.isFinite(Number(photo.metadata?.gps?.lat))&&Number.isFinite(Number(photo.metadata?.gps?.lon))?{lat:Number(photo.metadata.gps.lat),lon:Number(photo.metadata.gps.lon)}:{}),
+    ...(qnum('camera_lat',-85,85)!==null&&qnum('camera_lon',-180,180)!==null?{lat:qnum('camera_lat',-85,85),lon:qnum('camera_lon',-180,180)}:{}),
+    heading_deg:qnum('heading_deg',0,359)??(Number.isFinite(Number(photo.metadata?.heading_deg))?Number(photo.metadata.heading_deg):null),
+    pitch_deg:qnum('pitch_deg',-45,45),fov_deg:qnum('fov_deg',25,140),distance_m:qnum('distance_m',1,220),altitude_m:qnum('altitude_m',-50,500)
+   };
+   assets.push({id,src:photo.preview,stored:true,sha256:photo.sha256,metadata:photo.metadata,kind:'image',category,
+    subtype:String(req.query.subtype||defaults[category]).slice(0,60),role:roles[category],camera,
+    filename:String(req.query.filename||'photo').slice(0,180),label:String(req.query.label||'').slice(0,180),notes:String(req.query.notes||'').slice(0,900),
+    angle:String(req.query.angle||'unknown').slice(0,30),direction_deg:camera.heading_deg,priority:Math.max(1,Math.min(5,Number(req.query.priority)||4)),
+    primary:!assets.some(a=>a.category===category),created_at:new Date().toISOString()});
    return updateInput(client,latest,assets,normalizeConfig(latest.realcity_astra_config));
   });res.json(await current(saved));
  }));

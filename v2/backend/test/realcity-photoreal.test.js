@@ -281,7 +281,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
 });
 
 
@@ -331,16 +331,16 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.match(src,/depth-anything-v2-small-.*-onnx\+osm-scale/);
   assert.match(src,/cpu_onnx_depth/);
   assert.match(src,/CPU ONNX depth unavailable; using photoplane safety fallback/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
   assert.match(req,/onnxruntime==1\.23\.2/);
   assert.match(req,/huggingface_hub/);
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
+test('v22 physical-envelope revision invalidates unconstrained artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-physical-envelope-v1'/);
 });
 
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-physical-envelope-v1'/);
 });
 
 
@@ -474,7 +474,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-physical-envelope-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -565,4 +565,44 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
   assert.match(src,/photoreal\.queue\(x,x\.realcity_profile\|\|\{\}\)/);
   assert.match(src,/RealCity photoreal bootstrap/);
   assert.match(src,/waiting for a human to open a marker/);
+});
+
+
+test('physical envelope is derived from mapped building heights and scene radius',()=>{
+  const row={...marker,realcity_profile:profile};
+  const env=P._internals.physicalEnvelope(row);
+  assert.equal(env.radius_m,190);
+  assert.equal(env.mapped_max_height_m,12);
+  assert.equal(env.z_min,-2.5);
+  assert.equal(env.z_max,20);
+});
+
+test('API rejects volumetric artifacts that escape the mapped physical envelope',()=>{
+  const row={...marker,realcity_profile:profile};
+  const good=artifact();
+  assert.doesNotThrow(()=>P._internals.validateArtifact({artifact:good,input_signature:good.input_signature},row));
+  const bad={...good,chunks:[{...good.chunks[0],bounds_max:[10,10,80]}]};
+  assert.throws(()=>P._internals.validateArtifact({artifact:bad,input_signature:bad.input_signature},row),/photoreal_physical_envelope/);
+});
+
+test('ONNX worker clips source depth to the OSM physical scene envelope',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/def scene_physical_envelope\(job:Job\)/);
+  assert.match(src,/mapped_max_height_m/);
+  assert.match(src,/rr<=radius/);
+  assert.match(src,/pts\[\.\.\.,2\]>=z_min/);
+  assert.match(src,/pts\[\.\.\.,2\]<=z_max/);
+  assert.match(src,/envelope_removed/);
+  assert.match(src,/physical_envelope/);
+  assert.match(src,/inferred_heading/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
+});
+
+test('v22 release exposes the physical envelope in public quality diagnostics',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/photoreal_physical_envelope/);
+  assert.match(src,/physical_envelope:p\.quality\?\.physical_envelope/);
+  assert.match(src,/physical_envelope:artifact\.quality\?\.physical_envelope/);
 });

@@ -54,7 +54,7 @@ function lepeshkaMasterSources(marker){
     category:'main_building',subtype:'generated_master',role:'hero',angle:ref.angle,
     priority:ref.primary?10:9,primary:ref.primary,heading:null,pitch:0,fov:index===0?92:88,panoramic:false,
     coordinates:null,distance_m:index===0?28:24,license:'venue reference',attribution:'RealCity master reference',
-    photo_first:true,reference_master:true
+    photo_first:true,reference_master:true,reference_only:true,anchor_only:true
   }));
 }
 const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));

@@ -12,11 +12,11 @@ function buildOffThread(spec,sources){
  return new Promise((resolve,reject)=>{
   const worker=new Worker(require.resolve('./realcity-pro-worker'),{workerData:{spec,sources}});
   let settled=false;
-  const timer=setTimeout(()=>{if(!settled){settled=true;worker.terminate().catch(()=>{});reject(fail('pro_photo_worker_timeout',504))}},120000);
+  const timer=setTimeout(()=>{if(!settled){settled=true;worker.terminate().catch(()=>{});reject(Object.assign(new Error('pro_photo_worker_timeout'),{status:504}))}},120000);
   const end=(error,material)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(material)};
-  worker.once('message',m=>m.ok?end(null,m.material):end(fail(m.error||'pro_photo_worker_failed')));
+  worker.once('message',m=>m.ok?end(null,m.material):end(Object.assign(new Error(m.error||'pro_photo_worker_failed'),{status:422})));
   worker.once('error',err=>end(err));
-  worker.once('exit',code=>{if(code!==0)end(fail('pro_photo_worker_exit_'+code,500))});
+  worker.once('exit',code=>{if(!settled)end(Object.assign(new Error('pro_photo_worker_exit_'+code),{status:500}))});
  });
 }
 const ROLES=new Set(['hero_front','hero_oblique','hero_side','hero_distance','neighbor','panorama','road','vegetation','landmark','environment']);

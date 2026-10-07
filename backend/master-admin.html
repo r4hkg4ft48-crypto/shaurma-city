@@ -95,9 +95,17 @@
       </section>
 
       <section class="astraDatasetBlock">
-        <div class="astraDatasetHead"><div><b>2 · Панорама вокруг</b><small>Окружающий район: соседние здания, улица, тротуары, парковка, деревья, заборы, перекрёстки и общий вид места.</small></div><span class="astraBadge" id="astraPanoCount">0 фото</span></div>
-        <label class="astraUpload"><div><strong>＋</strong><b>Добавить панораму / фото района</b><small>слева · справа · напротив · вдоль улицы · общий вид</small></div><input id="astraPanoFiles" type="file" accept="image/*" multiple></label>
-        <div class="astraUrlRow"><input id="astraPanoUrl" placeholder="https://… ссылка на большой файл / видео / панораму"><button class="btn" id="addAstraPanoUrl" type="button">Добавить ссылку</button></div>
+        <div class="astraDatasetHead"><div><b>2 · Мир вокруг</b><small>Фотонаблюдения всего квартала: соседние здания, асфальт и тротуары, земля, парковка, зелень, ограждения и уличные объекты.</small></div><span class="astraBadge" id="astraPanoCount">0 фото</span></div>
+        <div class="field"><label>Что видно на новых фото</label><select id="astraWorldCategory">
+          <option value="panorama">Общий вид / панорама</option>
+          <option value="neighbor_building">Соседние здания</option>
+          <option value="road_ground">Дорога / тротуар / земля</option>
+          <option value="landscape">Ландшафт / двор / рельеф</option>
+          <option value="vegetation">Деревья / газон / кусты</option>
+          <option value="street_object">Уличные объекты / ограждения</option>
+        </select></div>
+        <label class="astraUpload"><div><strong>＋</strong><b>Добавить фото мира вокруг</b><small>оригиналы · EXIF/GPS и камера извлекаются автоматически</small></div><input id="astraPanoFiles" type="file" accept="image/*" multiple></label>
+        <div class="astraUrlRow"><input id="astraPanoUrl" placeholder="https://… ссылка на исходный файл"><button class="btn" id="addAstraPanoUrl" type="button">Добавить ссылку</button></div>
         <div class="astraAssetList" id="astraPanoList"></div>
       </section>
     </div>
@@ -267,35 +275,48 @@ async function loadOwnerAdmins(){
  }catch(e){$('#ownerAdminList').innerHTML='<div class="empty">'+esc('Не удалось загрузить владельцев: '+e.message)+'</div>'}
 }
 function astraSubtypeOptions(category,current){
- const rows=category==='main_building'
-  ?[['main_facade','Главный фасад'],['entrance','Вход в заведение'],['signage','Вывеска'],['left_facade','Левая сторона'],['right_facade','Правая сторона'],['rear_facade','Задняя сторона'],['detail','Архитектурная деталь']]
-  :[['front_panorama','Панорама перед входом'],['street_left','Улица слева'],['street_right','Улица справа'],['opposite','Напротив'],['intersection','Перекрёсток'],['courtyard','Двор'],['district','Общий район'],['detail','Деталь окружения']];
+ const sets={
+  main_building:[['main_facade','Главный фасад'],['entrance','Вход'],['signage','Вывеска'],['left_facade','Левая сторона'],['right_facade','Правая сторона'],['rear_facade','Задняя сторона'],['roof','Крыша / верх'],['storefront','Витрина / первый этаж'],['detail','Архитектурная деталь']],
+  panorama:[['front_panorama','Перед входом'],['street_left','Улица слева'],['street_right','Улица справа'],['opposite','Напротив'],['intersection','Перекрёсток'],['courtyard','Двор'],['district','Общий район'],['detail','Деталь']],
+  neighbor_building:[['front','Фасад соседа'],['left','Левая сторона'],['right','Правая сторона'],['rear','Задняя сторона'],['roof','Крыша'],['storefront','Первый этаж / витрина'],['detail','Деталь']],
+  road_ground:[['road','Дорога'],['sidewalk','Тротуар'],['curb','Бордюр'],['crossing','Переход'],['parking','Парковка'],['ground','Покрытие / земля'],['detail','Деталь']],
+  landscape:[['ground','Поверхность земли'],['terrain','Рельеф'],['courtyard','Двор'],['green_zone','Зелёная зона'],['parking','Парковка'],['embankment','Откос / насыпь'],['detail','Деталь']],
+  vegetation:[['trees','Деревья'],['bushes','Кусты'],['lawn','Газон'],['flowerbed','Клумба'],['detail','Деталь']],
+  street_object:[['lamp','Фонарь'],['fence','Ограждение'],['sign','Знак / вывеска'],['stop','Остановка'],['bench','Скамья'],['bollard','Столбик'],['parking_object','Парковочный объект'],['detail','Деталь']]
+ };
+ const rows=sets[category]||sets.panorama;
  return rows.map(x=>'<option value="'+x[0]+'" '+(x[0]===current?'selected':'')+'>'+x[1]+'</option>').join('');
 }
 function astraAngleOptions(current){
  return [['unknown','Не указан'],['front','Спереди'],['left','Слева'],['right','Справа'],['rear','Сзади'],['panorama','Панорама'],['detail','Крупная деталь'],['up','Снизу вверх'],['down','Сверху вниз']].map(x=>'<option value="'+x[0]+'" '+(x[0]===current?'selected':'')+'>'+x[1]+'</option>').join('');
 }
+function astraCategoryOptions(current){
+ return [['main_building','Главное здание'],['panorama','Общий вид'],['neighbor_building','Соседнее здание'],['road_ground','Дорога / земля'],['landscape','Ландшафт'],['vegetation','Растительность'],['street_object','Уличный объект']]
+  .map(x=>'<option value="'+x[0]+'" '+(x[0]===current?'selected':'')+'>'+x[1]+'</option>').join('');
+}
+
 function astraAssetCard(x){
  const isImage=String(x.src||'').startsWith('data:image/');
  return '<article class="astraAssetCard" data-astra-id="'+esc(x.id)+'">'+
   '<div class="astraThumb">'+(isImage?'<img src="'+esc(x.src)+'" alt="">':'<div class="external">ВНЕШНИЙ ФАЙЛ<br>'+esc(String(x.src||'').replace(/^https?:\/\//,'').slice(0,48))+'</div>')+'</div>'+
   '<div class="astraAssetFields">'+
+   '<select data-astra-field="category">'+astraCategoryOptions(x.category)+'</select>'+
    '<select data-astra-field="subtype">'+astraSubtypeOptions(x.category,x.subtype)+'</select>'+
    '<select data-astra-field="angle">'+astraAngleOptions(x.angle)+'</select>'+
    '<input class="full" data-astra-field="label" value="'+esc(x.label||'')+'" placeholder="Подпись: главный вход, дом напротив…">'+
    '<select data-astra-field="priority"><option value="5" '+(Number(x.priority)===5?'selected':'')+'>Приоритет 5 · критично</option><option value="4" '+(Number(x.priority)===4?'selected':'')+'>Приоритет 4</option><option value="3" '+(Number(x.priority)===3?'selected':'')+'>Приоритет 3</option><option value="2" '+(Number(x.priority)===2?'selected':'')+'>Приоритет 2</option><option value="1" '+(Number(x.priority)===1?'selected':'')+'>Приоритет 1</option></select>'+
    '<input data-astra-field="direction_deg" type="number" min="0" max="359" value="'+(x.direction_deg??'')+'" placeholder="Направление °">'+
    '<textarea class="full" data-astra-field="notes" placeholder="Что Astra должна увидеть именно на этом кадре">'+esc(x.notes||'')+'</textarea>'+
-   (x.metadata?'<small class="full">Оригинал '+Number(x.metadata.width)+' × '+Number(x.metadata.height)+' · '+(Number(x.metadata.bytes)/1048576).toFixed(1)+' МБ'+(x.metadata.warnings?.length?' · проверьте качество':'')+'</small>':'')+
+   (x.metadata?'<small class="full">Оригинал '+Number(x.metadata.width)+' × '+Number(x.metadata.height)+' · '+(Number(x.metadata.bytes)/1048576).toFixed(1)+' МБ'+(x.metadata.gps?' · GPS ✓':'')+(Number.isFinite(Number(x.metadata.heading_deg))?' · направление '+Math.round(Number(x.metadata.heading_deg))+'°':'')+(x.metadata.focal_length_35mm?' · '+x.metadata.focal_length_35mm+' мм экв.':'')+(x.metadata.warnings?.length?' · проверьте качество':'')+'</small>':'')+
    '<div class="astraAssetTools"><label class="astraPrimary"><input type="checkbox" data-astra-primary '+(x.primary?'checked':'')+'> Главное фото в группе</label><button class="astraRemove" type="button" data-astra-remove>Удалить</button></div>'+
   '</div></article>';
 }
 function renderAstraAssets(){
- const main=astraAssets.filter(x=>x.category==='main_building'),pano=astraAssets.filter(x=>x.category==='panorama');
+ const main=astraAssets.filter(x=>x.category==='main_building'),world=astraAssets.filter(x=>x.category!=='main_building');
  $('#astraMainList').innerHTML=main.length?main.map(astraAssetCard).join(''):'<div class="empty">Пока нет материалов главного здания.</div>';
- $('#astraPanoList').innerHTML=pano.length?pano.map(astraAssetCard).join(''):'<div class="empty">Пока нет панорамных материалов.</div>';
+ $('#astraPanoList').innerHTML=world.length?world.map(astraAssetCard).join(''):'<div class="empty">Пока нет фото мира вокруг.</div>';
  $('#astraMainCount').textContent=main.length+' материал'+(main.length===1?'':main.length<5?'а':'ов');
- $('#astraPanoCount').textContent=pano.length+' материал'+(pano.length===1?'':pano.length<5?'а':'ов');
+ $('#astraPanoCount').textContent=world.length+' материал'+(world.length===1?'':world.length<5?'а':'ов');
 }
 function readAstraConfig(){
  return {
@@ -316,13 +337,14 @@ function applyAstraState(j){
  window.RealCityStudio?.refresh(j);
 }
 function renderAstraReadiness(r){
- const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.ready?'готово для Astra':'сбор материалов';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
+ const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.photo_first_ready?'PHOTO-FIRST готов':r.ready?'базовый пакет готов':'сбор наблюдений';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
  const checks=[
-  ['Главное здание',Number(r.main_count||0)+' материала',Number(r.main_count||0)>=2],
-  ['Главный фасад',r.has_main_facade?'есть':'нужно добавить',!!r.has_main_facade],
-  ['Вход в заведение',r.has_entrance?'есть':'желательно добавить',!!r.has_entrance],
-  ['Панорама района',Number(r.panorama_count||0)+' материала',Number(r.panorama_count||0)>=3],
-  ['Разные направления',Number(r.panorama_coverage||0)+' типа',Number(r.panorama_coverage||0)>=3]
+  ['Главное здание',Number(r.main_count||0)+' фото',Number(r.main_count||0)>=3],
+  ['Вход / фасад',r.has_main_facade?(r.has_entrance?'фасад + вход':'фасад есть'):'нужно добавить',!!r.has_main_facade],
+  ['Мир вокруг',Number(r.world_count||0)+' фото',Number(r.world_count||0)>=5],
+  ['Разные части мира',Number(r.coverage_sectors||0)+' наблюдений',Number(r.coverage_sectors||0)>=5],
+  ['Позиция камер',Number(r.positioned_count||0)+' с GPS/позицией',Number(r.positioned_count||0)>=2],
+  ['Направление камер',Number(r.heading_count||0)+' с направлением',Number(r.heading_count||0)>=2]
  ];
  $('#astraChecks').innerHTML=checks.map(x=>'<div class="astraCheck"><b>'+x[0]+'</b><span style="color:'+(x[2]?'#9ce6c4':'#8290a3')+'">'+x[1]+'</span></div>').join('');
 }
@@ -353,12 +375,17 @@ function addAstraUrl(category){
  const input=$(category==='main_building'?'#astraMainUrl':'#astraPanoUrl'),url=input.value.trim();
  if(!/^https:\/\//i.test(url))return toast('Нужна https-ссылка');
  if(astraAssets.length>=120)return toast('Лимит: 120 материалов на точку');
- astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype:category==='main_building'?'detail':'district',role:category==='main_building'?'hero_facade':'environment',src:url,kind:'external_file',filename:'',label:'',notes:'',angle:'unknown',direction_deg:null,priority:3,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});input.value='';renderAstraAssets();
+ const defaults={main_building:'detail',panorama:'district',neighbor_building:'front',road_ground:'road',landscape:'terrain',vegetation:'trees',street_object:'detail'};
+ const roles={main_building:'hero_facade',panorama:'environment',neighbor_building:'context_building',road_ground:'ground',landscape:'landscape',vegetation:'vegetation',street_object:'street_object'};
+ astraAssets.push({id:'astra_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8),category,subtype:defaults[category]||'detail',role:roles[category]||'environment',src:url,kind:'external_file',camera:{heading_deg:null,pitch_deg:null,fov_deg:null,distance_m:null},filename:'',label:'',notes:'',angle:'unknown',direction_deg:null,priority:4,primary:!astraAssets.some(x=>x.category===category),created_at:new Date().toISOString()});input.value='';renderAstraAssets();
 }
 function updateAstraAsset(target){
  const card=target.closest('[data-astra-id]');if(!card)return;const x=astraAssets.find(v=>v.id===card.dataset.astraId);if(!x)return;
  const field=target.dataset.astraField;
- if(field)x[field]=field==='priority'?Number(target.value):field==='direction_deg'?(target.value===''?null:Number(target.value)):target.value;
+ if(field){
+  x[field]=field==='priority'?Number(target.value):field==='direction_deg'?(target.value===''?null:Number(target.value)):target.value;
+  if(field==='category'){const tmp=document.createElement('select');tmp.innerHTML=astraSubtypeOptions(x.category,'');x.subtype=tmp.options[0]?.value||'detail';renderAstraAssets();return}
+ }
  if(target.matches('[data-astra-primary]')&&target.checked){astraAssets.forEach(v=>{if(v.category===x.category)v.primary=v.id===x.id});renderAstraAssets()}
  else if(target.matches('[data-astra-primary]'))x.primary=false;
 }
@@ -472,8 +499,8 @@ document.addEventListener('click',e=>{
 $('#astraVenue').onchange=()=>{astraState=null;$('#astraMarker').innerHTML='';loadAstraStudio()};
 $('#astraMarker').onchange=loadAstraStudio;
 $('#astraMainFiles').onchange=async e=>{await addAstraImages('main_building',e.target.files);e.target.value=''};
-$('#astraPanoFiles').onchange=async e=>{await addAstraImages('panorama',e.target.files);e.target.value=''};
-$('#addAstraMainUrl').onclick=()=>addAstraUrl('main_building');$('#addAstraPanoUrl').onclick=()=>addAstraUrl('panorama');
+$('#astraPanoFiles').onchange=async e=>{await addAstraImages($('#astraWorldCategory').value||'panorama',e.target.files);e.target.value=''};
+$('#addAstraMainUrl').onclick=()=>addAstraUrl('main_building');$('#addAstraPanoUrl').onclick=()=>addAstraUrl($('#astraWorldCategory').value||'panorama');
 $('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});

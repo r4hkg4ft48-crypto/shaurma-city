@@ -657,6 +657,7 @@
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
         $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.reference_master?'REAL CITY · PHOTO MASTER':activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':activeRealCityModel?.quality?.surface_projection?'REAL CITY · PHOTO FACADE':'REAL CITY · PHOTO 3D'):activeRealCityMode==='pro'?'REAL CITY · PHOTO VERIFIED':activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
         if(preview&&activeRealCityMode==='astra'&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
+        if(preview&&activeRealCityMode==='pro'&&String(preview.marker.id)===String(p.id))previewSignature=preview.profile?.pro?.input_revision||'';
         const views=cam.views||[],box=$('#realCityViews');
         box.replaceChildren();box.classList.toggle('hidden',!views.length);
         for(const view of views){const button=document.createElement('button');button.textContent=view.label;button.type='button';button.setAttribute('aria-pressed','false');button.onclick=()=>{

@@ -340,7 +340,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
 });
 
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
 });
 
 
@@ -475,7 +475,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -617,7 +617,7 @@ test('ONNX depth cloud is constrained by mapped building heights',()=>{
 test('v22 revision forces rebuilding old volumetric artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
 });
 
 
@@ -652,7 +652,7 @@ test('v24 spatial lock refuses raw depth takeover and invalidates v23 artifacts'
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
   assert.match(api,/require_map_registration:true/);
   assert.match(api,/photoreal_spatial_registration/);
   assert.match(worker,/if LIGHTWEIGHT_CPU and require_registration:/);
@@ -681,7 +681,7 @@ test('v25 keeps owner facade photos authoritative and rejects wall-incompatible 
   const fs=require('node:fs'),path=require('node:path');
   const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
   assert.match(api,/anchor_only:hasOwner/);
   assert.match(api,/const publicBudget=hasOwner\?2:MAX_SOURCES/);
   assert.match(api,/angle:a\.angle\|\|'unknown'/);
@@ -691,4 +691,23 @@ test('v25 keeps owner facade photos authoritative and rejects wall-incompatible 
   assert.match(worker,/def _owner_semantic_edge/);
   assert.match(worker,/Without pose or a persisted assignment we cannot know which neighboring/);
   assert.match(worker,/max_points=min\(int\(job\.policy\.get\("max_points",48000\)\),48000\)/);
+});
+
+
+test('v26 seeds В Лепёшке from a curated master reference and removes procedural shell',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const routes=fs.readFileSync(path.join(__dirname,'../src/routes.js'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(api,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
+  assert.match(api,/REALCITY_LEPESHKA_MASTER_WEBP_B64_/);
+  assert.match(api,/subtype:'generated_master'/);
+  assert.match(api,/reference_master:true/);
+  assert.match(routes,/\/realcity\/reference\/:slug/);
+  assert.match(worker,/"reference_master_frames":master_used/);
+  assert.match(worker,/"reference_master":int\(stats\.get\("reference_master_frames",0\)\)>0/);
+  assert.match(map,/!isTruePhotogrammetry&&!isVolumetricDepth&&!referenceMaster/);
+  assert.match(map,/REAL CITY · PHOTO MASTER/);
+  assert.match(map,/referenceMaster\?0:photoreal\?\.045/);
 });

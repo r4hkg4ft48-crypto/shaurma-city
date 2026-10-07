@@ -9,7 +9,7 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v6"
+APP_VERSION="realcity-photoreal-worker-v7"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -656,7 +656,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     radius=float(job.map_anchor.get("radius_m",190))
     target=int(job.policy.get("max_points",150000))
     all_points=[];all_colors=[];all_conf=[];all_frames=[];onnx_variants=set()
-    used=0
+    used=0;owner_used=0;owner_roles=set()
     for path,source in zip(image_paths,sources):
         coords=source.get("coordinates")
         if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
@@ -722,6 +722,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         center=1-np.minimum(1,np.sqrt(((xx[valid]-(w-1)/2)/(w*.55))**2+((yy[valid]-(h-1)/2)/(h*.7))**2))
         cf=np.clip(.44+.44*center,.18,.92).astype(np.float32)
         all_points.append(p);all_colors.append(col);all_conf.append(cf);all_frames.append(np.full(len(p),used,dtype=np.int16));used+=1
+        if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
     if not all_points:raise RuntimeError("depth_fallback_no_geotagged_views")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
     pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
@@ -737,7 +738,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     else:
         tag="q4" if onnx_variants=={"onnx/model_q4.onnx"} else ("fp32" if onnx_variants=={"onnx/model.onnx"} else "hybrid")
         backend="depth-anything-v2-small-"+tag+"-onnx+osm-scale"
-    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants)}
+    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"owner_frames":owner_used,"owner_roles":sorted(owner_roles),"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants)}
 
 
 def wrap_angle_deg(value:float)->float:
@@ -1005,8 +1006,9 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     hardware=torch.cuda.get_device_name(0) if device=="cuda" else "CPU-high-memory"
     backend="mapanything-apache-1b"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
     return pts,cols,scores,scales_xyz,quats,alignment,{
-        "backend":backend,"gpu":hardware,"frames":len(image_paths),"dynamic_removed":dynamic_removed,
-        "metric":True,"universal_3d":True,**ba,**gs
+        "backend":backend,"gpu":hardware,"frames":len(image_paths),"owner_frames":sum(1 for s in sources[:len(image_paths)] if s.get("kind")=="owner"),
+        "owner_roles":sorted({str(s.get("role") or s.get("category") or "owner") for s in sources[:len(image_paths)] if s.get("kind")=="owner"}),
+        "dynamic_removed":dynamic_removed,"metric":True,"universal_3d":True,**ba,**gs
     }
 
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
@@ -1055,12 +1057,12 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     pts,cols,scores,scales_xyz,quats=pts[m],cols[m],scores[m],scales_xyz[m],quats[m]
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
     backend="vggt-1b-commercial"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
-    return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"dynamic_removed":dynamic_removed,**ba,**gs}
+    return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"owner_frames":sum(1 for s in sources[:len(image_paths)] if s.get("kind")=="owner"),"owner_roles":sorted({str(s.get("role") or s.get("category") or "owner") for s in sources[:len(image_paths)] if s.get("kind")=="owner"}),"dynamic_removed":dynamic_removed,**ba,**gs}
 
 def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
-    source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
+    source_meta=[{k:s.get(k) for k in ("id","kind","provider","category","subtype","role","license","license_url","attribution","page_url","captured_at")} for s in job.sources]
     radial=np.linalg.norm(np.asarray(points,dtype=np.float32)[:,:2],axis=1) if len(points) else np.array([0.0],dtype=np.float32)
     observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
     declared_radius=float(job.map_anchor.get("radius_m",190))
@@ -1072,6 +1074,8 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
       "coverage_radius_m":coverage_radius,
       "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
+      "photo_first":bool(job.policy.get("photo_first")),"owner_frames":int(stats.get("owner_frames",0)),"owner_roles":stats.get("owner_roles",[]),
+      "volumetric_reconstruction":bool(stats.get("universal_3d") or stats.get("depth_3d") or not stats.get("projection")),
       "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
       "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")
     }
@@ -1117,8 +1121,13 @@ async def run_job(job:Job):
             if LIGHTWEIGHT_CPU:
                 try:
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
+                    min_owner=int(job.policy.get("min_owner_frames",0) or 0)
+                    if job.policy.get("photo_first") and int(stats.get("owner_frames",0))<min_owner:
+                        raise RuntimeError("owner_photo_pose_required:"+str(stats.get("owner_frames",0))+"/"+str(min_owner))
                     stats["primary_error"]="cpu_onnx_depth";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
                 except Exception as depth_exc:
+                    if job.policy.get("forbid_flat_owner_fallback"):
+                        raise RuntimeError("photo_first_volumetric_required:"+str(depth_exc)[:260])
                     print("CPU ONNX depth unavailable; using photoplane safety fallback:",repr(depth_exc),flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
                     stats["primary_error"]="cpu_onnx_failed:"+str(depth_exc)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources

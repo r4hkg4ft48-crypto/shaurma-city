@@ -3,6 +3,7 @@ const crypto=require('crypto');
 const express=require('express');
 const A=require('./realcity-astra');
 const P=require('./realcity-photo');
+const R=require('./realcity-photoreal');
 const error=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
 async function ensureSchema(db){
  await db.query(`
@@ -133,6 +134,12 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
     primary:!assets.some(a=>a.category===category),created_at:new Date().toISOString()});
    return updateInput(client,latest,assets,normalizeConfig(latest.realcity_astra_config));
   });res.json(await current(saved));
+ }));
+ app.post(base+'/reconstruct',admin,route(async(req,res)=>{
+  const row=await select(req),assets=normalizeAssets(row.realcity_astra_assets),ready=readiness(assets);
+  if(!assets.length)error('photo_dataset_empty');
+  const result=await R.queue({...row,realcity_astra_assets:assets},row.realcity_profile||{});
+  res.json({ok:true,...result,readiness:ready,pipeline:'photo-first'});
  }));
  app.post(base+'/access',admin,route(async(req,res)=>{
   const row=await select(req),token=crypto.randomBytes(32).toString('hex');

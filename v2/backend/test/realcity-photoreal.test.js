@@ -440,3 +440,11 @@ test('Astra Studio can explicitly queue the current photo-first dataset',()=>{
   assert.match(ui,/Собрать PHOTO-FIRST RealCity/);
   assert.match(ui,/\/reconstruct\?marker_id=/);
 });
+
+
+test('low-memory ONNX consumes up to forty-eight sequential observations',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/if LIGHTWEIGHT_CPU:\s*return min\(requested,48\)/);
+  assert.match(src,/for path,source in zip\(image_paths,sources\)/);
+});

@@ -139,6 +139,8 @@ test('transient worker outages bypass retry cooldown policy',()=>{
   assert.equal(P._internals.transientWorkerFailure('worker_http_503'),true);
   assert.equal(P._internals.transientWorkerFailure('worker_timeout'),true);
   assert.equal(P._internals.transientWorkerFailure('UND_ERR_CONNECT_TIMEOUT'),true);
+  assert.equal(P._internals.transientWorkerFailure('This operation was aborted'),true);
+  assert.equal(P._internals.transientWorkerFailure('AbortError'),true);
   assert.equal(P._internals.transientWorkerFailure('metric_fallback_too_sparse'),false);
 });
 

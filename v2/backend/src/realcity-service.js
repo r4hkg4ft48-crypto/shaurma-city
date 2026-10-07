@@ -57,7 +57,7 @@ function queue(markerId){
 async function bootstrap(){
   if(!db.configured)return;
   await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
-  const q=await db.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_status,realcity_profile,realcity_astra_assets FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
+  const q=await db.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_status,realcity_profile,realcity_astra_assets FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY CASE WHEN id=3139 OR lower(replace(name,'ё','е')) LIKE '%лепешк%' THEN 0 ELSE 1 END, updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
   const rows=q.rows||[],refresh=rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8);
   refresh.forEach(x=>queue(x.id)?.catch(()=>{}));
   // A photoreal pipeline/source revision must rebuild proactively instead of

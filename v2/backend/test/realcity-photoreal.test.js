@@ -489,16 +489,20 @@ test('lazy RealCity renderer follows the Mini App cache revision',()=>{
 });
 
 
-test('incomplete depth reconstruction keeps native 3D buildings instead of flattening them',()=>{
+test('volumetric depth reconstruction replaces native buildings only with exact support volumes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/function isCompletePhotogrammetry\(model\)/);
   assert.match(src,/photogrammetric===true&&model\?\.quality\?\.metric_reconstruction===true/);
   assert.match(src,/const completePhotogrammetry=photoreal&&isCompletePhotogrammetry\(authored\)/);
-  assert.match(src,/const replaced=new Set\(completePhotogrammetry/);
-  assert.match(src,/:photoreal\?\[\]/);
+  assert.match(src,/const volumetricPhoto3D=photoreal&&!completePhotogrammetry&&authored\?\.quality\?\.volumetric_reconstruction===true/);
+  assert.match(src,/const supportIds=new Set/);
+  assert.match(src,/supportIds\.has\(String\(b\.id\)\)/);
+  assert.match(src,/const dimmed=\(completePhotogrammetry\|\|volumetricPhoto3D\)\?covered/);
+  assert.match(src,/const context=volumetricPhoto3D/);
+  assert.match(src,/const hero=volumetricPhoto3D/);
+  assert.match(src,/neutralSupport/);
   assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
-  assert.match(src,/hero=astraLayer\?null:/);
   assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
 });
 

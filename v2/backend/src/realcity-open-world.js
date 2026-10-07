@@ -248,6 +248,41 @@ async function collectWikimedia(marker){
   return out;
 }
 
+function wikimediaReferenceApiUrl(refs=[]){
+  const ids=[...new Set((refs||[]).filter(r=>String(r?.source||'')==='wikimedia').map(r=>String(r?.source_id||'').trim()).filter(x=>/^\d+$/.test(x)))];
+  if(!ids.length)return null;
+  const u=new URL('https://commons.wikimedia.org/w/api.php');
+  const params={action:'query',format:'json',origin:'*',pageids:ids.slice(0,50).join('|'),prop:'imageinfo|coordinates',iiprop:'url|extmetadata',iiurlwidth:'1600'};
+  for(const [k,v] of Object.entries(params))u.searchParams.set(k,String(v));
+  return u.toString();
+}
+async function resolveReferences(refs=[]){
+  const out=[],wm=(refs||[]).filter(r=>String(r?.source||'')==='wikimedia'),url=wikimediaReferenceApiUrl(wm);
+  if(url){
+    try{
+      const j=await fetchJson(url,{timeout:5500});
+      const byId=new Map(wm.map(r=>[String(r.source_id),r]));
+      for(const page of Object.values(j?.query?.pages||{})){
+        const ref=byId.get(String(page.pageid));if(!ref)continue;
+        const info=page.imageinfo?.[0]||{},meta=info.extmetadata||{},c0=page.coordinates?.[0];
+        const coords=c0?[Number(c0.lon),Number(c0.lat)]:ref.coordinates;
+        const lic=clean(meta.LicenseShortName?.value||meta.License?.value||ref.license||'',100);
+        if(lic&&!/CC|public domain|PD/i.test(lic))continue;
+        const author=clean(meta.Artist?.value||meta.Credit?.value||ref.attribution||'',140);
+        const candidate=candidateBase('wikimedia',page.pageid,coords,info.thumburl||info.url,info.descriptionurl||ref.page_url,{
+          fallback_image_url:info.url||null,
+          heading:ref.heading,captured_at:meta.DateTimeOriginal?.value||meta.DateTime?.value||ref.captured_at||null,
+          license:lic||ref.license||'Wikimedia Commons',license_url:meta.LicenseUrl?.value||ref.license_url||licenseUrlFor(lic),
+          attribution:author?'Wikimedia Commons · '+author:(ref.attribution||'Wikimedia Commons contributors'),
+          panoramic:false,fov:78
+        });
+        if(candidate&&canPersistAdaptation(candidate))out.push({...candidate,persisted_reference:true,persisted_match:ref.match||null});
+      }
+    }catch{}
+  }
+  return out;
+}
+
 function candidateScore(c,marker){
   const d=haversine(c.coordinates,[Number(marker.lon),Number(marker.lat)]);
   const street=STREET_SOURCES.has(c.source)?1:0;
@@ -490,6 +525,6 @@ async function reconstruct(marker,scene){
 }
 
 module.exports={
-  ENGINE,reconstruct,collectCandidates,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
-  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation,candidateBase,fetchCandidateImage}
+  ENGINE,reconstruct,collectCandidates,resolveReferences,analyzeImage,nearestAssignment,compileModel,buildFacadeMaterial,
+  _internals:{bbox,bearing,haversine,diversify,modulesForFacade,licenseFromConfig,canPersistAdaptation,candidateBase,fetchCandidateImage,wikimediaReferenceApiUrl}
 };

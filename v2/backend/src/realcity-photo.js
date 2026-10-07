@@ -29,6 +29,23 @@ function masks(value=[]){
 function inside([x,y],p){
  let yes=false;for(let i=0,j=p.length-1;i<p.length;j=i++)if((p[i][1]>y)!==(p[j][1]>y)&&x<(p[j][0]-p[i][0])*(y-p[i][1])/(p[j][1]-p[i][1])+p[i][0])yes=!yes;return yes;
 }
+async function inspectPose(buffer){
+ if(!Buffer.isBuffer(buffer)||!buffer.length||buffer.length>16*1024*1024)fail('photo_file_limit_16mb');
+ const [exif0,gps]=await Promise.all([
+  exifr.parse(buffer,['Make','Model','LensModel','FocalLength','FocalLengthIn35mmFormat','GPSImgDirection','GPSImgDirectionRef','DateTimeOriginal','CreateDate']).catch(()=>({})),
+  exifr.gps(buffer).catch(()=>null)
+ ]);
+ const exif=exif0||{},latitude=Number(gps?.latitude),longitude=Number(gps?.longitude),heading=Number(exif.GPSImgDirection),focal=Number(exif.FocalLength),focal35=Number(exif.FocalLengthIn35mmFormat);
+ const captured=exif.DateTimeOriginal||exif.CreateDate||null;
+ return {
+  exif_pose_v:1,
+  camera_make:String(exif.Make||'').slice(0,80),camera_model:String(exif.Model||'').slice(0,100),lens_model:String(exif.LensModel||'').slice(0,120),
+  focal_length_mm:Number.isFinite(focal)?Number(focal.toFixed(3)):null,focal_length_35mm:Number.isFinite(focal35)?Number(focal35.toFixed(2)):null,
+  gps:Number.isFinite(latitude)&&Number.isFinite(longitude)?{lat:latitude,lon:longitude}:null,
+  heading_deg:Number.isFinite(heading)?((heading%360)+360)%360:null,
+  captured_at:captured instanceof Date?captured.toISOString():(captured?String(captured).slice(0,60):null)
+ };
+}
 async function inspect(buffer){
  if(!Buffer.isBuffer(buffer)||!buffer.length||buffer.length>16*1024*1024)fail('photo_file_limit_16mb');
  let meta,sample,preview,exif={},gps=null;
@@ -129,4 +146,4 @@ const instructions={
  automation:'Upload automatically preserves originals and measures image quality. Semantic side matching is an Astra task. No vision model runs implicitly or without configured access.',
  recipe_schema:{version:3,expected_revision:'geometry.revision',output:'Astra output v2 with facade.surfaces[]',materials:[{id:'front',width_m:20,height_m:12,pixels_per_m:60,views:[{source_asset_id:'id',source_quad:[[0,0],[1,0],[1,1],[0,1]],exclude:[],exposure_ev:0,white_balance:[1,1,1]}],roughness:.85,metalness:0,lighting_mix:.35,sharpen:.25}]}
 };
-module.exports={METHOD,hash,finite,quad,inspect,buildMaterial,instructions};
+module.exports={METHOD,hash,finite,quad,inspect,inspectPose,buildMaterial,instructions};

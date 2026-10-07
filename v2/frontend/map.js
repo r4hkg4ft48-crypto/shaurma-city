@@ -531,13 +531,13 @@
           removeAstraLayer();
           if(authored.mode==='photoreal'){
             const isTruePhotogrammetry=authored.model?.quality?.photogrammetric===true;
-            let shell=null;
+            let shell=null,shellSource=null;
             if(!isTruePhotogrammetry){
               const shellCandidates=[
                 {mode:'astra',model:j.profile?.astra},
                 {mode:'open-world',model:j.profile?.real_world}
               ].filter(x=>x.model?.status==='ready');
-              const shellSource=shellCandidates.find(x=>window.RealCitySpatial.bound(x.model,p,j.profile.scene));
+              shellSource=shellCandidates.find(x=>window.RealCitySpatial.bound(x.model,p,j.profile.scene));
               if(shellSource){
                 shell=window.RealCityLayer.create({
                   marker:p,profile:j.profile,model:shellSource.model,layerId:'realcity-photoreal-shell',
@@ -562,7 +562,7 @@
                 activeRealCityModel=authored.model;activeRealCityMode=authored.mode;setRealCityAttribution(authored.model);
               }else removeAstraLayer();
             }else if(shell){
-              astraLayer=shell;supportRealCityLayer=shell;activeRealCityModel=shellCandidates.find(x=>window.RealCitySpatial.bound(x.model,p,j.profile.scene))?.model||null;activeRealCityMode='open-world';
+              astraLayer=shell;supportRealCityLayer=shell;activeRealCityModel=shellSource?.model||null;activeRealCityMode=shellSource?.mode||'open-world';setRealCityAttribution(activeRealCityModel);
             }
           }else{
             const layer=window.RealCityLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:'realcity-authored-facades',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity renderer fallback',e.message)});

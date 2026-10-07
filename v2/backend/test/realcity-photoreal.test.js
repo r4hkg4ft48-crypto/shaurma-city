@@ -139,6 +139,8 @@ test('transient worker outages bypass retry cooldown policy',()=>{
   assert.equal(P._internals.transientWorkerFailure('worker_http_503'),true);
   assert.equal(P._internals.transientWorkerFailure('worker_timeout'),true);
   assert.equal(P._internals.transientWorkerFailure('UND_ERR_CONNECT_TIMEOUT'),true);
+  assert.equal(P._internals.transientWorkerFailure('This operation was aborted'),true);
+  assert.equal(P._internals.transientWorkerFailure('AbortError'),true);
   assert.equal(P._internals.transientWorkerFailure('metric_fallback_too_sparse'),false);
 });
 
@@ -160,4 +162,18 @@ test('worker retries preview and original source URLs with diagnostics',()=>{
   assert.match(src,/RealCity source rejected/);
   assert.match(src,/no_decodable_views:/);
   assert.match(src,/ShaurmegRealCity\/1\.0/);
+});
+
+
+test('CPU fallback is low-memory ONNX and does not require PyTorch',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements-cpu.txt'),'utf8');
+  assert.match(src,/CPU_ONNX_MODEL/);
+  assert.match(src,/onnx\/model_int8\.onnx/);
+  assert.match(src,/CPU_ONLY/);
+  assert.match(src,/depth-anything-v2-small-int8-onnx\+osm-scale/);
+  assert.match(req,/onnxruntime==/);
+  assert.doesNotMatch(req,/torch/i);
+  assert.doesNotMatch(req,/transformers/i);
 });

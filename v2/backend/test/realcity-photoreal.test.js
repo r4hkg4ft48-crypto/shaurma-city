@@ -521,7 +521,7 @@ test('volumetric ONNX splats overlay support geometry while metric photogrammetr
   const fs=require('node:fs'),path=require('node:path');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   const splat=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
-  assert.match(map,/overlaySupport:!isTruePhotogrammetry&&isVolumetricDepth/);
+  assert.match(map,/overlaySupport:authored\.model\?\.quality\?\.surface_projection===true\|\|\(!isTruePhotogrammetry&&isVolumetricDepth\)/);
   assert.match(map,/fill-extrusion-color','#8b8983'/);
   assert.match(map,/fill-extrusion-opacity',\.46/);
   assert.match(splat,/overlaySupport=false/);

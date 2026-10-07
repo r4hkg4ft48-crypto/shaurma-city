@@ -221,7 +221,7 @@ test('MapAnything single-view stays metric and is attempted before low-view fall
   assert.match(src,/gps-heading-metric/);
   assert.match(src,/gps-rigid-metric/);
   assert.match(src,/metric_reconstruction/);
-  const dispatch=src.indexOf('MapAnything is metric and explicitly supports monocular');
+  const dispatch=src.indexOf('Free-form dense reconstruction may replace the map only after');
   const lowFallback=src.indexOf('MAX paths unavailable; using metric depth fallback');
   assert.ok(dispatch>0&&lowFallback>dispatch);
   assert.doesNotMatch(src,/elif len\(paths\)<3:[\s\S]{0,260}?gps_depth_reconstruct/);
@@ -281,7 +281,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/realcity-photoreal-worker-v8-spatial-lock/);
 });
 
 
@@ -330,8 +330,8 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.match(src,/def onnx_relative_depth/);
   assert.match(src,/depth-anything-v2-small-.*-onnx\+osm-scale/);
   assert.match(src,/cpu_onnx_depth/);
-  assert.match(src,/CPU ONNX depth unavailable; using photoplane safety fallback/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/CPU ONNX depth unavailable; using map-registered facade fallback/);
+  assert.match(src,/realcity-photoreal-worker-v8-spatial-lock/);
   assert.match(req,/onnxruntime==1\.23\.2/);
   assert.match(req,/huggingface_hub/);
   assert.doesNotMatch(req,/torch|transformers/i);
@@ -340,7 +340,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1'/);
 });
 
 
@@ -354,7 +354,7 @@ test('Q4 falls back to FP32 before photoplane on CPU',()=>{
   assert.match(src,/opts\.enable_mem_pattern=False/);
   const q4=src.indexOf('onnx/model_q4.onnx');
   const fp32=src.indexOf('onnx/model.onnx');
-  const plane=src.indexOf('CPU ONNX depth unavailable; using photoplane safety fallback');
+  const plane=src.indexOf('CPU ONNX depth unavailable; using map-registered facade fallback');
   assert.ok(q4>0&&fp32>q4&&plane>fp32);
 });
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1'/);
 });
 
 
@@ -404,15 +404,16 @@ test('stored originals expose EXIF pose migration without altering originals',()
   assert.match(src,/GPSImgDirection/);
 });
 
-test('owner-photo dataset can never silently publish a flat photoplane',()=>{
+test('owner-photo dataset is published only on a map-registered surface',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
-  assert.match(src,/forbid_flat_owner_fallback/);
-  assert.match(src,/photo_first_volumetric_required/);
-  assert.match(src,/owner_photo_not_used_in_volume/);
-  assert.match(src,/flat_owner_reconstruction_rejected/);
+  assert.match(src,/require_map_registration/);
+  assert.match(src,/owner_photo_not_used_in_registered_scene/);
+  assert.match(src,/unregistered_owner_projection_rejected/);
   assert.match(src,/"owner_frames":owner_used/);
-  assert.match(src,/"volumetric_reconstruction"/);
+  assert.match(src,/"map_registered_surface":True/);
+  assert.match(src,/"display_safe":registered_surface/);
+  assert.match(src,/"volumetric_reconstruction":registered_3d/);
 });
 
 test('Astra master UI models the full world instead of only facade and panorama',()=>{
@@ -474,7 +475,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -616,7 +617,7 @@ test('ONNX depth cloud is constrained by mapped building heights',()=>{
 test('v22 revision forces rebuilding old volumetric artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1'/);
 });
 
 
@@ -643,4 +644,22 @@ test('Telegram entrypoint cache-busts map and RealCity renderer assets per open'
   assert.match(index,/load\(entry\)/);
   assert.match(map,/realcity-splat-layer\.js/);
   assert.match(map,/\?v='\+encodeURIComponent\(revision\)/);
+});
+
+
+test('v24 spatial lock refuses raw depth takeover and invalidates v23 artifacts',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(api,/PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1'/);
+  assert.match(api,/require_map_registration:true/);
+  assert.match(api,/photoreal_spatial_registration/);
+  assert.match(worker,/if LIGHTWEIGHT_CPU and require_registration:/);
+  assert.match(worker,/facade_plane_reconstruct,paths,kept,job/);
+  assert.match(worker,/mapanything_unregistered/);
+  assert.match(worker,/spatial_registration_required/);
+  assert.match(map,/function isPhotorealDisplaySafe\(model\)/);
+  assert.match(map,/surface_projection===true/);
+  assert.match(map,/REAL CITY · PHOTO FACADE/);
 });

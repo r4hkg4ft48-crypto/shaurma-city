@@ -119,7 +119,7 @@ test('RealCity Pro uses authenticated full-resolution photo and refuses filename
  assert.match(api,/SELECT content,mime FROM realcity_pro_assets WHERE marker_id=\$1 AND asset_id=\$2/);
  assert.match(api,/DELETE FROM realcity_pro_calibrations WHERE marker_id=\$1 AND asset_id=\$2/);
  assert.match(ui,/sourceObjectUrl=URL\.createObjectURL\(blob\)/);
- assert.match(ui,/$('#editRole')/);
+ assert.ok(ui.includes("$('#editRole')"));
  assert.doesNotMatch(ui,/const sourceMap/);
  assert.match(ui,/const f=files\[i\],role=\$\('#role'\)\.value/);
 });

@@ -31,7 +31,7 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 <option value="hero_side">Боковой фасад</option><option value="hero_distance">Дальний вид главного</option>
 <option value="neighbor">Соседнее здание</option><option value="panorama">Панорама округа</option>
 <option value="road">Дороги и тротуары</option><option value="vegetation">Деревья и озеленение</option>
-<option value="landmark">Городской объект</option><option value="environment">Общий вид</option></select></label>
+<option value="landmark">Городской объект</option><option value="environment" selected>Общий вид — требует классификации</option></select></label>
 <label>Оригиналы JPG/PNG/HEIC/WebP<input type="file" id="photos" accept="image/*" multiple></label>
 <div><small>Исходные файлы сохраняются отдельно от Astra, проверяются размер, фокус, контраст и EXIF. Панорамы никогда не натягиваются на фасады.</small></div></div>
 <div id="photosList" class="list"></div></section>
@@ -39,7 +39,7 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 <section><h2>3 · Калибровка поверхности</h2>
 <p>Выбери фотокарточку, здание и грань. На фото нажми четыре угла <b>одной плоскости</b> по порядку: верх-лево → верх-право → низ-право → низ-лево. Не отмечай всю картинку, если в кадре есть небо и другие дома.</p>
 <div class="fields"><label>Здание<select id="building"></select></label><label>Сторона здания<select id="edge"></select></label><label>Размещение изображения<label><input type="checkbox" id="flip"> Развернуть горизонтально</label></label></div>
-<div id="stage" class="stage"><img id="workingPhoto" alt="Выбранная фотография"><svg id="overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div>
+<div class="fields"><label>Уточнить роль выбранного снимка<select id="editRole"></select></label><label><span>Исправление роли сбросит прежние привязки снимка</span><button id="saveRole" type="button">Сохранить роль</button></label></div><div id="stage" class="stage"><img id="workingPhoto" alt="Выбранная исходная фотография в максимальном разрешении"><svg id="overlay" viewBox="0 0 100 100" preserveAspectRatio="none"></svg></div>
 <div class="actions"><button id="resetQuad">Начать 4 точки заново</button><button id="maskMode">Маска: исключить объект</button><button id="finishMask">Закончить маску</button></div>
 <p id="pointsInfo" class="muted">Выбери фотографию для разметки.</p>
 <label><input type="checkbox" id="confirmed"> Подтверждаю, что углы принадлежат именно выбранной стене</label>
@@ -59,12 +59,8 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 (() => {
 const $=s=>document.querySelector(s),esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 const launch=new URL(location.href),tg=window.Telegram?.WebApp;
-let session=sessionStorage.getItem('sc_admin_tg_session')||'',owner=sessionStorage.getItem('sc_owner_token')||'',state=null,selected=null,quad=[],masks=[],workingMask=[],masking=false,previewOpened=false;
-const sourceMap={
-'IMG_7096':'hero_front','IMG_7094':'hero_oblique','IMG_7099':'hero_distance','IMG_7110':'hero_side',
-'IMG_7097':'neighbor','IMG_7105':'panorama','IMG_7095':'panorama','IMG_7100':'panorama',
-'IMG_7103':'panorama','IMG_7106':'panorama'
-};
+let session=sessionStorage.getItem('sc_admin_tg_session')||'',owner=sessionStorage.getItem('sc_owner_token')||'',state=null,selected=null,quad=[],masks=[],workingMask=[],masking=false,previewOpened=false,sourceObjectUrl=null,photoSelectionRevision=0;
+
 function status(t){$('#status').textContent=t}
 async function api(path,opt={}){
 const headers={...(opt.headers||{})};if(!headers['Content-Type']&&!(opt.body instanceof File))headers['Content-Type']='application/json';
@@ -75,6 +71,7 @@ if(!r.ok)throw Error(j.error||('HTTP '+r.status));return j;
 const endpoint=tail=>'/api/shaurma/admin/realcity-pro/'+encodeURIComponent($('#venue').value)+tail+'?marker_id='+encodeURIComponent($('#marker').value);
 async function init(){
 try{
+ $('#editRole').innerHTML=$('#role').innerHTML;
  if(!session&&!owner&&tg?.initData){
    const r=await fetch('/api/shaurma/admin-telegram-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData:tg.initData})});
    const j=await r.json();if(r.ok){session=j.session;sessionStorage.setItem('sc_admin_tg_session',session);}
@@ -96,7 +93,7 @@ try{
 }catch(e){status('Не удаётся загрузить метки: '+e.message)}
 }
 async function load(){
-try{state=await api(endpoint(''));selected=null;quad=[];masks=[];workingMask=[];previewOpened=false;
+try{if(sourceObjectUrl){URL.revokeObjectURL(sourceObjectUrl);sourceObjectUrl=null}photoSelectionRevision++;state=await api(endpoint(''));selected=null;quad=[];masks=[];workingMask=[];previewOpened=false;
 $('#published').textContent=state.published?'Опубликована · '+state.published.input_revision.slice(0,10):'Нет публикации';
 $('#settings').innerHTML=Object.entries(state.settings).map(([k,v])=>'<p><code>'+esc(k)+'</code> · '+esc(String(v))+'</p>').join('');
 $('#building').innerHTML=state.manifest.buildings.map(b=>'<option value="'+esc(b.building_id)+'">'+esc(b.role)+' · '+esc(b.building_id)+' · '+b.height_m+' м</option>').join('');
@@ -120,12 +117,25 @@ function surfaceSelection(){
  masks=c?.exclude?c.exclude.map(p=>p.map(x=>[...x])):[];
  workingMask=[];$('#flip').checked=c?.flip_u===true;$('#confirmed').checked=c?.confirmed===true;draw();
 }
-function choose(id){
+async function choose(id){
+ const rev=++photoSelectionRevision;
  selected=state.assets.find(a=>a.asset_id===id)||null;
  const c=state.calibrations.find(c=>c.asset_id===id);
  if(c){$('#building').value=c.building_id;edges();$('#edge').value=String(c.edge_index);}
+ $('#editRole').value=selected?.role||'environment';
+ if(sourceObjectUrl){URL.revokeObjectURL(sourceObjectUrl);sourceObjectUrl=null}
  $('#workingPhoto').src=selected?.preview||'';
  surfaceSelection();renderPhotos();
+ if(!selected)return;
+ try{
+   const headers={};if(session)headers.Authorization='Bearer '+session;else if(owner)headers['X-Owner-Token']=owner;
+   const response=await fetch(endpoint('/assets/'+encodeURIComponent(id)+'/original'),{headers,cache:'no-store'});
+   if(!response.ok)throw new Error('HTTP '+response.status);
+   const blob=await response.blob();
+   if(rev!==photoSelectionRevision)return;
+   sourceObjectUrl=URL.createObjectURL(blob);$('#workingPhoto').src=sourceObjectUrl;
+   status('Открыт исходный файл · '+selected.filename+' · '+(blob.size/1024/1024).toFixed(2)+' МБ');
+ }catch(e){if(rev===photoSelectionRevision)status('Недоступен оригинал, показана миниатюра: '+e.message)}
 }
 function draw(){
 const all=quad.map(([x,y])=>[x*100,y*100]);
@@ -144,19 +154,31 @@ if(masking){if(workingMask.length<40)workingMask.push(p);}else if(quad.length<4)
 $('#resetQuad').onclick=()=>{quad=[];draw()};
 $('#maskMode').onclick=()=>{masking=!masking;$('#maskMode').textContent=masking?'Режим маски активен':'Маска: исключить объект';draw()};
 $('#finishMask').onclick=()=>{if(workingMask.length>=3)masks.push(workingMask);workingMask=[];masking=false;$('#maskMode').textContent='Маска: исключить объект';draw()};
-$('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)choose(b.dataset.id)};
+$('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)void choose(b.dataset.id)};
 $('#building').onchange=()=>{edges();surfaceSelection()};$('#edge').onchange=surfaceSelection;
 $('#venue').onchange=markers;$('#marker').onchange=load;
 $('#photos').onchange=async e=>{
 const files=[...e.target.files];if(!files.length||!state)return;
 $('#photos').disabled=true;
 try{for(let i=0;i<files.length;i++){
-const f=files[i],guess=Object.entries(sourceMap).find(([name])=>f.name.startsWith(name)),role=guess?.[1]||$('#role').value;
+const f=files[i],role=$('#role').value;
 status('Загрузка '+(i+1)+'/'+files.length+': '+f.name);
 if(f.size>16*1024*1024)throw Error('Оригинал больше 16 МБ');
 state=await api(endpoint('/assets')+'&role='+encodeURIComponent(role)+'&filename='+encodeURIComponent(f.name),{method:'POST',body:f,headers:{'Content-Type':'application/octet-stream'}});
 renderPhotos();}status('Оригиналы сохранены в RealCity Pro · '+files.length);
 }catch(err){status('Не удалось загрузить: '+err.message)}finally{$('#photos').disabled=false;e.target.value='';updateButtons()}
+};
+$('#saveRole').onclick=async()=>{
+ if(!selected)return status('Сначала выбери оригинальную фотографию');
+ const role=$('#editRole').value;
+ if(role===selected.role)return status('Роль уже сохранена');
+ if(state.calibrations.some(c=>c.asset_id===selected.asset_id)&&!confirm('Переклассификация удалит только привязки этой фотографии. Продолжить?'))return;
+ try{
+  state=await api(endpoint('/assets/'+encodeURIComponent(selected.asset_id)+'/role'),{
+   method:'PATCH',body:JSON.stringify({marker_id:state.marker.id,role,expected_revision:state.revision})});
+  status('Роль фотографии исправлена. Проверь и заново привяжи соответствующие поверхности.');
+  const selectedId=selected.asset_id;await choose(selectedId);updateButtons();
+ }catch(e){status('Роль не сохранена: '+e.message)}
 };
 $('#saveCalibration').onclick=async()=>{
 if(!selected||quad.length!==4)return status('Нужна выбранная фотография и 4 угла одной поверхности');

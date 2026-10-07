@@ -559,7 +559,10 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
         return points,colors,confidence,fallback_scales,fallback_quats,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
 
 def frame_budget(requested:int)->int:
-    if LIGHTWEIGHT_CPU:return min(requested,12)
+    if LIGHTWEIGHT_CPU:
+        return min(requested,12)
+    if HIGH_MEMORY_CPU:
+        return min(requested,32)
     try:
         import torch
         if not torch.cuda.is_available():

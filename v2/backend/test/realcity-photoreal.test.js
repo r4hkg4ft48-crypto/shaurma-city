@@ -427,3 +427,16 @@ test('Astra master UI models the full world instead of only facade and panorama'
   assert.match(ui,/data-astra-camera="lat"/);
   assert.match(ui,/data-astra-camera="distance_m"/);
 });
+
+
+test('Astra Studio can explicitly queue the current photo-first dataset',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const studio=fs.readFileSync(path.join(__dirname,'../src/realcity-studio.js'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../../../backend/master-admin.html'),'utf8');
+  assert.match(studio,/base\+'\/reconstruct'/);
+  assert.match(studio,/R\.queue/);
+  assert.match(studio,/pipeline:'photo-first'/);
+  assert.match(ui,/id="astraReconstruct"/);
+  assert.match(ui,/Собрать PHOTO-FIRST RealCity/);
+  assert.match(ui,/\/reconstruct\?marker_id=/);
+});

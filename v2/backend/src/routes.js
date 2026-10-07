@@ -249,6 +249,8 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
     const q=await db.query('SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_profile,realcity_astra_assets,realcity_status,realcity_updated_at,jsonb_array_length(realcity_astra_assets) asset_count FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE',[req.params.id,D.establishmentId(req.query.establishment_id)]);
     const row=q.rows[0];if(!row)return res.sendStatus(404);
     const profile=row.realcity_profile||{};
+    const photorealCurrent=photoreal.isCurrent(row,profile);
+    const responseProfile=photorealCurrent?profile:{...profile,photoreal:null};
     if(realcity.needsRefresh(profile))realcity.queue(row.id)?.catch(()=>{});
     else photoreal.queue(row,profile).catch(e=>console.warn('RealCity photoreal on read',row.id,e.message));
     res.setHeader('Cache-Control','no-store');
@@ -271,12 +273,12 @@ router.get('/map/markers/:id/realcity',async(req,res)=>{
             diagnostics:rw.diagnostics||null,reconstruction:rw.reconstruction||null
           },
           astra:{status:astra.status||null,coverage:astra.coverage||null},
-          photoreal:photoreal.publicSummary(profile.photoreal),
+          photoreal:photoreal.publicSummary(photorealCurrent?profile.photoreal:null),
           photoreal_job:profile.photoreal_job||null
         }
       });
     }
-    res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
+    res.json({marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,profile:responseProfile,status:row.realcity_status,asset_count:Number(row.asset_count),updated_at:row.realcity_updated_at});
   }catch(e){fail(res,e,'realcity_read_failed')}
 });
 router.get('/realcity/reconstruction/source/:markerId/:assetId',async(req,res)=>{

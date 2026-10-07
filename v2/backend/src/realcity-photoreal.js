@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v20-open-street-source-v1';
+const PIPELINE_REVISION='v21-open-only-measured-3d-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -274,6 +274,11 @@ function validateArtifact(body,row){
       backend:clean(a.stats?.backend,80),gpu:clean(a.stats?.gpu,120)}
   };
 }
+function isCurrent(marker,profile=marker?.realcity_profile||{}){
+  if(!marker||!profile?.photoreal||profile.photoreal.status!=='ready')return false;
+  const assets=Array.isArray(marker.realcity_astra_assets)?marker.realcity_astra_assets:[];
+  return profile.photoreal.input_signature===sceneSignature(marker,profile,assets);
+}
 async function queue(marker,profile=marker.realcity_profile||{}){
   await ensureSchema();
   if(!db.configured||!config.REALCITY_PHOTOREAL_ENABLED||!config.REALCITY_RECONSTRUCTION_WORKER_URL||!config.REALCITY_RECONSTRUCTION_SECRET)return {queued:false,reason:'worker_not_configured'};
@@ -321,6 +326,11 @@ async function acceptResult(body){
   const currentSig=sceneSignature(marker,marker.realcity_profile,marker.realcity_astra_assets||[]);
   if(currentSig!==body.input_signature)throw Object.assign(new Error('photoreal_inputs_changed'),{status:409});
   const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,volume:volumeDiagnostics(artifact.chunks),source_mix:sourceMix(artifact.sources)};
+  console.log('RealCity reconstruction accepted',JSON.stringify({
+    marker_id:Number(row.marker_id),job_id:body.job_id,backend:summary.backend,
+    frames:summary.frames,points:summary.points,volume:summary.volume,
+    source_mix:summary.source_mix,alignment:summary.alignment
+  }));
   await db.tx(async client=>{
     await client.query("UPDATE realcity_reconstruction_jobs SET status='ready',result_summary=$2::jsonb,updated_at=NOW() WHERE job_id=$1",[body.job_id,JSON.stringify(summary)]);
     await client.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal}',$2::jsonb),'{photoreal_job}',$3::jsonb),realcity_quality='photoreal',realcity_updated_at=NOW() WHERE id=$1",[row.marker_id,JSON.stringify(artifact),JSON.stringify({job_id:body.job_id,status:'ready',input_signature:body.input_signature,completed_at:new Date().toISOString(),summary})]);
@@ -341,4 +351,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics}};

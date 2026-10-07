@@ -337,10 +337,10 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v19 photo-first revision invalidates old reconstruction artifacts',()=>{
+test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
 });
 
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
 });
 
 
@@ -384,11 +384,12 @@ test('photo-first owner observations carry exact camera and world roles',()=>{
             P._internals.ownerPriority({category:'street_object',priority:3}));
 });
 
-test('photo-first config enables owner originals by default',()=>{
+test('open-only release disables owner originals by default while keeping the feature opt-in',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/config.js'),'utf8');
-  assert.match(src,/REALCITY_PHOTOREAL_USE_OWNER_ASSETS.*\|\|'true'/);
-  assert.match(src,/v2-realcity-photo-first-19/);
+  assert.match(src,/REALCITY_PHOTOREAL_USE_OWNER_ASSETS.*\|\|'false'/);
+  assert.match(src,/toLowerCase\(\)===\'true\'/);
+  assert.match(src,/v2-realcity-open-only-measured-21/);
 });
 
 test('stored originals expose EXIF pose migration without altering originals',()=>{
@@ -473,7 +474,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -526,4 +527,42 @@ test('volumetric ONNX splats overlay support geometry while metric photogrammetr
   assert.match(splat,/if\(this\.overlaySupport\)gl\.disable\(gl\.DEPTH_TEST\)/);
   assert.match(splat,/else\{gl\.enable\(gl\.DEPTH_TEST\);gl\.depthFunc\(gl\.LEQUAL\)\}/);
   assert.match(splat,/overlaySupport:!!overlaySupport/);
+});
+
+
+test('stale photoreal artifact is rejected when its input signature is no longer current',()=>{
+  const m={...marker,realcity_astra_assets:[]};
+  const currentSig=P.sceneSignature(m,profile,[]);
+  const current={...profile,photoreal:{status:'ready',input_signature:currentSig}};
+  assert.equal(P.isCurrent(m,current),true);
+  const stale={...profile,photoreal:{status:'ready',input_signature:'0'.repeat(64)}};
+  assert.equal(P.isCurrent(m,stale),false);
+});
+
+test('RealCity route hides stale photoreal subtree while queuing a rebuild',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/routes.js'),'utf8');
+  assert.match(src,/photorealCurrent=photoreal\.isCurrent\(row,profile\)/);
+  assert.match(src,/responseProfile=photorealCurrent\?profile:\{\.\.\.profile,photoreal:null\}/);
+  assert.match(src,/photoreal:photoreal\.publicSummary\(photorealCurrent\?profile\.photoreal:null\)/);
+  assert.match(src,/profile:responseProfile/);
+});
+
+test('accepted reconstruction emits measured release diagnostics',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/RealCity reconstruction accepted/);
+  assert.match(src,/volume:summary\.volume/);
+  assert.match(src,/source_mix:summary\.source_mix/);
+  assert.match(src,/alignment:summary\.alignment/);
+});
+
+
+test('release bootstrap proactively requeues current photoreal scenes',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-service.js'),'utf8');
+  assert.match(src,/realcity_astra_assets FROM shaurmeg_markers/);
+  assert.match(src,/photoreal\.queue\(x,x\.realcity_profile\|\|\{\}\)/);
+  assert.match(src,/RealCity photoreal bootstrap/);
+  assert.match(src,/waiting for a human to open a marker/);
 });

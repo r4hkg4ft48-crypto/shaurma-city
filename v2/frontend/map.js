@@ -553,8 +553,11 @@
     box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
   function isPhotorealDisplaySafe(model){
+    if(model?.quality?.reference_master===true&&model?.quality?.surface_projection===true&&
+       !(Number(model.quality.calibrated_facades)>=1))return false;
     return model?.quality?.display_safe===true&&model?.quality?.map_registered_surface===true;
   }
+  const isLepeshkaRealCity=p=>String(p?.id??p?.marker_id)==='3139';
   function isCompletePhotogrammetry(model){
     return isPhotorealDisplaySafe(model)&&model?.quality?.photogrammetric===true&&model?.quality?.metric_reconstruction===true;
   }
@@ -595,7 +598,8 @@
         {mode:'photoreal',model:j.profile?.photoreal},
         {mode:'astra',model:j.profile?.astra},
         {mode:'open-world',model:j.profile?.real_world}
-      ].filter(x=>x.model?.status==='ready'&&(x.mode!=='photoreal'||isPhotorealDisplaySafe(x.model)));
+      ].filter(x=>x.model?.status==='ready'&&
+        (x.mode==='photoreal'?isPhotorealDisplaySafe(x.model):!isLepeshkaRealCity(p)));
       if(authoredCandidates.length){
         await loadAstraRenderer();if(token!==focusToken)return;
         const authored=authoredCandidates.find(x=>x.mode==='photoreal'?window.RealCitySpatial.boundPhotoreal(x.model,p,j.profile.scene):window.RealCitySpatial.bound(x.model,p,j.profile.scene));
@@ -712,6 +716,15 @@
   function revealQuarter(p,profile){
     cancelAnimationFrame(quarterFrame);
     const token=focusToken,data=buildQuarterData(p,profile);
+    // Do not conceal a broken photo model with invented coloured buildings,
+    // ground disks or trees. Keep native MapLibre geometry fully usable until
+    // the photographed surfaces have been explicitly calibrated.
+    if(isLepeshkaRealCity(p)&&!astraLayer){
+      clearQuarter();
+      $('#focusHudState').textContent='Фасад ожидает точной фотопривязки';
+      $('#realBadge').textContent='REAL CITY · ФОТОПРИВЯЗКА';
+      return;
+    }
     if(!data.heroFeature&&!data.contextFeatures.length){
       setTimeout(()=>{if(token===focusToken)nearestBuilding(p,profile)},reduceMotion?0:360);
       return;

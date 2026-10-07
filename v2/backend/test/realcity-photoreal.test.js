@@ -459,3 +459,20 @@ test('ONNX depth preserves high-resolution source appearance and EXIF orientatio
   assert.match(src,/rgb=np\.asarray\(base\)/);
   assert.match(src,/resize\(\(w,h\),Image\.Resampling\.BICUBIC\)/);
 });
+
+
+test('provider mix reports reconstruction evidence explicitly',()=>{
+  const mix=P._internals.sourceMix([
+    {provider:'wikimedia'},{provider:'wikimedia'},{provider:'kartaview'},
+    {provider:'panoramax'},{provider:'unknown'}
+  ]);
+  assert.deepEqual(mix,{owner:0,panoramax:1,kartaview:1,wikimedia:2,mapillary:0,other:1});
+});
+
+test('v20 source revision forces requeue after street discovery changes',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
+  assert.match(src,/source_mix:sourceMix\(sources\)/);
+  assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
+});

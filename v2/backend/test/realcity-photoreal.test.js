@@ -262,3 +262,23 @@ test('bundle-adjusted camera basis feeds final ENU alignment',()=>{
   assert.match(src,/anchor_c2w=invert_w2c\(ex\)/);
   assert.match(src,/anchor_metric_points\(pts,centers,anchor_c2w/);
 });
+
+
+test('RealCity world palette visibly replaces the dark city theme and restores on exit',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/function setRealCityWorldPalette\(active\)/);
+  assert.match(src,/background-color','#9da5a7'/);
+  assert.match(src,/fill-color','#7898a5'/);
+  assert.match(src,/line-color','#55585a'/);
+  assert.match(src,/setRealCityWorldPalette\(!!astraLayer\)/);
+  assert.match(src,/setRealCityWorldPalette\(false\)/);
+  assert.match(src,/zoom:19\.05,pitch:67/);
+});
+
+test('MapAnything does not request multiview confidence for a single observation',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/use_multiview_confidence=len\(views\)>1/);
+  assert.match(src,/realcity-photoreal-worker-v4/);
+});

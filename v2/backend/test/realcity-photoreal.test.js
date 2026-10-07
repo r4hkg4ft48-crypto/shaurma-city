@@ -225,3 +225,17 @@ test('MapAnything single-view stays metric and is attempted before low-view fall
   assert.ok(dispatch>0&&lowFallback>dispatch);
   assert.doesNotMatch(src,/elif len\(paths\)<3:[\s\S]{0,260}?gps_depth_reconstruct/);
 });
+
+
+test('compute tier invalidates a photoreal signature only when explicitly set',()=>{
+  const before=config.REALCITY_RECONSTRUCTION_TIER;
+  try{
+    config.REALCITY_RECONSTRUCTION_TIER='';
+    const base=P.sceneSignature(marker,profile,[]);
+    config.REALCITY_RECONSTRUCTION_TIER='max';
+    const max=P.sceneSignature(marker,profile,[]);
+    assert.notEqual(base,max);
+    config.REALCITY_RECONSTRUCTION_TIER='lite';
+    assert.notEqual(max,P.sceneSignature(marker,profile,[]));
+  }finally{config.REALCITY_RECONSTRUCTION_TIER=before}
+});

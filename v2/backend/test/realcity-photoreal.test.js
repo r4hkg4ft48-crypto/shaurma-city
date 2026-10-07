@@ -200,14 +200,14 @@ test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>
   assert.doesNotMatch(req,/rerun-sdk|tensorboard/i);
 });
 
-test('partial photoreal keeps support geometry only for non-volumetric fallbacks',()=>{
+test('partial photoreal distinguishes flat fallback from measured volumetric support',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/realcity-photoreal-shell/);
   assert.match(src,/isTruePhotogrammetry=isCompletePhotogrammetry\(authored\.model\)/);
-  assert.match(src,/isVolumetricDepth=authored\.model\?\.quality\?\.volumetric_reconstruction===true/);
+  assert.match(src,/isVolumetricDepth=isMeasuredVolumetric\(authored\.model\)/);
   assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
-  assert.match(src,/setProgress\(v\)\{shell\.setProgress\?\.\(v\);splat\.setProgress\?\.\(v\)\}/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
   assert.match(src,/REAL CITY · PHOTO 3D/);
 });
@@ -337,10 +337,10 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
+test('v22 visible-world revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
 });
 
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
 });
 
 
@@ -474,7 +474,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -489,17 +489,17 @@ test('lazy RealCity renderer follows the Mini App cache revision',()=>{
 });
 
 
-test('incomplete depth reconstruction keeps native 3D buildings instead of flattening them',()=>{
+test('measured incomplete depth replaces native buildings with neutral 3D support volumes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/function isCompletePhotogrammetry\(model\)/);
-  assert.match(src,/photogrammetric===true&&model\?\.quality\?\.metric_reconstruction===true/);
+  assert.match(src,/function isMeasuredVolumetric\(model\)/);
   assert.match(src,/const completePhotogrammetry=photoreal&&isCompletePhotogrammetry\(authored\)/);
-  assert.match(src,/const replaced=new Set\(completePhotogrammetry/);
-  assert.match(src,/:photoreal\?\[\]/);
+  assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
+  assert.match(src,/\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
-  assert.match(src,/hero=astraLayer\?null:/);
-  assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
+  assert.match(src,/supportify/);
 });
 
 

@@ -320,16 +320,25 @@ async function acceptResult(body){
   const marker={...row,id:row.marker_id,realcity_profile:row.realcity_profile||{}},artifact=validateArtifact(body,marker);
   const currentSig=sceneSignature(marker,marker.realcity_profile,marker.realcity_astra_assets||[]);
   if(currentSig!==body.input_signature)throw Object.assign(new Error('photoreal_inputs_changed'),{status:409});
-  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,source_mix:sourceMix(artifact.sources)};
+  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,volume:volumeDiagnostics(artifact.chunks),source_mix:sourceMix(artifact.sources)};
   await db.tx(async client=>{
     await client.query("UPDATE realcity_reconstruction_jobs SET status='ready',result_summary=$2::jsonb,updated_at=NOW() WHERE job_id=$1",[body.job_id,JSON.stringify(summary)]);
     await client.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal}',$2::jsonb),'{photoreal_job}',$3::jsonb),realcity_quality='photoreal',realcity_updated_at=NOW() WHERE id=$1",[row.marker_id,JSON.stringify(artifact),JSON.stringify({job_id:body.job_id,status:'ready',input_signature:body.input_signature,completed_at:new Date().toISOString(),summary})]);
   });
   return {ok:true,status:'ready',summary};
 }
+function volumeDiagnostics(chunks=[]){
+  const valid=(chunks||[]).filter(c=>Array.isArray(c?.bounds_min)&&Array.isArray(c?.bounds_max)&&c.bounds_min.length===3&&c.bounds_max.length===3);
+  if(!valid.length)return null;
+  const mn=[Infinity,Infinity,Infinity],mx=[-Infinity,-Infinity,-Infinity];
+  for(const c of valid)for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],Number(c.bounds_min[i]));mx[i]=Math.max(mx[i],Number(c.bounds_max[i]))}
+  if([...mn,...mx].some(v=>!Number.isFinite(v)))return null;
+  const span=mx.map((v,i)=>Number((v-mn[i]).toFixed(3)));
+  return {min:mn.map(v=>Number(v.toFixed(3))),max:mx.map(v=>Number(v.toFixed(3))),span_m:{x:span[0],y:span[1],z:span[2]},volumetric:span[2]>=2&&Math.max(span[0],span[1])>=3};
+}
 function publicSummary(p){
   if(!p)return null;return {status:p.status,engine:p.engine,representation:p.representation,generated_at:p.generated_at,
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
-    alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
+    alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics}};

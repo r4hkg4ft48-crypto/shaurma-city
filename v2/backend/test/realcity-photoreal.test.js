@@ -500,3 +500,16 @@ test('incomplete depth reconstruction keeps native 3D buildings instead of flatt
   assert.match(src,/hero=astraLayer\?null:/);
   assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
 });
+
+
+test('RCSP2 volume diagnostics detect collapsed height and true 3D extent',()=>{
+  const P=require('../src/realcity-photoreal');
+  const good=P._internals.volumeDiagnostics([
+    {bounds_min:[-12,-8,-1],bounds_max:[14,19,18]},
+    {bounds_min:[-3,-4,0],bounds_max:[5,7,9]}
+  ]);
+  assert.deepEqual(good.span_m,{x:26,y:27,z:19});
+  assert.equal(good.volumetric,true);
+  const flat=P._internals.volumeDiagnostics([{bounds_min:[-12,-8,0],bounds_max:[14,19,.7]}]);
+  assert.equal(flat.volumetric,false);
+});

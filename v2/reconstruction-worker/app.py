@@ -851,6 +851,17 @@ def invert_c2w(c2w:np.ndarray)->np.ndarray:
         out.append(inv[:3,:4])
     return np.stack(out)
 
+def invert_w2c(extrinsic:np.ndarray)->np.ndarray:
+    out=[]
+    for pose in np.asarray(extrinsic):
+        E=np.asarray(pose,dtype=np.float64)
+        if E.shape!=(3,4):raise RuntimeError("extrinsic_shape")
+        R=E[:,:3];t=E[:,3]
+        H=np.eye(4,dtype=np.float64);H[:3,:3]=R.T;H[:3,3]=-R.T@t
+        out.append(H.astype(np.float32))
+    return np.stack(out)
+
+
 def unproject_depth_np(depth:np.ndarray,extrinsic:np.ndarray,intrinsic:np.ndarray)->np.ndarray:
     maps=[]
     for d,E,K in zip(depth,extrinsic,intrinsic):
@@ -915,6 +926,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     if ba.get("bundle_adjustment"):
         p=unproject_depth_np(depth_np,ex2,intr2)
         ex,intr_np=ex2,intr2
+    anchor_c2w=invert_w2c(ex)
     centers=camera_centers(ex)
     target=int(job.policy.get("max_points",150000))
     ims_chw=ims_hwc.transpose(0,3,1,2)
@@ -922,7 +934,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
     pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,180000))
     pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,torch_images,ex,intr_np,cf)
-    pts,centers,alignment=anchor_metric_points(pts,centers,c2w,sources,job.map_anchor["origin"],job.map_anchor)
+    pts,centers,alignment=anchor_metric_points(pts,centers,anchor_c2w,sources,job.map_anchor["origin"],job.map_anchor)
     world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
     if alignment.get("rotation_matrix") is not None:
         quats=rotate_quats_matrix(quats,np.asarray(alignment["rotation_matrix"],dtype=np.float64))

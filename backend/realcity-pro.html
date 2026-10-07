@@ -102,6 +102,8 @@ $('#settings').innerHTML=Object.entries(state.settings).map(([k,v])=>'<p><code>'
 $('#building').innerHTML=state.manifest.buildings.map(b=>'<option value="'+esc(b.building_id)+'">'+esc(b.role)+' · '+esc(b.building_id)+' · '+b.height_m+' м</option>').join('');
 $('#building').value=state.manifest.hero_building_id;edges();renderPhotos();updateButtons();
 $('#report').textContent=state.draft?JSON.stringify(state.draft.report,null,2):'Черновик не создан.';
+if(state.job?.status==='processing')status('RealCity Pro выполняет '+state.job.completed+'/'+state.job.total+' поверхностей · заказы и карта работают');
+if(state.job?.status==='failed')status('Предыдущая сборка: '+state.job.last_error);
 }catch(e){status('Ошибка загрузки RealCity Pro: '+e.message)}
 }
 function edges(){
@@ -172,9 +174,26 @@ $('#publish').disabled=!state?.draft?.report?.ready||state.draft.reviewed_revisi
 $('#unpublish').disabled=!state?.published;
 }
 $('#build').onclick=async()=>{
-$('#build').disabled=true;status('Выпрямление фотографических текстур…');
-try{const j=await api(endpoint('/build'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision})});status('Сборка завершена. '+(j.report.ready?'Можно проверить на карте.':'Есть проблемы качества.'));await load();
-}catch(e){status('Сборка остановлена: '+e.message)}finally{$('#build').disabled=false}
+$('#build').disabled=true;status('RealCity Pro: отправляем фотографии в отдельный CPU worker…');
+try{
+ const j=await api(endpoint('/build'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision})});
+ status('Выполняется '+j.total+' фасадных поверхностей. Основная карта продолжает работать.');
+ let finished=false;
+ for(let attempt=0;attempt<160;attempt++){
+   await new Promise(resolve=>setTimeout(resolve,1400));
+   const next=await api(endpoint(''));
+   if(next.job?.job_id!==j.job_id)throw Error('pro_build_replaced');
+   const progress=next.job;
+   if(progress.status==='failed')throw Error(progress.last_error||'pro_build_failed');
+   if(progress.status==='ready'){
+     await load();status(next.draft?.report?.ready?'PHOTO VERIFIED: черновик готов к визуальному сравнению на карте.':
+       'Фото обработаны; публикация заблокирована до устранения проблем качества.');
+     finished=true;break;
+   }
+   status('Обработка фотографий: '+progress.completed+'/'+progress.total+' поверхностей. Mini App и заказы не заблокированы.');
+ }
+ if(!finished)status('Расчёт выполняется дольше ожидаемого. Можно вернуться в раздел и проверить состояние сборки.');
+}catch(e){status('Сборка не завершена: '+e.message)}finally{$('#build').disabled=false}
 };
 window.RealCityProStudio={previewData:null};
 $('#preview').onclick=async()=>{

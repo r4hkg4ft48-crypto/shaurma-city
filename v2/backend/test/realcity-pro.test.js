@@ -79,3 +79,13 @@ test('One photograph may calibrate two different map walls without sharing photo
  assert.match(src,/PRIMARY KEY\(marker_id,asset_id,building_id,edge_index\)/);
  assert.match(src,/ON CONFLICT\(marker_id,asset_id,building_id,edge_index\)/);
 });
+
+test('Different real photographs share one rectified surface per map edge',()=>{
+ const sameWall={building_id:'hero-1',edge_index:0};
+ assert.equal(pro.surfaceId({...sameWall,asset_id:'one'}),pro.surfaceId({...sameWall,asset_id:'two'}));
+ const src=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ assert.match(src,/const groups=new Map\(\)/);
+ assert.match(src,/pro_max_four_views_per_surface/);
+ assert.match(src,/views:views\.map\(v=>\(/);
+ assert.match(src,/used\.push\(\.\.\.views\)/);
+});

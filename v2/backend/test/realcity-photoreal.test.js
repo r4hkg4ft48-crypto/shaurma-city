@@ -301,7 +301,9 @@ test('MAX source sweep reaches beyond the old narrow street radius',()=>{
   assert.match(open,/radius:'520'/);
   assert.match(open,/ggsradius:'650'/);
   assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
-  assert.match(photo,/photorealCandidates\(await openWorld\.collectCandidates\(marker\),marker,88,maxDistance\)/);
+  assert.match(photo,/openWorld\.collectCandidates\(marker\)\.catch\(\(\)=>\[\]\)/);
+  assert.match(photo,/openWorld\.resolveReferences\(persistedRefs\)\.catch\(\(\)=>\[\]\)/);
+  assert.match(photo,/photorealCandidates\(merged,marker,88,maxDistance\)/);
 });
 
 
@@ -334,10 +336,10 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v18 ONNX revision invalidates old flat photoplane artifacts',()=>{
+test('v18 source resolver revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v18-onnx-q4-v2'/);
+  assert.match(src,/PIPELINE_REVISION='v18-source-resolver-v3'/);
 });
 
 

@@ -6,6 +6,7 @@
   let astraLayer=null,supportRealCityLayer=null,astraScripts=null,quarterFrame=0,previewSignature='',activeRealCityModel=null,activeRealCityMode='';
   const baseBuildingPaint=new Map();
   const baseLabelPaint=new Map();
+  const realCityWorldPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='',orderDetailId='';
   let pointsWarmPromise=null;
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
@@ -362,6 +363,43 @@
     };
     for(const [id,props] of baseLabelPaint)for(const [prop,value] of Object.entries(props))try{map.setPaintProperty(id,prop,marker?mask(value):value??1)}catch{}
   }
+  function setRealCityWorldPalette(active){
+    const layers=map.getStyle()?.layers||[];
+    if(!active){
+      for(const [id,props] of realCityWorldPaint){
+        if(!map.getLayer(id))continue;
+        for(const [prop,value] of Object.entries(props))try{map.setPaintProperty(id,prop,value)}catch{}
+      }
+      realCityWorldPaint.clear();
+      return;
+    }
+    if(realCityWorldPaint.size)return;
+    const remember=(id,prop)=>{
+      if(!realCityWorldPaint.has(id))realCityWorldPaint.set(id,{});
+      realCityWorldPaint.get(id)[prop]=map.getPaintProperty(id,prop);
+    };
+    for(const l of layers){
+      const id=String(l.id||''),type=l.type;
+      try{
+        if(type==='background'){
+          remember(id,'background-color');map.setPaintProperty(id,'background-color','#9da5a7');
+        }else if(type==='fill'&&/water|river|lake|ocean/i.test(id)){
+          remember(id,'fill-color');remember(id,'fill-opacity');
+          map.setPaintProperty(id,'fill-color','#7898a5');map.setPaintProperty(id,'fill-opacity',.88);
+        }else if(type==='fill'&&/park|grass|wood|vegetation|forest|landcover/i.test(id)){
+          remember(id,'fill-color');remember(id,'fill-opacity');
+          map.setPaintProperty(id,'fill-color','#5f7357');map.setPaintProperty(id,'fill-opacity',.84);
+        }else if(type==='fill'&&/residential|landuse|land/i.test(id)&&!/water/i.test(id)){
+          remember(id,'fill-color');remember(id,'fill-opacity');
+          map.setPaintProperty(id,'fill-color','#969289');map.setPaintProperty(id,'fill-opacity',.82);
+        }else if(type==='line'&&/road|street|highway|path|motorway|trunk/i.test(id)){
+          remember(id,'line-color');remember(id,'line-opacity');
+          map.setPaintProperty(id,'line-color','#55585a');map.setPaintProperty(id,'line-opacity',.54);
+        }
+      }catch{}
+    }
+  }
+
   function addFocusLayers(){
     if(map.getSource('focus-building'))return;
 
@@ -572,7 +610,7 @@
       }
       if(token!==focusToken)return;
       if(astraLayer&&activeRealCityModel){
-        const cam=activeRealCityModel.camera||j.profile?.camera||{zoom:18.35,pitch:61,bearing:-20,views:[]},offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
+        const cam=activeRealCityModel.camera||j.profile?.camera||(activeRealCityMode==='photoreal'?{zoom:19.05,pitch:67,bearing:-20,views:[]}:{zoom:18.35,pitch:61,bearing:-20,views:[]}),offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
         $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':'REAL CITY · PHOTO 3D'):activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
         if(preview&&activeRealCityMode==='astra'&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
@@ -631,7 +669,7 @@
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-barriers-line','line-opacity',0)}catch{}
-    setBaseBuildingsDim(false);setPhotoLabels(null);document.body.classList.remove('realCityActive','realCitySettled');
+    setBaseBuildingsDim(false);setPhotoLabels(null);setRealCityWorldPalette(false);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
     cancelAnimationFrame(quarterFrame);
@@ -666,11 +704,12 @@
     const visibleTrees=photoreal?data.trees.filter(f=>f.properties?.source==='osm'):data.trees;
     map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:visibleTrees});
     const photoGround=!!(photoreal||(astraLayer&&authored?.environment?.roads?.length));
+    setRealCityWorldPalette(!!astraLayer);
     setPhotoLabels(photoGround?p:null);
     document.body.classList.toggle('realCityPhotographic',photoGround);
     // Keep the real base map visible. A flat 90%-opaque disk was one of the
     // main reasons the quarter looked synthetic even when facade pixels were real.
-    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#a3a19a':photoGround?'#b3b0a7':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.18:photoGround?.32:daypart()==='night'?.12:.16)}catch{}
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#8c8981':photoGround?'#aaa69c':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.1:photoGround?.24:daypart()==='night'?.12:.16)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoreal?.58:photoGround?.62:.34)}catch{}
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoreal?.18:photoGround?.14:.12)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',photoreal?.72:photoGround?.64:daypart()==='night'?.42:.56)}catch{}

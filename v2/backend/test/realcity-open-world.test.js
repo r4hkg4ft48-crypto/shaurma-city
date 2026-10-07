@@ -184,3 +184,20 @@ test('OpenFreeMap environment fallback survives Overpass outages by contract',()
   assert.match(src,/constrained-green-density/);
   assert.doesNotMatch(src,/source:'procedural-density'/);
 });
+
+
+test('persisted Wikimedia references can be deterministically re-resolved without storing raw images',()=>{
+  const O=require('../src/realcity-open-world');
+  const url=O._internals.wikimediaReferenceApiUrl([
+    {source:'wikimedia',source_id:'18392888'},
+    {source:'wikimedia',source_id:'18392888'},
+    {source:'kartaview',source_id:'x'},
+    {source:'wikimedia',source_id:'not-a-pageid'}
+  ]);
+  assert.ok(url);
+  const u=new URL(url);
+  assert.equal(u.hostname,'commons.wikimedia.org');
+  assert.equal(u.searchParams.get('pageids'),'18392888');
+  assert.equal(u.searchParams.get('iiprop'),'url|extmetadata');
+  assert.equal(typeof O.resolveReferences,'function');
+});

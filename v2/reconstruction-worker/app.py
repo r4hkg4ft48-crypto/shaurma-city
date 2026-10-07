@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v7"
+APP_VERSION="realcity-photoreal-worker-v8-spatial-lock"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -806,9 +806,9 @@ def facade_candidate(source:dict,job:Job):
 def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor.get("origin") or job.target.get("coordinates")
     if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
-    max_points=min(int(job.policy.get("max_points",120000)),120000)
+    max_points=min(int(job.policy.get("max_points",80000)),80000)
     all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
-    used=0;inferred=0;masked=0;facades=set()
+    used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set()
     per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))
     for path,source in zip(image_paths,sources):
         hit=facade_candidate(source,job)
@@ -898,6 +898,7 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
 
         all_points.append(p);all_colors.append(cols);all_conf.append(cf);all_scales.append(scales);all_quats.append(quat)
         used+=1;inferred+=1 if is_inferred else 0
+        if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
         facades.add(str(building.get("building_id"))+":"+str(edge))
 
     if not all_points:raise RuntimeError("photoplane_no_visible_facades")
@@ -909,9 +910,10 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     alignment={"method":"osm-facade-ray-projection","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
     stats={
       "backend":"open-pixel-osm-facade-projection","gpu":"CPU-lightweight","frames":used,
+      "owner_frames":owner_used,"owner_roles":sorted(owner_roles),
       "dynamic_removed":masked,"bundle_adjustment":False,"gaussian_optimized":False,
-      "fallback":True,"projection":True,"inferred_facade_matches":inferred,
-      "covered_facades":len(facades)
+      "fallback":True,"projection":True,"map_registered_surface":True,
+      "inferred_facade_matches":inferred,"covered_facades":len(facades)
     }
     return pts,cols,conf,scales,quats,alignment,stats
 

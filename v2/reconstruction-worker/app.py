@@ -1088,17 +1088,23 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
     declared_radius=float(job.map_anchor.get("radius_m",190))
     coverage_radius=max(12.0,min(declared_radius,observed_radius+6.0))
+    safe_3d_methods=("gps-rigid-metric-3d","gps-heading-metric-3d")
+    registered_3d=bool(stats.get("universal_3d")) and alignment.get("method") in safe_3d_methods
+    registered_surface=bool(stats.get("map_registered_surface")) or registered_3d
     quality={
-      "geometry":"metric_multiview_mapanything" if stats.get("universal_3d") else ("osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth")),
+      "geometry":"metric_multiview_mapanything" if registered_3d else ("osm_registered_facade_pixels" if stats.get("map_registered_surface") else ("gps_monocular_depth_unregistered" if stats.get("fallback") else "dense_multi_view_depth")),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":coverage_radius,
       "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
       "photo_first":bool(job.policy.get("photo_first")),"owner_frames":int(stats.get("owner_frames",0)),"owner_roles":stats.get("owner_roles",[]),
-      "volumetric_reconstruction":bool(stats.get("universal_3d") or stats.get("depth_3d") or not stats.get("projection")),
-      "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
-      "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")
+      "map_registered_surface":registered_surface,
+      "display_safe":registered_surface,
+      "surface_projection":bool(stats.get("map_registered_surface") and stats.get("projection")),
+      "volumetric_reconstruction":registered_3d,
+      "photogrammetric":registered_3d and int(stats.get("frames",0))>=2,
+      "metric_reconstruction":registered_3d
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,

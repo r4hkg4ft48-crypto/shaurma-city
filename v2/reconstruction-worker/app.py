@@ -1103,6 +1103,14 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"owner_frames":sum(1 for s in sources[:len(image_paths)] if s.get("kind")=="owner"),"owner_roles":sorted({str(s.get("role") or s.get("category") or "owner") for s in sources[:len(image_paths)] if s.get("kind")=="owner"}),"dynamic_removed":dynamic_removed,**ba,**gs}
 
 def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
+    envelope=scene_physical_envelope(job)
+    points=np.asarray(points,dtype=np.float32);colors=np.asarray(colors);conf=np.asarray(conf)
+    scales_xyz=np.asarray(scales_xyz);quats=np.asarray(quats)
+    before=len(points)
+    keep=(np.linalg.norm(points[:,:2],axis=1)<=float(envelope["radius_m"]))&(points[:,2]>=float(envelope["z_min"]))&(points[:,2]<=float(envelope["z_max"]))&np.isfinite(points).all(axis=1)
+    points,colors,conf,scales_xyz,quats=points[keep],colors[keep],conf[keep],scales_xyz[keep],quats[keep]
+    stats={**stats,"envelope_removed":int(stats.get("envelope_removed",0))+int(before-len(points)),"physical_envelope":envelope}
+    if len(points)<5000:raise RuntimeError("physical_envelope_too_sparse")
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","category","subtype","role","license","license_url","attribution","page_url","captured_at")} for s in job.sources]

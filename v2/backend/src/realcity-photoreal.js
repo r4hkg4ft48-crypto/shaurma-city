@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v26-lepeshka-master-reference-v1';
+const PIPELINE_REVISION='v26.1-lepeshka-marker3139-master-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -26,8 +26,10 @@ const LEPESHKA_MASTER_B64=[1,2,3,4,5,6,7,8]
   .join('');
 const LEPESHKA_MASTER_SHA=LEPESHKA_MASTER_B64?crypto.createHash('sha256').update(LEPESHKA_MASTER_B64).digest('hex'):'';
 function isLepeshka(marker){
-  const name=String(marker?.name||'').toLowerCase().replace(/ё/g,'е');
-  return String(marker?.id||'')==='3139'||name.includes('в лепешке')||name==='лепешка'||name.includes('лепешк');
+  // The production venue with the uploaded Astra photo pack is marker 3139.
+  // Do not route the master to legacy/duplicate markers merely because their
+  // names contain "Лепёшка".
+  return String(marker?.id||'')==='3139';
 }
 function readReferenceAsset(slug){
   if(slug!=='lepeshka-master.webp'||!LEPESHKA_MASTER_B64)return null;

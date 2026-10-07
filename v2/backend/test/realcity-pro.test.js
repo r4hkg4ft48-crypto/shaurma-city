@@ -89,3 +89,20 @@ test('Different real photographs share one rectified surface per map edge',()=>{
  assert.match(src,/views:views\.map\(v=>\(/);
  assert.match(src,/used\.push\(\.\.\.views\)/);
 });
+
+test('RealCity Pro runs CPU rectification off-thread, persists progress and fails closed on missing textures',()=>{
+ const api=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ const worker=fs.readFileSync(path.join(__dirname,'../src/realcity-pro-worker.js'),'utf8');
+ const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+ const layer=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-layer.js'),'utf8');
+ assert.match(api,/new Worker\(require\.resolve\('\.\/realcity-pro-worker'\)/);
+ assert.match(api,/res\.status\(202\)\.json\(\{queued:true/);
+ assert.match(api,/realcity_pro_jobs/);
+ assert.match(api,/buildOffThread\(\{/);
+ assert.match(api,/UPDATE realcity_pro_jobs SET status='ready'/);
+ assert.match(worker,/P\.buildMaterial\(workerData\.spec/);
+ assert.match(layer,/if\(astra\.mode==='realcity-pro'&&atlas\.photos\.failures\.length\)/);
+ assert.match(layer,/astra\.mode==='realcity-pro'&&!this\.photoReady/);
+ assert.match(layer,/onError\(new Error\('pro_photo_texture_failed:/);
+ assert.match(map,/astraLayer\.photoPromise\?\.then\(visible\)/);
+});

@@ -9,7 +9,7 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v4"
+APP_VERSION="realcity-photoreal-worker-v5"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -882,15 +882,54 @@ def unproject_depth_np(depth:np.ndarray,extrinsic:np.ndarray,intrinsic:np.ndarra
         maps.append(world)
     return np.stack(maps)
 
+def mapanything_pose_prior(source:dict,job:Job):
+    coords=source.get("coordinates")
+    if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) and math.isfinite(float(v)) for v in coords[:2])):
+        return None
+    origin=job.map_anchor.get("origin") or job.target.get("coordinates") or coords
+    x,y=local_xy(float(coords[0]),float(coords[1]),origin)
+    pose=np.eye(4,dtype=np.float32)
+    pose[:3,:3]=desired_camera_basis(source,job.map_anchor,origin).astype(np.float32)
+    height=source.get("camera_height_m")
+    height=float(height) if isinstance(height,(int,float)) and math.isfinite(float(height)) else 1.65
+    pose[:3,3]=np.array([x,y,max(.8,min(4.0,height))],dtype=np.float32)
+    return pose
+
+def mapanything_raw_views(image_paths:list[str],sources:list[dict],job:Job,torch):
+    pairs=list(zip(image_paths,sources))
+    priors=[mapanything_pose_prior(s,job) for _,s in pairs]
+    use_pose_priors=bool(priors) and all(p is not None for p in priors)
+    raw=[]
+    calibrated=0
+    for idx,(path,source) in enumerate(pairs):
+        im=Image.open(path).convert("RGB")
+        arr=np.asarray(im,dtype=np.uint8)
+        h,w=arr.shape[:2]
+        view={"img":arr}
+        if use_pose_priors:
+            view["camera_poses"]=priors[idx]
+            view["is_metric_scale"]=torch.tensor([True],dtype=torch.bool)
+        fov=source.get("fov")
+        panoramic=bool(source.get("panoramic"))
+        if isinstance(fov,(int,float)) and math.isfinite(float(fov)) and not panoramic:
+            hfov=max(30.0,min(125.0,float(fov)))
+            focal=float(w)/(2.0*math.tan(math.radians(hfov)*.5))
+            K=np.array([[focal,0.0,(w-1)*.5],[0.0,focal,(h-1)*.5],[0.0,0.0,1.0]],dtype=np.float32)
+            view["intrinsics"]=K
+            calibrated+=1
+        raw.append(view)
+    return raw,{"pose_priors":len(raw) if use_pose_priors else 0,"calibration_priors":calibrated}
+
 def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
-    from mapanything.utils.image import load_images
+    from mapanything.utils.image import preprocess_inputs
     if len(image_paths)<1:raise RuntimeError("mapanything_requires_one_view")
     device="cuda" if torch.cuda.is_available() else "cpu"
     if device=="cpu" and not HIGH_MEMORY_CPU and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
         raise RuntimeError("high_memory_compute_required_for_mapanything")
     model=get_mapanything(device)
-    views=load_images(image_paths,resolution_set=518,norm_type="dinov2",patch_size=14)
+    raw_views,prior_stats=mapanything_raw_views(image_paths,sources,job,torch)
+    views=preprocess_inputs(raw_views,resolution_set=518,norm_type="dinov2",patch_size=14,verbose=False)
     with torch.inference_mode():
         preds=model.infer(
             views,
@@ -903,6 +942,11 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
             apply_confidence_mask=False,
             confidence_percentile=8,
             use_multiview_confidence=len(views)>1,
+            ignore_calibration_inputs=False,
+            ignore_pose_inputs=False,
+            ignore_depth_inputs=True,
+            ignore_depth_scale_inputs=True,
+            ignore_pose_scale_inputs=False,
         )
     if not preds:raise RuntimeError("mapanything_empty")
     points=[];confs=[];images=[];poses=[];intr=[];depths=[]
@@ -951,7 +995,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     backend="mapanything-apache-1b"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
     return pts,cols,scores,scales_xyz,quats,alignment,{
         "backend":backend,"gpu":hardware,"frames":len(image_paths),"dynamic_removed":dynamic_removed,
-        "metric":True,"universal_3d":True,**ba,**gs
+        "metric":True,"universal_3d":True,**prior_stats,**ba,**gs
     }
 
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):

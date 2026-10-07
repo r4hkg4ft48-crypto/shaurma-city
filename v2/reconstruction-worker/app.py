@@ -9,7 +9,7 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v1"
+APP_VERSION="realcity-photoreal-worker-v2"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -21,6 +21,7 @@ USE_BA=os.getenv("REALCITY_USE_BA","true").lower() not in ("0","false","off","no
 USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","off","no")
 GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
 ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() not in ("0","false","off","no")
+LIGHTWEIGHT_CPU=os.getenv("REALCITY_LIGHTWEIGHT_CPU","false").lower() in ("1","true","on","yes")
 DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
@@ -440,6 +441,7 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
         return points,colors,confidence,fallback_scales,fallback_quats,{"gaussian_optimized":False,"gsplat_error":str(e)[:180]}
 
 def frame_budget(requested:int)->int:
+    if LIGHTWEIGHT_CPU:return min(requested,12)
     try:
         import torch
         if not torch.cuda.is_available():return min(requested,6)
@@ -558,6 +560,162 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
     return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-metric-outdoor-gps-osm","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
 
+
+def wrap_angle_deg(value:float)->float:
+    return (float(value)+180.0)%360.0-180.0
+
+def facade_candidate(source:dict,job:Job):
+    buildings=job.map_anchor.get("buildings") or []
+    match=source.get("match") if isinstance(source.get("match"),dict) else {}
+    wanted=str(match.get("building_id") or "")
+    try:wanted_edge=int(match.get("edge_index"))
+    except Exception:wanted_edge=-1
+    for b in buildings:
+        ring=b.get("ring") or []
+        if wanted and str(b.get("building_id"))==wanted and 0<=wanted_edge<len(ring)-1:
+            return b,wanted_edge,False
+
+    coords=source.get("coordinates")
+    if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
+        return None
+    origin=job.map_anchor.get("origin") or job.target.get("coordinates") or coords
+    cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+    heading=source.get("heading")
+    if not isinstance(heading,(int,float)):
+        heading=bearing_deg(coords,source_target(source,job))
+    panoramic=bool(source.get("panoramic"))
+    fov=360.0 if panoramic else max(35.0,min(120.0,float(source.get("fov") or 78.0)))
+    best=None
+    for b in buildings:
+        ring=b.get("ring") or []
+        role=str(b.get("role") or "")
+        for edge in range(max(0,len(ring)-1)):
+            a,bp=ring[edge],ring[edge+1]
+            ax,ay=local_xy(float(a[0]),float(a[1]),origin); bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
+            mx,my=(ax+bx)*.5,(ay+by)*.5
+            dist=math.hypot(mx-cx,my-cy)
+            if dist<2.0 or dist>145.0:continue
+            target=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
+            err=abs(wrap_angle_deg(target-float(heading)))
+            if not panoramic and err>fov*.62+12.0:continue
+            role_bonus=-12.0 if role=="hero" else (-4.0 if role=="nearby" else 0.0)
+            score=err*1.65+dist*.055+role_bonus
+            if best is None or score<best[0]:best=(score,b,edge,err)
+    if best is None:return None
+    return best[1],best[2],True
+
+def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
+    origin=job.map_anchor.get("origin") or job.target.get("coordinates")
+    if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
+    max_points=min(int(job.policy.get("max_points",120000)),120000)
+    all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
+    used=0;inferred=0;masked=0;facades=set()
+    per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))
+    for path,source in zip(image_paths,sources):
+        hit=facade_candidate(source,job)
+        if not hit:continue
+        building,edge,is_inferred=hit
+        ring=building.get("ring") or []
+        if edge<0 or edge>=len(ring)-1:continue
+        a,b=ring[edge],ring[edge+1]
+        ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(b[0]),float(b[1]),origin)
+        ex,ey=bx-ax,by-ay
+        length=math.hypot(ex,ey)
+        base=max(0.0,float(building.get("base_m") or 0.0))
+        height=max(base+2.6,float(building.get("height_m") or 9.0))
+        if length<1.5:continue
+
+        im=Image.open(path).convert("RGB")
+        im.thumbnail((1280,960),Image.Resampling.LANCZOS)
+        rgb=np.asarray(im,dtype=np.uint8);h,w=rgb.shape[:2]
+        coords=source.get("coordinates")
+        if not (isinstance(coords,list) and len(coords)>=2):continue
+        cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        midx,midy=(ax+bx)*.5,(ay+by)*.5
+        heading=source.get("heading")
+        if not isinstance(heading,(int,float)):
+            heading=(math.degrees(math.atan2(midx-cx,midy-cy))+360.0)%360.0
+        panoramic=bool(source.get("panoramic"))
+        hfov=360.0 if panoramic else max(35.0,min(115.0,float(source.get("fov") or 78.0)))
+        if panoramic:vfov=180.0
+        else:
+            vfov=math.degrees(2.0*math.atan(math.tan(math.radians(hfov)*.5)*h/max(w,1)))
+            vfov=max(28.0,min(100.0,vfov))
+        pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) else 0.0
+
+        # Build a metric grid on the exact OSM wall plane, then sample the
+        # corresponding pixels using the geotagged camera ray. This preserves
+        # map geometry while retaining observed facade appearance.
+        aspect=max(length/(height-base),.2)
+        nz=max(30,int(math.sqrt(per_source/max(aspect,1e-3))))
+        nx=max(34,int(nz*aspect))
+        if nx*nz>per_source:
+            scale=math.sqrt(per_source/(nx*nz));nx=max(28,int(nx*scale));nz=max(26,int(nz*scale))
+        ts=np.linspace(.012,.988,nx,dtype=np.float32)
+        zs=np.linspace(base+.05,height-.05,nz,dtype=np.float32)
+        tt,zz=np.meshgrid(ts,zs)
+        wx=ax+tt*ex;wy=ay+tt*ey
+        dx=wx-cx;dy=wy-cy
+        dist=np.maximum(np.sqrt(dx*dx+dy*dy),.5)
+        bearings=(np.degrees(np.arctan2(dx,dy))+360.0)%360.0
+        rel=((bearings-float(heading)+540.0)%360.0)-180.0
+        if panoramic:
+            xn=(.5+rel/360.0)%1.0
+        else:
+            xn=.5+rel/hfov
+        elev=np.degrees(np.arctan2(zz-1.65,dist))
+        yn=.5-(elev-pitch)/vfov
+        valid=(yn>=.015)&(yn<=.985)
+        if not panoramic:valid&=(xn>=.015)&(xn<=.985)
+        if not valid.any():continue
+        px=np.clip(np.rint(xn*(w-1)),0,w-1).astype(np.int32)
+        py=np.clip(np.rint(yn*(h-1)),0,h-1).astype(np.int32)
+        col=rgb[py,px].astype(np.float32)/255.0
+        # Remove only high-confidence sky samples. Lower facade/storefront
+        # pixels remain observed rather than being procedurally repainted.
+        sky=(yn<.48)&(col[...,2]>col[...,0]*1.10)&(col[...,2]>col[...,1]*1.05)&(col[...,2]>.48)
+        masked+=int(np.count_nonzero(valid&sky));valid&=~sky
+        if np.count_nonzero(valid)<900:continue
+
+        p=np.column_stack([wx[valid],wy[valid],zz[valid]]).astype(np.float32)
+        cols=col[valid].astype(np.float32)
+        center=np.clip(1.0-np.abs(xn[valid]-.5)*1.55,0.0,1.0)
+        vertical=np.clip(1.0-np.abs(yn[valid]-.52)*.85,0.0,1.0)
+        match=source.get("match") if isinstance(source.get("match"),dict) else {}
+        q=float(match.get("quality") or (.36 if is_inferred else .58))
+        q=max(.12,min(1.0,q))
+        cf=np.clip(.44+.28*center+.12*vertical+.14*q-(.10 if is_inferred else 0),.24,.96).astype(np.float32)
+
+        du=max(.025,length/max(nx-1,1));dz=max(.025,(height-base)/max(nz-1,1))
+        depth_scale=max(.018,min(.065,du*.18))
+        scales=np.column_stack([
+            np.full(len(p),du*.72,np.float32),
+            np.full(len(p),depth_scale,np.float32),
+            np.full(len(p),dz*.72,np.float32)
+        ])
+        theta=math.atan2(ey,ex)
+        quat=np.zeros((len(p),4),dtype=np.float32)
+        quat[:,0]=math.cos(theta*.5);quat[:,3]=math.sin(theta*.5)
+
+        all_points.append(p);all_colors.append(cols);all_conf.append(cf);all_scales.append(scales);all_quats.append(quat)
+        used+=1;inferred+=1 if is_inferred else 0
+        facades.add(str(building.get("building_id"))+":"+str(edge))
+
+    if not all_points:raise RuntimeError("photoplane_no_visible_facades")
+    pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf)
+    scales=np.concatenate(all_scales);quats=np.concatenate(all_quats)
+    if len(pts)>max_points:
+        ids=np.argpartition(conf,-max_points)[-max_points:]
+        pts,cols,conf,scales,quats=pts[ids],cols[ids],conf[ids],scales[ids],quats[ids]
+    alignment={"method":"osm-facade-ray-projection","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
+    stats={
+      "backend":"open-pixel-osm-facade-projection","gpu":"CPU-lightweight","frames":used,
+      "dynamic_removed":masked,"bundle_adjustment":False,"gaussian_optimized":False,
+      "fallback":True,"projection":True,"inferred_facade_matches":inferred,
+      "covered_facades":len(facades)
+    }
+    return pts,cols,conf,scales,quats,alignment,stats
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.utils.load_fn import load_and_preprocess_images
@@ -611,7 +769,7 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
     quality={
-      "geometry":"gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth",
+      "geometry":"osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth"),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
@@ -657,7 +815,10 @@ async def run_job(job:Job):
                 raise RuntimeError("no_decodable_views: "+"; ".join(source_errors[:4]))
 
             loop=asyncio.get_running_loop()
-            if len(paths)<3:
+            if LIGHTWEIGHT_CPU:
+                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
+                stats["primary_error"]="cpu_memory_safe_photoplane";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+            elif len(paths)<3:
                 if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("not_enough_views_for_multiview")
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
                 stats["primary_error"]="partial_view_metric_fallback";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
@@ -681,13 +842,16 @@ async def run_job(job:Job):
 
 @app.get("/health")
 async def health():
-    try:
-        import torch
-        cuda=torch.cuda.is_available()
-        gpu=torch.cuda.get_device_name(0) if cuda else ""
-    except Exception:
+    if LIGHTWEIGHT_CPU:
         cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":VGGT_MODEL,"commercial_checkpoint_required":True,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":DEPTH_MODEL}
+    else:
+        try:
+            import torch
+            cuda=torch.cuda.is_available()
+            gpu=torch.cuda.get_device_name(0) if cuda else ""
+        except Exception:
+            cuda=False;gpu=""
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else VGGT_MODEL,"commercial_checkpoint_required":not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

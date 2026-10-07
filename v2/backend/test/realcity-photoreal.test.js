@@ -186,6 +186,7 @@ test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements.txt'),'utf8');
+  const docker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/Dockerfile'),'utf8');
   assert.match(src,/facebook\/map-anything-apache/);
   assert.match(src,/def mapanything_reconstruct/);
   assert.match(src,/memory_efficient_inference=True/);
@@ -195,7 +196,8 @@ test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>
   assert.match(src,/arr\("intrinsics"\)/);
   assert.match(src,/mapanything-apache-1b/);
   assert.match(src,/MAX_BACKEND in \("mapanything","auto"\)/);
-  assert.match(req,/facebookresearch\/map-anything\.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9/);
+  assert.match(docker,/pip install --no-deps git\+https:\/\/github\.com\/facebookresearch\/map-anything\.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9/);
+  assert.doesNotMatch(req,/rerun-sdk|tensorboard/i);
 });
 
 test('partial photoreal uses a volumetric support shell while true photogrammetry stays pure',()=>{

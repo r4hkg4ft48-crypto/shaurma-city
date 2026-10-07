@@ -6,13 +6,14 @@ const P=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 const fail=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
+const surfaceId=c=>'pro_'+hash([c.asset_id,c.building_id,c.edge_index].join(':')).slice(0,24);
 const ROLES=new Set(['hero_front','hero_oblique','hero_side','hero_distance','neighbor','panorama','road','vegetation','landmark','environment']);
 const settings=Object.freeze({mode:'realcity-pro',geometry:'mapped-only',facade:'source-pixels',
   procedural_facades:false,synthetic_windows:false,synthetic_vegetation:false,
   source_fabrication:false,generated_images_as_geometry:false,
   uncalibrated_projection:false,manual_review_required:true,max_texture_size:2048});
 async function ensureSchema(db){
-  await db.query("CREATE TABLE IF NOT EXISTS realcity_pro_assets (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,role TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL,mime TEXT NOT NULL,content BYTEA NOT NULL,metadata JSONB NOT NULL,preview TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id),UNIQUE(marker_id,sha256)); CREATE TABLE IF NOT EXISTS realcity_pro_calibrations (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,building_id TEXT NOT NULL,geometry_key TEXT NOT NULL,edge_index INT NOT NULL,source_quad JSONB NOT NULL,exclude JSONB NOT NULL DEFAULT '[]'::jsonb,flip_u BOOLEAN NOT NULL DEFAULT FALSE,confirmed BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id)); CREATE TABLE IF NOT EXISTS realcity_pro_drafts (marker_id BIGINT PRIMARY KEY REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,revision TEXT NOT NULL,output JSONB NOT NULL,report JSONB NOT NULL,reviewed_revision TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());");
+  await db.query("CREATE TABLE IF NOT EXISTS realcity_pro_assets (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,role TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL,mime TEXT NOT NULL,content BYTEA NOT NULL,metadata JSONB NOT NULL,preview TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id),UNIQUE(marker_id,sha256)); CREATE TABLE IF NOT EXISTS realcity_pro_calibrations (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,building_id TEXT NOT NULL,geometry_key TEXT NOT NULL,edge_index INT NOT NULL,source_quad JSONB NOT NULL,exclude JSONB NOT NULL DEFAULT '[]'::jsonb,flip_u BOOLEAN NOT NULL DEFAULT FALSE,confirmed BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id,building_id,edge_index)); CREATE TABLE IF NOT EXISTS realcity_pro_drafts (marker_id BIGINT PRIMARY KEY REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,revision TEXT NOT NULL,output JSONB NOT NULL,report JSONB NOT NULL,reviewed_revision TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());");
 }
 function manifest(row){
  const scene=row.realcity_profile?.scene||{},point=[Number(row.lon),Number(row.lat)];
@@ -58,7 +59,7 @@ function qualityGate(row,cals,mats){
 function outputModel(row,cals,mats,rev,report){
  const mani=manifest(row),grouped=new Map(),available=new Set(mats.map(m=>m.id));
  for(const c of cals){
-  const matId='pro_'+c.asset_id,b=mani.buildings.find(b=>b.building_id===c.building_id);
+  const matId=surfaceId(c),b=mani.buildings.find(b=>b.building_id===c.building_id);
   const e=b?.edges.find(e=>e.edge_index===c.edge_index);
   if(!e||!available.has(matId))continue;
   const arr=grouped.get(b.building_id)||[];
@@ -129,7 +130,7 @@ function install(app,{db,authorize}){
   if(['panorama','road','vegetation','environment','landmark','hero_distance'].includes(role))fail('pro_context_cannot_be_projected_to_wall');
   if(role.startsWith('hero_')&&b.building_id!==mani.hero_building_id&&b.role!=='hero')fail('pro_hero_building_required');
   if(role==='neighbor'&&(b.building_id===mani.hero_building_id||b.role==='hero'))fail('pro_neighbor_building_required');
-  await db.query('INSERT INTO realcity_pro_calibrations(marker_id,asset_id,building_id,geometry_key,edge_index,source_quad,exclude,flip_u,confirmed) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9) ON CONFLICT(marker_id,asset_id) DO UPDATE SET building_id=EXCLUDED.building_id,geometry_key=EXCLUDED.geometry_key,edge_index=EXCLUDED.edge_index,source_quad=EXCLUDED.source_quad,exclude=EXCLUDED.exclude,flip_u=EXCLUDED.flip_u,confirmed=EXCLUDED.confirmed,updated_at=NOW()',
+  await db.query('INSERT INTO realcity_pro_calibrations(marker_id,asset_id,building_id,geometry_key,edge_index,source_quad,exclude,flip_u,confirmed) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9) ON CONFLICT(marker_id,asset_id,building_id,edge_index) DO UPDATE SET geometry_key=EXCLUDED.geometry_key,source_quad=EXCLUDED.source_quad,exclude=EXCLUDED.exclude,flip_u=EXCLUDED.flip_u,confirmed=EXCLUDED.confirmed,updated_at=NOW()',
     [row.id,c.asset_id,c.building_id,c.geometry_key,c.edge_index,JSON.stringify(c.source_quad),JSON.stringify(c.exclude),c.flip_u,c.confirmed]);
   res.json(await state(row));
  }));
@@ -148,7 +149,7 @@ function install(app,{db,authorize}){
     if(materials.some(m=>m.edge_key===c.building_id+':'+c.edge_index))continue;
     const src=await db.query('SELECT content FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,c.asset_id]);
     if(!src.rows[0])fail('pro_original_missing',409);
-    const m=await P.buildMaterial({id:'pro_'+c.asset_id,width_m:e.length_m,height_m:b.height_m-b.base_m,
+    const m=await P.buildMaterial({id:surfaceId(c),width_m:e.length_m,height_m:b.height_m-b.base_m,
       pixels_per_m:80,sharpen:0,roughness:1,metalness:0,lighting_mix:0,
       views:[{source_asset_id:c.asset_id,source_quad:c.source_quad,exclude:c.exclude,exposure_ev:0,white_balance:[1,1,1]}]},
       async()=>src.rows[0].content);
@@ -186,4 +187,4 @@ function install(app,{db,authorize}){
   res.json({ok:true,published_revision:rev,quality:d.report});
  }));
 }
-module.exports={install,ensureSchema,manifest,validCalibration,qualityGate,settings,revision,outputModel};
+module.exports={install,ensureSchema,manifest,validCalibration,qualityGate,settings,revision,outputModel,surfaceId};

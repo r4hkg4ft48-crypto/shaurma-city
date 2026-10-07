@@ -6,7 +6,7 @@ const crypto=require('crypto');
 const spatial=require('../../frontend/realcity-spatial');
 const openWorld=require('./realcity-open-world');
 
-const PROFILE_VERSION=15;
+const PROFILE_VERSION=16;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
@@ -259,9 +259,18 @@ async function fetchOsmWorld(marker,radius=190){
   const buildingsQ='[out:json][timeout:12];way["building"](around:'+radius+','+marker.lat+','+marker.lon+');out geom tags;';
   const environmentQ='[out:json][timeout:12];('+
     'node["natural"="tree"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["highway"="street_lamp"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["highway"="bus_stop"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["highway"="traffic_signals"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["amenity"="bench"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["amenity"="waste_basket"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["barrier"="bollard"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'node["emergency"="fire_hydrant"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["leisure"="park"](around:'+radius+','+marker.lat+','+marker.lon+');'+
-    'way["landuse"="grass"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'way["landuse"~"grass|meadow|forest|recreation_ground|village_green"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'way["natural"~"wood|scrub|grassland"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["highway"](around:'+radius+','+marker.lat+','+marker.lon+');'+
+    'way["barrier"](around:'+radius+','+marker.lat+','+marker.lon+');'+
   ');out geom tags;';
   const [v,b,e]=await Promise.allSettled([fetchVectorBuildings(marker,radius),overpassQuery(buildingsQ,8500),overpassQuery(environmentQ,6500)]);
   // Use the same vector footprints as MapLibre whenever available. OSM remains
@@ -272,18 +281,33 @@ async function fetchOsmWorld(marker,radius=190){
   return [...buildings,...environment];
 }
 function osmWorld(elements,marker,basePalette){
-  const center=[marker.lon,marker.lat],buildings=[],trees=[],greens=[],roads=[];
+  const center=[marker.lon,marker.lat],buildings=[],trees=[],greens=[],roads=[],sidewalks=[],barriers=[],streetObjects=[];
   const colors=[],roofColors=[],materials={},levels=[];
 
   for(const e of elements){
     const t=e.tags||{};
-    if(e.type==='node'&&t.natural==='tree'&&Number.isFinite(Number(e.lon))&&Number.isFinite(Number(e.lat))){
-      trees.push([Number(e.lon),Number(e.lat)]);continue;
+    if(e.type==='node'&&Number.isFinite(Number(e.lon))&&Number.isFinite(Number(e.lat))){
+      const lon=Number(e.lon),lat=Number(e.lat);
+      if(t.natural==='tree'){trees.push([lon,lat]);continue}
+      const kind=t.highway==='street_lamp'?'street_lamp':
+        t.highway==='bus_stop'?'bus_stop':
+        t.highway==='traffic_signals'?'traffic_signals':
+        t.amenity==='bench'?'bench':
+        t.amenity==='waste_basket'?'waste_basket':
+        t.barrier==='bollard'?'bollard':
+        t.emergency==='fire_hydrant'?'fire_hydrant':null;
+      if(kind){streetObjects.push({kind,lon,lat,source:'osm',ref:'osm-node-'+e.id});continue}
     }
     if(!Array.isArray(e.geometry)||e.geometry.length<2)continue;
     const geom=e.geometry.map(p=>[Number(p.lon),Number(p.lat)]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
-    if(t.highway){roads.push(geom);continue}
-    if(t.leisure==='park'||t.landuse==='grass'){
+    if(t.highway){
+      const cls=String(t.highway);
+      if(['footway','path','pedestrian','steps','cycleway'].includes(cls))sidewalks.push(geom);
+      else roads.push(geom);
+      continue;
+    }
+    if(t.barrier){barriers.push({kind:String(t.barrier),coordinates:geom});continue}
+    if(t.leisure==='park'||['grass','meadow','forest','recreation_ground','village_green'].includes(String(t.landuse||''))||['wood','scrub','grassland'].includes(String(t.natural||''))){
       if(geom.length>=4)greens.push(geom);continue;
     }
     if(!t.building||geom.length<4)continue;
@@ -309,7 +333,7 @@ function osmWorld(elements,marker,basePalette){
   const dominantMaterial=Object.entries(materials).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
   const avgLevels=levels.length?levels.reduce((a,b)=>a+b,0)/levels.length:null;
 
-  return {buildings,hero,trees,greens,roads,colors:uniqColors([...colors,...roofColors],8),dominantMaterial,avgLevels};
+  return {buildings,hero,trees,greens,roads,sidewalks,barriers,streetObjects,colors:uniqColors([...colors,...roofColors],8),dominantMaterial,avgLevels};
 }
 
 function classifyStyle(osm,heroFeatures){
@@ -401,8 +425,27 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
     hero_building_id:osm.hero?.id||null,
     buildings,
     trees:synthesizeTrees(osm,marker,treeDensity),
-    roads:(osm.roads||[]).slice(0,36).map(line=>roundRing(line)),
-    greens:(osm.greens||[]).slice(0,20).map(ring=>roundRing(ring))
+    roads:(osm.roads||[]).slice(0,48).map(line=>roundRing(line)),
+    sidewalks:(osm.sidewalks||[]).slice(0,64).map(line=>roundRing(line)),
+    greens:(osm.greens||[]).slice(0,32).map(ring=>roundRing(ring)),
+    barriers:(osm.barriers||[]).slice(0,48).map(x=>({kind:x.kind,coordinates:roundRing(x.coordinates)})),
+    street_objects:(osm.streetObjects||[]).slice(0,120),
+    environment_revision:2
+  };
+}
+
+function mergeFreshEnvironment(saved,fresh){
+  if(!Array.isArray(saved?.buildings)||!saved.buildings.length)return fresh;
+  return {
+    ...saved,
+    radius_m:Number(saved.radius_m)||fresh.radius_m,
+    trees:fresh.trees,
+    roads:fresh.roads,
+    sidewalks:fresh.sidewalks,
+    greens:fresh.greens,
+    barriers:fresh.barriers,
+    street_objects:fresh.street_objects,
+    environment_revision:2
   };
 }
 
@@ -423,8 +466,11 @@ async function analyzeRealCityProfile(marker){
   // Published footprints are spatial anchors, not a cache. Preserve their edges
   // even when OSM or tile cuts change, particularly after Astra reconstruction.
   const saved=marker.realcity_profile?.scene;
-  const scene=Array.isArray(saved?.buildings)&&saved.buildings.length
-    ?saved:buildScene(osmSeed,safe,osmPalette,osmPalette,style,facade,treeDensity);
+  const freshScene=buildScene(osmSeed,safe,osmPalette,osmPalette,style,facade,treeDensity);
+  // Building footprints are persistent spatial anchors. Environment is not:
+  // refresh roads, sidewalks, vegetation and street furniture independently so
+  // an old profile with empty arrays cannot permanently freeze a toy-like world.
+  const scene=mergeFreshEnvironment(saved,freshScene);
   const open=await openWorld.reconstruct(safe,scene).catch(e=>{console.warn('RealCity open-world',safe.id,e.message);return null});
   const quality=open?.quality||(osmSeed.buildings.length?'osm':'heuristic');
   const confidence=open?.confidence||(osmSeed.buildings.length?.61:.38);
@@ -458,10 +504,10 @@ async function analyzeRealCityProfile(marker){
       photo_reconstruction:!!open?.model?.materials?.length,
       derived_facade_materials:Number(open?.model?.materials?.length||0),
       raw_images_persisted:false,
-      openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length},
+      openstreetmap:{building_count:osmSeed.buildings.length,tree_count:osmSeed.trees.length,road_count:osmSeed.roads.length,sidewalk_count:osmSeed.sidewalks.length,green_count:osmSeed.greens.length,street_object_count:osmSeed.streetObjects.length},
       open_world:open?.report||{engine:openWorld.ENGINE,status:'unavailable'}
     }
   };
 }
 
-module.exports={PROFILE_VERSION,analyzeRealCityProfile,fetchBuffer,fetchVectorBuildings};
+module.exports={PROFILE_VERSION,analyzeRealCityProfile,fetchBuffer,fetchVectorBuildings,_internals:{osmWorld,buildScene,mergeFreshEnvironment}};

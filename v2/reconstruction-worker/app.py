@@ -656,6 +656,15 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor["origin"]
     radius=float(job.map_anchor.get("radius_m",190))
     target=int(job.policy.get("max_points",150000))
+    mapped_heights=[]
+    for building in job.map_anchor.get("buildings",[]):
+        try:
+            h=float(building.get("height_m") or building.get("height") or 0)
+            if math.isfinite(h) and h>2:mapped_heights.append(h)
+        except Exception:pass
+    mapped_max_height=max(mapped_heights) if mapped_heights else 24.0
+    z_floor=-3.5
+    z_ceiling=max(16.0,min(95.0,mapped_max_height+12.0))
     all_points=[];all_colors=[];all_conf=[];all_frames=[];onnx_variants=set()
     used=0;owner_used=0;owner_roles=set()
     for path,source in zip(image_paths,sources):
@@ -723,7 +732,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         cols=rgb[yy,xx].astype(np.float32)/255.0
         rr=np.linalg.norm(pts[...,:2],axis=2)
         sky=(yy<h*.48)&(cols[...,2]>cols[...,0]*1.08)&(cols[...,2]>cols[...,1]*1.03)&(cols[...,2]>.42)&(z>camera_distance*.8)
-        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-5)&(pts[...,2]<90)&(~sky)
+        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.10)&(pts[...,2]>z_floor)&(pts[...,2]<z_ceiling)&(~sky)
         if not valid.any():continue
         p=pts[valid];col=cols[valid]
         center=1-np.minimum(1,np.sqrt(((xx[valid]-(w-1)/2)/(w*.55))**2+((yy[valid]-(h-1)/2)/(h*.7))**2))
@@ -733,6 +742,9 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     if not all_points:raise RuntimeError("depth_fallback_no_geotagged_views")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
     pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
+    sane=np.isfinite(pts).all(axis=1)&(pts[:,2]>z_floor)&(pts[:,2]<z_ceiling)&(np.linalg.norm(pts[:,:2],axis=1)<radius*1.10)
+    pts,cols,conf,frames=pts[sane],cols[sane],conf[sane],frames[sane]
+    if len(pts)<1500:raise RuntimeError("depth_scene_too_sparse_after_map_constraints")
     pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,160000))
     radial=np.linalg.norm(pts[:,:2],axis=1)
     base=np.clip(.04+radial*.00135,.04,.19).astype(np.float32)
@@ -745,7 +757,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     else:
         tag="q4" if onnx_variants=={"onnx/model_q4.onnx"} else ("fp32" if onnx_variants=={"onnx/model.onnx"} else "hybrid")
         backend="depth-anything-v2-small-"+tag+"-onnx+osm-scale"
-    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"owner_frames":owner_used,"owner_roles":sorted(owner_roles),"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants)}
+    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"owner_frames":owner_used,"owner_roles":sorted(owner_roles),"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants),"mapped_max_height_m":mapped_max_height,"z_ceiling_m":z_ceiling}
 
 
 def wrap_angle_deg(value:float)->float:

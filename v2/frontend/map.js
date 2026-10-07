@@ -450,22 +450,23 @@
 
     map.addSource('realcity-context',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-context-extrude',type:'fill-extrusion',source:'realcity-context',paint:{
-      'fill-extrusion-color':['coalesce',['get','wall'],'#b9b7ad'],
+      'fill-extrusion-color':['case',['==',['get','support'],1],'#77736b',['coalesce',['get','wall'],'#b9b7ad']],
       'fill-extrusion-height':['coalesce',['get','height'],1],
       'fill-extrusion-base':['coalesce',['get','base'],0],
-      'fill-extrusion-opacity':.78
+      'fill-extrusion-opacity':['case',['==',['get','support'],1],.26,.78]
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
-      'line-color':['coalesce',['get','accent'],'#D7E0EA'],
+      'line-color':['case',['==',['get','support'],1],'#9a958a',['coalesce',['get','accent'],'#D7E0EA']],
       'line-width':['case',['==',['get','role'],'nearby'],1,.65],
-      'line-opacity':['case',['==',['get','role'],'nearby'],.45,.22]
+      'line-opacity':['case',['==',['get','support'],1],.08,['case',['==',['get','role'],'nearby'],.45,.22]]
     }});
 
     map.addSource('focus-building',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'focus-building-extrude',type:'fill-extrusion',source:'focus-building',paint:{
-      'fill-extrusion-color':['coalesce',['get','wall'],'#a59c88'],
+      'fill-extrusion-color':['case',['==',['get','support'],1],'#706d66',['coalesce',['get','wall'],'#a59c88']],
       'fill-extrusion-height':['coalesce',['get','height'],18],
-      'fill-extrusion-base':['coalesce',['get','base'],0],'fill-extrusion-opacity':.97
+      'fill-extrusion-base':['coalesce',['get','base'],0],
+      'fill-extrusion-opacity':['case',['==',['get','support'],1],.34,.97]
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
       'line-color':['coalesce',['get','accent'],'#F4F7FA'],'line-width':1.55,'line-opacity':.78
@@ -554,6 +555,22 @@
   function isCompletePhotogrammetry(model){
     return model?.quality?.photogrammetric===true&&model?.quality?.metric_reconstruction===true;
   }
+  function photorealVolume(model){
+    const chunks=Array.isArray(model?.chunks)?model.chunks:[];
+    if(!chunks.length)return null;
+    const mn=[Infinity,Infinity,Infinity],mx=[-Infinity,-Infinity,-Infinity];
+    for(const ch of chunks){
+      if(!Array.isArray(ch?.bounds_min)||!Array.isArray(ch?.bounds_max))continue;
+      for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],Number(ch.bounds_min[i]));mx[i]=Math.max(mx[i],Number(ch.bounds_max[i]));}
+    }
+    if([...mn,...mx].some(v=>!Number.isFinite(v)))return null;
+    return {span:[mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]],min:mn,max:mx};
+  }
+  function isMeasuredVolumetric(model){
+    if(model?.quality?.volumetric_reconstruction!==true)return false;
+    const v=photorealVolume(model),points=Number(model?.stats?.points)||0;
+    return !!(v&&points>=5000&&v.span[2]>=3&&Math.max(v.span[0],v.span[1])>=8);
+  }
   function removeAstraLayer(){
     for(const id of ['realcity-photoreal-splats','realcity-photoreal-shell','realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
     astraLayer=null;supportRealCityLayer=null;activeRealCityModel=null;activeRealCityMode='';setRealCityAttribution(null);
@@ -583,7 +600,7 @@
           removeAstraLayer();
           if(authored.mode==='photoreal'){
             const isTruePhotogrammetry=isCompletePhotogrammetry(authored.model);
-            const isVolumetricDepth=authored.model?.quality?.volumetric_reconstruction===true;
+            const isVolumetricDepth=isMeasuredVolumetric(authored.model);
             let shell=null,shellSource=null;
             if(!isTruePhotogrammetry&&!isVolumetricDepth){
               const shellCandidates=[
@@ -696,12 +713,16 @@
     }
     const authored=astraLayer?activeRealCityModel:null,photoreal=!!(authored&&activeRealCityMode==='photoreal');
     const completePhotogrammetry=photoreal&&isCompletePhotogrammetry(authored);
-    const reconstructedRadius=completePhotogrammetry?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190)):0;
-    // Only a verified metric photogrammetry scene may remove native 3D buildings.
-    // Depth-estimated splats are photographic surface evidence, not a complete
-    // replacement mesh. Keeping the mapped extrusion behind them prevents the
-    // exact "flattened houses" failure when source coverage is incomplete.
-    const replaced=new Set(completePhotogrammetry
+    const measuredVolumetric=photoreal&&isMeasuredVolumetric(authored);
+    const reconstructedRadius=completePhotogrammetry
+      ?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190))
+      :measuredVolumetric?Math.max(45,Math.min(120,Number(authored.quality?.coverage_radius_m)||90)):0;
+    // Measured ONNX depth already contains true 3D parallax, but its source
+    // coverage is incomplete. Replace the visible native city blocks with
+    // neutral map-accurate support volumes, then let source-colour splats carry
+    // appearance. This avoids the "unchanged map with a translucent overlay"
+    // failure without pretending fallback depth is complete photogrammetry.
+    const replaced=new Set((completePhotogrammetry||measuredVolumetric)
       ?(profile.scene?.buildings||[]).filter(b=>Number(b.distance||0)<=reconstructedRadius).map(b=>String(b.id))
       :photoreal?[]
       :(authored?.buildings||[]).map(b=>String(b.building_id)));
@@ -717,7 +738,7 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    const dimmed=completePhotogrammetry?covered:
+    const dimmed=(completePhotogrammetry||measuredVolumetric)?covered:
       (astraLayer&&!photoreal?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[]);
     setBaseBuildingsDim(dimmed.length>0,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
@@ -741,7 +762,14 @@
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
     const duration=reduceMotion?1:980,started=performance.now();
-    const context=astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=astraLayer?null:(data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null);
+    const supportify=f=>f?{...f,properties:{...f.properties,support:1,wall:'#77736b',accent:'#8f8a80'}}:null;
+    const supportMode=measuredVolumetric&&!completePhotogrammetry;
+    const context=supportMode
+      ?data.contextFeatures.filter(f=>replaced.has(f.properties.id)).map(supportify)
+      :(astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)));
+    const hero=supportMode&&data.heroFeature&&replaced.has(data.heroFeature.properties.id)
+      ?supportify(data.heroFeature)
+      :(astraLayer?null:(data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null));
     if(!hero)heroSource?.setData(emptyGeo());
     const render=(now)=>{
       if(token!==focusToken)return;

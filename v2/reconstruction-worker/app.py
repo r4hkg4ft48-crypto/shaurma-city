@@ -228,6 +228,49 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
         yaw_deg=0.0
     return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"yaw_deg":yaw_deg,"geo_cameras":len(geo_src)}
 
+def anchor_metric_points(points:np.ndarray,centers:np.ndarray,c2w:np.ndarray,sources:list[dict],origin:list[float],map_anchor:dict):
+    geo=[]
+    for i,s in enumerate(sources[:len(centers)]):
+        coords=s.get("coordinates")
+        if isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2]):
+            x,y=local_xy(float(coords[0]),float(coords[1]),origin)
+            geo.append((i,np.array([x,y],dtype=np.float64)))
+    if len(geo)>=2:
+        src=np.stack([centers[i,:2] for i,_ in geo]).astype(np.float64)
+        dst=np.stack([xy for _,xy in geo]).astype(np.float64)
+        sm,dm=src.mean(0),dst.mean(0);X=src-sm;Y=dst-dm
+        U,_,Vt=np.linalg.svd(X.T@Y);R=Vt.T@U.T
+        if np.linalg.det(R)<0:
+            Vt[-1,:]*=-1;R=Vt.T@U.T
+        t=dm-R@sm
+        points[:,:2]=(R@points[:,:2].T).T+t
+        centers[:,:2]=(R@centers[:,:2].T).T+t
+        zshift=1.65-float(np.median(centers[:,2]));points[:,2]+=zshift;centers[:,2]+=zshift
+        pred=(R@src.T).T+t;rms=float(np.sqrt(np.mean(np.sum((pred-dst)**2,axis=1))))
+        yaw=float(math.degrees(math.atan2(R[1,0],R[0,0])))
+        return points,centers,{"method":"gps-rigid-metric","rms_m":rms,"scale":1.0,"yaw_deg":yaw,"geo_cameras":len(geo)}
+
+    if len(geo)==1:
+        i,target_xy=geo[0]
+        center=centers[i].copy()
+        source=sources[i]
+        desired=source.get("heading")
+        if not isinstance(desired,(int,float)):
+            coords=source.get("coordinates") or origin
+            desired=bearing_deg(coords,source_target(source,type("AnchorJob",(),{"map_anchor":map_anchor,"target":{"coordinates":origin}})()))
+        # MapAnything camera_poses are OpenCV cam2world; +Z is camera forward.
+        forward=np.asarray(c2w[i][:3,2],dtype=np.float64)
+        current=(math.degrees(math.atan2(float(forward[0]),float(forward[1])))+360.0)%360.0
+        yaw=wrap_angle_deg(float(desired)-current)
+        a=math.radians(yaw);R=np.array([[math.cos(a),-math.sin(a)],[math.sin(a),math.cos(a)]],dtype=np.float64)
+        rel=points[:,:2]-center[:2];points[:,:2]=(R@rel.T).T+center[:2]
+        crel=centers[:,:2]-center[:2];centers[:,:2]=(R@crel.T).T+center[:2]
+        delta=target_xy-centers[i,:2];points[:,:2]+=delta;centers[:,:2]+=delta
+        zshift=1.65-float(centers[i,2]);points[:,2]+=zshift;centers[:,2]+=zshift
+        return points,centers,{"method":"gps-heading-metric","rms_m":0.0,"scale":1.0,"yaw_deg":yaw,"geo_cameras":1}
+
+    return anchor_points(points,centers,sources,origin,map_anchor)
+
 def choose_samples(point_maps:np.ndarray,conf:np.ndarray,images:np.ndarray,target:int):
     # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence pixels while
     # retaining frame IDs so unstable single-view geometry can be rejected.
@@ -756,7 +799,7 @@ def unproject_depth_np(depth:np.ndarray,extrinsic:np.ndarray,intrinsic:np.ndarra
 def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from mapanything.utils.image import load_images
-    if len(image_paths)<2:raise RuntimeError("mapanything_requires_two_views")
+    if len(image_paths)<1:raise RuntimeError("mapanything_requires_one_view")
     device="cuda" if torch.cuda.is_available() else "cpu"
     if device=="cpu" and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
         raise RuntimeError("high_memory_compute_required_for_mapanything")
@@ -808,7 +851,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
     pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,180000))
     pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,torch_images,ex,intr_np,cf)
-    pts,centers,alignment=anchor_points(pts,centers,sources,job.map_anchor["origin"],job.map_anchor)
+    pts,centers,alignment=anchor_metric_points(pts,centers,c2w,sources,job.map_anchor["origin"],job.map_anchor)
     world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
     quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
     radius=float(job.map_anchor.get("radius_m",190))*1.18
@@ -879,7 +922,8 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
       "generated_pixels_only":False,
-      "photogrammetric":not bool(stats.get("fallback"))
+      "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
+      "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,

@@ -21,10 +21,16 @@ const MAX_ARTIFACT_B64=12*1024*1024;
 let schemaReady=null;
 
 const clean=(v,n=300)=>String(v??'').trim().slice(0,n);
-const LEPESHKA_MASTER_B64=[1,2,3,4,5,6,7,8]
-  .map(i=>String(process.env['REALCITY_LEPESHKA_MASTER_WEBP_B64_'+i]||'').trim())
+const LEPESHKA_MASTER_A_B64=[1,2,3,4,5,6,7,8]
+  .map(i=>String(process.env['REALCITY_LEPESHKA_MASTER_A_WEBP_B64_'+i]||'').trim())
   .join('');
-const LEPESHKA_MASTER_SHA=LEPESHKA_MASTER_B64?crypto.createHash('sha256').update(LEPESHKA_MASTER_B64).digest('hex'):'';
+const LEPESHKA_MASTER_B_B64=[1,2,3,4,5,6,7,8]
+  .map(i=>String(process.env['REALCITY_LEPESHKA_MASTER_B_WEBP_B64_'+i]||'').trim())
+  .join('');
+const LEPESHKA_MASTERS=[
+  {slug:'lepeshka-master-a.webp',b64:LEPESHKA_MASTER_A_B64,primary:false,angle:'front-left'},
+  {slug:'lepeshka-master-b.webp',b64:LEPESHKA_MASTER_B_B64,primary:true,angle:'front'}
+].map(x=>({...x,sha:x.b64?crypto.createHash('sha256').update(x.b64).digest('hex'):''})).filter(x=>x.b64);
 function isLepeshka(marker){
   const name=String(marker?.name||'').toLowerCase().replace(/ё/g,'е');
   return String(marker?.id||'')==='3139'||name.includes('в лепешке')||name==='лепешка'||name.includes('лепешк');

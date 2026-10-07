@@ -844,7 +844,7 @@ def synthetic_camera_for_wall(building:dict,edge:int,origin:list,distance_m:floa
     ex,ey=bx-ax,by-ay;length=max(math.hypot(ex,ey),1e-3)
     mx,my=(ax+bx)*.5,(ay+by)*.5
     local_ring=[]
-    for p in ring[:-1] if len(ring)>1 else ring:
+    for p in (ring[:-1] if len(ring)>1 else ring):
         try:local_ring.append(local_xy(float(p[0]),float(p[1]),origin))
         except Exception:pass
     if local_ring:

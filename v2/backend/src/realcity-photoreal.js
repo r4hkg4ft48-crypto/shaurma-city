@@ -12,7 +12,7 @@ const openWorld=require('./realcity-open-world');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='source-fetch-v2';
+const PIPELINE_REVISION='cpu-photoplane-v3';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;

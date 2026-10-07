@@ -448,3 +448,14 @@ test('low-memory ONNX consumes up to forty-eight sequential observations',()=>{
   assert.match(src,/if LIGHTWEIGHT_CPU:\s*return min\(requested,48\)/);
   assert.match(src,/for path,source in zip\(image_paths,sources\)/);
 });
+
+
+test('ONNX depth preserves high-resolution source appearance and EXIF orientation',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/ImageOps\.exif_transpose/);
+  assert.match(src,/max_side:int=2048/);
+  assert.match(src,/depth_im=base\.copy\(\);depth_im\.thumbnail\(\(518,392\)/);
+  assert.match(src,/rgb=np\.asarray\(base\)/);
+  assert.match(src,/resize\(\(w,h\),Image\.Resampling\.BICUBIC\)/);
+});

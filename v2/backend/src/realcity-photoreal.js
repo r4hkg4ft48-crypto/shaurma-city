@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v24.1-facade-pose-recovery-v1';
+const PIPELINE_REVISION='v25-owner-surface-routing-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -211,6 +211,7 @@ async function buildSources(marker,profile,assets){
     return {
       id:'owner:'+a.id,kind:'owner',provider:'owner',url:(a.kind==='external_file'&&/^https:\/\//i.test(String(a.src||''))?String(a.src):sourceUrl(marker,a)),asset_id:a.id,
       category:a.category||'main_building',subtype:a.subtype||'detail',role:a.role||'environment',priority:Number(a.priority)||3,primary:!!a.primary,
+      angle:a.angle||'unknown',label:a.label||'',notes:a.notes||'',
       coordinates,heading,pitch:finite(camera.pitch_deg)?Number(camera.pitch_deg):null,fov:fovFromAsset(a),
       distance_m:finite(camera.distance_m)?Number(camera.distance_m):null,altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,
       captured_at:a.metadata?.captured_at||null,camera_make:a.metadata?.camera_make||'',camera_model:a.metadata?.camera_model||'',
@@ -235,19 +236,24 @@ async function buildSources(marker,profile,assets){
     publicCandidates=photorealCandidates(merged,marker,88,maxDistance);
   }catch{}
   const refs=new Map(persistedRefs.map(r=>[String(r.source)+':'+String(r.source_id),r]));
+  const hasOwner=own.length>0;
   const pub=publicCandidates.map(c=>{
     const ref=refs.get(String(c.source)+':'+String(c.id));
     return {
       id:c.source+':'+c.id,kind:'open',url:c.image_url,fallback_url:c.fallback_image_url||null,provider:c.source,
       coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,distance_m:c.distance_m,
       captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url,
-      match:c.persisted_match||ref?.match||null
+      match:c.persisted_match||ref?.match||null,anchor_only:hasOwner
     };
   });
-  // Photo-first: observed owner pixels dominate appearance. Keep several
-  // geotagged public frames early as absolute anchors when private EXIF is absent.
+  // Photo-first means venue originals are appearance truth. Public frames may
+  // help a metric GPU solve its world pose, but when owner material exists they
+  // are never allowed to become facade appearance in the map-surface fallback.
   const posed=own.filter(s=>Array.isArray(s.coordinates)),unposed=own.filter(s=>!Array.isArray(s.coordinates));
-  const ordered=[...posed.slice(0,8),...pub.slice(0,4),...unposed,...posed.slice(8),...pub.slice(4)];
+  const publicBudget=hasOwner?2:MAX_SOURCES;
+  const ordered=hasOwner
+    ? [...posed,...unposed,...pub.slice(0,publicBudget)]
+    : [...pub];
   const seen=new Set(),out=[];
   for(const s of ordered){
     if(!s.url||seen.has(s.id))continue;seen.add(s.id);out.push(s);if(out.length>=MAX_SOURCES)break;

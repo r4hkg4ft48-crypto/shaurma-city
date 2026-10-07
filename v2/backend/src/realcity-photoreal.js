@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v21-open-only-measured-3d-v1';
+const PIPELINE_REVISION='v22-physical-envelope-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -299,6 +299,13 @@ function validateChunk(c){
     bounds_min:c.bounds_min.map(Number),bounds_max:c.bounds_max.map(Number),byte_size:Math.ceil(c.data.length*.75),
     min_zoom:finite(c.min_zoom)?Number(c.min_zoom):16.8,max_zoom:finite(c.max_zoom)?Number(c.max_zoom):24};
 }
+function physicalEnvelope(marker){
+  const scene=marker?.realcity_profile?.scene||{},radius=Math.max(60,Math.min(350,Number(scene.radius_m)||190));
+  const heights=(scene.buildings||[]).map(b=>Number(b.height_m??b.height)).filter(h=>Number.isFinite(h)&&h>1);
+  const mappedMax=heights.length?Math.max(...heights):12;
+  const zMin=-2.5,zMax=Math.max(18,Math.min(120,mappedMax+Math.max(8,mappedMax*.30)));
+  return {radius_m:radius,z_min:zMin,z_max:Number(zMax.toFixed(3)),mapped_max_height_m:Number(mappedMax.toFixed(3))};
+}
 function validateArtifact(body,row){
   const a=body?.artifact;if(!a||a.schema!==SCHEMA||a.engine!==ENGINE)throw new Error('photoreal_schema');
   const t=a.target||{};if(String(t.marker_id)!==String(row.id)||t.establishment_id!==row.establishment_id||t.venue_id!==row.venue_id)throw new Error('photoreal_target');
@@ -307,14 +314,18 @@ function validateArtifact(body,row){
   const anchor=heroAnchor(row.realcity_profile||{});if(!anchor||a.anchor?.building_id!==anchor.building_id||a.anchor?.geometry_key!==anchor.geometry_key)throw new Error('photoreal_anchor');
   const chunks=(a.chunks||[]).slice(0,MAX_CHUNKS).map(validateChunk);if(!chunks.length)throw new Error('photoreal_chunks_required');
   if(chunks.reduce((n,c)=>n+c.data.length,0)>MAX_ARTIFACT_B64)throw new Error('photoreal_artifact_too_large');
+  const envelope=physicalEnvelope(row),volume=volumeDiagnostics(chunks),xy=envelope.radius_m*1.025;
+  if(!volume)throw new Error('photoreal_volume_required');
+  if(volume.min[0]<-xy||volume.max[0]>xy||volume.min[1]<-xy||volume.max[1]>xy||
+     volume.min[2]<envelope.z_min-.5||volume.max[2]>envelope.z_max+.5)throw new Error('photoreal_physical_envelope');
   return {
     schema:SCHEMA,status:'ready',engine:ENGINE,representation:String(a.representation||'gaussian-splats-v2'),generated_at:new Date().toISOString(),
     input_signature:a.input_signature,target:{marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id},
     origin:a.origin.map(Number),anchor:a.anchor,chunks,
-    camera:a.camera||null,alignment:a.alignment||{},quality:a.quality||{},environment:a.environment||{},
+    camera:a.camera||null,alignment:a.alignment||{},quality:{...(a.quality||{}),physical_envelope:envelope},environment:a.environment||{},
     sources:(a.sources||[]).slice(0,96).map(s=>({id:clean(s.id,140),kind:clean(s.kind,30),provider:clean(s.provider,50),category:clean(s.category,40),subtype:clean(s.subtype,60),role:clean(s.role,50),captured_at:clean(s.captured_at,80),license:clean(s.license,120),license_url:clean(s.license_url,800),attribution:clean(s.attribution,300),page_url:clean(s.page_url,1200)})),
-    stats:{frames:Number(a.stats?.frames)||0,points:chunks.reduce((n,c)=>n+c.point_count,0),dynamic_removed:Number(a.stats?.dynamic_removed)||0,confidence_mean:Number(a.stats?.confidence_mean)||0,
-      backend:clean(a.stats?.backend,80),gpu:clean(a.stats?.gpu,120)}
+    stats:{frames:Number(a.stats?.frames)||0,points:chunks.reduce((n,c)=>n+c.point_count,0),dynamic_removed:Number(a.stats?.dynamic_removed)||0,envelope_removed:Number(a.stats?.envelope_removed)||0,confidence_mean:Number(a.stats?.confidence_mean)||0,
+      physical_envelope:a.stats?.physical_envelope||envelope,backend:clean(a.stats?.backend,80),gpu:clean(a.stats?.gpu,120)}
   };
 }
 function isCurrent(marker,profile=marker?.realcity_profile||{}){
@@ -370,6 +381,7 @@ async function acceptResult(body){
   console.log('RealCity reconstruction accepted',JSON.stringify({
     marker_id:Number(row.marker_id),job_id:body.job_id,backend:summary.backend,
     frames:summary.frames,points:summary.points,volume:summary.volume,
+    physical_envelope:artifact.quality?.physical_envelope||null,
     source_mix:summary.source_mix,alignment:summary.alignment
   }));
   await db.tx(async client=>{
@@ -390,6 +402,6 @@ function volumeDiagnostics(chunks=[]){
 function publicSummary(p){
   if(!p)return null;return {status:p.status,engine:p.engine,representation:p.representation,generated_at:p.generated_at,
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
-    alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
+    alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),physical_envelope:p.quality?.physical_envelope||null,source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,physicalEnvelope,transientWorkerStatus,warmWorker,submitWorkerJob}};

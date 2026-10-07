@@ -111,7 +111,7 @@ async function submitWorkerJob(payload){
 function sceneSignature(marker,profile,assets=[]){
   const scene=profile?.scene||{},hero=(scene.buildings||[]).find(b=>String(b.id)===String(scene.hero_building_id)||b.role==='hero');
   return hash({
-    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,reference_master:isLepeshka(marker)?LEPESHKA_MASTER_SHA:null,...(config.REALCITY_RECONSTRUCTION_TIER?{reconstruction_tier:config.REALCITY_RECONSTRUCTION_TIER}:{}),
+    engine:ENGINE,pipeline_revision:PIPELINE_REVISION,reference_masters:isLepeshka(marker)?LEPESHKA_MASTERS.map(x=>x.sha):[],...(config.REALCITY_RECONSTRUCTION_TIER?{reconstruction_tier:config.REALCITY_RECONSTRUCTION_TIER}:{}),
     target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
@@ -240,8 +240,8 @@ function photorealCandidates(raw,marker,max=72,maxDistance=360){
 }
 async function buildSources(marker,profile,assets){
   const ownerAssets=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,96).sort((a,b)=>ownerPriority(b)-ownerPriority(a));
-  const seeded=lepeshkaMasterSource(marker);
-  const own=[...(seeded?[seeded]:[]),...ownerAssets.map(a=>{
+  const seeded=lepeshkaMasterSources(marker);
+  const own=[...seeded,...ownerAssets.map(a=>{
     const camera=a.camera||{},coordinates=ownerCameraCoordinates(marker,a);
     const heading=finite(camera.heading_deg)?Number(camera.heading_deg):(finite(a.direction_deg)?Number(a.direction_deg):(finite(a.metadata?.heading_deg)?Number(a.metadata.heading_deg):null));
     return {
@@ -437,4 +437,4 @@ function publicSummary(p){
     alignment:p.alignment||{},quality:p.quality||{},display_safe:p.quality?.display_safe===true,map_registered_surface:p.quality?.map_registered_surface===true,
     volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,readReferenceAsset,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob,isLepeshka,lepeshkaMasterSource}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,readReferenceAsset,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob,isLepeshka,lepeshkaMasterSources}};

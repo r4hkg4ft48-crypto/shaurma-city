@@ -9,10 +9,11 @@ const crypto=require('crypto');
 const db=require('./db');
 const config=require('./config');
 const openWorld=require('./realcity-open-world');
+const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v18-source-resolver-v3';
+const PIPELINE_REVISION='v19-photo-first-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -36,7 +37,7 @@ function sceneSignature(marker,profile,assets=[]){
     target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
-    assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.priority]),
+    assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.role,a.priority,a.camera||null,a.metadata?.gps||null,a.metadata?.heading_deg??null,a.metadata?.focal_length_35mm??null,a.metadata?.exif_pose_v||0]),
     open:(profile?.real_world?.references||[]).map(r=>[r.source,r.source_id,r.license,r.coordinates,r.heading])
   });
 }
@@ -91,6 +92,45 @@ async function readPrivateSource(markerId,assetId){
   const m=/^data:(image\/(?:png|jpeg|webp|avif|heic));base64,([a-z0-9+/=]+)$/i.exec(asset.src||'');
   return m?{content:Buffer.from(m[2],'base64'),mime:m[1]}:null;
 }
+async function enrichOwnerAssets(marker,assets){
+  if(!config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS||!db.configured||!Array.isArray(assets)||!assets.length)return assets||[];
+  const ids=assets.filter(a=>a?.stored&&a.id&&Number(a.metadata?.exif_pose_v||0)<1).map(a=>String(a.id));
+  if(!ids.length)return assets;
+  const q=await db.query('SELECT asset_id,content FROM realcity_astra_originals WHERE marker_id=$1 AND asset_id=ANY($2::text[])',[marker.id,ids]).catch(()=>({rows:[]}));
+  if(!q.rows.length)return assets;
+  const originals=new Map(q.rows.map(r=>[String(r.asset_id),r.content])),out=[];let changed=false;
+  for(const asset of assets){
+    const raw=originals.get(String(asset.id));
+    if(!raw){out.push(asset);continue}
+    try{
+      const pose=await photo.inspectPose(raw),next={...asset,metadata:{...(asset.metadata||{}),...pose}};
+      out.push(next);changed=true;
+    }catch{out.push(asset)}
+  }
+  if(changed)await db.query('UPDATE shaurmeg_markers SET realcity_astra_assets=$2::jsonb,updated_at=NOW() WHERE id=$1',[marker.id,JSON.stringify(out)]).catch(()=>{});
+  return out;
+}
+function fovFromAsset(asset){
+  const direct=Number(asset?.camera?.fov_deg);if(Number.isFinite(direct)&&direct>=25&&direct<=140)return direct;
+  const f35=Number(asset?.metadata?.focal_length_35mm);
+  if(Number.isFinite(f35)&&f35>4&&f35<600)return Math.max(25,Math.min(140,2*Math.atan(36/(2*f35))*180/Math.PI));
+  return null;
+}
+function ownerCameraCoordinates(marker,asset){
+  const cam=asset?.camera||{},gps=asset?.metadata?.gps||{};
+  const lat=Number(cam.lat??gps.lat),lon=Number(cam.lon??gps.lon);
+  if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=85&&Math.abs(lon)<=180)return [lon,lat];
+  const heading=Number(cam.heading_deg??asset?.direction_deg??asset?.metadata?.heading_deg),distance=Number(cam.distance_m);
+  if(asset?.category==='main_building'&&Number.isFinite(heading)&&Number.isFinite(distance)&&distance>=1&&distance<=220){
+    const a=heading*Math.PI/180,lat0=Number(marker.lat),lon0=Number(marker.lon),cos=Math.max(.15,Math.cos(lat0*Math.PI/180));
+    return [lon0-distance*Math.sin(a)/(111320*cos),lat0-distance*Math.cos(a)/110540];
+  }
+  return null;
+}
+function ownerPriority(asset){
+  const category=String(asset?.category||''),base={main_building:90,neighbor_building:82,road_ground:78,landscape:76,panorama:72,vegetation:66,street_object:62}[category]||50;
+  return base+(Number(asset?.priority)||3)*8+(asset?.primary?8:0)+(asset?.metadata?.gps?12:0);
+}
 function allowedOpenCandidate(c){
   return ['panoramax','kartaview','wikimedia'].includes(c.source)&&openWorld._internals.canPersistAdaptation(c);
 }
@@ -113,13 +153,20 @@ function photorealCandidates(raw,marker,max=72,maxDistance=360){
   return out;
 }
 async function buildSources(marker,profile,assets){
-  const own=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,72).map(a=>({
-    id:'owner:'+a.id,kind:'owner',url:sourceUrl(marker,a),asset_id:a.id,
-    category:a.category||'main_building',subtype:a.subtype||'detail',priority:Number(a.priority)||3,
-    direction_deg:finite(a.direction_deg)?Number(a.direction_deg):null,
-    coordinates:null,heading:finite(a.direction_deg)?Number(a.direction_deg):null,
-    license:'owner supplied',attribution:'Venue supplied source'
-  })).filter(x=>x.url);
+  const ownerAssets=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,96).sort((a,b)=>ownerPriority(b)-ownerPriority(a));
+  const own=ownerAssets.map(a=>{
+    const camera=a.camera||{},coordinates=ownerCameraCoordinates(marker,a);
+    const heading=finite(camera.heading_deg)?Number(camera.heading_deg):(finite(a.direction_deg)?Number(a.direction_deg):(finite(a.metadata?.heading_deg)?Number(a.metadata.heading_deg):null));
+    return {
+      id:'owner:'+a.id,kind:'owner',provider:'owner',url:sourceUrl(marker,a),asset_id:a.id,
+      category:a.category||'main_building',subtype:a.subtype||'detail',role:a.role||'environment',priority:Number(a.priority)||3,primary:!!a.primary,
+      coordinates,heading,pitch:finite(camera.pitch_deg)?Number(camera.pitch_deg):null,fov:fovFromAsset(a),
+      distance_m:finite(camera.distance_m)?Number(camera.distance_m):null,altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,
+      captured_at:a.metadata?.captured_at||null,camera_make:a.metadata?.camera_make||'',camera_model:a.metadata?.camera_model||'',
+      focal_length_mm:finite(a.metadata?.focal_length_mm)?Number(a.metadata.focal_length_mm):null,
+      license:'owner supplied',attribution:'Venue supplied original',photo_first:true
+    };
+  }).filter(x=>x.url);
   let publicCandidates=[];
   const persistedRefs=profile?.real_world?.references||[];
   try{
@@ -146,10 +193,10 @@ async function buildSources(marker,profile,assets){
       match:c.persisted_match||ref?.match||null
     };
   });
-  // Interleave geotagged public frames with owner close-ups. This gives the
-  // reconstruction both absolute camera anchors and maximum facade detail even
-  // when an owner uploaded dozens of photos.
-  const ordered=[];for(let i=0;i<Math.max(own.length,pub.length);i++){if(pub[i])ordered.push(pub[i]);if(own[i])ordered.push(own[i])}
+  // Photo-first: observed owner pixels dominate appearance. Keep several
+  // geotagged public frames early as absolute anchors when private EXIF is absent.
+  const posed=own.filter(s=>Array.isArray(s.coordinates)),unposed=own.filter(s=>!Array.isArray(s.coordinates));
+  const ordered=[...posed.slice(0,8),...pub.slice(0,4),...unposed,...posed.slice(8),...pub.slice(4)];
   const seen=new Set(),out=[];
   for(const s of ordered){
     if(!s.url||seen.has(s.id))continue;seen.add(s.id);out.push(s);if(out.length>=MAX_SOURCES)break;
@@ -166,6 +213,9 @@ function buildPayload(marker,profile,assets,sources,inputSignature,jobId){
       roads:(scene.roads||[]).slice(0,96),greens:(scene.greens||[]).slice(0,64)},
     sources,
     policy:{preserve_map_geometry:true,remove_dynamic_objects:true,prefer_observed_pixels:true,forbid_unlicensed_derivatives:true,
+      photo_first:sources.some(s=>s.kind==='owner'),owner_source_count:sources.filter(s=>s.kind==='owner').length,
+      owner_world_source_count:sources.filter(s=>s.kind==='owner'&&s.category!=='main_building').length,
+      forbid_flat_owner_fallback:sources.some(s=>s.kind==='owner'),min_owner_frames:sources.filter(s=>s.kind==='owner').length>=3?2:1,
       max_points:config.REALCITY_RECONSTRUCTION_MAX_POINTS,max_frames:Math.min(config.REALCITY_RECONSTRUCTION_MAX_FRAMES,sources.length),
       target_mobile_bytes:config.REALCITY_RECONSTRUCTION_TARGET_BYTES},
     callback:{url:config.PUBLIC_API_URL+'/api/v2/realcity/reconstruction/callback',algorithm:'hmac-sha256'}
@@ -219,7 +269,8 @@ function validateArtifact(body,row){
 async function queue(marker,profile=marker.realcity_profile||{}){
   await ensureSchema();
   if(!db.configured||!config.REALCITY_PHOTOREAL_ENABLED||!config.REALCITY_RECONSTRUCTION_WORKER_URL||!config.REALCITY_RECONSTRUCTION_SECRET)return {queued:false,reason:'worker_not_configured'};
-  const assets=Array.isArray(marker.realcity_astra_assets)?marker.realcity_astra_assets:[];
+  let assets=Array.isArray(marker.realcity_astra_assets)?marker.realcity_astra_assets:[];
+  assets=await enrichOwnerAssets(marker,assets);
   const inputSignature=sceneSignature(marker,profile,assets);
   if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return {queued:false,reason:'current'};
   const sources=await buildSources(marker,profile,assets);
@@ -273,4 +324,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority}};

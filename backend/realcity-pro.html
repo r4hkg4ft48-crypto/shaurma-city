@@ -34,6 +34,7 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 <option value="landmark">Городской объект</option><option value="environment">Общий вид</option></select></label>
 <label>Оригиналы JPG/PNG/HEIC/WebP<input type="file" id="photos" accept="image/*" multiple></label>
 <div><small>Исходные файлы сохраняются отдельно от Astra, проверяются размер, фокус, контраст и EXIF. Панорамы никогда не натягиваются на фасады.</small></div></div>
+<div class="actions"><button type="button" id="importAstra">Импортировать уже сохранённые фото из Astra</button></div><p class="muted">Копируются только оригиналы выбранной метки. Astra, её черновики и готовые модели не изменяются. После импорта Pro хранит снимки самостоятельно.</p>
 <div id="photosList" class="list"></div></section>
 <div class="grid">
 <section><h2>3 · Калибровка поверхности</h2>
@@ -147,6 +148,15 @@ $('#finishMask').onclick=()=>{if(workingMask.length>=3)masks.push(workingMask);w
 $('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)choose(b.dataset.id)};
 $('#building').onchange=()=>{edges();surfaceSelection()};$('#edge').onchange=surfaceSelection;
 $('#venue').onchange=markers;$('#marker').onchange=load;
+$('#importAstra').onclick=async()=>{
+ if(!state?.marker?.id||!confirm('Скопировать исходные снимки этой метки из Astra в независимое хранилище RealCity Pro?'))return;
+ $('#importAstra').disabled=true;status('Импортируем исходные фотографии без изменения Astra…');
+ try{
+  const j=await api(endpoint('/import-astra'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id})});
+  state=j.state;renderPhotos();updateButtons();status('Готово: импортировано '+j.imported+' исходных фотографий. Проверьте роли и откалибруйте реальные фасады.');
+ }catch(err){status('Импорт не выполнен: '+err.message)}
+ finally{$('#importAstra').disabled=false}
+};
 $('#photos').onchange=async e=>{
 const files=[...e.target.files];if(!files.length||!state)return;
 $('#photos').disabled=true;

@@ -121,6 +121,34 @@ function install(app,{db,authorize}){
     published:row.realcity_profile?.pro?{input_revision:row.realcity_profile.pro.input_revision,quality:row.realcity_profile.pro.quality}:null};
  }
  app.get(base,admin,route(async(req,res)=>res.json(await state(await select(req)))));
+
+ app.post(base+'/import-astra',admin,route(async(req,res)=>{
+  const row=await select(req);
+  // Import means COPY of user-controlled originals for this same marker only.
+  // It never reads a different venue and does not mutate Astra's originals or recipes.
+  const originals=await db.query('SELECT asset_id,sha256,octet_length(content)::bigint bytes FROM realcity_astra_originals WHERE marker_id=$1 ORDER BY created_at',[row.id]);
+  const existing=await db.query('SELECT sha256,octet_length(content)::bigint bytes FROM realcity_pro_assets WHERE marker_id=$1',[row.id]);
+  const known=new Set(existing.rows.map(x=>x.sha256)),fresh=originals.rows.filter(x=>!known.has(x.sha256));
+  if(existing.rows.length+fresh.length>100||fresh.reduce((n,x)=>n+Number(x.bytes),existing.rows.reduce((n,x)=>n+Number(x.bytes),0))>256*1024*1024)
+   fail('pro_import_dataset_limit');
+  const categoryRole=(asset)=>{
+   const c=String(asset.category||'').toLowerCase(),hint=[asset.subtype,asset.angle,asset.role].join(' ').toLowerCase();
+   if(c==='main_building')return /бок|side|right|left|лев|прав/.test(hint)?'hero_side':'hero_front';
+   if(c==='neighbor_building')return 'neighbor';
+   if(c==='road_ground')return 'road';
+   if(c==='vegetation')return 'vegetation';
+   if(c==='street_object')return 'landmark';
+   return c==='panorama'?'panorama':'environment';
+  };
+  const roles=Object.fromEntries((Array.isArray(row.realcity_astra_assets)?row.realcity_astra_assets:[])
+    .filter(a=>a?.id).map(a=>[String(a.id),categoryRole(a)]));
+  if(fresh.length){
+   await db.query("INSERT INTO realcity_pro_assets(marker_id,asset_id,role,filename,sha256,mime,content,metadata,preview) SELECT o.marker_id,'pro_'+left(md5(o.asset_id),20),COALESCE($2::jsonb->>o.asset_id,'environment'),'Astra · '||o.asset_id,o.sha256,o.mime,o.content,o.metadata,o.preview FROM realcity_astra_originals o WHERE o.marker_id=$1 AND o.asset_id=ANY($3::text[]) ON CONFLICT(marker_id,sha256) DO NOTHING",
+    [row.id,JSON.stringify(roles),fresh.map(x=>x.asset_id)]);
+  }
+  res.json({ok:true,imported:fresh.length,state:await state(row)});
+ }));
+
  app.post(base+'/assets',admin,express.raw({type:'application/octet-stream',limit:'16mb'}),route(async(req,res)=>{
   const row=await select(req),role=String(req.query.role||'environment');
   if(!ROLES.has(role))fail('pro_photo_role_unknown');

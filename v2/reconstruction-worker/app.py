@@ -763,8 +763,21 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
 def wrap_angle_deg(value:float)->float:
     return (float(value)+180.0)%360.0-180.0
 
+def anchor_buildings(job:Job):
+    buildings=[dict(b) for b in (job.map_anchor.get("buildings") or []) if isinstance(b,dict)]
+    hero=job.map_anchor.get("hero") if isinstance(job.map_anchor.get("hero"),dict) else None
+    if hero and isinstance(hero.get("ring"),list) and len(hero.get("ring"))>=4:
+        hero_id=str(hero.get("building_id") or "hero")
+        if not any(str(b.get("building_id"))==hero_id for b in buildings):
+            buildings.insert(0,{
+                "building_id":hero_id,"role":"hero","ring":hero.get("ring"),
+                "height_m":float(hero.get("height_m") or 9.0),"base_m":0.0
+            })
+    return buildings
+
 def facade_candidate(source:dict,job:Job):
-    buildings=job.map_anchor.get("buildings") or []
+    buildings=anchor_buildings(job)
+    if not buildings:return None
     match=source.get("match") if isinstance(source.get("match"),dict) else {}
     wanted=str(match.get("building_id") or "")
     try:wanted_edge=int(match.get("edge_index"))
@@ -774,34 +787,76 @@ def facade_candidate(source:dict,job:Job):
         if wanted and str(b.get("building_id"))==wanted and 0<=wanted_edge<len(ring)-1:
             return b,wanted_edge,False
 
+    origin=job.map_anchor.get("origin") or job.target.get("coordinates")
     coords=source.get("coordinates")
-    if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
-        return None
-    origin=job.map_anchor.get("origin") or job.target.get("coordinates") or coords
-    cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
-    heading=source.get("heading")
-    if not isinstance(heading,(int,float)):
-        heading=bearing_deg(coords,source_target(source,job))
-    panoramic=bool(source.get("panoramic"))
-    fov=360.0 if panoramic else max(35.0,min(120.0,float(source.get("fov") or 78.0)))
-    best=None
-    for b in buildings:
-        ring=b.get("ring") or []
-        role=str(b.get("role") or "")
-        for edge in range(max(0,len(ring)-1)):
-            a,bp=ring[edge],ring[edge+1]
-            ax,ay=local_xy(float(a[0]),float(a[1]),origin); bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
-            mx,my=(ax+bx)*.5,(ay+by)*.5
-            dist=math.hypot(mx-cx,my-cy)
-            if dist<2.0 or dist>145.0:continue
-            target=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
-            err=abs(wrap_angle_deg(target-float(heading)))
-            if not panoramic and err>fov*.62+12.0:continue
-            role_bonus=-12.0 if role=="hero" else (-4.0 if role=="nearby" else 0.0)
-            score=err*1.65+dist*.055+role_bonus
-            if best is None or score<best[0]:best=(score,b,edge,err)
-    if best is None:return None
-    return best[1],best[2],True
+    coords_ok=isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])
+    if coords_ok:
+        cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        heading=source.get("heading")
+        if not isinstance(heading,(int,float)):
+            heading=bearing_deg(coords,source_target(source,job))
+        panoramic=bool(source.get("panoramic"))
+        fov=360.0 if panoramic else max(35.0,min(120.0,float(source.get("fov") or 78.0)))
+        best=None
+        relaxed=None
+        for b in buildings:
+            ring=b.get("ring") or []
+            role=str(b.get("role") or "")
+            for edge in range(max(0,len(ring)-1)):
+                a,bp=ring[edge],ring[edge+1]
+                ax,ay=local_xy(float(a[0]),float(a[1]),origin); bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
+                mx,my=(ax+bx)*.5,(ay+by)*.5
+                dist=math.hypot(mx-cx,my-cy)
+                if dist<1.0 or dist>190.0:continue
+                target=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
+                err=abs(wrap_angle_deg(target-float(heading)))
+                role_bonus=-14.0 if role=="hero" else (-5.0 if role=="nearby" else 0.0)
+                score=err*1.65+dist*.055+role_bonus
+                if relaxed is None or score<relaxed[0]:relaxed=(score,b,edge,err)
+                if panoramic or err<=fov*.62+12.0:
+                    if best is None or score<best[0]:best=(score,b,edge,err)
+        if best is not None:return best[1],best[2],True
+        # Heading metadata on mobile photos is often absent or wrong by tens of
+        # degrees. Keep the geometry exact and relax only the camera orientation.
+        if relaxed is not None:return relaxed[1],relaxed[2],True
+
+    # Owner photos can arrive stripped of EXIF. They are still useful for
+    # appearance, but never invent free-form world geometry: attach them to the
+    # exact mapped hero wall and synthesize only a viewing ray for sampling.
+    hero=next((b for b in buildings if str(b.get("role") or "")=="hero"),buildings[0])
+    ring=hero.get("ring") or []
+    best_edge=-1;best_len=0.0
+    for edge in range(max(0,len(ring)-1)):
+        a,bp=ring[edge],ring[edge+1]
+        try:
+            ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
+        except Exception:
+            continue
+        ln=math.hypot(bx-ax,by-ay)
+        if ln>best_len:best_len=ln;best_edge=edge
+    if best_edge>=0:return hero,best_edge,True
+    return None
+
+def synthetic_camera_for_wall(building:dict,edge:int,origin:list,distance_m:float=18.0):
+    ring=building.get("ring") or []
+    a,b=ring[edge],ring[edge+1]
+    ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(b[0]),float(b[1]),origin)
+    ex,ey=bx-ax,by-ay;length=max(math.hypot(ex,ey),1e-3)
+    mx,my=(ax+bx)*.5,(ay+by)*.5
+    local_ring=[]
+    for p in ring[:-1] if len(ring)>1 else ring:
+        try:local_ring.append(local_xy(float(p[0]),float(p[1]),origin))
+        except Exception:pass
+    if local_ring:
+        gx=sum(p[0] for p in local_ring)/len(local_ring);gy=sum(p[1] for p in local_ring)/len(local_ring)
+    else:
+        gx,gy=mx,my
+    n1=(-ey/length,ex/length);n2=(ey/length,-ex/length)
+    outward=(mx-gx,my-gy)
+    n=n1 if n1[0]*outward[0]+n1[1]*outward[1]>=n2[0]*outward[0]+n2[1]*outward[1] else n2
+    cx,cy=mx+n[0]*distance_m,my+n[1]*distance_m
+    heading=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
+    return cx,cy,heading
 
 def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor.get("origin") or job.target.get("coordinates")
@@ -828,23 +883,28 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         im.thumbnail((1280,960),Image.Resampling.LANCZOS)
         rgb=np.asarray(im,dtype=np.uint8);h,w=rgb.shape[:2]
         coords=source.get("coordinates")
-        if not (isinstance(coords,list) and len(coords)>=2):continue
-        cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        coords_ok=isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])
+        if coords_ok:
+            cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+            synthetic_heading=None
+        else:
+            cx,cy,synthetic_heading=synthetic_camera_for_wall(building,edge,origin,max(12.0,min(34.0,length*1.15)))
         midx,midy=(ax+bx)*.5,(ay+by)*.5
         heading=source.get("heading")
-        if not isinstance(heading,(int,float)):
+        if synthetic_heading is not None or is_inferred or not isinstance(heading,(int,float)):
             heading=(math.degrees(math.atan2(midx-cx,midy-cy))+360.0)%360.0
         panoramic=bool(source.get("panoramic"))
-        hfov=360.0 if panoramic else max(35.0,min(115.0,float(source.get("fov") or 78.0)))
+        hfov=360.0 if panoramic else max(42.0,min(118.0,float(source.get("fov") or 82.0)))
+        if is_inferred and not panoramic:hfov=max(hfov,92.0)
         if panoramic:vfov=180.0
         else:
             vfov=math.degrees(2.0*math.atan(math.tan(math.radians(hfov)*.5)*h/max(w,1)))
-            vfov=max(28.0,min(100.0,vfov))
-        pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) else 0.0
+            vfov=max(34.0,min(105.0,vfov))
+        pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) and not is_inferred and synthetic_heading is None else 0.0
 
-        # Build a metric grid on the exact OSM wall plane, then sample the
-        # corresponding pixels using the geotagged camera ray. This preserves
-        # map geometry while retaining observed facade appearance.
+        # Build a metric grid on the exact OSM wall plane, then sample source
+        # pixels through a camera ray. Only the sampling ray may be inferred;
+        # every rendered point remains locked to the mapped facade itself.
         aspect=max(length/(height-base),.2)
         nz=max(30,int(math.sqrt(per_source/max(aspect,1e-3))))
         nx=max(34,int(nz*aspect))
@@ -864,33 +924,31 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
             xn=.5+rel/hfov
         elev=np.degrees(np.arctan2(zz-1.65,dist))
         yn=.5-(elev-pitch)/vfov
-        valid=(yn>=.015)&(yn<=.985)
-        if not panoramic:valid&=(xn>=.015)&(xn<=.985)
+        valid=(yn>=.01)&(yn<=.99)
+        if not panoramic:valid&=(xn>=.01)&(xn<=.99)
         if not valid.any():continue
         px=np.clip(np.rint(xn*(w-1)),0,w-1).astype(np.int32)
         py=np.clip(np.rint(yn*(h-1)),0,h-1).astype(np.int32)
         col=rgb[py,px].astype(np.float32)/255.0
-        # Remove only high-confidence sky samples. Lower facade/storefront
-        # pixels remain observed rather than being procedurally repainted.
-        sky=(yn<.48)&(col[...,2]>col[...,0]*1.10)&(col[...,2]>col[...,1]*1.05)&(col[...,2]>.48)
+        sky=(yn<.34)&(col[...,2]>col[...,0]*1.16)&(col[...,2]>col[...,1]*1.10)&(col[...,2]>.62)
         masked+=int(np.count_nonzero(valid&sky));valid&=~sky
-        if np.count_nonzero(valid)<900:continue
+        if np.count_nonzero(valid)<320:continue
 
         p=np.column_stack([wx[valid],wy[valid],zz[valid]]).astype(np.float32)
         cols=col[valid].astype(np.float32)
-        center=np.clip(1.0-np.abs(xn[valid]-.5)*1.55,0.0,1.0)
-        vertical=np.clip(1.0-np.abs(yn[valid]-.52)*.85,0.0,1.0)
+        center=np.clip(1.0-np.abs(xn[valid]-.5)*1.45,0.0,1.0)
+        vertical=np.clip(1.0-np.abs(yn[valid]-.52)*.78,0.0,1.0)
         match=source.get("match") if isinstance(source.get("match"),dict) else {}
-        q=float(match.get("quality") or (.36 if is_inferred else .58))
+        q=float(match.get("quality") or (.40 if is_inferred else .62))
         q=max(.12,min(1.0,q))
-        cf=np.clip(.44+.28*center+.12*vertical+.14*q-(.10 if is_inferred else 0),.24,.96).astype(np.float32)
+        cf=np.clip(.48+.25*center+.11*vertical+.14*q-(.06 if is_inferred else 0),.28,.97).astype(np.float32)
 
         du=max(.025,length/max(nx-1,1));dz=max(.025,(height-base)/max(nz-1,1))
-        depth_scale=max(.018,min(.065,du*.18))
+        depth_scale=max(.016,min(.052,du*.15))
         scales=np.column_stack([
-            np.full(len(p),du*.72,np.float32),
+            np.full(len(p),du*.70,np.float32),
             np.full(len(p),depth_scale,np.float32),
-            np.full(len(p),dz*.72,np.float32)
+            np.full(len(p),dz*.70,np.float32)
         ])
         theta=math.atan2(ey,ex)
         quat=np.zeros((len(p),4),dtype=np.float32)
@@ -901,7 +959,7 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
         facades.add(str(building.get("building_id"))+":"+str(edge))
 
-    if not all_points:raise RuntimeError("photoplane_no_visible_facades")
+    if not all_points:raise RuntimeError("photoplane_no_mapped_facade_evidence")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf)
     scales=np.concatenate(all_scales);quats=np.concatenate(all_quats)
     if len(pts)>max_points:

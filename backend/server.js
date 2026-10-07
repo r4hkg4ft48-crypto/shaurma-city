@@ -467,7 +467,7 @@ async function getClientBotInfo(){
 }
 const CLIENT_BOT_WEBHOOK_SECRET=String(process.env.CLIENT_TELEGRAM_WEBHOOK_SECRET||'').trim();
 const PUBLIC_API_URL=String(process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,'');
-const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurma-city-app.onrender.com').replace(/\/+$/,'');
+const PUBLIC_APP_URL=String(process.env.PUBLIC_APP_URL||'https://shaurmeg-v2-app.onrender.com').replace(/\/+$/,'');
 const ORDER_BUILD='100';
 const MAP_BUILD=String(MAP_CONFIG.version||104);
 
@@ -483,7 +483,7 @@ function accessAdminBotToken(){
 function aggregatorBotToken(){
  return String(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN||'').trim();
 }
-const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/map.html').trim();
+const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/index.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
 const ADMIN_BOT_WEBHOOK_SECRET=adminTelegramBotToken()?crypto.createHash('sha256').update('shaurmeg-admin:'+adminTelegramBotToken()).digest('hex').slice(0,32):'';
 const MASTER_ADMIN_BOT_WEBHOOK_SECRET=masterAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-master-admin:'+masterAdminBotToken()).digest('hex').slice(0,32):'';

@@ -354,3 +354,13 @@ test('Q4 falls back to FP32 before photoplane on CPU',()=>{
   const plane=src.indexOf('CPU ONNX depth unavailable; using photoplane safety fallback');
   assert.ok(q4>0&&fp32>q4&&plane>fp32);
 });
+
+
+test('deep reconstruction merges persisted references before live discovery',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
+  assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
+  assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
+  assert.match(src,/PIPELINE_REVISION='v18-source-resolver-v3'/);
+});

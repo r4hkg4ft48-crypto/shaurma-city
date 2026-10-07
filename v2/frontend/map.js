@@ -389,6 +389,12 @@
         }else if(type==='fill'&&/park|grass|wood|vegetation|forest|landcover/i.test(id)){
           remember(id,'fill-color');remember(id,'fill-opacity');
           map.setPaintProperty(id,'fill-color','#5f7357');map.setPaintProperty(id,'fill-opacity',.84);
+        }else if(type==='fill-extrusion'&&/building/i.test(id)){
+          remember(id,'fill-extrusion-color');remember(id,'fill-extrusion-opacity');
+          map.setPaintProperty(id,'fill-extrusion-color','#8b8983');map.setPaintProperty(id,'fill-extrusion-opacity',.46);
+        }else if(type==='fill'&&/building/i.test(id)){
+          remember(id,'fill-color');remember(id,'fill-opacity');
+          map.setPaintProperty(id,'fill-color','#8b8983');map.setPaintProperty(id,'fill-opacity',.42);
         }else if(type==='fill'&&/residential|landuse|land/i.test(id)&&!/water/i.test(id)){
           remember(id,'fill-color');remember(id,'fill-opacity');
           map.setPaintProperty(id,'fill-color','#969289');map.setPaintProperty(id,'fill-opacity',.82);
@@ -595,7 +601,8 @@
             }
             const splat=window.RealCitySplatLayer.create({
               marker:p,profile:j.profile,model:authored.model,layerId:'realcity-photoreal-splats',
-              reducedMotion:reduceMotion,onError:e=>console.warn('RealCity photoreal fallback',e.message)
+              reducedMotion:reduceMotion,overlaySupport:!isTruePhotogrammetry&&isVolumetricDepth,
+              onError:e=>console.warn('RealCity photoreal fallback',e.message)
             });
             if(splat){
               map.addLayer(splat);

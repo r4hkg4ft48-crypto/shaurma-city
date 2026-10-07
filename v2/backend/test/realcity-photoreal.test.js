@@ -298,7 +298,7 @@ test('MAX source sweep reaches beyond the old narrow street radius',()=>{
   const open=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
   const photo=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   assert.match(open,/bbox\(marker,520\)/);
-  assert.match(open,/radius:'520'/);
+  assert.match(open,/radius','1000'/);
   assert.match(open,/ggsradius:'650'/);
   assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
   assert.match(photo,/openWorld\.collectCandidates\(marker\)\.catch\(\(\)=>\[\]\)/);
@@ -339,7 +339,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v19 photo-first revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v19-photo-first-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
 });
 
 
@@ -364,7 +364,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v19-photo-first-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
 });
 
 
@@ -458,4 +458,30 @@ test('ONNX depth preserves high-resolution source appearance and EXIF orientatio
   assert.match(src,/depth_im=base\.copy\(\);depth_im\.thumbnail\(\(518,392\)/);
   assert.match(src,/rgb=np\.asarray\(base\)/);
   assert.match(src,/resize\(\(w,h\),Image\.Resampling\.BICUBIC\)/);
+});
+
+
+test('provider mix reports reconstruction evidence explicitly',()=>{
+  const mix=P._internals.sourceMix([
+    {provider:'wikimedia'},{provider:'wikimedia'},{provider:'kartaview'},
+    {provider:'panoramax'},{provider:'unknown'}
+  ]);
+  assert.deepEqual(mix,{owner:0,panoramax:1,kartaview:1,wikimedia:2,mapillary:0,other:1});
+});
+
+test('v20 source revision forces requeue after street discovery changes',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/PIPELINE_REVISION='v20-open-street-source-v1'/);
+  assert.match(src,/source_mix:sourceMix\(sources\)/);
+  assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
+});
+
+
+test('lazy RealCity renderer follows the Mini App cache revision',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/window\.__SHAURMEG_ASSET_VERSION__/);
+  assert.match(src,/src\+'\?v='\+encodeURIComponent\(revision\)/);
+  assert.doesNotMatch(src,/realcity-photoreal-1/);
 });

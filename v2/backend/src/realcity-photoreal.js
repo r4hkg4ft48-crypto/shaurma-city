@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v19-photo-first-v1';
+const PIPELINE_REVISION='v20-open-street-source-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -134,6 +134,14 @@ function ownerPriority(asset){
 function allowedOpenCandidate(c){
   return ['panoramax','kartaview','wikimedia'].includes(c.source)&&openWorld._internals.canPersistAdaptation(c);
 }
+function sourceMix(sources){
+  const mix={owner:0,panoramax:0,kartaview:0,wikimedia:0,mapillary:0,other:0};
+  for(const s of sources||[]){
+    const key=Object.prototype.hasOwnProperty.call(mix,String(s.provider||s.source||''))?String(s.provider||s.source):'other';
+    mix[key]=(mix[key]||0)+1;
+  }
+  return mix;
+}
 function photorealCandidates(raw,marker,max=72,maxDistance=360){
   const origin=[Number(marker.lon),Number(marker.lat)],weights={panoramax:150,kartaview:145,wikimedia:105};
   const caps={panoramax:56,kartaview:56,wikimedia:32},bins=new Map(),counts={},seen=new Set(),out=[];
@@ -212,7 +220,7 @@ function buildPayload(marker,profile,assets,sources,inputSignature,jobId){
       buildings:(scene.buildings||[]).slice(0,32).map(b=>({building_id:String(b.id),role:b.role,ring:b.ring,height_m:Number(b.height)||9,base_m:Number(b.base_m)||0,geometry_key:S.geometryKey(b.ring)})),
       roads:(scene.roads||[]).slice(0,96),greens:(scene.greens||[]).slice(0,64)},
     sources,
-    policy:{preserve_map_geometry:true,remove_dynamic_objects:true,prefer_observed_pixels:true,forbid_unlicensed_derivatives:true,
+    policy:{preserve_map_geometry:true,remove_dynamic_objects:true,prefer_observed_pixels:true,forbid_unlicensed_derivatives:true,source_mix:sourceMix(sources),
       photo_first:sources.some(s=>s.kind==='owner'),owner_source_count:sources.filter(s=>s.kind==='owner').length,
       owner_world_source_count:sources.filter(s=>s.kind==='owner'&&s.category!=='main_building').length,
       forbid_flat_owner_fallback:sources.some(s=>s.kind==='owner'),min_owner_frames:sources.filter(s=>s.kind==='owner').length>=3?2:1,
@@ -287,7 +295,7 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   }
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);
   await db.query("INSERT INTO realcity_reconstruction_jobs(job_id,marker_id,input_signature,status,source_count,attempts) VALUES($1,$2,$3,'queued',$4,1)",[jobId,marker.id,inputSignature,sources.length]);
-  await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'queued',input_signature:inputSignature,source_count:sources.length,submitted_at:new Date().toISOString()})]);
+  await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb),realcity_updated_at=NOW() WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'queued',input_signature:inputSignature,source_count:sources.length,source_mix:sourceMix(sources),submitted_at:new Date().toISOString()})]);
   try{
     const ac=new AbortController(),timer=setTimeout(()=>ac.abort(),12000);
     const r=await fetch(config.REALCITY_RECONSTRUCTION_WORKER_URL.replace(/\/+$/,'')+'/v1/jobs',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.REALCITY_RECONSTRUCTION_WORKER_TOKEN},body:JSON.stringify(payload)});clearTimeout(timer);
@@ -312,7 +320,7 @@ async function acceptResult(body){
   const marker={...row,id:row.marker_id,realcity_profile:row.realcity_profile||{}},artifact=validateArtifact(body,marker);
   const currentSig=sceneSignature(marker,marker.realcity_profile,marker.realcity_astra_assets||[]);
   if(currentSig!==body.input_signature)throw Object.assign(new Error('photoreal_inputs_changed'),{status:409});
-  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment};
+  const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,source_mix:sourceMix(artifact.sources)};
   await db.tx(async client=>{
     await client.query("UPDATE realcity_reconstruction_jobs SET status='ready',result_summary=$2::jsonb,updated_at=NOW() WHERE job_id=$1",[body.job_id,JSON.stringify(summary)]);
     await client.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal}',$2::jsonb),'{photoreal_job}',$3::jsonb),realcity_quality='photoreal',realcity_updated_at=NOW() WHERE id=$1",[row.marker_id,JSON.stringify(artifact),JSON.stringify({job_id:body.job_id,status:'ready',input_signature:body.input_signature,completed_at:new Date().toISOString(),summary})]);
@@ -324,4 +332,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix}};

@@ -175,7 +175,7 @@ function deepObjects(value,out=[]){
   out.push(value);for(const v of Object.values(value))if(v&&typeof v==='object')deepObjects(v,out);return out;
 }
 function kartaImage(row){
-  for(const k of ['fileurlProc','fileurlLTh','procUrl','imageProcUrl','thumbUrl','thumbnailUrl','image_url','url','lth_name','name','fileName','filepath','path']){
+  for(const k of ['fileurlProc','fileurlLTh','fileUrl','fileurl','procUrl','imageProcUrl','thumbUrl','thumbnailUrl','image_url','url','lth_name','name','fileName','filepath','path']){
     const raw=String(row?.[k]||'').trim();if(!raw)continue;
     const direct=safeUrl(raw);if(direct)return direct;
     if(/^http:\/\//i.test(raw)){const https=safeUrl(raw.replace(/^http:/i,'https:'));if(https)return https}
@@ -184,27 +184,39 @@ function kartaImage(row){
   return null;
 }
 async function collectKartaView(marker){
-  let j;
-  try{
-    j=await fetchJson(KARTAVIEW_API+'/1.0/list/nearby-photos/',{
-      method:'POST',form:{lat:String(marker.lat),lng:String(marker.lon),radius:'520',ipp:'300',page:'1'},timeout:6000
-    });
-  }catch{return[]}
-  const apiCode=Number(j?.status?.apiCode);if(apiCode&&apiCode!==600)return[];
-  const out=[],seen=new Set();
-  for(const row of deepObjects(j)){
-    const coords=[num(row.lng??row.lon??row.longitude),num(row.lat??row.latitude)],image=kartaImage(row);
-    if(!finite(coords[0])||!finite(coords[1])||!image)continue;
-    const id=row.id??row.photoId??row.photo_id??((row.sequenceId??row.sequence_id)+'-'+(row.sequenceIndex??row.sequence_index));
-    const key=String(id||image);if(seen.has(key))continue;seen.add(key);
-    const fov=Number(row.fieldOfView??row.fov??row.hFoV)||78;
-    const c=candidateBase('kartaview',key,coords,image,'https://kartaview.org/map/@'+coords[1]+','+coords[0]+',18z',{
-      heading:row.heading??row.compass??row.cameraHeading??row.direction,
-      captured_at:row.date_added??row.dateAdded??row.createdAt??row.timestamp??null,
-      license:'CC BY-SA 4.0',license_url:'https://creativecommons.org/licenses/by-sa/4.0/',attribution:'© Grab and KartaView Contributors',
-      sequence_id:row.sequenceId??row.sequence_id,panoramic:fov>=300,fov
-    });if(c)out.push(c);
-    if(out.length>=160)break;
+  // KartaView currently exposes both the newer 2.0 GET surface and the older
+  // anonymous 1.0 nearby endpoint. Query both: deployments and regional
+  // coverage can differ, and one API occasionally times out while the other works.
+  const u=new URL(KARTAVIEW_API+'/2.0/photo/');
+  u.searchParams.set('lat',String(marker.lat));u.searchParams.set('lng',String(marker.lon));
+  u.searchParams.set('radius','1000');u.searchParams.set('zoomLevel','15');
+  u.searchParams.set('join','sequence');u.searchParams.set('orderBy','id');u.searchParams.set('orderDirection','desc');
+  const done=await Promise.allSettled([
+    fetchJson(u.toString(),{timeout:7500}),
+    fetchJson(KARTAVIEW_API+'/1.0/list/nearby-photos/',{
+      method:'POST',form:{lat:String(marker.lat),lng:String(marker.lon),radius:'1000',ipp:'300',page:'1'},timeout:7500
+    })
+  ]);
+  const payloads=done.filter(x=>x.status==='fulfilled').map(x=>x.value),out=[],seen=new Set();
+  for(const j of payloads){
+    const apiCode=Number(j?.status?.apiCode);
+    if(apiCode&&![600,200].includes(apiCode))continue;
+    for(const row of deepObjects(j)){
+      const coords=[num(row.lng??row.lon??row.longitude),num(row.lat??row.latitude)],image=kartaImage(row);
+      if(!finite(coords[0])||!finite(coords[1])||!image)continue;
+      const id=row.id??row.photoId??row.photo_id??((row.sequenceId??row.sequence_id)+'-'+(row.sequenceIndex??row.sequence_index));
+      const key=String(id||image);if(seen.has(key))continue;seen.add(key);
+      const fov=Number(row.fieldOfView??row.fov??row.hFoV??row.field_of_view)||78;
+      const candidate=candidateBase('kartaview',key,coords,image,'https://kartaview.org/map/@'+coords[1]+','+coords[0]+',18z',{
+        heading:row.heading??row.compass??row.cameraHeading??row.direction??row.compass_angle,
+        captured_at:row.date_added??row.dateAdded??row.createdAt??row.timestamp??row.captured_at??null,
+        license:'CC BY-SA 4.0',license_url:'https://creativecommons.org/licenses/by-sa/4.0/',attribution:'© Grab and KartaView Contributors',
+        sequence_id:row.sequenceId??row.sequence_id,panoramic:fov>=300,fov
+      });
+      if(candidate)out.push(candidate);
+      if(out.length>=220)break;
+    }
+    if(out.length>=220)break;
   }
   return out;
 }

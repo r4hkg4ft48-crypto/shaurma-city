@@ -1317,6 +1317,8 @@ app.post('/api/shaurmeg/admin/discovery/moscow',async(req,res)=>{
 });
 
 require('../v2/backend/src/realcity-studio').install(app,{db:DB,authorize:ownerOk,manifest:astraManifest,normalizeAssets:normalizeAstraRealCityAssets,normalizeConfig:normalizeAstraRealCityConfig,readiness:astraReadiness});
+require('../v2/backend/src/realcity-pro').install(app,{db:DB,authorize:ownerOk});
+
 
 /* The v3 studio owns input reads/writes; original files and draft processing are
    implemented in v2/backend. The existing output endpoint remains compatible. */
@@ -1927,6 +1929,7 @@ const sendMasterAdmin=(req,res)=>{res.setHeader('Cache-Control','no-store, no-ca
 const sendOwner=(req,res)=>{res.setHeader('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');res.setHeader('Pragma','no-cache');res.setHeader('Expires','0');res.sendFile(path.join(__dirname,'shaurma-owner.html'))};
 const sendShaurmegOwner=(req,res)=>res.sendFile(path.join(__dirname,'shaurmeg-owner.html'));
 app.get('/master-admin',sendMasterAdmin);
+app.get('/realcity-pro',(req,res)=>{res.setHeader('Cache-Control','no-store');res.sendFile(path.join(__dirname,'realcity-pro.html'))});
 app.get('/master',sendMasterAdmin);
 app.get('/shaurma-owner',sendOwner);
 app.get('/admin',sendOwner);

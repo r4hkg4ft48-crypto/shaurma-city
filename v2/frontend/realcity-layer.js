@@ -185,7 +185,7 @@ void main(){
   function makePhotoAtlas(astra){
     const materials=(astra.materials||[]).filter(m=>m.mode==='facade'),canvas=document.createElement('canvas');
     const size=materials.length?4096:1;canvas.width=canvas.height=size;
-    const slots=new Map(),params=new Float32Array(48),ctx=canvas.getContext('2d');
+    const slots=new Map(),params=new Float32Array(48),ctx=canvas.getContext('2d'),failures=[];
     let placement=[],scale=1;
     for(let attempt=0;attempt<12;attempt++){
       let x=0,y=0,row=0;placement=[];
@@ -205,9 +205,9 @@ void main(){
         // 16px gutters prevent neighboring facades leaking into oblique mipmaps.
         ctx.drawImage(img,0,0,1,img.height,x-16,y,16,h);ctx.drawImage(img,img.width-1,0,1,img.height,x+w,y,16,h);
         ctx.drawImage(canvas,x-16,y,w+32,1,x-16,y-16,w+32,16);ctx.drawImage(canvas,x-16,y+h-1,w+32,1,x-16,y+h,w+32,16);
-        resolve();};img.onerror=()=>resolve();img.src=m.data_url;});
+        resolve();};img.onerror=()=>{failures.push(m.id);resolve()};img.src=m.data_url;});
     });
-    return {canvas,slots,params,scale,ready:Promise.all(jobs)};
+    return {canvas,slots,params,scale,failures,ready:Promise.all(jobs)};
   }
   function subtractRectangles(rect,holes){
     let parts=[rect];
@@ -246,7 +246,7 @@ void main(){
       if(glass)return {...r,texture:r.texture>=20?r.texture+20:9};
       return r.repeat?{u0:0,u1:w/r.repeat[0],v0:0,v1:h/r.repeat[1],texture:r.repeatTexture}:r;
     };
-    if(astra.materials?.length&&astra.environment?.roads?.length){
+    if(astra.mode!=='realcity-pro'&&astra.materials?.length&&astra.environment?.roads?.length){
       // The same local quarter ground, now receiving the same light/shadow map
       // as its facades. No detached landscape or changed building coordinates.
       const radius=Math.min(280,Math.max(100,Number(scene.radius_m)||244));
@@ -261,6 +261,7 @@ void main(){
       for(const edge of edges){
         if(edge.length<.2)continue;
         const f=b.facades.find(x=>x.edge_index===edge.index),n=[...edge.normal,0],t=[...edge.tangent,0];
+        if(astra.mode==='realcity-pro'&&(!f||!f.surfaces?.length))continue;
         const point=(u,z,d=0)=>[edge.a[0]+edge.tangent[0]*u+edge.normal[0]*(d+.035),edge.a[1]+edge.tangent[1]*u+edge.normal[1]*(d+.035),z];
         const plane=(u,z,w,h,d,col,slot,lod=0)=>{
           // Photo crops and lettering read left-to-right from outside, even
@@ -277,15 +278,15 @@ void main(){
         };
         const facadeTexture=material(f?.material_id,edge.length,height-b.base_m),ribbed=f?.wall?.finish==='ribbed';
         const surfaces=f?.surfaces||[];
-        if(!surfaces.length)plane(0,b.base_m,edge.length,height-b.base_m,0,facadeTexture?'#ffffff':f?.wall?.color||base.palette?.wall,facadeTexture||(ribbed?{u0:0,u1:edge.length/f.wall.module_m,v0:1,v1:0,texture:2}:null));
+        if(!surfaces.length&&astra.mode!=='realcity-pro')plane(0,b.base_m,edge.length,height-b.base_m,0,facadeTexture?'#ffffff':f?.wall?.color||base.palette?.wall,facadeTexture||(ribbed?{u0:0,u1:edge.length/f.wall.module_m,v0:1,v1:0,texture:2}:null));
         else{
-          for(const p of subtractRectangles([0,b.base_m,edge.length,height-b.base_m],surfaces.map(s=>[s.u_m,s.z_m,s.width_m,s.height_m])))plane(...p,0,f.wall.color,null);
+          if(astra.mode!=='realcity-pro')for(const p of subtractRectangles([0,b.base_m,edge.length,height-b.base_m],surfaces.map(s=>[s.u_m,s.z_m,s.width_m,s.height_m])))plane(...p,0,f.wall.color,null);
           for(const s of surfaces){
             const slot=atlas.slots.get(s.material_id),w=s.width_m,h=s.height_m,d=s.depth_m,openings=s.openings||[];
-            if(!slot){plane(s.u_m,s.z_m,w,h,d,f.wall.color,null);continue;}
+            if(!slot){if(astra.mode!=='realcity-pro')plane(s.u_m,s.z_m,w,h,d,f.wall.color,null);continue;}
             const patch=(x,z,pw,ph,depth,glass=false)=>{
               const u=q=>slot.u0+(slot.u1-slot.u0)*(s.flip_u?1-q:q),v=q=>slot.v1-(slot.v1-slot.v0)*q;
-              plane(s.u_m+x,s.z_m+z,pw,ph,depth-.002,f.wall.color,null);
+              if(astra.mode!=='realcity-pro')plane(s.u_m+x,s.z_m+z,pw,ph,depth-.002,f.wall.color,null);
               plane(s.u_m+x,s.z_m+z,pw,ph,depth,'#ffffff',{...slot,u0:u(x/w),u1:u((x+pw)/w),v0:v((z+ph)/h),v1:v(z/h),texture:slot.texture+(glass?20:0),oriented:true});
             };
             for(const p of subtractRectangles([0,0,w,h],openings.map(o=>[o.u_m,o.z_m,o.width_m,o.height_m])))patch(...p,d);
@@ -355,8 +356,9 @@ void main(){
             }
           }
         }
-        if(b.roof.parapet_m)box(0,height-b.roof.parapet_m,edge.length,b.roof.parapet_m,.055,b.roof.color,0);
+        if(astra.mode!=='realcity-pro'&&b.roof.parapet_m)box(0,height-b.roof.parapet_m,edge.length,b.roof.parapet_m,.055,b.roof.color,0);
       }
+      if(astra.mode==='realcity-pro')continue;
       const roof=S.ring(base.ring).slice(0,-1).map(coordinateFrame.toLocal),idx=root.earcut(roof.flat()),col=rgb(b.roof.color);
       for(let j=0;j<idx.length;j+=3)addTri([...roof[idx[j]],height+.035],[...roof[idx[j+1]],height+.035],[...roof[idx[j+2]],height+.035],[0,0,1],col,[[0,0],[0,0],[0,0]],6,0,order);
     }
@@ -367,14 +369,14 @@ void main(){
       const color=rgb(col);
       for(const [s,q,s2,q2] of [[-1,-1,1,-1],[1,-1,1,1],[1,1,-1,1],[-1,1,-1,-1]])quad([corner(a,s,q),corner(b,s,q),corner(b,s2,q2),corner(a,s2,q2)],n.map((v,i)=>v*(s+s2)/2+k[i]*(q+q2)/2),color,null,0,.3);
     };
-    for(const fence of astra.environment?.fences||[]){
+    for(const fence of (astra.mode==='realcity-pro'?[]:astra.environment?.fences)||[]){
       const a=coordinateFrame.toLocal(fence.start),b=coordinateFrame.toLocal(fence.end),h=fence.height_m,len=Math.hypot(b[0]-a[0],b[1]-a[1]);
       for(const z of [.25,h-.08])beam([...a,z],[...b,z],.06,'#424f54');
       const count=Math.ceil(len/.2);for(let i=0;i<=count;i++){
         const p=[a[0]+(b[0]-a[0])*i/count,a[1]+(b[1]-a[1])*i/count];beam([...p,.12],[...p,h],i%12===0?.09:.045,'#536168');
       }
     }
-    for(const lamp of astra.environment?.lamps||[]){
+    for(const lamp of (astra.mode==='realcity-pro'?[]:astra.environment?.lamps)||[]){
       const p=coordinateFrame.toLocal(lamp.coordinates),h=lamp.height_m,a=lamp.bearing*Math.PI/180,q=[p[0]+Math.sin(a)*1.8,p[1]+Math.cos(a)*1.8,h-.3];
       beam([...p,0],[...p,h-1],.11,'#889395');beam([...p,h-1],q,.085,'#7c888b');
       beam(q,[q[0]+Math.sin(a)*.65,q[1]+Math.cos(a)*.65,q[2]],.24,'#46545b');
@@ -453,7 +455,7 @@ void main(){
       return S.edges(b.ring||base.ring,[Number(marker.lon),Number(marker.lat)]).map(e=>({building_id:parent.building_id,edge_index:e.index,role:b.role,evidence:b.facades.find(f=>f.edge_index===e.index)?.evidence||'inferred',vertices:[[...e.a,b.base_m],[...e.b,b.base_m],[...e.b,b.height_m],[...e.a,b.height_m]]}));
     }));
     if(mesh.triangles>180000){onError(new Error('astra_geometry_budget'));return null;}
-    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
+    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,photoReady:astra.mode!=='realcity-pro',photoPromise:atlas.ready,disposed:false,progress:reducedMotion?1:0,
       stats:{buildings:astra.buildings.length,triangles:mesh.triangles,bytes:mesh.vertices.byteLength,photo_atlas_scale:atlas.photos.scale,photo_materials:atlas.photos.slots.size},
       onAdd(map,gl){
         this.map=map;this.gl=gl;
@@ -485,7 +487,15 @@ void main(){
           if(anisotropy)gl.texParameterf(gl.TEXTURE_2D,anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
           this.uploadAtlas();this.ready=true;this.light=lightMatrix();
           if(astra.materials?.length)this.setupShadow();
-          atlas.ready.then(()=>{if(!this.disposed){this.uploadAtlas();map.triggerRepaint()}});
+          atlas.ready.then(()=>{
+            if(this.disposed)return;
+            if(astra.mode==='realcity-pro'&&atlas.photos.failures.length){
+              this.ready=false;
+              onError(new Error('pro_photo_texture_failed:'+atlas.photos.failures.join(',')));
+              return;
+            }
+            this.uploadAtlas();this.photoReady=true;map.triggerRepaint();
+          });
         }catch(e){this.onRemove(map,gl);onError(e);}
       },
       uploadAtlas(){
@@ -537,7 +547,7 @@ void main(){
         }return hit;
       },
       render(gl,args){
-        if(!this.ready||this.disposed)return;
+        if(!this.ready||this.disposed||(astra.mode==='realcity-pro'&&!this.photoReady))return;
         const m=args?.defaultProjectionData?.mainMatrix||args?.modelViewProjectionMatrix||(Array.isArray(args)||ArrayBuffer.isView(args)?args:null);if(!m)return;
         this.drawShadow();
         gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);

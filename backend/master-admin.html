@@ -36,7 +36,7 @@
   </nav>
   <div class="consolePageHeading"><div><small id="consoleEyebrow">ОПЕРАЦИОННЫЙ ОБЗОР</small><h1 id="consolePageTitle">Вся сеть под контролем</h1></div><span class="consoleBuild">ASTRA / 03</span></div>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b><span>активных точек</span></div><div class="stat"><small>ЗАКАЗЫ ЗА 24 ЧАСА</small><b id="stToday">—</b><span>по всей сети</span></div><div class="stat"><small>НОВЫЕ ЗАКАЗЫ</small><b id="stNew">—</b><span>ожидают кухни</span></div><div class="stat"><small>ВЫРУЧКА ЗА 24 ЧАСА</small><b id="stRevenue">—</b><span>без отменённых</span></div></div>
-  <nav class="tabs" id="tabs" aria-label="Системные модули"><button data-tab="tools">Все инструменты</button><button data-tab="astra">Astra / RealCity</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="bots">Боты</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Системные модули"><button data-tab="tools">Все инструменты</button><button data-tab="astra">Astra / RealCity</button><button data-tab="pro">RealCity Pro · Фото</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="bots">Боты</button></nav>
 
   <section class="pane active" id="overviewPane">
     <div class="consoleNetworkStrip"><div><small>ЗАВЕДЕНИЯ СЕТИ</small><h2>На связи с каждой точкой</h2></div><div id="networkVenues" class="consoleVenueStrip"></div><button class="btn" data-tab-open="sites">Весь каталог →</button></div><div class="sectionTitle"><h2>Рабочие пространства</h2><small>Быстрый переход</small></div>
@@ -44,6 +44,7 @@
       <button class="module" data-open="/shaurma-owner?section=orders&from=master&v=6" style="--glow:rgba(111,141,255,.18)"><span class="moduleGlyph" data-icon="orders"></span><b>Заказы и аналитика</b><small>Фильтр по точке и периоду, вся история, выручка, средний чек и позиции.</small></button>
       <button class="module" data-open="/shaurma-owner?section=menu&from=master&v=6" style="--glow:rgba(107,216,163,.13)"><span class="moduleGlyph" data-icon="menu"></span><b>Меню заведений</b><small>Выбрать конкретную точку и редактировать её категории, позиции, цены и конструктор.</small></button>
       <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span class="moduleGlyph" data-icon="pin"></span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
+      <button class="module" data-tab-open="pro" style="--glow:rgba(77,226,210,.18)"><span class="moduleGlyph" data-icon="layers"></span><b>RealCity Pro · Фото</b><small>Точные исходники, грань дома, калибровка, строгая проверка и публикация — независимо от Astra.</small></button>
       <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span class="moduleGlyph" data-icon="layers"></span><b>Astra / RealCity</b><small>Digital Twin конкретной точки: главное здание, вход и панорама района.</small></button>
       <button class="module" data-tab-open="access"><span class="moduleGlyph" data-icon="key"></span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
       <button class="module" data-tab-open="sites"><span class="moduleGlyph" data-icon="store"></span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
@@ -51,6 +52,8 @@
       <button class="module" data-tab-open="bots"><span class="moduleGlyph" data-icon="telegram"></span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
     </div>
   </section>
+
+  <section class="pane" id="proPane"><div class="sectionTitle"><h2>RealCity Pro · фотограмметрическая студия</h2><small>независимая от Astra обработка</small></div><iframe id="proFrame" title="RealCity Pro" src="about:blank" style="width:100%;min-height:calc(100vh - 205px);border:0;border-radius:19px;background:#071320"></iframe></section>
 
   <section class="pane" id="astraPane">
     <div class="sectionTitle"><h2>Astra / RealCity</h2><small>digital twin dataset · per establishment</small></div>
@@ -220,7 +223,7 @@ function masterBack(){
  try{window.Telegram?.WebApp?.close?.()}catch{}
 }
 function activate(name){
- if(!['overview','astra','access','owners','sites','bots','tools','orders','menu','map'].includes(name))name='overview';
+ if(!['overview','astra','pro','access','owners','sites','bots','tools','orders','menu','map'].includes(name))name='overview';
  $$('[data-tab]').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
  $$('.pane').forEach(x=>x.classList.toggle('active',x.id===name+'Pane'));
  try{const u=new URL(location.href);u.searchParams.set('tab',name);history.replaceState(null,'',u)}catch{}
@@ -229,6 +232,7 @@ function activate(name){
  if(name==='bots')loadBots();
  if(name==='owners')loadOwnerAdmins();if(name==='access'){loadAdmins();loadInvites()}
  if(name==='astra')loadAstraStudio();
+ if(name==='pro'&&$('#proFrame').src.endsWith('about:blank'))$('#proFrame').src='/realcity-pro?from=master';
 }
 async function telegramLogin(){
  const tg=window.Telegram?.WebApp;
@@ -486,7 +490,7 @@ function renderConsoleScreen(name){
 }
 function openConsoleModule(path){if(path.startsWith('/shaurmeg-owner'))return activate('map');if(path.startsWith('/shaurma-owner'))return activate(path.includes('section=menu')?'menu':'orders');location.href=path}
 function renderConsoleTools(){
- const defs=[['astra','layers','Astra / RealCity','Фотографии, реконструкция и публикация'],['access','key','Ключи доступа','Выдача OWN-ключей и отзыв доступа'],['owners','users','Владельцы','Привязки Telegram и кабинеты точек'],['bots','telegram','Telegram-боты','Состояние связок и вебхуков'],['orders','chart','Аналитика','Периоды, выручка и история'],['menu','menu','Меню сети','Категории, блюда и конструкторы'],['map','pin','Карта','Метки, координаты и оформление'],['sites','store','Заведения','Карточки и настройки каждой точки']];
+ const defs=[['pro','layers','RealCity Pro · Фото','Точная калибровка и проверка оригиналов'],['astra','layers','Astra / RealCity','Фотографии, реконструкция и публикация'],['access','key','Ключи доступа','Выдача OWN-ключей и отзыв доступа'],['owners','users','Владельцы','Привязки Telegram и кабинеты точек'],['bots','telegram','Telegram-боты','Состояние связок и вебхуков'],['orders','chart','Аналитика','Периоды, выручка и история'],['menu','menu','Меню сети','Категории, блюда и конструкторы'],['map','pin','Карта','Метки, координаты и оформление'],['sites','store','Заведения','Карточки и настройки каждой точки']];
  $('#consoleToolGrid').innerHTML=defs.map(([id,icon,title,desc])=>'<button class="consoleSetting" data-tab-open="'+id+'"><span data-icon="'+icon+'"></span><div><b>'+title+'</b><small>'+desc+'</small></div><i>›</i></button>').join('');
 }
 renderConsoleTools();

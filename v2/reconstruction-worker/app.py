@@ -9,7 +9,7 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v4"
+APP_VERSION="realcity-photoreal-worker-v5"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -26,10 +26,12 @@ ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() n
 LIGHTWEIGHT_CPU=os.getenv("REALCITY_LIGHTWEIGHT_CPU","false").lower() in ("1","true","on","yes")
 HIGH_MEMORY_CPU=os.getenv("REALCITY_HIGH_MEMORY_CPU","false").lower() in ("1","true","on","yes")
 DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
+CPU_ONNX_MODEL=os.getenv("REALCITY_CPU_ONNX_MODEL","onnx-community/depth-anything-v2-small")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
 _MAPANYTHING_CACHE=None
 _DEPTH_CACHE=None
+_ONNX_DEPTH_CACHE=None
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
 class Job(BaseModel):
@@ -597,92 +599,129 @@ def get_depth_engine(device):
     _DEPTH_CACHE=(processor,model)
     return _DEPTH_CACHE
 
+def get_onnx_depth_engine():
+    global _ONNX_DEPTH_CACHE
+    if _ONNX_DEPTH_CACHE is not None:return _ONNX_DEPTH_CACHE
+    import onnxruntime as ort
+    from huggingface_hub import hf_hub_download
+    model_path=hf_hub_download(repo_id=CPU_ONNX_MODEL,filename="onnx/model_int8.onnx")
+    opts=ort.SessionOptions()
+    opts.intra_op_num_threads=max(1,min(2,int(os.getenv("OMP_NUM_THREADS","1"))))
+    opts.inter_op_num_threads=1
+    opts.enable_cpu_mem_arena=True
+    opts.graph_optimization_level=ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    session=ort.InferenceSession(model_path,sess_options=opts,providers=["CPUExecutionProvider"])
+    _ONNX_DEPTH_CACHE=session
+    return session
+
+def onnx_relative_depth(image:Image.Image)->np.ndarray:
+    session=get_onnx_depth_engine()
+    w,h=image.size
+    resized=image.resize((518,518),Image.Resampling.BICUBIC)
+    x=np.asarray(resized,dtype=np.float32)/255.0
+    mean=np.asarray([.485,.456,.406],dtype=np.float32)
+    std=np.asarray([.229,.224,.225],dtype=np.float32)
+    x=((x-mean)/std).transpose(2,0,1)[None]
+    name=session.get_inputs()[0].name
+    out=np.asarray(session.run(None,{name:x})[0],dtype=np.float32).squeeze()
+    if out.ndim!=2:raise RuntimeError("onnx_depth_bad_shape")
+    restored=Image.fromarray(out,mode="F").resize((w,h),Image.Resampling.BICUBIC)
+    return np.asarray(restored,dtype=np.float32)
+
 def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
-    import torch
-    from transformers import AutoImageProcessor,AutoModelForDepthEstimation
-    device="cuda" if torch.cuda.is_available() else "cpu"
-    processor,model=get_depth_engine(device)
+    torch=None
+    if not LIGHTWEIGHT_CPU:
+        try:
+            import torch as _torch
+            torch=_torch
+        except Exception:
+            torch=None
+    device="cuda" if torch is not None and torch.cuda.is_available() else "cpu"
+    processor=model=None
+    if device=="cuda":processor,model=get_depth_engine(device)
     origin=job.map_anchor["origin"]
     radius=float(job.map_anchor.get("radius_m",190))
     target=int(job.policy.get("max_points",150000))
     all_points=[];all_colors=[];all_conf=[];all_frames=[]
     used=0
-    for i,(path,source) in enumerate(zip(image_paths,sources)):
+    for path,source in zip(image_paths,sources):
         coords=source.get("coordinates")
         if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
             continue
         im=Image.open(path).convert("RGB")
-        # One common raster size keeps inference bounded and preserves enough
-        # detail for windows, curbs and vegetation on the fallback path.
         im.thumbnail((768,576) if device=="cuda" else (518,392),Image.Resampling.LANCZOS)
-        rgb=np.asarray(im)
-        h,w=rgb.shape[:2]
-        inputs=processor(images=im,return_tensors="pt")
-        inputs={k:v.to(device) for k,v in inputs.items()}
-        with torch.inference_mode():
-            if device=="cuda":
+        rgb=np.asarray(im);h,w=rgb.shape[:2]
+        if device=="cuda":
+            inputs=processor(images=im,return_tensors="pt")
+            inputs={k:v.to(device) for k,v in inputs.items()}
+            with torch.inference_mode():
                 with torch.autocast("cuda",dtype=torch.float16):
                     pred=model(**inputs).predicted_depth
-            else:
-                pred=model(**inputs).predicted_depth
-        d=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
-        finite=np.isfinite(d)&(d>.05)
+            d=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
+        else:
+            d=onnx_relative_depth(im)
+        finite=np.isfinite(d)&(d>.00001)
         if not finite.any():continue
-        # Metric Outdoor predicts absolute outdoor depth. Keep it metric; only
-        # permit a bounded scale correction when this exact image was matched
-        # to a known OSM facade edge.
-        depth=np.clip(np.nan_to_num(d,nan=0.0,posinf=80.0,neginf=0.0),.55,min(radius*1.25,80.0))
         match=source.get("match") if isinstance(source.get("match"),dict) else {}
         anchor=match.get("distance_m") if isinstance(match.get("distance_m"),(int,float)) else source.get("distance_m")
-        if isinstance(anchor,(int,float)) and math.isfinite(float(anchor)) and float(anchor)>3:
-            roi=depth[int(h*.32):int(h*.72),int(w*.34):int(w*.66)]
-            valid_depth=roi[np.isfinite(roi)&(roi>.6)&(roi<80)]
-            if valid_depth.size>100:
-                ratio=float(anchor)/max(float(np.median(valid_depth)),.5)
-                if .5<=ratio<=2.0:depth=np.clip(depth*ratio,.55,min(radius*1.25,100.0))
         cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
-        camera_distance=max(5.0,min(100.0,float(anchor) if isinstance(anchor,(int,float)) else math.hypot(cx,cy)))
+        camera_distance=max(5.0,min(100.0,float(anchor) if isinstance(anchor,(int,float)) and float(anchor)>3 else math.hypot(cx,cy)))
+        if device=="cuda":
+            depth=np.clip(np.nan_to_num(d,nan=0.0,posinf=80.0,neginf=0.0),.55,min(radius*1.25,80.0))
+            if isinstance(anchor,(int,float)) and math.isfinite(float(anchor)) and float(anchor)>3:
+                roi=depth[int(h*.32):int(h*.72),int(w*.34):int(w*.66)]
+                valid_depth=roi[np.isfinite(roi)&(roi>.6)&(roi<80)]
+                if valid_depth.size>100:
+                    ratio=float(anchor)/max(float(np.median(valid_depth)),.5)
+                    if .5<=ratio<=2.0:depth=np.clip(depth*ratio,.55,min(radius*1.25,100.0))
+        else:
+            # INT8 relative depth becomes metric through the exact mapped facade
+            # distance whenever available. This preserves real parallax/depth
+            # without loading a PyTorch model into the 512 MiB worker.
+            lo,hi=np.percentile(d[finite],[3,97])
+            disparity=np.clip((d-lo)/max(float(hi-lo),1e-6),0,1)
+            inv=.12+.88*disparity
+            med=float(np.median(inv[finite]))
+            depth=np.clip(camera_distance*med/np.maximum(inv,.05),1.0,min(radius*1.25,160.0))
         heading=source.get("heading")
-        if not isinstance(heading,(int,float)):
-            heading=bearing_deg(coords,source_target(source,job))
-        yaw=math.radians(float(heading))
-        forward=np.array([math.sin(yaw),math.cos(yaw),0.0],np.float32)
+        if not isinstance(heading,(int,float)):heading=bearing_deg(coords,source_target(source,job))
+        pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) else 0.0
+        yaw=math.radians(float(heading));pit=math.radians(max(-30,min(30,pitch)))
+        forward=np.array([math.sin(yaw)*math.cos(pit),math.cos(yaw)*math.cos(pit),math.sin(pit)],np.float32)
         right=np.array([math.cos(yaw),-math.sin(yaw),0.0],np.float32)
-        up=np.array([0.0,0.0,1.0],np.float32)
-        fov=float(source.get("fov") or 78)
-        fov=max(35,min(110,90 if source.get("panoramic") else fov))
+        up=np.cross(right,forward).astype(np.float32);up/=max(float(np.linalg.norm(up)),1e-6)
+        fov=float(source.get("fov") or 78);fov=max(35,min(110,90 if source.get("panoramic") else fov))
         focal=w/(2*math.tan(math.radians(fov)/2))
-        desired=max(12000,min(45000,int(target*1.8/max(1,len(image_paths)))))
+        desired=max(14000,min(50000,int(target*2.0/max(1,len(image_paths)))))
         step=max(1,int(math.sqrt((w*h)/desired)))
         ys=np.arange(step//2,h,step,dtype=np.int32);xs=np.arange(step//2,w,step,dtype=np.int32)
-        xx,yy=np.meshgrid(xs,ys)
-        z=depth[yy,xx]
-        xn=(xx.astype(np.float32)-(w-1)/2)/focal
-        yn=(yy.astype(np.float32)-(h-1)/2)/focal
+        xx,yy=np.meshgrid(xs,ys);z=depth[yy,xx]
+        xn=(xx.astype(np.float32)-(w-1)/2)/focal;yn=(yy.astype(np.float32)-(h-1)/2)/focal
         rays=forward[None,None,:]+xn[...,None]*right[None,None,:]-yn[...,None]*up[None,None,:]
         rays/=np.maximum(np.linalg.norm(rays,axis=2,keepdims=True),1e-6)
         pts=np.array([cx,cy,1.65],np.float32)[None,None,:]+rays*z[...,None]
-        cols=rgb[yy,xx].astype(np.float32)/255
+        cols=rgb[yy,xx].astype(np.float32)/255.0
         rr=np.linalg.norm(pts[...,:2],axis=2)
         sky=(yy<h*.48)&(cols[...,2]>cols[...,0]*1.08)&(cols[...,2]>cols[...,1]*1.03)&(cols[...,2]>.42)&(z>camera_distance*.8)
-        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-4)&(pts[...,2]<75)&(~sky)
+        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-5)&(pts[...,2]<90)&(~sky)
         if not valid.any():continue
         p=pts[valid];col=cols[valid]
-        # Confidence favours central pixels and stable mid-range disparity.
         center=1-np.minimum(1,np.sqrt(((xx[valid]-(w-1)/2)/(w*.55))**2+((yy[valid]-(h-1)/2)/(h*.7))**2))
-        cf=np.clip(.45+.42*center,.2,.9).astype(np.float32)
+        cf=np.clip(.44+.44*center,.18,.92).astype(np.float32)
         all_points.append(p);all_colors.append(col);all_conf.append(cf);all_frames.append(np.full(len(p),used,dtype=np.int16));used+=1
     if not all_points:raise RuntimeError("depth_fallback_no_geotagged_views")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
     pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
-    pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,140000))
+    pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,160000))
     radial=np.linalg.norm(pts[:,:2],axis=1)
-    base=np.clip(.045+radial*.0016,.045,.22).astype(np.float32)
-    scales=np.column_stack([base,base,np.clip(base*.42,.018,.11)]).astype(np.float32)
+    base=np.clip(.04+radial*.00135,.04,.19).astype(np.float32)
+    scales=np.column_stack([base,base,np.clip(base*.55,.018,.11)]).astype(np.float32)
     quats=np.zeros((len(pts),4),dtype=np.float32);quats[:,0]=1
-    alignment={"method":"gps-metric-depth+osm-facade-heading","rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
-    gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU"
-    return pts,cols,conf,scales,quats,alignment,{"backend":"depth-anything-v2-metric-outdoor-gps-osm","gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True}
+    method="gps-metric-depth+osm-facade-heading" if device=="cuda" else "gps-relative-depth+osm-scale+facade-heading"
+    alignment={"method":method,"rms_m":None,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
+    gpu=torch.cuda.get_device_name(0) if device=="cuda" else "CPU/ONNX"
+    backend="depth-anything-v2-metric-outdoor-gps-osm" if device=="cuda" else "depth-anything-v2-small-int8-onnx+osm-scale"
+    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True}
 
 
 def wrap_angle_deg(value:float)->float:
@@ -1060,8 +1099,13 @@ async def run_job(job:Job):
 
             loop=asyncio.get_running_loop()
             if LIGHTWEIGHT_CPU:
-                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
-                stats["primary_error"]="cpu_memory_safe_photoplane";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+                try:
+                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
+                    stats["primary_error"]="cpu_onnx_depth";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+                except Exception as depth_exc:
+                    print("CPU ONNX depth unavailable; using photoplane safety fallback:",repr(depth_exc),flush=True)
+                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
+                    stats["primary_error"]="cpu_onnx_failed:"+str(depth_exc)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
                 primary_errors=[];points=None
                 # MapAnything is metric and explicitly supports monocular as well
@@ -1104,7 +1148,7 @@ async def health():
             gpu=torch.cuda.get_device_name(0) if cuda else ""
         except Exception:
             cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"depth-anything-v2-small-int8-onnx" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

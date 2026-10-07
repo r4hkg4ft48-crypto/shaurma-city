@@ -12,7 +12,7 @@ const openWorld=require('./realcity-open-world');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v18-onnx-q4-v2';
+const PIPELINE_REVISION='v18-source-resolver-v3';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -121,18 +121,29 @@ async function buildSources(marker,profile,assets){
     license:'owner supplied',attribution:'Venue supplied source'
   })).filter(x=>x.url);
   let publicCandidates=[];
+  const persistedRefs=profile?.real_world?.references||[];
   try{
     const maxDistance=Math.max(220,Math.min(520,(Number(profile?.scene?.radius_m)||190)*2.35));
-    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,88,maxDistance);
+    const [live,persisted]=await Promise.all([
+      openWorld.collectCandidates(marker).catch(()=>[]),
+      openWorld.resolveReferences(persistedRefs).catch(()=>[])
+    ]);
+    const merged=[],seenCandidates=new Set();
+    for(const candidate of [...persisted,...live]){
+      const key=String(candidate.source)+':'+String(candidate.id);
+      if(seenCandidates.has(key))continue;
+      seenCandidates.add(key);merged.push(candidate);
+    }
+    publicCandidates=photorealCandidates(merged,marker,88,maxDistance);
   }catch{}
-  const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
+  const refs=new Map(persistedRefs.map(r=>[String(r.source)+':'+String(r.source_id),r]));
   const pub=publicCandidates.map(c=>{
     const ref=refs.get(String(c.source)+':'+String(c.id));
     return {
       id:c.source+':'+c.id,kind:'open',url:c.image_url,fallback_url:c.fallback_image_url||null,provider:c.source,
       coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,distance_m:c.distance_m,
       captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url,
-      match:ref?.match||null
+      match:c.persisted_match||ref?.match||null
     };
   });
   // Interleave geotagged public frames with owner close-ups. This gives the

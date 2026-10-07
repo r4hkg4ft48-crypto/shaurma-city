@@ -135,6 +135,38 @@ function install(app,{db,authorize}){
   }
   res.json(await state(row));
  }));
+ // Original-resolution image is fetched only with admin credentials; the
+ // public Mini App receives derived, approved facade texture crops only.
+ app.get(base+'/assets/:assetId/original',admin,route(async(req,res)=>{
+  const row=await select(req);
+  const q=await db.query('SELECT content,mime FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,String(req.params.assetId)]);
+  if(!q.rows[0])fail('pro_photo_not_found',404);
+  res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('Referrer-Policy','no-referrer');
+  res.setHeader('Content-Length',String(q.rows[0].content.length));
+  res.type(q.rows[0].mime).send(q.rows[0].content);
+ }));
+ // Photo labels are editorial, never derived from filenames. A relabel
+ // invalidates its calibration explicitly, preventing a panorama being
+ // silently promoted to a measured facade.
+ app.patch(base+'/assets/:assetId/role',admin,route(async(req,res)=>{
+  const row=await select(req),newRole=String(req.body?.role||'');
+  if(!ROLES.has(newRole))fail('pro_photo_role_unknown');
+  const current=revision(row,await assets(row,false),await cals(row));
+  if(req.body?.expected_revision!==current)fail('pro_sources_changed',409);
+  const client=await db.connect();
+  try{
+   await client.query('BEGIN');
+   const lock=await client.query('SELECT asset_id FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2 FOR UPDATE',[row.id,String(req.params.assetId)]);
+   if(!lock.rows.length)fail('pro_photo_not_found',404);
+   // Removing prior calibration is deliberately destructive only for this
+   // single private asset and its marker; the original bytes remain intact.
+   await client.query('DELETE FROM realcity_pro_calibrations WHERE marker_id=$1 AND asset_id=$2',[row.id,String(req.params.assetId)]);
+   await client.query('UPDATE realcity_pro_assets SET role=$3 WHERE marker_id=$1 AND asset_id=$2',[row.id,String(req.params.assetId),newRole]);
+   await client.query('COMMIT');
+  }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
+  res.json(await state(row));
+ }));
  app.put(base+'/calibrations',admin,route(async(req,res)=>{
   const row=await select(req),mani=manifest(row),c=validCalibration(req.body,mani);
   const item=await db.query('SELECT role FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,c.asset_id]);

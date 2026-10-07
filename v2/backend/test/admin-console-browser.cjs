@@ -32,10 +32,10 @@ test('Menu studio navigation, stable modifier identity, photo upload, and failed
 });
 test('Master catalog, permanent navigation, lazy operational modules and full access tools',async()=>{
  const {page,errors}=await pageFor();try{
- await page.goto(base+'/master-admin');await page.waitForSelector('#app:not([hidden])');await noOverflow(page,'Master 390');await page.screenshot({path:path.join(artifacts,'master-overview-390.png'),fullPage:true});assert.equal(await page.locator('#overviewPane .module').count(),8);
+ await page.goto(base+'/master-admin');await page.waitForSelector('#app:not([hidden])');await noOverflow(page,'Master 390');await page.screenshot({path:path.join(artifacts,'master-overview-390.png'),fullPage:true});assert.equal(await page.locator('#overviewPane .module').count(),9);
  await page.click('#consoleNav [data-tab=sites]');await page.fill('#venueSearch','Арбат');assert.equal(await page.locator('#venueList .consoleVenueCard').count(),1);await page.fill('#venueSearch','');await page.selectOption('#venueStatusFilter','paused');assert.equal(await page.locator('#venueList .consoleVenueCard').count(),1);await page.screenshot({path:path.join(artifacts,'master-catalog-390.png'),fullPage:true});
  await page.click('#consoleNav [data-tab=orders]');await page.waitForSelector('#ordersFrame[src]');await page.frameLocator('#ordersFrame').locator('#app:not([hidden])').waitFor();await page.screenshot({path:path.join(artifacts,'master-orders-390.png'),fullPage:true});
- await page.click('#consoleNav [data-tab=tools]');assert.equal(await page.locator('#consoleToolGrid .consoleSetting').count(),8);await page.click('#consoleToolGrid [data-tab-open=access]');await page.waitForSelector('#accessPane.active');await page.click('#createKey');await page.click('#consoleNav [data-tab=overview]');assert.deepEqual(errors,[]);
+ await page.click('#consoleNav [data-tab=tools]');assert.equal(await page.locator('#consoleToolGrid .consoleSetting').count(),9);await page.click('#consoleToolGrid [data-tab-open=access]');await page.waitForSelector('#accessPane.active');await page.click('#createKey');await page.click('#consoleNav [data-tab=overview]');assert.deepEqual(errors,[]);
  }finally{await page.close()}
 });
 test('320, 430 and 1440 pixel screens fit without horizontal page overflow',async()=>{

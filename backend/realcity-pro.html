@@ -109,14 +109,21 @@ const b=state?.manifest.buildings.find(b=>b.building_id===$('#building').value);
 $('#edge').innerHTML=(b?.edges||[]).map(e=>'<option value="'+e.edge_index+'">Грань '+e.edge_index+' · '+e.length_m+' м · '+Math.round(e.bearing)+'°</option>').join('');
 }
 function renderPhotos(){
-$('#photosList').innerHTML=(state?.assets||[]).map(a=>'<button type="button" class="photo '+(selected?.asset_id===a.asset_id?'active':'')+'" data-id="'+esc(a.asset_id)+'"><img src="'+a.preview+'" alt=""><b>'+esc(a.filename)+'</b><small>'+esc(a.role)+'</small><small>'+esc((a.metadata?.warnings||[]).join(' · ')||'EXIF / качество проверены')+'</small></button>').join('');
+$('#photosList').innerHTML=(state?.assets||[]).map(a=>'<button type="button" class="photo '+(selected?.asset_id===a.asset_id?'active':'')+'" data-id="'+esc(a.asset_id)+'"><img src="'+a.preview+'" alt=""><b>'+esc(a.filename)+'</b><small>'+esc(a.role)+' · '+(state.calibrations.filter(c=>c.asset_id===a.asset_id).length)+' калибровок</small><small>'+esc((a.metadata?.warnings||[]).join(' · ')||'EXIF / качество проверены')+'</small></button>').join('');
+}
+function surfaceSelection(){
+ const c=state?.calibrations.find(c=>c.asset_id===selected?.asset_id&&
+   c.building_id===$('#building').value&&c.edge_index===Number($('#edge').value));
+ quad=c?.source_quad?c.source_quad.map(p=>[...p]):[];
+ masks=c?.exclude?c.exclude.map(p=>p.map(x=>[...x])):[];
+ workingMask=[];$('#flip').checked=c?.flip_u===true;$('#confirmed').checked=c?.confirmed===true;draw();
 }
 function choose(id){
-selected=state.assets.find(a=>a.asset_id===id)||null;const c=state.calibrations.find(c=>c.asset_id===id);
-quad=c?.source_quad?c.source_quad.map(p=>[...p]):[];masks=c?.exclude||[];workingMask=[];
-if(c){$('#building').value=c.building_id;edges();$('#edge').value=String(c.edge_index);$('#flip').checked=c.flip_u;$('#confirmed').checked=c.confirmed;}
-else{$('#confirmed').checked=false;$('#flip').checked=false;}
-$('#workingPhoto').src=selected?.preview||'';draw();renderPhotos();
+ selected=state.assets.find(a=>a.asset_id===id)||null;
+ const c=state.calibrations.find(c=>c.asset_id===id);
+ if(c){$('#building').value=c.building_id;edges();$('#edge').value=String(c.edge_index);}
+ $('#workingPhoto').src=selected?.preview||'';
+ surfaceSelection();renderPhotos();
 }
 function draw(){
 const all=quad.map(([x,y])=>[x*100,y*100]);
@@ -136,7 +143,7 @@ $('#resetQuad').onclick=()=>{quad=[];draw()};
 $('#maskMode').onclick=()=>{masking=!masking;$('#maskMode').textContent=masking?'Режим маски активен':'Маска: исключить объект';draw()};
 $('#finishMask').onclick=()=>{if(workingMask.length>=3)masks.push(workingMask);workingMask=[];masking=false;$('#maskMode').textContent='Маска: исключить объект';draw()};
 $('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)choose(b.dataset.id)};
-$('#building').onchange=edges;
+$('#building').onchange=()=>{edges();surfaceSelection()};$('#edge').onchange=surfaceSelection;
 $('#venue').onchange=markers;$('#marker').onchange=load;
 $('#photos').onchange=async e=>{
 const files=[...e.target.files];if(!files.length||!state)return;

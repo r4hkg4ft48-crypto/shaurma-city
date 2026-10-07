@@ -485,3 +485,17 @@ test('lazy RealCity renderer follows the Mini App cache revision',()=>{
   assert.match(src,/src\+'\?v='\+encodeURIComponent\(revision\)/);
   assert.doesNotMatch(src,/realcity-photoreal-1/);
 });
+
+
+test('incomplete depth reconstruction keeps native 3D buildings instead of flattening them',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/function isCompletePhotogrammetry\(model\)/);
+  assert.match(src,/photogrammetric===true&&model\?\.quality\?\.metric_reconstruction===true/);
+  assert.match(src,/const completePhotogrammetry=photoreal&&isCompletePhotogrammetry\(authored\)/);
+  assert.match(src,/const replaced=new Set\(completePhotogrammetry/);
+  assert.match(src,/:photoreal\?\[\]/);
+  assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
+  assert.match(src,/hero=astraLayer\?null:/);
+  assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
+});

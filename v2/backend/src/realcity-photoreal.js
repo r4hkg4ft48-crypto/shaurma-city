@@ -36,24 +36,25 @@ function isLepeshka(marker){
   return String(marker?.id||'')==='3139'||name.includes('в лепешке')||name==='лепешка'||name.includes('лепешк');
 }
 function readReferenceAsset(slug){
-  if(slug!=='lepeshka-master.webp'||!LEPESHKA_MASTER_B64)return null;
+  const ref=LEPESHKA_MASTERS.find(x=>x.slug===slug);
+  if(!ref)return null;
   try{
-    const content=Buffer.from(LEPESHKA_MASTER_B64,'base64');
+    const content=Buffer.from(ref.b64,'base64');
     if(content.length<4096)return null;
-    return {content,mime:'image/webp',etag:LEPESHKA_MASTER_SHA};
+    return {content,mime:'image/webp',etag:ref.sha};
   }catch{return null}
 }
-function lepeshkaMasterSource(marker){
-  if(!isLepeshka(marker)||!LEPESHKA_MASTER_B64)return null;
-  return {
-    id:'reference:lepeshka-master-'+LEPESHKA_MASTER_SHA.slice(0,12),
+function lepeshkaMasterSources(marker){
+  if(!isLepeshka(marker)||!LEPESHKA_MASTERS.length)return [];
+  return LEPESHKA_MASTERS.map((ref,index)=>({
+    id:'reference:'+ref.slug.replace(/\.webp$/,'')+'-'+ref.sha.slice(0,12),
     kind:'owner',provider:'venue_reference',
-    url:config.PUBLIC_API_URL+'/api/v2/realcity/reference/lepeshka-master.webp?v='+LEPESHKA_MASTER_SHA.slice(0,12),
-    category:'main_building',subtype:'generated_master',role:'hero',angle:'front',
-    priority:10,primary:true,heading:null,pitch:0,fov:86,panoramic:false,
-    coordinates:null,distance_m:24,license:'venue reference',attribution:'RealCity master reference',
+    url:config.PUBLIC_API_URL+'/api/v2/realcity/reference/'+ref.slug+'?v='+ref.sha.slice(0,12),
+    category:'main_building',subtype:'generated_master',role:'hero',angle:ref.angle,
+    priority:ref.primary?10:9,primary:ref.primary,heading:null,pitch:0,fov:index===0?92:88,panoramic:false,
+    coordinates:null,distance_m:index===0?28:24,license:'venue reference',attribution:'RealCity master reference',
     photo_first:true,reference_master:true
-  };
+  }));
 }
 const finite=v=>Number.isFinite(Number(v));
 const hash=v=>crypto.createHash('sha256').update(typeof v==='string'?v:JSON.stringify(v)).digest('hex');

@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1';
+const PIPELINE_REVISION='v27-calibrated-facade-only-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -33,7 +33,8 @@ const LEPESHKA_MASTERS=[
 ].map(x=>({...x,sha:x.b64?crypto.createHash('sha256').update(x.b64).digest('hex'):''})).filter(x=>x.b64);
 function isLepeshka(marker){
   const name=String(marker?.name||'').toLowerCase().replace(/ё/g,'е');
-  return String(marker?.id||'')==='3139'||name.includes('в лепешке')||name==='лепешка'||name.includes('лепешк');
+  // Master references are location-specific. Never apply them to similarly named venues.
+  return String(marker?.id||'')==='3139';
 }
 function readReferenceAsset(slug){
   const ref=LEPESHKA_MASTERS.find(x=>x.slug===slug);
@@ -53,10 +54,24 @@ function lepeshkaMasterSources(marker){
     category:'main_building',subtype:'generated_master',role:'hero',angle:ref.angle,
     priority:ref.primary?10:9,primary:ref.primary,heading:null,pitch:0,fov:index===0?92:88,panoramic:false,
     coordinates:null,distance_m:index===0?28:24,license:'venue reference',attribution:'RealCity master reference',
-    photo_first:true,reference_master:true
+    photo_first:true,reference_master:true,reference_only:true,anchor_only:true
   }));
 }
-const finite=v=>Number.isFinite(Number(v));
+const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
+function calibratedFacadeMatch(asset){
+  const m=asset?.match||asset?.facade_match||asset?.camera?.facade_match;
+  if(!m||typeof m!=='object'||!String(m.building_id||'')||!Number.isInteger(Number(m.edge_index)))return null;
+  const q=m.source_quad;
+  if(!Array.isArray(q)||q.length!==4||q.some(p=>!Array.isArray(p)||p.length!==2||p.some(v=>!Number.isFinite(v)||v<0||v>1)))return null;
+  let sign=0,area=0;
+  for(let i=0;i<4;i++){
+    const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4],cross=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+    if(Math.abs(cross)<.0001||(sign&&Math.sign(cross)!==sign))return null;
+    sign=Math.sign(cross);area+=a[0]*b[1]-b[0]*a[1];
+  }
+  if(Math.abs(area)<.01||Number(m.quality||0)<.6)return null;
+  return {building_id:String(m.building_id),edge_index:Number(m.edge_index),source_quad:q,flip_u:m.flip_u===true,quality:Number(m.quality)};
+}
 const hash=v=>crypto.createHash('sha256').update(typeof v==='string'?v:JSON.stringify(v)).digest('hex');
 const hmac=v=>crypto.createHmac('sha256',config.REALCITY_RECONSTRUCTION_SECRET).update(v).digest('hex');
 const safeEqual=(a,b)=>{
@@ -115,7 +130,7 @@ function sceneSignature(marker,profile,assets=[]){
     target:[String(marker.id),marker.establishment_id,marker.venue_id,Number(marker.lon),Number(marker.lat)],
     hero:hero?{id:String(hero.id),geometry_key:S.geometryKey(hero.ring),height:Number(hero.height)||0}:null,
     scene:(scene.buildings||[]).slice(0,32).map(b=>[String(b.id),S.geometryKey(b.ring),Number(b.height)||0,Number(b.base_m)||0]),
-    assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.role,a.priority,a.camera||null,a.metadata?.gps||null,a.metadata?.heading_deg??null,a.metadata?.focal_length_35mm??null,a.metadata?.exif_pose_v||0]),
+    assets:(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).map(a=>[a.id,a.sha256||'',a.direction_deg??null,a.category,a.subtype,a.role,a.priority,a.camera||null,a.match||a.facade_match||null,a.metadata?.gps||null,a.metadata?.heading_deg??null,a.metadata?.focal_length_35mm??null,a.metadata?.exif_pose_v||0]),
     open:(profile?.real_world?.references||[]).map(r=>[r.source,r.source_id,r.license,r.coordinates,r.heading])
   });
 }
@@ -252,7 +267,7 @@ async function buildSources(marker,profile,assets){
       distance_m:finite(camera.distance_m)?Number(camera.distance_m):null,altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,
       captured_at:a.metadata?.captured_at||null,camera_make:a.metadata?.camera_make||'',camera_model:a.metadata?.camera_model||'',
       focal_length_mm:finite(a.metadata?.focal_length_mm)?Number(a.metadata.focal_length_mm):null,
-      license:'owner supplied',attribution:'Venue supplied original',photo_first:true
+      match:calibratedFacadeMatch(a),license:'owner supplied',attribution:'Venue supplied original',photo_first:true
     };
   }).filter(x=>x.url)];
   let publicCandidates=[];
@@ -373,6 +388,11 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   assets=await enrichOwnerAssets(marker,assets);
   const inputSignature=sceneSignature(marker,profile,assets);
   if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return {queued:false,reason:'current'};
+  if(isLepeshka(marker)&&!assets.some(a=>calibratedFacadeMatch(a))){
+    // A generated overview + unposed photos cannot produce a registered facade.
+    // Keep the map operational instead of publishing a warped partial overlay.
+    return {queued:false,reason:'awaiting_facade_calibration'};
+  }
   const sources=await buildSources(marker,profile,assets);
   if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return {queued:false,reason:'insufficient_views',sources:sources.length};
   // A GPU process can disappear without a callback. Do not let one dead job
@@ -437,4 +457,4 @@ function publicSummary(p){
     alignment:p.alignment||{},quality:p.quality||{},display_safe:p.quality?.display_safe===true,map_registered_surface:p.quality?.map_registered_surface===true,
     volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,readReferenceAsset,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob,isLepeshka,lepeshkaMasterSources}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,readReferenceAsset,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob,isLepeshka,lepeshkaMasterSources,calibratedFacadeMatch}};

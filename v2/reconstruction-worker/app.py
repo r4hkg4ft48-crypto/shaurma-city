@@ -841,6 +841,14 @@ def facade_candidate(source:dict,job:Job):
         return None
 
     match=source.get("match") if isinstance(source.get("match"),dict) else {}
+    # A scene-wide photo is never a calibrated facade. Reconstruct only an
+    # explicitly registered wall and its own four pixel corners for В Лепёшке.
+    strict=str(job.target.get("marker_id") or "")=="3139" or bool(source.get("reference_master"))
+    quad=match.get("source_quad")
+    registered_quad=(isinstance(quad,list) and len(quad)==4 and all(
+      isinstance(p,list) and len(p)==2 and all(isinstance(v,(int,float)) and math.isfinite(v) and 0<=v<=1 for v in p)
+      for p in quad) and float(match.get("quality") or 0)>=.6)
+    if strict and not registered_quad:return None
     wanted=str(match.get("building_id") or "")
     try:wanted_edge=int(match.get("edge_index"))
     except Exception:wanted_edge=-1
@@ -913,12 +921,26 @@ def synthetic_camera_for_wall(building:dict,edge:int,origin:list,distance_m:floa
     heading=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
     return cx,cy,heading
 
+def facade_source_homography(quad:list):
+    # Source corners TL,TR,BR,BL map one exact facade rectangle to its photo.
+    # A projective transform preserves perspective, unlike an invented camera FOV.
+    src=((0.,0.),(1.,0.),(1.,1.),(0.,1.))
+    rows=[];out=[]
+    for (u,v),(x,y) in zip(src,quad):
+        rows.extend(([u,v,1.,0.,0.,0.,-x*u,-x*v],
+                     [0.,0.,0.,u,v,1.,-y*u,-y*v]))
+        out.extend((x,y))
+    A=np.array(rows,dtype=np.float64)
+    if np.linalg.cond(A)>1e7:raise ValueError("calibration_degenerate")
+    h=np.linalg.solve(A,np.array(out,dtype=np.float64))
+    return h
+
 def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor.get("origin") or job.target.get("coordinates")
     if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
     max_points=min(int(job.policy.get("max_points",48000)),48000)
     all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
-    used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set();master_used=0
+    used=0;inferred=0;masked=0;facades=set();calibrated_facades=set();owner_used=0;owner_roles=set();master_used=0
     per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))
     for path,source in zip(image_paths,sources):
         hit=facade_candidate(source,job)
@@ -978,23 +1000,38 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         zs=np.linspace(base+.05,height-.05,nz,dtype=np.float32)
         tt,zz=np.meshgrid(ts,zs)
         wx=ax+tt*ex;wy=ay+tt*ey
-        dx=wx-cx;dy=wy-cy
-        dist=np.maximum(np.sqrt(dx*dx+dy*dy),.5)
-        bearings=(np.degrees(np.arctan2(dx,dy))+360.0)%360.0
-        rel=((bearings-float(heading)+540.0)%360.0)-180.0
-        if panoramic:
-            xn=(.5+rel/360.0)%1.0
+        match=source.get("match") if isinstance(source.get("match"),dict) else {}
+        quad=match.get("source_quad")
+        calibrated=bool(quad and not is_inferred)
+        if calibrated:
+            # Exact source-pixel rectification. The quad belongs to THIS wall,
+            # not the whole photo or a guessed angle. Never sample the sky or
+            # street outside the registered facade quadrilateral.
+            try:H=facade_source_homography(quad)
+            except (ValueError,np.linalg.LinAlgError):continue
+            uu=1.0-tt if match.get("flip_u") is True else tt
+            vv=(height-zz)/max(height-base,1e-6)
+            den=H[6]*uu+H[7]*vv+1.
+            with np.errstate(divide="ignore",invalid="ignore"):
+                xn=(H[0]*uu+H[1]*vv+H[2])/den
+                yn=(H[3]*uu+H[4]*vv+H[5])/den
+            valid=(np.abs(den)>.001)&np.isfinite(xn)&np.isfinite(yn)&(xn>=0)&(xn<=1)&(yn>=0)&(yn<=1)
         else:
-            xn=.5+rel/hfov
-        elev=np.degrees(np.arctan2(zz-1.65,dist))
-        yn=.5-(elev-pitch)/vfov
-        valid=(yn>=.01)&(yn<=.99)
-        if not panoramic:valid&=(xn>=.01)&(xn<=.99)
+            dx=wx-cx;dy=wy-cy
+            dist=np.maximum(np.sqrt(dx*dx+dy*dy),.5)
+            bearings=(np.degrees(np.arctan2(dx,dy))+360.0)%360.0
+            rel=((bearings-float(heading)+540.0)%360.0)-180.0
+            if panoramic:xn=(.5+rel/360.0)%1.0
+            else:xn=.5+rel/hfov
+            elev=np.degrees(np.arctan2(zz-1.65,dist))
+            yn=.5-(elev-pitch)/vfov
+            valid=(yn>=.01)&(yn<=.99)
+            if not panoramic:valid&=(xn>=.01)&(xn<=.99)
         if not valid.any():continue
         px=np.clip(np.rint(xn*(w-1)),0,w-1).astype(np.int32)
         py=np.clip(np.rint(yn*(h-1)),0,h-1).astype(np.int32)
         col=rgb[py,px].astype(np.float32)/255.0
-        sky=(yn<.34)&(col[...,2]>col[...,0]*1.16)&(col[...,2]>col[...,1]*1.10)&(col[...,2]>.62)
+        sky=np.zeros(valid.shape,dtype=bool) if calibrated else (yn<.34)&(col[...,2]>col[...,0]*1.16)&(col[...,2]>col[...,1]*1.10)&(col[...,2]>.62)
         masked+=int(np.count_nonzero(valid&sky));valid&=~sky
         if np.count_nonzero(valid)<320:continue
 
@@ -1023,7 +1060,9 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         if source.get("kind")=="owner":
             owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
             if source.get("reference_master") is True or str(source.get("subtype") or "")=="generated_master":master_used+=1
-        facades.add(str(building.get("building_id"))+":"+str(edge))
+        surface_id=str(building.get("building_id"))+":"+str(edge)
+        facades.add(surface_id)
+        if calibrated:calibrated_facades.add(surface_id)
 
     if not all_points:raise RuntimeError("photoplane_no_mapped_facade_evidence")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf)
@@ -1037,7 +1076,8 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
       "owner_frames":owner_used,"owner_roles":sorted(owner_roles),"reference_master_frames":master_used,
       "dynamic_removed":masked,"bundle_adjustment":False,"gaussian_optimized":False,
       "fallback":True,"projection":True,"map_registered_surface":True,
-      "inferred_facade_matches":inferred,"covered_facades":len(facades)
+      "inferred_facade_matches":inferred,"covered_facades":len(facades),
+      "calibrated_facades":len(calibrated_facades)
     }
     return pts,cols,conf,scales,quats,alignment,stats
 
@@ -1225,6 +1265,7 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
       "photo_first":bool(job.policy.get("photo_first")),"owner_frames":int(stats.get("owner_frames",0)),"owner_roles":stats.get("owner_roles",[]),
       "reference_master":int(stats.get("reference_master_frames",0))>0,
       "reference_master_frames":int(stats.get("reference_master_frames",0)),
+      "calibrated_facades":int(stats.get("calibrated_facades",0)),
       "map_registered_surface":registered_surface,
       "display_safe":registered_surface,
       "surface_projection":bool(stats.get("map_registered_surface") and stats.get("projection")),
@@ -1254,10 +1295,16 @@ async def run_job(job:Job):
     async with SEM:
         root=Path(tempfile.mkdtemp(prefix="realcity_"))
         try:
-            requested=max(1,min(int(job.policy.get("max_frames",24)),len(job.sources)))
-            selected=job.sources[:frame_budget(requested)]
+            evidence=[source for source in job.sources if source.get("reference_only") is not True]
+            if not evidence:raise RuntimeError("no_calibrated_photo_evidence")
+            requested=max(1,min(int(job.policy.get("max_frames",24)),len(evidence)))
+            selected=evidence[:frame_budget(requested)]
             paths=[];kept=[];source_errors=[];fallback_sources=0
             for i,s in enumerate(selected):
+                if s.get("reference_only") is True:
+                    # Concept images can guide a human review, not inject geometry,
+                    # depth or wall colours into an evidence-driven reconstruction.
+                    continue
                 try:
                     p=root/f"{i:03d}.jpg"
                     loaded=await load_source_image(s,p)

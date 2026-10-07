@@ -206,3 +206,18 @@ test('partial photoreal uses a volumetric support shell while true photogrammetr
   assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
   assert.match(src,/REAL CITY · PHOTO 3D/);
 });
+
+
+test('MapAnything single-view stays metric and is attempted before low-view fallback',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/mapanything_requires_one_view/);
+  assert.match(src,/def anchor_metric_points/);
+  assert.match(src,/gps-heading-metric/);
+  assert.match(src,/gps-rigid-metric/);
+  assert.match(src,/metric_reconstruction/);
+  const dispatch=src.indexOf('MapAnything is metric and explicitly supports monocular');
+  const lowFallback=src.indexOf('MAX paths unavailable; using metric depth fallback');
+  assert.ok(dispatch>0&&lowFallback>dispatch);
+  assert.doesNotMatch(src,/elif len\(paths\)<3:[\s\S]{0,260}?gps_depth_reconstruct/);
+});

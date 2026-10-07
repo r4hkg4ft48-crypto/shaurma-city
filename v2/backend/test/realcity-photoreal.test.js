@@ -280,7 +280,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v4/);
+  assert.match(src,/realcity-photoreal-worker-v5/);
 });
 
 
@@ -315,4 +315,21 @@ test('96GB CPU launch profile enables MapAnything without the lightweight photop
   assert.match(sh,/REALCITY_CPU_MAX_FRAMES=.*32/);
   assert.match(sh,/REALCITY_USE_GSPLAT=false/);
   assert.match(sh,/uvicorn app:app/);
+});
+
+
+test('MapAnything receives metric GPS and heading camera priors before reconstruction',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/def mapanything_pose_prior\(source:dict,job:Job\)/);
+  assert.match(src,/desired_camera_basis\(source,job\.map_anchor,origin\)/);
+  assert.match(src,/pose\[:3,3\]=np\.array\(\[x,y,max\(\.8,min\(4\.0,height\)\)\]/);
+  assert.match(src,/view\["camera_poses"\]=priors\[idx\]/);
+  assert.match(src,/view\["is_metric_scale"\]=torch\.tensor\(\[True\],dtype=torch\.bool\)/);
+  assert.match(src,/view\["intrinsics"\]=K/);
+  assert.match(src,/preprocess_inputs\(raw_views,resolution_set=518/);
+  assert.match(src,/ignore_pose_inputs=False/);
+  assert.match(src,/ignore_pose_scale_inputs=False/);
+  assert.match(src,/"pose_priors":len\(raw\) if use_pose_priors else 0/);
+  assert.match(src,/realcity-photoreal-worker-v5/);
 });

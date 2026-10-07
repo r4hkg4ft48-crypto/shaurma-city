@@ -25,6 +25,9 @@ const hmac=v=>crypto.createHmac('sha256',config.REALCITY_RECONSTRUCTION_SECRET).
 const safeEqual=(a,b)=>{
   try{const A=Buffer.from(String(a),'hex'),B=Buffer.from(String(b),'hex');return A.length===B.length&&crypto.timingSafeEqual(A,B)}catch{return false}
 };
+function transientWorkerFailure(error){
+  return /^(worker_http_(502|503|504)|worker_timeout|fetch failed|ECONNREFUSED|UND_ERR_CONNECT_TIMEOUT)/i.test(String(error||''));
+}
 function sceneSignature(marker,profile,assets=[]){
   const scene=profile?.scene||{},hero=(scene.buildings||[]).find(b=>String(b.id)===String(scene.hero_building_id)||b.role==='hero');
   return hash({
@@ -215,7 +218,7 @@ async function queue(marker,profile=marker.realcity_profile||{}){
   if(existing.rows[0])return {queued:false,reason:'already_queued',job_id:existing.rows[0].job_id};
   const recentFailure=await db.query("SELECT job_id,last_error,updated_at FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status='failed' AND updated_at>NOW()-INTERVAL '10 minutes' ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
   if(recentFailure.rows[0]){
-    const transient=/^(worker_http_(502|503|504)|worker_timeout|fetch failed|ECONNREFUSED|UND_ERR_CONNECT_TIMEOUT)/i.test(String(recentFailure.rows[0].last_error||''));
+    const transient=transientWorkerFailure(recentFailure.rows[0].last_error);
     if(!transient)return {queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error};
   }
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);
@@ -257,4 +260,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure}};

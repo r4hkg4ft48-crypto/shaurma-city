@@ -228,6 +228,42 @@ def anchor_points(points:np.ndarray,centers:np.ndarray,sources:list[dict],origin
         yaw_deg=0.0
     return points,centers,{"method":method,"rms_m":None,"scale":float(scale),"yaw_deg":yaw_deg,"geo_cameras":len(geo_src)}
 
+def source_target_from_anchor(source:dict,map_anchor:dict,origin:list[float]):
+    match=source.get("match") if isinstance(source.get("match"),dict) else None
+    if match:
+        bid=str(match.get("building_id") or "")
+        try:edge=int(match.get("edge_index"))
+        except Exception:edge=-1
+        for building in map_anchor.get("buildings",[]):
+            if str(building.get("building_id"))!=bid:continue
+            ring=building.get("ring") or []
+            if 0<=edge<len(ring)-1:
+                a,b=ring[edge],ring[edge+1]
+                return [(float(a[0])+float(b[0]))/2,(float(a[1])+float(b[1]))/2]
+    return list(origin[:2])
+
+def desired_camera_basis(source:dict,map_anchor:dict,origin:list[float]):
+    coords=source.get("coordinates")
+    heading=source.get("heading")
+    if not isinstance(heading,(int,float)) or not math.isfinite(float(heading)):
+        if isinstance(coords,list) and len(coords)>=2:
+            heading=bearing_deg(coords,source_target_from_anchor(source,map_anchor,origin))
+        else:
+            heading=0.0
+    pitch=source.get("pitch")
+    pitch=float(pitch) if isinstance(pitch,(int,float)) and math.isfinite(float(pitch)) else 0.0
+    pitch=max(-30.0,min(30.0,pitch))
+    yaw=math.radians(float(heading));pit=math.radians(pitch)
+    # OpenCV camera axes are +X right, +Y down, +Z forward. Build the
+    # corresponding East/North/Up basis for this observed camera heading.
+    forward=np.array([math.sin(yaw)*math.cos(pit),math.cos(yaw)*math.cos(pit),math.sin(pit)],dtype=np.float64)
+    right=np.array([math.cos(yaw),-math.sin(yaw),0.0],dtype=np.float64)
+    right/=max(float(np.linalg.norm(right)),1e-9)
+    forward/=max(float(np.linalg.norm(forward)),1e-9)
+    down=np.cross(forward,right)
+    down/=max(float(np.linalg.norm(down)),1e-9)
+    return np.column_stack([right,down,forward])
+
 def anchor_metric_points(points:np.ndarray,centers:np.ndarray,c2w:np.ndarray,sources:list[dict],origin:list[float],map_anchor:dict):
     geo=[]
     for i,s in enumerate(sources[:len(centers)]):
@@ -235,41 +271,54 @@ def anchor_metric_points(points:np.ndarray,centers:np.ndarray,c2w:np.ndarray,sou
         if isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2]):
             x,y=local_xy(float(coords[0]),float(coords[1]),origin)
             geo.append((i,np.array([x,y],dtype=np.float64)))
+
+    if not geo:
+        return anchor_points(points,centers,sources,origin,map_anchor)
+
+    # Align the complete MapAnything world basis, not only XY. MapAnything
+    # camera_poses use OpenCV cam2world: columns are camera right/down/forward.
+    # Without this basis transform genuine depth can appear rotated onto the
+    # ground plane when rendered in the ENU map frame.
+    ref_i=next((i for i,_ in geo if isinstance(sources[i].get("heading"),(int,float))),geo[0][0])
+    model_basis=np.asarray(c2w[ref_i][:3,:3],dtype=np.float64)
+    desired_basis=desired_camera_basis(sources[ref_i],map_anchor,origin)
+    Rbase=desired_basis@model_basis.T
+    if np.linalg.det(Rbase)<0:
+        desired_basis[:,1]*=-1.0
+        Rbase=desired_basis@model_basis.T
+    points=(Rbase@points.astype(np.float64).T).T
+    centers=(Rbase@centers.astype(np.float64).T).T
+
+    Rtotal=Rbase.copy()
     if len(geo)>=2:
         src=np.stack([centers[i,:2] for i,_ in geo]).astype(np.float64)
         dst=np.stack([xy for _,xy in geo]).astype(np.float64)
         sm,dm=src.mean(0),dst.mean(0);X=src-sm;Y=dst-dm
-        U,_,Vt=np.linalg.svd(X.T@Y);R=Vt.T@U.T
-        if np.linalg.det(R)<0:
-            Vt[-1,:]*=-1;R=Vt.T@U.T
-        t=dm-R@sm
-        points[:,:2]=(R@points[:,:2].T).T+t
-        centers[:,:2]=(R@centers[:,:2].T).T+t
-        zshift=1.65-float(np.median(centers[:,2]));points[:,2]+=zshift;centers[:,2]+=zshift
-        pred=(R@src.T).T+t;rms=float(np.sqrt(np.mean(np.sum((pred-dst)**2,axis=1))))
-        yaw=float(math.degrees(math.atan2(R[1,0],R[0,0])))
-        return points,centers,{"method":"gps-rigid-metric","rms_m":rms,"scale":1.0,"yaw_deg":yaw,"geo_cameras":len(geo)}
+        U,_,Vt=np.linalg.svd(X.T@Y);R2=Vt.T@U.T
+        if np.linalg.det(R2)<0:
+            Vt[-1,:]*=-1;R2=Vt.T@U.T
+        t=dm-R2@sm
+        points[:,:2]=(R2@points[:,:2].T).T+t
+        centers[:,:2]=(R2@centers[:,:2].T).T+t
+        Rz3=np.eye(3,dtype=np.float64);Rz3[:2,:2]=R2
+        Rtotal=Rz3@Rbase
+        zref=float(np.median([centers[i,2] for i,_ in geo]))
+        zshift=1.65-zref;points[:,2]+=zshift;centers[:,2]+=zshift
+        pred=(R2@src.T).T+t;rms=float(np.sqrt(np.mean(np.sum((pred-dst)**2,axis=1))))
+        yaw=float(math.degrees(math.atan2(R2[1,0],R2[0,0])))
+        return points.astype(np.float32),centers.astype(np.float32),{
+            "method":"gps-rigid-metric-3d","rms_m":rms,"scale":1.0,"yaw_deg":yaw,
+            "geo_cameras":len(geo),"rotation_matrix":Rtotal.tolist()
+        }
 
-    if len(geo)==1:
-        i,target_xy=geo[0]
-        center=centers[i].copy()
-        source=sources[i]
-        desired=source.get("heading")
-        if not isinstance(desired,(int,float)):
-            coords=source.get("coordinates") or origin
-            desired=bearing_deg(coords,source_target(source,type("AnchorJob",(),{"map_anchor":map_anchor,"target":{"coordinates":origin}})()))
-        # MapAnything camera_poses are OpenCV cam2world; +Z is camera forward.
-        forward=np.asarray(c2w[i][:3,2],dtype=np.float64)
-        current=(math.degrees(math.atan2(float(forward[0]),float(forward[1])))+360.0)%360.0
-        yaw=wrap_angle_deg(float(desired)-current)
-        a=math.radians(yaw);R=np.array([[math.cos(a),-math.sin(a)],[math.sin(a),math.cos(a)]],dtype=np.float64)
-        rel=points[:,:2]-center[:2];points[:,:2]=(R@rel.T).T+center[:2]
-        crel=centers[:,:2]-center[:2];centers[:,:2]=(R@crel.T).T+center[:2]
-        delta=target_xy-centers[i,:2];points[:,:2]+=delta;centers[:,:2]+=delta
-        zshift=1.65-float(centers[i,2]);points[:,2]+=zshift;centers[:,2]+=zshift
-        return points,centers,{"method":"gps-heading-metric","rms_m":0.0,"scale":1.0,"yaw_deg":yaw,"geo_cameras":1}
-
-    return anchor_points(points,centers,sources,origin,map_anchor)
+    i,target_xy=geo[0]
+    delta_xy=target_xy-centers[i,:2]
+    points[:,:2]+=delta_xy;centers[:,:2]+=delta_xy
+    zshift=1.65-float(centers[i,2]);points[:,2]+=zshift;centers[:,2]+=zshift
+    return points.astype(np.float32),centers.astype(np.float32),{
+        "method":"gps-heading-metric-3d","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,
+        "geo_cameras":1,"rotation_matrix":Rtotal.tolist()
+    }
 
 def choose_samples(point_maps:np.ndarray,conf:np.ndarray,images:np.ndarray,target:int):
     # point_maps: N,H,W,3; conf N,H,W. Sample high-confidence pixels while
@@ -335,6 +384,28 @@ def voxel_reduce(points,colors,conf,max_points:int):
         if len(packed)>=max_points: break
     ids=np.fromiter(packed.values(),dtype=np.int64)
     return points[ids],colors[ids],conf[ids]
+
+def rotate_quats_matrix(quats:np.ndarray,R:np.ndarray)->np.ndarray:
+    if not len(quats):return quats
+    M=np.asarray(R,dtype=np.float64).reshape(3,3)
+    tr=float(np.trace(M))
+    if tr>0:
+        s=math.sqrt(tr+1.0)*2.0;qw=.25*s;qx=(M[2,1]-M[1,2])/s;qy=(M[0,2]-M[2,0])/s;qz=(M[1,0]-M[0,1])/s
+    elif M[0,0]>M[1,1] and M[0,0]>M[2,2]:
+        s=math.sqrt(max(1e-12,1.0+M[0,0]-M[1,1]-M[2,2]))*2.0;qw=(M[2,1]-M[1,2])/s;qx=.25*s;qy=(M[0,1]+M[1,0])/s;qz=(M[0,2]+M[2,0])/s
+    elif M[1,1]>M[2,2]:
+        s=math.sqrt(max(1e-12,1.0+M[1,1]-M[0,0]-M[2,2]))*2.0;qw=(M[0,2]-M[2,0])/s;qx=(M[0,1]+M[1,0])/s;qy=.25*s;qz=(M[1,2]+M[2,1])/s
+    else:
+        s=math.sqrt(max(1e-12,1.0+M[2,2]-M[0,0]-M[1,1]))*2.0;qw=(M[1,0]-M[0,1])/s;qx=(M[0,2]+M[2,0])/s;qy=(M[1,2]+M[2,1])/s;qz=.25*s
+    q=np.array([qw,qx,qy,qz],dtype=np.float64);q/=max(float(np.linalg.norm(q)),1e-9)
+    w,x,y,z=quats[:,0],quats[:,1],quats[:,2],quats[:,3]
+    out=np.empty_like(quats,dtype=np.float64)
+    out[:,0]=q[0]*w-q[1]*x-q[2]*y-q[3]*z
+    out[:,1]=q[0]*x+q[1]*w+q[2]*z-q[3]*y
+    out[:,2]=q[0]*y-q[1]*z+q[2]*w+q[3]*x
+    out[:,3]=q[0]*z+q[1]*y-q[2]*x+q[3]*w
+    out/=np.maximum(np.linalg.norm(out,axis=1,keepdims=True),1e-9)
+    return out.astype(np.float32)
 
 def rotate_quats_z(quats:np.ndarray,yaw_deg:float)->np.ndarray:
     if not len(quats) or abs(yaw_deg)<1e-7:return quats
@@ -853,7 +924,10 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,torch_images,ex,intr_np,cf)
     pts,centers,alignment=anchor_metric_points(pts,centers,c2w,sources,job.map_anchor["origin"],job.map_anchor)
     world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
-    quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
+    if alignment.get("rotation_matrix") is not None:
+        quats=rotate_quats_matrix(quats,np.asarray(alignment["rotation_matrix"],dtype=np.float64))
+    else:
+        quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
     radius=float(job.map_anchor.get("radius_m",190))*1.18
     m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<180)
     pts,cols,scores,scales_xyz,quats=pts[m],cols[m],scores[m],scales_xyz[m],quats[m]

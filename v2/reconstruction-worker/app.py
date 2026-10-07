@@ -1299,6 +1299,10 @@ async def run_job(job:Job):
             selected=job.sources[:frame_budget(requested)]
             paths=[];kept=[];source_errors=[];fallback_sources=0
             for i,s in enumerate(selected):
+                if s.get("reference_only") is True:
+                    # Concept images can guide a human review, not inject geometry,
+                    # depth or wall colours into an evidence-driven reconstruction.
+                    continue
                 try:
                     p=root/f"{i:03d}.jpg"
                     loaded=await load_source_image(s,p)

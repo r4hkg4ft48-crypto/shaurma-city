@@ -119,3 +119,20 @@ test('Photo-archive import is scoped to one marker, copies originals, and does n
  assert.match(editor,/id="importAstra"/);
  assert.match(editor,/endpoint\('\/import-astra'\)/);
 });
+
+test('RealCity Pro uses authenticated full-resolution photo and refuses filename-based role guesses',()=>{
+ const api=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ const ui=fs.readFileSync(path.join(__dirname,'../../../backend/realcity-pro.html'),'utf8');
+ const vm=require('node:vm');
+ const inline=ui.match(/<script>([\s\S]*?)<\/script>/);
+ assert.ok(inline);
+ assert.doesNotThrow(()=>new vm.Script(inline[1],{filename:'realcity-pro.html'}));
+ assert.match(api,/base\+'\/assets\/:assetId\/original'/);
+ assert.match(api,/base\+'\/assets\/:assetId\/role'/);
+ assert.match(api,/SELECT content,mime FROM realcity_pro_assets WHERE marker_id=\$1 AND asset_id=\$2/);
+ assert.match(api,/DELETE FROM realcity_pro_calibrations WHERE marker_id=\$1 AND asset_id=\$2/);
+ assert.match(ui,/sourceObjectUrl=URL\.createObjectURL\(blob\)/);
+ assert.ok(ui.includes("$('#editRole')"));
+ assert.doesNotMatch(ui,/const sourceMap/);
+ assert.match(ui,/const f=files\[i\],role=\$\('#role'\)\.value/);
+});

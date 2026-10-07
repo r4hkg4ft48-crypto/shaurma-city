@@ -106,3 +106,16 @@ test('RealCity Pro runs CPU rectification off-thread, persists progress and fail
  assert.match(layer,/onError\(new Error\('pro_photo_texture_failed:/);
  assert.match(map,/astraLayer\.photoPromise\?\.then\(visible\)/);
 });
+
+test('Photo-archive import is scoped to one marker, copies originals, and does not edit Astra data',()=>{
+ const api=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ const editor=fs.readFileSync(path.join(__dirname,'../../../backend/realcity-pro.html'),'utf8');
+ assert.match(api,/app\.post\(base\+'\/import-astra',admin/);
+ assert.match(api,/FROM realcity_astra_originals WHERE marker_id=\$1/);
+ assert.match(api,/INSERT INTO realcity_pro_assets/);
+ assert.match(api,/o\.asset_id=ANY\(\$3::text\[\]\)/);
+ assert.match(api,/ON CONFLICT\(marker_id,sha256\) DO NOTHING/);
+ assert.doesNotMatch(api,/UPDATE realcity_astra_originals|DELETE FROM realcity_astra_originals/);
+ assert.match(editor,/id="importAstra"/);
+ assert.match(editor,/endpoint\('\/import-astra'\)/);
+});

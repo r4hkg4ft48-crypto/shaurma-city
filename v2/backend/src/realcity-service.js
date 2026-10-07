@@ -58,12 +58,32 @@ async function bootstrap(){
   if(!db.configured)return;
   await installPhotoRelease().catch(e=>console.error('RealCity photo release:',e.message));
   const q=await db.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_status,realcity_profile,realcity_astra_assets FROM shaurmeg_markers WHERE is_active=TRUE ORDER BY CASE WHEN id=3139 OR lower(replace(name,'ё','е')) LIKE '%лепешк%' THEN 0 ELSE 1 END, updated_at DESC LIMIT 32").catch(()=>({rows:[]}));
-  const rows=q.rows||[],refresh=rows.filter(x=>x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{})).slice(0,8);
+  const rows=q.rows||[];
+  // Curated master-reference venues are deterministic release assets, so they
+  // are awaited at boot instead of being left behind an asynchronous slice.
+  const curated=rows.filter(x=>photoreal._internals?.isLepeshka?.(x)).slice(0,2);
+  const curatedIds=new Set(curated.map(x=>String(x.id)));
+  for(const original of curated){
+    let row=original;
+    if(row.realcity_status!=='ready'||needsRefresh(row.realcity_profile||{})){
+      await queue(row.id).catch(e=>console.warn('RealCity curated geometry bootstrap',row.id,e.message));
+      const fresh=await db.query("SELECT id,establishment_id,venue_id,name,address,lat,lon,realcity_status,realcity_profile,realcity_astra_assets FROM shaurmeg_markers WHERE id=$1 AND is_active=TRUE",[row.id]).catch(()=>({rows:[]}));
+      row=fresh.rows[0]||row;
+    }
+    const masters=(photoreal._internals?.lepeshkaMasterSources?.(row)||[]).length;
+    try{
+      const result=await photoreal.queue(row,row.realcity_profile||{});
+      console.log('RealCity curated master bootstrap',JSON.stringify({marker_id:Number(row.id),masters,result}));
+    }catch(e){
+      console.warn('RealCity curated master bootstrap',row.id,e.message);
+    }
+  }
+  const refresh=rows.filter(x=>!curatedIds.has(String(x.id))&&(x.realcity_status!=='ready'||needsRefresh(x.realcity_profile||{}))).slice(0,8);
   refresh.forEach(x=>queue(x.id)?.catch(()=>{}));
   // A photoreal pipeline/source revision must rebuild proactively instead of
   // waiting for a human to open a marker. Geometry-refresh rows enqueue their
   // reconstruction from queue(); stable rows can be checked immediately.
-  rows.filter(x=>!refresh.includes(x)&&!needsRefresh(x.realcity_profile||{})).slice(0,16).forEach(x=>
+  rows.filter(x=>!curatedIds.has(String(x.id))&&!refresh.includes(x)&&!needsRefresh(x.realcity_profile||{})).slice(0,16).forEach(x=>
     photoreal.queue(x,x.realcity_profile||{}).catch(e=>console.warn('RealCity photoreal bootstrap',x.id,e.message))
   );
 }

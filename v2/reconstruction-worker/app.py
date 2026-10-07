@@ -563,7 +563,7 @@ def gsplat_refine(points,colors,confidence,images,extrinsic,intrinsic,depth_conf
 
 def frame_budget(requested:int)->int:
     if LIGHTWEIGHT_CPU:
-        return min(requested,12)
+        return min(requested,48)
     if HIGH_MEMORY_CPU:
         return min(requested,32)
     try:

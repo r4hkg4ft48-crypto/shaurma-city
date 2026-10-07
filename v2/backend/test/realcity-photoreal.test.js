@@ -341,7 +341,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
 });
 
 
@@ -366,7 +366,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
 });
 
 
@@ -476,7 +476,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -622,7 +622,7 @@ test('ONNX depth cloud is constrained by mapped building heights',()=>{
 test('v22 revision forces rebuilding old volumetric artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
 });
 
 
@@ -657,7 +657,7 @@ test('v24 spatial lock refuses raw depth takeover and invalidates v23 artifacts'
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
   assert.match(api,/require_map_registration:true/);
   assert.match(api,/photoreal_spatial_registration/);
   assert.match(worker,/if LIGHTWEIGHT_CPU and require_registration:/);
@@ -686,7 +686,7 @@ test('v25 keeps owner facade photos authoritative and rejects wall-incompatible 
   const fs=require('node:fs'),path=require('node:path');
   const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
   assert.match(api,/anchor_only:hasOwner/);
   assert.match(api,/const publicBudget=hasOwner\?2:MAX_SOURCES/);
   assert.match(api,/angle:a\.angle\|\|'unknown'/);
@@ -705,7 +705,7 @@ test('v26.1 seeds В Лепёшке from both curated master references and remo
   const routes=fs.readFileSync(path.join(__dirname,'../src/routes.js'),'utf8');
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v26.1-lepeshka-dual-master-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v27-calibrated-facade-only-v1'/);
   assert.match(api,/REALCITY_LEPESHKA_MASTER_A_WEBP_B64_/);
   assert.match(api,/REALCITY_LEPESHKA_MASTER_B_WEBP_B64_/);
   assert.match(api,/lepeshka-master-a\.webp/);
@@ -718,4 +718,31 @@ test('v26.1 seeds В Лепёшке from both curated master references and remo
   assert.match(map,/!isTruePhotogrammetry&&!isVolumetricDepth&&!referenceMaster/);
   assert.match(map,/REAL CITY · PHOTO MASTER/);
   assert.match(map,/referenceMaster\?0:photoreal\?\.045/);
+});
+
+
+test('v27 refuses fictitious photo-camera registration and accepts only measured facade quads',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const P=require('../src/realcity-photoreal');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  const quad=[[.1,.1],[.9,.1],[.87,.92],[.12,.91]];
+  const input={match:{building_id:'hero',edge_index:0,source_quad:quad,quality:.9,flip_u:true}};
+  assert.deepEqual(P._internals.calibratedFacadeMatch(input),{
+    building_id:'hero',edge_index:0,source_quad:quad,quality:.9,flip_u:true
+  });
+  assert.equal(P._internals.calibratedFacadeMatch({match:{...input.match,source_quad:[[0,0],[1,1],[1,0],[0,1]]}}),null);
+  assert.equal(P._internals.calibratedFacadeMatch({match:{...input.match,quality:.2}}),null);
+  assert.equal(P._internals.calibratedFacadeMatch({match:{building_id:'hero',edge_index:0}}),null);
+  assert.equal(P._internals.isLepeshka({id:3139,name:'В Лепёшке'}),true);
+  assert.equal(P._internals.isLepeshka({id:1,name:'В Лепёшке'}),false);
+  assert.match(api,/reason:'awaiting_facade_calibration'/);
+  assert.match(api,/match:calibratedFacadeMatch\(a\)/);
+  assert.match(worker,/if strict and not registered_quad:return None/);
+  assert.match(worker,/def facade_source_homography\(quad:list\):/);
+  assert.match(worker,/xn=\(H\[0\]\*uu\+H\[1\]\*vv\+H\[2\]\)\/den/);
+  assert.match(worker,/"calibrated_facades":len\(calibrated_facades\)/);
+  assert.match(map,/isLepeshkaRealCity\(p\)&&!astraLayer/);
+  assert.match(map,/Number\(model\.quality\.calibrated_facades\)>=1/);
 });

@@ -203,7 +203,7 @@ test('persisted Wikimedia references can be deterministically re-resolved withou
 });
 
 
-test('KartaView collector probes both current and anonymous APIs and accepts fileUrl',()=>{
+test('KartaView collector probes both 2.0 GET and anonymous 1.0 POST APIs and accepts fileUrl',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
   assert.match(src,/\/2\.0\/photo\//);

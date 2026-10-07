@@ -990,11 +990,16 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","license","license_url","attribution","page_url")} for s in job.sources]
+    radial=np.linalg.norm(np.asarray(points,dtype=np.float32)[:,:2],axis=1) if len(points) else np.array([0.0],dtype=np.float32)
+    observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
+    declared_radius=float(job.map_anchor.get("radius_m",190))
+    coverage_radius=max(12.0,min(declared_radius,observed_radius+6.0))
     quality={
       "geometry":"metric_multiview_mapanything" if stats.get("universal_3d") else ("osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth")),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
-      "coverage_radius_m":float(job.map_anchor.get("radius_m",190)),
+      "coverage_radius_m":coverage_radius,
+      "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
       "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
       "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")

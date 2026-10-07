@@ -955,7 +955,16 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         else:
             vfov=math.degrees(2.0*math.atan(math.tan(math.radians(hfov)*.5)*h/max(w,1)))
             vfov=max(34.0,min(105.0,vfov))
-        pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) and not is_inferred and synthetic_heading is None else 0.0
+        if source.get("reference_master") is True:
+            # The curated overview reference sees the whole high-rise from above/afar.
+            # Center the sampling frustum on the mapped wall's vertical midpoint so
+            # upper floors and the storefront are both preserved instead of clipping
+            # the building at an eye-level horizon.
+            wall_dist=max(math.hypot(midx-cx,midy-cy),.5)
+            pitch=math.degrees(math.atan2(((base+height)*.5)-1.65,wall_dist))
+            if not panoramic:hfov=max(hfov,92.0)
+        else:
+            pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) and not is_inferred and synthetic_heading is None else 0.0
 
         # Build a metric grid on the exact OSM wall plane, then sample source
         # pixels through a camera ray. Only the sampling ray may be inferred;

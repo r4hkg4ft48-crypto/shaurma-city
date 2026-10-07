@@ -1152,6 +1152,11 @@ async def run_job(job:Job):
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
                     stats["primary_error"]="; ".join(primary_errors)[:360] or ("partial_view_metric_fallback" if len(paths)<3 else "metric_depth_fallback")
                     stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+            min_owner=int(job.policy.get("min_owner_frames",0) or 0)
+            if job.policy.get("photo_first") and int(stats.get("owner_frames",0))<min_owner:
+                raise RuntimeError("owner_photo_not_used_in_volume:"+str(stats.get("owner_frames",0))+"/"+str(min_owner))
+            if job.policy.get("forbid_flat_owner_fallback") and stats.get("projection"):
+                raise RuntimeError("flat_owner_reconstruction_rejected")
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)

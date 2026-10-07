@@ -280,7 +280,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v5/);
+  assert.match(src,/realcity-photoreal-worker-v6/);
 });
 
 
@@ -323,12 +323,12 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements-cpu.txt'),'utf8');
   assert.match(src,/CPU_ONNX_MODEL/);
-  assert.match(src,/onnx\/model_int8\.onnx/);
+  assert.match(src,/onnx\/model_q4\.onnx/);
   assert.match(src,/def onnx_relative_depth/);
-  assert.match(src,/depth-anything-v2-small-int8-onnx\+osm-scale/);
+  assert.match(src,/depth-anything-v2-small-.*-onnx\+osm-scale/);
   assert.match(src,/cpu_onnx_depth/);
   assert.match(src,/CPU ONNX depth unavailable; using photoplane safety fallback/);
-  assert.match(src,/realcity-photoreal-worker-v5/);
+  assert.match(src,/realcity-photoreal-worker-v6/);
   assert.match(req,/onnxruntime==1\.23\.2/);
   assert.match(req,/huggingface_hub/);
   assert.doesNotMatch(req,/torch|transformers/i);
@@ -337,5 +337,20 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v18 ONNX revision invalidates old flat photoplane artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v18-onnx-depth-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v18-onnx-q4-v2'/);
+});
+
+
+test('Q4 falls back to FP32 before photoplane on CPU',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/CPU_ONNX_FILES=.*onnx\/model_q4\.onnx,onnx\/model\.onnx/);
+  assert.match(src,/for model_file in CPU_ONNX_FILES:/);
+  assert.match(src,/RealCity ONNX variant rejected/);
+  assert.match(src,/opts\.enable_cpu_mem_arena=False/);
+  assert.match(src,/opts\.enable_mem_pattern=False/);
+  const q4=src.indexOf('onnx/model_q4.onnx');
+  const fp32=src.indexOf('onnx/model.onnx');
+  const plane=src.indexOf('CPU ONNX depth unavailable; using photoplane safety fallback');
+  assert.ok(q4>0&&fp32>q4&&plane>fp32);
 });

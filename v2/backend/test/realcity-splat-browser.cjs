@@ -55,3 +55,18 @@ test('RealCity RCSP2 Gaussian shader compiles and renders in Chromium WebGL',asy
     await browser.close();
   }
 });
+
+
+test('volumetric PHOTO-3D takes over native buildings with exact support volumes',()=>{
+  const fs=require('node:fs');
+  const src=fs.readFileSync(path.resolve(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/const volumetricPhoto3D=photoreal&&!completePhotogrammetry&&authored\?\.quality\?\.volumetric_reconstruction===true/);
+  assert.match(src,/supportIds=new Set/);
+  assert.match(src,/volumetricPhoto3D\s*\?\(profile\.scene\?\.buildings\|\|\[\]\)/);
+  assert.match(src,/const dimmed=\(completePhotogrammetry\|\|volumetricPhoto3D\)\?covered/);
+  assert.match(src,/const context=volumetricPhoto3D/);
+  assert.match(src,/neutralSupport/);
+  assert.match(src,/realcity-context-extrude','fill-extrusion-opacity',volumetricPhoto3D\?\.54:\.78/);
+  assert.match(src,/focus-building-extrude','fill-extrusion-opacity',volumetricPhoto3D\?\.6:\.97/);
+  assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
+});

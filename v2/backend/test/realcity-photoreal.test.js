@@ -144,14 +144,16 @@ test('transient worker outages bypass retry cooldown policy',()=>{
   assert.equal(P._internals.transientWorkerFailure('metric_fallback_too_sparse'),false);
 });
 
-test('worker contract permits one-view metric fallback but keeps three-view MAX path',()=>{
+test('worker contract tries MapAnything from one view and keeps VGGT for three-plus views',()=>{
   const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/requested=max\(1,min\(/);
   assert.match(src,/if len\(paths\)<1:/);
   assert.match(src,/no_decodable_views/);
-  assert.match(src,/if len\(paths\)<3:/);
+  assert.match(src,/mapanything_reconstruct/);
+  assert.match(src,/len\(paths\)>=3/);
+  assert.match(src,/vggt_reconstruct/);
   assert.match(src,/len\(job\.sources\)<1/);
-  assert.match(src,/partial_view_metric_fallback/);
+  assert.match(src,/MAX paths unavailable; using metric depth fallback/);
 });
 
 

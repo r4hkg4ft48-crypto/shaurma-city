@@ -545,6 +545,9 @@
     }
     box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
+  function isCompletePhotogrammetry(model){
+    return model?.quality?.photogrammetric===true&&model?.quality?.metric_reconstruction===true;
+  }
   function removeAstraLayer(){
     for(const id of ['realcity-photoreal-splats','realcity-photoreal-shell','realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
     astraLayer=null;supportRealCityLayer=null;activeRealCityModel=null;activeRealCityMode='';setRealCityAttribution(null);
@@ -573,9 +576,10 @@
         if(authored){
           removeAstraLayer();
           if(authored.mode==='photoreal'){
-            const isTruePhotogrammetry=authored.model?.quality?.photogrammetric===true;
+            const isTruePhotogrammetry=isCompletePhotogrammetry(authored.model);
+            const isVolumetricDepth=authored.model?.quality?.volumetric_reconstruction===true;
             let shell=null,shellSource=null;
-            if(!isTruePhotogrammetry){
+            if(!isTruePhotogrammetry&&!isVolumetricDepth){
               const shellCandidates=[
                 {mode:'astra',model:j.profile?.astra},
                 {mode:'open-world',model:j.profile?.real_world}
@@ -684,9 +688,15 @@
       return;
     }
     const authored=astraLayer?activeRealCityModel:null,photoreal=!!(authored&&activeRealCityMode==='photoreal');
-    const reconstructedRadius=photoreal?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190)):0;
-    const replaced=new Set(photoreal
+    const completePhotogrammetry=photoreal&&isCompletePhotogrammetry(authored);
+    const reconstructedRadius=completePhotogrammetry?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190)):0;
+    // Only a verified metric photogrammetry scene may remove native 3D buildings.
+    // Depth-estimated splats are photographic surface evidence, not a complete
+    // replacement mesh. Keeping the mapped extrusion behind them prevents the
+    // exact "flattened houses" failure when source coverage is incomplete.
+    const replaced=new Set(completePhotogrammetry
       ?(profile.scene?.buildings||[]).filter(b=>Number(b.distance||0)<=reconstructedRadius).map(b=>String(b.id))
+      :photoreal?[]
       :(authored?.buildings||[]).map(b=>String(b.building_id)));
     if(authored&&!photoreal)for(const b of profile.scene.buildings){
       if(replaced.has(String(b.id)))continue;
@@ -700,8 +710,9 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    const dimmed=photoreal?covered:astraLayer?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[data.heroFeature,...data.contextFeatures,...covered];
-    setBaseBuildingsDim(true,dimmed.filter(Boolean));
+    const dimmed=completePhotogrammetry?covered:
+      (astraLayer&&!photoreal?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[]);
+    setBaseBuildingsDim(dimmed.length>0,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
@@ -723,7 +734,7 @@
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
     const duration=reduceMotion?1:980,started=performance.now();
-    const context=astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null;
+    const context=astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)),hero=astraLayer?null:(data.heroFeature&&!replaced.has(data.heroFeature.properties.id)?data.heroFeature:null);
     if(!hero)heroSource?.setData(emptyGeo());
     const render=(now)=>{
       if(token!==focusToken)return;

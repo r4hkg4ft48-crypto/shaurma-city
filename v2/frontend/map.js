@@ -3,7 +3,7 @@
   const $=s=>document.querySelector(s);
   const qs=new URLSearchParams(location.search);
   let map,points=[],selected=null,markers=new Map(),buildingLayers=[],fallback=false,userMarker=null,focusToken=0,markerRenderFrame=0;
-  let astraLayer=null,astraScripts=null,quarterFrame=0,previewSignature='',activeRealCityModel=null,activeRealCityMode='';
+  let astraLayer=null,supportRealCityLayer=null,astraScripts=null,quarterFrame=0,previewSignature='',activeRealCityModel=null,activeRealCityMode='';
   const baseBuildingPaint=new Map();
   const baseLabelPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='',orderDetailId='';
@@ -503,8 +503,8 @@
     box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
   function removeAstraLayer(){
-    for(const id of ['realcity-photoreal-splats','realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
-    astraLayer=null;activeRealCityModel=null;activeRealCityMode='';setRealCityAttribution(null);
+    for(const id of ['realcity-photoreal-splats','realcity-photoreal-shell','realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
+    astraLayer=null;supportRealCityLayer=null;activeRealCityModel=null;activeRealCityMode='';setRealCityAttribution(null);
   }
   async function selectRealCityProfile(p,token){
     try{
@@ -529,17 +529,52 @@
         const authored=authoredCandidates.find(x=>x.mode==='photoreal'?window.RealCitySpatial.boundPhotoreal(x.model,p,j.profile.scene):window.RealCitySpatial.bound(x.model,p,j.profile.scene));
         if(authored){
           removeAstraLayer();
-          const layer=authored.mode==='photoreal'
-            ?window.RealCitySplatLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:'realcity-photoreal-splats',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity photoreal fallback',e.message)})
-            :window.RealCityLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:'realcity-authored-facades',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity renderer fallback',e.message)});
-          if(layer){map.addLayer(layer);if(layer.ready){astraLayer=layer;activeRealCityModel=authored.model;activeRealCityMode=authored.mode;setRealCityAttribution(authored.model)}else removeAstraLayer();}
+          if(authored.mode==='photoreal'){
+            const isTruePhotogrammetry=authored.model?.quality?.photogrammetric===true;
+            let shell=null;
+            if(!isTruePhotogrammetry){
+              const shellCandidates=[
+                {mode:'astra',model:j.profile?.astra},
+                {mode:'open-world',model:j.profile?.real_world}
+              ].filter(x=>x.model?.status==='ready');
+              const shellSource=shellCandidates.find(x=>window.RealCitySpatial.bound(x.model,p,j.profile.scene));
+              if(shellSource){
+                shell=window.RealCityLayer.create({
+                  marker:p,profile:j.profile,model:shellSource.model,layerId:'realcity-photoreal-shell',
+                  reducedMotion:reduceMotion,onError:e=>console.warn('RealCity support shell fallback',e.message)
+                });
+                if(shell){map.addLayer(shell);if(!shell.ready){try{map.removeLayer('realcity-photoreal-shell')}catch{}shell=null}}
+              }
+            }
+            const splat=window.RealCitySplatLayer.create({
+              marker:p,profile:j.profile,model:authored.model,layerId:'realcity-photoreal-splats',
+              reducedMotion:reduceMotion,onError:e=>console.warn('RealCity photoreal fallback',e.message)
+            });
+            if(splat){
+              map.addLayer(splat);
+              if(splat.ready){
+                supportRealCityLayer=shell;
+                astraLayer=shell?{
+                  ready:true,
+                  setProgress(v){shell.setProgress?.(v);splat.setProgress?.(v)},
+                  stats:{composite:true,shell:shell.stats||null,splats:splat.stats||null}
+                }:splat;
+                activeRealCityModel=authored.model;activeRealCityMode=authored.mode;setRealCityAttribution(authored.model);
+              }else removeAstraLayer();
+            }else if(shell){
+              astraLayer=shell;supportRealCityLayer=shell;activeRealCityModel=shellCandidates.find(x=>window.RealCitySpatial.bound(x.model,p,j.profile.scene))?.model||null;activeRealCityMode='open-world';
+            }
+          }else{
+            const layer=window.RealCityLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:'realcity-authored-facades',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity renderer fallback',e.message)});
+            if(layer){map.addLayer(layer);if(layer.ready){astraLayer=layer;activeRealCityModel=authored.model;activeRealCityMode=authored.mode;setRealCityAttribution(authored.model)}else removeAstraLayer();}
+          }
         }
       }
       if(token!==focusToken)return;
       if(astraLayer&&activeRealCityModel){
         const cam=activeRealCityModel.camera||j.profile?.camera||{zoom:18.35,pitch:61,bearing:-20,views:[]},offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
-        $('#realBadge').textContent=activeRealCityMode==='photoreal'?'REAL CITY · LIVE 3D':activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
+        $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':'REAL CITY · PHOTO 3D'):activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
         if(preview&&activeRealCityMode==='astra'&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
         const views=cam.views||[],box=$('#realCityViews');
         box.replaceChildren();box.classList.toggle('hidden',!views.length);

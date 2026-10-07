@@ -522,8 +522,8 @@
   function loadAstraRenderer(){
     if(window.RealCityLayer&&window.RealCitySplatLayer)return Promise.resolve();
     if(astraScripts)return astraScripts;
-    // Renderer modules used to carry a permanent "realcity-photoreal-1" query
-    // string, so Telegram WebView could keep an obsolete splat renderer even
+    // Renderer modules used to carry a permanent query revision, so Telegram
+    // WebView could keep an obsolete splat renderer even
     // after map.js itself was refreshed. Bind every lazy renderer asset to the
     // same per-open cache revision as the Mini App entrypoint.
     const revision=window.__SHAURMEG_ASSET_VERSION__||Date.now().toString(36);

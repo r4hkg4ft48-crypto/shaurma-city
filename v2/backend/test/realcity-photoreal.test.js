@@ -690,4 +690,5 @@ test('v25 keeps owner facade photos authoritative and rejects wall-incompatible 
   assert.match(worker,/match_quality<\.12/);
   assert.match(worker,/def _owner_semantic_edge/);
   assert.match(worker,/Without pose or a persisted assignment we cannot know which neighboring/);
+  assert.match(worker,/max_points=min\(int\(job\.policy\.get\("max_points",48000\)\),48000\)/);
 });

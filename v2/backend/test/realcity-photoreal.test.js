@@ -161,3 +161,18 @@ test('worker retries preview and original source URLs with diagnostics',()=>{
   assert.match(src,/no_decodable_views:/);
   assert.match(src,/ShaurmegRealCity\/1\.0/);
 });
+
+
+test('lightweight CPU photoplane avoids ML runtime while MAX GPU path remains available',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements-cpu.txt'),'utf8');
+  assert.match(src,/LIGHTWEIGHT_CPU/);
+  assert.match(src,/def facade_plane_reconstruct/);
+  assert.match(src,/open-pixel-osm-facade-projection/);
+  assert.match(src,/osm-facade-ray-projection/);
+  assert.match(src,/if LIGHTWEIGHT_CPU:/);
+  assert.doesNotMatch(req,/torch|transformers|safetensors/i);
+  assert.match(src,/def vggt_reconstruct/);
+  assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
+});

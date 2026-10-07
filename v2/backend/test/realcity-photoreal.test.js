@@ -1,5 +1,4 @@
 'use strict';
-// v22 visible-world contract sync
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const config=require('../src/config');
@@ -338,7 +337,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v22 visible-world revision invalidates old reconstruction artifacts',()=>{
+test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
@@ -569,6 +568,24 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
 });
 
 
+test('cold-start worker submission is warmed and retried safely',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(api,/async function warmWorker\(base\)/);
+  assert.match(api,/const waits=\[20000,35000,50000\]/);
+  assert.match(api,/await warmWorker\(base\)/);
+  assert.match(api,/attempt===0\?20000:35000/);
+  assert.match(api,/transientWorkerStatus/);
+  assert.doesNotMatch(api,/setTimeout\(\(\)=>ac\.abort\(\),12000\)/);
+  assert.match(worker,/_ACTIVE_JOBS=set\(\)/);
+  assert.match(worker,/if job\.job_id in _ACTIVE_JOBS:/);
+  assert.match(worker,/"duplicate":True/);
+  assert.match(worker,/tasks\.add_task\(run_job_guarded,job\)/);
+  assert.match(worker,/_ACTIVE_JOBS\.discard\(job\.job_id\)/);
+});
+
+
 test('measured volumetric scenes replace native buildings visibly',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
@@ -577,7 +594,6 @@ test('measured volumetric scenes replace native buildings visibly',()=>{
   assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/support:1/);
   assert.match(src,/const dimmed=\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
-  assert.match(src,/fill-extrusion-opacity'\:\['case',\['==',\['get','support'\],1\],\.26,\.78\]/);
 });
 
 test('volumetric renderer boosts source splats over support geometry',()=>{

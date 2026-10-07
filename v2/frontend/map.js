@@ -579,7 +579,7 @@
     return !!(v&&points>=5000&&v.span[2]>=3&&Math.max(v.span[0],v.span[1])>=8);
   }
   function removeAstraLayer(){
-    for(const id of ['realcity-photoreal-splats','realcity-photoreal-shell','realcity-authored-facades','realcity-astra-facades'])if(map.getLayer(id))map.removeLayer(id);
+    for(const id of ['realcity-photoreal-splats','realcity-photoreal-shell','realcity-authored-facades','realcity-astra-facades','realcity-pro-facades'])if(map.getLayer(id))map.removeLayer(id);
     astraLayer=null;supportRealCityLayer=null;activeRealCityModel=null;activeRealCityMode='';setRealCityAttribution(null);
   }
   async function selectRealCityProfile(p,token){
@@ -596,11 +596,12 @@
       if(token!==focusToken||String(j.marker_id)!==String(p.id)||j.establishment_id!==p.establishment_id||j.venue_id!==p.venue_id)return;
       p.realcity_profile=j.profile||p.realcity_profile;
       const authoredCandidates=[
+        {mode:'pro',model:j.profile?.pro},
         {mode:'photoreal',model:j.profile?.photoreal},
         {mode:'astra',model:j.profile?.astra},
         {mode:'open-world',model:j.profile?.real_world}
       ].filter(x=>x.model?.status==='ready'&&
-        (x.mode==='photoreal'?isPhotorealDisplaySafe(x.model):!isLepeshkaRealCity(p)));
+        (x.mode==='photoreal'?isPhotorealDisplaySafe(x.model):x.mode==='pro'?x.model?.mode==='realcity-pro'&&x.model?.quality?.ready===true:!isLepeshkaRealCity(p)));
       if(authoredCandidates.length){
         await loadAstraRenderer();if(token!==focusToken)return;
         const authored=authoredCandidates.find(x=>x.mode==='photoreal'?window.RealCitySpatial.boundPhotoreal(x.model,p,j.profile.scene):window.RealCitySpatial.bound(x.model,p,j.profile.scene));
@@ -645,7 +646,7 @@
               astraLayer=shell;supportRealCityLayer=shell;activeRealCityModel=shellSource?.model||null;activeRealCityMode=shellSource?.mode||'open-world';setRealCityAttribution(activeRealCityModel);
             }
           }else{
-            const layer=window.RealCityLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:'realcity-authored-facades',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity renderer fallback',e.message)});
+            const layer=window.RealCityLayer.create({marker:p,profile:j.profile,model:authored.model,layerId:authored.mode==='pro'?'realcity-pro-facades':'realcity-authored-facades',reducedMotion:reduceMotion,onError:e=>console.warn('RealCity renderer fallback',e.message)});
             if(layer){map.addLayer(layer);if(layer.ready){astraLayer=layer;activeRealCityModel=authored.model;activeRealCityMode=authored.mode;setRealCityAttribution(authored.model)}else removeAstraLayer();}
           }
         }
@@ -654,7 +655,7 @@
       if(astraLayer&&activeRealCityModel){
         const cam=activeRealCityModel.camera||j.profile?.camera||(activeRealCityMode==='photoreal'?{zoom:19.05,pitch:67,bearing:-20,views:[]}:{zoom:18.35,pitch:61,bearing:-20,views:[]}),offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
-        $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.reference_master?'REAL CITY · PHOTO MASTER':activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':activeRealCityModel?.quality?.surface_projection?'REAL CITY · PHOTO FACADE':'REAL CITY · PHOTO 3D'):activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
+        $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.reference_master?'REAL CITY · PHOTO MASTER':activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':activeRealCityModel?.quality?.surface_projection?'REAL CITY · PHOTO FACADE':'REAL CITY · PHOTO 3D'):activeRealCityMode==='pro'?'REAL CITY · PHOTO VERIFIED':activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
         if(preview&&activeRealCityMode==='astra'&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
         const views=cam.views||[],box=$('#realCityViews');
         box.replaceChildren();box.classList.toggle('hidden',!views.length);
@@ -733,6 +734,7 @@
     const authored=astraLayer?activeRealCityModel:null,photoreal=!!(authored&&activeRealCityMode==='photoreal');
     const completePhotogrammetry=photoreal&&isCompletePhotogrammetry(authored);
     const measuredVolumetric=photoreal&&isMeasuredVolumetric(authored);
+    const proMode=!!(authored&&activeRealCityMode==='pro');
     const referenceMaster=photoreal&&(isLepeshkaRealCity(p)||authored?.quality?.reference_master===true);
     const reconstructedRadius=completePhotogrammetry
       ?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190))
@@ -744,7 +746,7 @@
     // failure without pretending fallback depth is complete photogrammetry.
     const replaced=new Set((completePhotogrammetry||measuredVolumetric)
       ?(profile.scene?.buildings||[]).filter(b=>Number(b.distance||0)<=reconstructedRadius).map(b=>String(b.id))
-      :photoreal?[]
+      :photoreal||proMode?[]
       :(authored?.buildings||[]).map(b=>String(b.building_id)));
     if(authored&&!photoreal)for(const b of profile.scene.buildings){
       if(replaced.has(String(b.id)))continue;
@@ -758,33 +760,33 @@
     // A distance expression hides the whole feature, not just its local part.
     // Authored neighbors cover the native surfaces directly; only the clinic's
     // distinct footprint needs hiding for its different roof/wing heights.
-    const dimmed=(completePhotogrammetry||measuredVolumetric)?covered:
+    const dimmed=proMode?[]:(completePhotogrammetry||measuredVolumetric)?covered:
       (astraLayer&&!photoreal?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[]);
     setBaseBuildingsDim(dimmed.length>0,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
     map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
     map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
     map.getSource('realcity-barriers')?.setData({type:'FeatureCollection',features:data.barriers});
-    const visibleTrees=referenceMaster?[]:(photoreal?data.trees.filter(f=>f.properties?.source==='osm'):data.trees);
+    const visibleTrees=(referenceMaster||proMode)?[]:(photoreal?data.trees.filter(f=>f.properties?.source==='osm'):data.trees);
     map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:visibleTrees});
     const photoGround=!!(photoreal||(astraLayer&&authored?.environment?.roads?.length));
-    setRealCityWorldPalette(!!astraLayer&&!referenceMaster);
+    setRealCityWorldPalette(!!astraLayer&&!referenceMaster&&!proMode);
     setPhotoLabels(photoGround?p:null);
     document.body.classList.toggle('realCityPhotographic',photoGround);
     // Keep the real base map visible. A flat 90%-opaque disk was one of the
     // main reasons the quarter looked synthetic even when facade pixels were real.
-    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#87847d':photoGround?'#aaa69c':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',referenceMaster?0:photoreal?.045:photoGround?.24:daypart()==='night'?.12:.16)}catch{}
-    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',referenceMaster?0:photoreal?.24:photoGround?.62:.34)}catch{}
-    try{map.setPaintProperty('realcity-roads-glow','line-opacity',referenceMaster?0:photoreal?.05:photoGround?.14:.12)}catch{}
-    try{map.setPaintProperty('realcity-roads-core','line-opacity',referenceMaster?0:photoreal?.28:photoGround?.64:daypart()==='night'?.42:.56)}catch{}
-    try{map.setPaintProperty('realcity-barriers-line','line-opacity',referenceMaster?0:photoreal?.22:photoGround?.5:.3)}catch{}
-    try{map.setPaintProperty('realcity-tree-glow','circle-opacity',referenceMaster?0:photoreal?.04:.28);map.setPaintProperty('realcity-tree-crown','circle-opacity',referenceMaster?0:photoreal?.14:.86)}catch{}
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#87847d':photoGround?'#aaa69c':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',referenceMaster||proMode?0:photoreal?.045:photoGround?.24:daypart()==='night'?.12:.16)}catch{}
+    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',referenceMaster||proMode?0:photoreal?.24:photoGround?.62:.34)}catch{}
+    try{map.setPaintProperty('realcity-roads-glow','line-opacity',referenceMaster||proMode?0:photoreal?.05:photoGround?.14:.12)}catch{}
+    try{map.setPaintProperty('realcity-roads-core','line-opacity',referenceMaster||proMode?0:photoreal?.28:photoGround?.64:daypart()==='night'?.42:.56)}catch{}
+    try{map.setPaintProperty('realcity-barriers-line','line-opacity',referenceMaster||proMode?0:photoreal?.22:photoGround?.5:.3)}catch{}
+    try{map.setPaintProperty('realcity-tree-glow','circle-opacity',referenceMaster||proMode?0:photoreal?.04:.28);map.setPaintProperty('realcity-tree-crown','circle-opacity',referenceMaster||proMode?0:photoreal?.14:.86)}catch{}
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');
     const duration=reduceMotion?1:980,started=performance.now();
     const supportify=f=>f?{...f,properties:{...f.properties,support:1,wall:'#77736b',accent:'#8f8a80'}}:null;
-    const supportMode=measuredVolumetric&&!completePhotogrammetry;
+    const supportMode=!proMode&&measuredVolumetric&&!completePhotogrammetry;
     const context=supportMode
       ?data.contextFeatures.filter(f=>replaced.has(f.properties.id)).map(supportify)
       :(astraLayer?[]:data.contextFeatures.filter(f=>!replaced.has(f.properties.id)));
@@ -810,7 +812,7 @@
       else{
         document.body.classList.add('realCitySettled');
         if(astraLayer&&previewSignature)window.__SHAURMEG_REALCITY_PREVIEW_READY__=previewSignature;
-        $('#focusHudState').textContent=astraLayer?(activeRealCityMode==='photoreal'?'фотографическая 3D-реконструкция':activeRealCityMode==='astra'?'фасады Astra':'открытые данные · реальный квартал'):'геометрия квартала';
+        $('#focusHudState').textContent=astraLayer?(activeRealCityMode==='pro'?'проверенные фотоповерхности':activeRealCityMode==='photoreal'?'фотографическая 3D-реконструкция':activeRealCityMode==='astra'?'фасады Astra':'открытые данные · реальный квартал'):'геометрия квартала';
         if(astraLayer)setTimeout(()=>{if(token===focusToken)$('#focusHud').classList.remove('show')},1400);
         tg?.HapticFeedback?.impactOccurred?.('light');
       }

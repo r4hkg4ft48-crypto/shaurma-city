@@ -812,7 +812,14 @@
       if(elapsed<duration)quarterFrame=requestAnimationFrame(render);
       else{
         document.body.classList.add('realCitySettled');
-        if(astraLayer&&previewSignature)window.__SHAURMEG_REALCITY_PREVIEW_READY__=previewSignature;
+        if(astraLayer&&previewSignature){
+          const signature=previewSignature,visible=()=>{
+            if(token===focusToken&&astraLayer?.ready&&(activeRealCityMode!=='pro'||astraLayer.photoReady===true))
+              window.__SHAURMEG_REALCITY_PREVIEW_READY__=signature;
+          };
+          if(activeRealCityMode==='pro')astraLayer.photoPromise?.then(visible).catch(()=>{});
+          else visible();
+        }
         $('#focusHudState').textContent=astraLayer?(activeRealCityMode==='pro'?'проверенные фотоповерхности':activeRealCityMode==='photoreal'?'фотографическая 3D-реконструкция':activeRealCityMode==='astra'?'фасады Astra':'открытые данные · реальный квартал'):'геометрия квартала';
         if(astraLayer)setTimeout(()=>{if(token===focusToken)$('#focusHud').classList.remove('show')},1400);
         tg?.HapticFeedback?.impactOccurred?.('light');

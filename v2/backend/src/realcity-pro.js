@@ -18,7 +18,7 @@ async function ensureSchema(db){
 function manifest(row){
  const scene=row.realcity_profile?.scene||{},point=[Number(row.lon),Number(row.lat)];
  return {marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id,
-  hero_building_id:String(scene.hero_building_id||''),
+  hero_building_id:String(scene.hero_building_id||(scene.buildings||[]).find(b=>b.role==='hero')?.id||''),
   point,buildings:(scene.buildings||[]).map(b=>({
     building_id:String(b.id),geometry_key:S.geometryKey(b.ring),role:b.role||'context',
     height_m:Number(b.height)||0,base_m:Number(b.base_m)||0,
@@ -33,6 +33,7 @@ function validCalibration(body,mani){
  const edge_index=Number(body?.edge_index);
  if(!Number.isInteger(edge_index)||!b.edges.some(e=>e.edge_index===edge_index))fail('pro_edge_not_in_map');
  if(String(body?.geometry_key||'')!==b.geometry_key)fail('pro_geometry_revision_mismatch',409);
+ if(!Array.isArray(body?.source_quad)||body.source_quad.length!==4)fail('pro_four_photo_corners_required');
  P.quad(body.source_quad);
  const exclude=Array.isArray(body.exclude)?body.exclude:[];
  if(exclude.length>16||exclude.some(p=>!Array.isArray(p)||p.length<3||p.length>40||p.some(v=>!Array.isArray(v)||v.length!==2||v.some(n=>!Number.isFinite(n)||n<0||n>1))))fail('pro_invalid_occlusion_mask');
@@ -46,7 +47,7 @@ const revision=(row,assets,cals)=>hash(JSON.stringify({
  cals:cals.map(c=>[c.asset_id,c.building_id,c.geometry_key,c.edge_index,c.source_quad,c.exclude,c.flip_u,c.confirmed])
 }));
 function qualityGate(row,cals,mats){
- const hero=String(row.realcity_profile?.scene?.hero_building_id||'');
+ const hero=manifest(row).hero_building_id;
  const edges=new Set(cals.filter(c=>c.confirmed&&c.building_id===hero).map(c=>c.edge_index));
  const errors=[];
  if(edges.size<2)errors.push('Нужны две подтверждённые стороны главного здания');
@@ -191,6 +192,12 @@ function install(app,{db,authorize}){
   if(req.body?.expected_revision!==rev||req.body.visually_verified!==true)fail('pro_explicit_review_required',409);
   const x=await db.query('UPDATE realcity_pro_drafts SET reviewed_revision=$2 WHERE marker_id=$1 AND revision=$2 RETURNING marker_id',[row.id,rev]);
   if(!x.rows.length)fail('pro_draft_stale',409);res.json({ok:true,reviewed_revision:rev});
+ }));
+ app.post(base+'/unpublish',admin,route(async(req,res)=>{
+  const row=await select(req);
+  if(req.body?.confirm_unpublish!==true)fail('pro_explicit_unpublish_confirmation',409);
+  await db.query("UPDATE shaurmeg_markers SET realcity_profile=COALESCE(realcity_profile,'{}'::jsonb)-'pro',realcity_updated_at=NOW() WHERE id=$1 AND establishment_id=$2",[row.id,row.establishment_id]);
+  res.json({ok:true,marker_id:String(row.id),unpublished:true});
  }));
  app.post(base+'/publish',admin,route(async(req,res)=>{
   const row=await select(req),rev=revision(row,await assets(row,false),await cals(row));

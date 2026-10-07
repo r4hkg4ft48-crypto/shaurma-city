@@ -453,12 +453,12 @@
       'fill-extrusion-color':['case',['==',['get','support'],1],'#77736b',['coalesce',['get','wall'],'#b9b7ad']],
       'fill-extrusion-height':['coalesce',['get','height'],1],
       'fill-extrusion-base':['coalesce',['get','base'],0],
-      'fill-extrusion-opacity':['case',['==',['get','support'],1],.26,.78]
+      'fill-extrusion-opacity':['case',['==',['get','support'],1],.08,.78]
     }});
     map.addLayer({id:'realcity-context-edge',type:'line',source:'realcity-context',paint:{
       'line-color':['case',['==',['get','support'],1],'#9a958a',['coalesce',['get','accent'],'#D7E0EA']],
       'line-width':['case',['==',['get','role'],'nearby'],1,.65],
-      'line-opacity':['case',['==',['get','support'],1],.08,['case',['==',['get','role'],'nearby'],.45,.22]]
+      'line-opacity':['case',['==',['get','support'],1],.025,['case',['==',['get','role'],'nearby'],.45,.22]]
     }});
 
     map.addSource('focus-building',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -466,7 +466,7 @@
       'fill-extrusion-color':['case',['==',['get','support'],1],'#706d66',['coalesce',['get','wall'],'#a59c88']],
       'fill-extrusion-height':['coalesce',['get','height'],18],
       'fill-extrusion-base':['coalesce',['get','base'],0],
-      'fill-extrusion-opacity':['case',['==',['get','support'],1],.34,.97]
+      'fill-extrusion-opacity':['case',['==',['get','support'],1],.11,.97]
     }});
     map.addLayer({id:'focus-building-edge',type:'line',source:'focus-building',paint:{
       'line-color':['coalesce',['get','accent'],'#F4F7FA'],'line-width':1.55,'line-opacity':.78
@@ -702,6 +702,7 @@
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-barriers-line','line-opacity',0)}catch{}
+    try{map.setPaintProperty('realcity-tree-glow','circle-opacity',.28);map.setPaintProperty('realcity-tree-crown','circle-opacity',.86)}catch{}
     setBaseBuildingsDim(false);setPhotoLabels(null);setRealCityWorldPalette(false);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
@@ -753,11 +754,12 @@
     document.body.classList.toggle('realCityPhotographic',photoGround);
     // Keep the real base map visible. A flat 90%-opaque disk was one of the
     // main reasons the quarter looked synthetic even when facade pixels were real.
-    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#8c8981':photoGround?'#aaa69c':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.1:photoGround?.24:daypart()==='night'?.12:.16)}catch{}
-    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoreal?.58:photoGround?.62:.34)}catch{}
-    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoreal?.18:photoGround?.14:.12)}catch{}
-    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoreal?.72:photoGround?.64:daypart()==='night'?.42:.56)}catch{}
-    try{map.setPaintProperty('realcity-barriers-line','line-opacity',photoreal?.62:photoGround?.5:.3)}catch{}
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#87847d':photoGround?'#aaa69c':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.045:photoGround?.24:daypart()==='night'?.12:.16)}catch{}
+    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoreal?.24:photoGround?.62:.34)}catch{}
+    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoreal?.05:photoGround?.14:.12)}catch{}
+    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoreal?.28:photoGround?.64:daypart()==='night'?.42:.56)}catch{}
+    try{map.setPaintProperty('realcity-barriers-line','line-opacity',photoreal?.22:photoGround?.5:.3)}catch{}
+    try{map.setPaintProperty('realcity-tree-glow','circle-opacity',photoreal?.04:.28);map.setPaintProperty('realcity-tree-crown','circle-opacity',photoreal?.14:.86)}catch{}
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');

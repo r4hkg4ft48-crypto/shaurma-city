@@ -522,7 +522,12 @@
   function loadAstraRenderer(){
     if(window.RealCityLayer&&window.RealCitySplatLayer)return Promise.resolve();
     if(astraScripts)return astraScripts;
-    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v=realcity-photoreal-1';s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('realcity_renderer_unavailable'))};document.head.appendChild(s)});
+    // Renderer modules used to carry a permanent "realcity-photoreal-1" query
+    // string, so Telegram WebView could keep an obsolete splat renderer even
+    // after map.js itself was refreshed. Bind every lazy renderer asset to the
+    // same per-open cache revision as the Mini App entrypoint.
+    const revision=window.__SHAURMEG_ASSET_VERSION__||Date.now().toString(36);
+    const load=src=>new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src+'?v='+encodeURIComponent(revision);s.onload=resolve;s.onerror=()=>{s.remove();reject(new Error('realcity_renderer_unavailable'))};document.head.appendChild(s)});
     astraScripts=(window.RealCitySpatial?Promise.resolve():load('realcity-spatial.js')).then(()=>load('vendor/earcut.min.js')).then(()=>load('realcity-layer.js')).then(()=>load('realcity-splat-layer.js')).catch(e=>{astraScripts=null;throw e});
     return astraScripts;
   }

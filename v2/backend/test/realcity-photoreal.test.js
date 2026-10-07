@@ -1,4 +1,5 @@
 'use strict';
+// v22 visible-world contract sync
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const config=require('../src/config');

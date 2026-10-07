@@ -6,7 +6,7 @@ const crypto=require('crypto');
 const spatial=require('../../frontend/realcity-spatial');
 const openWorld=require('./realcity-open-world');
 
-const PROFILE_VERSION=16;
+const PROFILE_VERSION=17;
 const OVERPASS_ENDPOINTS=[
   'https://overpass.kumi.systems/api/interpreter',
   'https://overpass-api.de/api/interpreter'
@@ -219,14 +219,23 @@ function geoOuterRings(g){
   if(g.type==='MultiPolygon')return (g.coordinates||[]).map(p=>p?.[0]).filter(r=>Array.isArray(r));
   return[];
 }
-async function fetchVectorBuildings(marker,radius=190){
-  const z=14,t=mercatorTile(marker.lon,marker.lat,z),tpl=await getOpenFreeMapTileTemplate();
-  const xs=[t.xi],ys=[t.yi];
-  const edge=.22;
+function geoLines(g){
+  if(!g)return[];
+  if(g.type==='LineString')return Array.isArray(g.coordinates)?[g.coordinates]:[];
+  if(g.type==='MultiLineString')return (g.coordinates||[]).filter(r=>Array.isArray(r));
+  return[];
+}
+async function vectorTileJobs(marker,z=14){
+  const t=mercatorTile(marker.lon,marker.lat,z),tpl=await getOpenFreeMapTileTemplate();
+  const xs=[t.xi],ys=[t.yi],edge=.22;
   if(t.fx<edge)xs.push(t.xi-1);if(t.fx>1-edge)xs.push(t.xi+1);
   if(t.fy<edge)ys.push(t.yi-1);if(t.fy>1-edge)ys.push(t.yi+1);
   const jobs=[];
-  for(const x of [...new Set(xs)])for(const y of [...new Set(ys)])jobs.push({x,y,url:tpl.replace('{z}',z).replace('{x}',x).replace('{y}',y)});
+  for(const x of [...new Set(xs)])for(const y of [...new Set(ys)])jobs.push({x,y,z,url:tpl.replace('{z}',z).replace('{x}',x).replace('{y}',y)});
+  return jobs;
+}
+async function fetchVectorBuildings(marker,radius=190){
+  const z=14,jobs=await vectorTileJobs(marker,z);
   const pseudo=[],seen=new Set(),center=[marker.lon,marker.lat];
   await Promise.all(jobs.map(async job=>{
     try{
@@ -255,6 +264,54 @@ async function fetchVectorBuildings(marker,radius=190){
   return pseudo;
 }
 
+function vectorLineKey(kind,coords){
+  return kind+':'+crypto.createHash('sha1').update(JSON.stringify(roundRing(coords))).digest('hex').slice(0,18);
+}
+async function fetchVectorEnvironment(marker,radius=190){
+  const z=14,jobs=await vectorTileJobs(marker,z),center=[Number(marker.lon),Number(marker.lat)];
+  const pseudo=[],seen=new Set();
+  const roadClasses=new Set(['motorway','trunk','primary','secondary','tertiary','minor','service','track','path','raceway','street','residential']);
+  const walkKinds=new Set(['path','footway','pedestrian','steps','cycleway']);
+  const greenClasses=new Set(['grass','wood','scrub','grassland']);
+  await Promise.all(jobs.map(async job=>{
+    try{
+      const buf=await fetchBuffer(job.url,15000),tile=new VectorTile(new Pbf(buf));
+      const transport=tile.layers?.transportation;
+      if(transport)for(let n=0;n<transport.length;n++){
+        const gj=transport.feature(n).toGeoJSON(job.x,job.y,z),props=gj.properties||{};
+        const cls=String(props.class||'').toLowerCase(),sub=String(props.subclass||'').toLowerCase();
+        if(!roadClasses.has(cls)&&!walkKinds.has(sub))continue;
+        const walking=walkKinds.has(cls)||walkKinds.has(sub)||String(props.foot||'').toLowerCase()==='only';
+        for(const line0 of geoLines(gj.geometry)){
+          const line=line0.map(v=>[Number(v[0]),Number(v[1])]).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));
+          if(line.length<2||pointToLineMeters(center,line,marker.lon,marker.lat)>radius+55)continue;
+          const kind=walking?(walkKinds.has(sub)?sub:(walkKinds.has(cls)?cls:'path')):(cls||'road'),key=vectorLineKey('transport:'+kind,line);
+          if(seen.has(key))continue;seen.add(key);
+          pseudo.push({type:'way',id:'ofm-env-'+key.slice(-18),tags:{highway:kind,surface:String(props.surface||''),source:'openfreemap'},geometry:line.map(v=>({lon:v[0],lat:v[1]}))});
+        }
+      }
+
+      const collectGreen=(layerName,accept,tagger)=>{
+        const layer=tile.layers?.[layerName];if(!layer)return;
+        for(let n=0;n<layer.length;n++){
+          const gj=layer.feature(n).toGeoJSON(job.x,job.y,z),props=gj.properties||{},cls=String(props.class||'').toLowerCase();
+          if(!accept(cls))continue;
+          for(const ring0 of geoOuterRings(gj.geometry)){
+            const ring=ring0.map(v=>[Number(v[0]),Number(v[1])]).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1]));
+            if(ring.length<4||pointToRingMeters(center,ring,marker.lon,marker.lat)>radius+55)continue;
+            const first=ring[0],last=ring[ring.length-1];if(first[0]!==last[0]||first[1]!==last[1])ring.push([...first]);
+            const key=vectorLineKey('green:'+layerName+':'+cls,ring);if(seen.has(key))continue;seen.add(key);
+            pseudo.push({type:'way',id:'ofm-env-'+key.slice(-18),tags:{...tagger(cls),source:'openfreemap'},geometry:ring.map(v=>({lon:v[0],lat:v[1]}))});
+          }
+        }
+      };
+      collectGreen('park',()=>true,()=>({leisure:'park'}));
+      collectGreen('landcover',cls=>greenClasses.has(cls),cls=>cls==='wood'?{natural:'wood'}:{landuse:'grass'});
+    }catch{}
+  }));
+  return pseudo;
+}
+
 async function fetchOsmWorld(marker,radius=190){
   const buildingsQ='[out:json][timeout:12];way["building"](around:'+radius+','+marker.lat+','+marker.lon+');out geom tags;';
   const environmentQ='[out:json][timeout:12];('+
@@ -272,11 +329,18 @@ async function fetchOsmWorld(marker,radius=190){
     'way["highway"](around:'+radius+','+marker.lat+','+marker.lon+');'+
     'way["barrier"](around:'+radius+','+marker.lat+','+marker.lon+');'+
   ');out geom tags;';
-  const [v,b,e]=await Promise.allSettled([fetchVectorBuildings(marker,radius),overpassQuery(buildingsQ,8500),overpassQuery(environmentQ,6500)]);
-  // Use the same vector footprints as MapLibre whenever available. OSM remains
-  // the network fallback; an existing saved scene is never replaced.
-  let buildings=v.status==='fulfilled'&&v.value.length?v.value:(b.status==='fulfilled'?b.value:[]);
-  const environment=e.status==='fulfilled'?e.value:[];
+  const [vb,ve,b,e]=await Promise.allSettled([
+    fetchVectorBuildings(marker,radius),fetchVectorEnvironment(marker,radius),
+    overpassQuery(buildingsQ,8500),overpassQuery(environmentQ,6500)
+  ]);
+  // OpenFreeMap is the resilient map-matched backbone for both buildings and
+  // environment. Overpass enriches it with exact OSM nodes and barriers when
+  // available, but an Overpass outage can no longer erase roads/greens.
+  const buildings=vb.status==='fulfilled'&&vb.value.length?vb.value:(b.status==='fulfilled'?b.value:[]);
+  const environment=[
+    ...(ve.status==='fulfilled'?ve.value:[]),
+    ...(e.status==='fulfilled'?e.value:[])
+  ];
   if(!buildings.length&&b.status==='rejected')throw b.reason;
   return [...buildings,...environment];
 }
@@ -394,8 +458,11 @@ function synthesizeTrees(osm,marker,density){
     const p=[lon,lat];
     if(osm.buildings.some(b=>pointToRingMeters(p,b.ring,marker.lon,marker.lat)<3.2))continue;
     if(osm.roads.some(r=>pointToLineMeters(p,r,marker.lon,marker.lat)<6.0))continue;
+    // Never scatter invented trees across asphalt/courtyards. Synthetic density
+    // is permitted only inside a mapped green polygon.
+    if(!(osm.greens||[]).some(r=>pointInRing(p,r)))continue;
     if(out.some(t=>haversine(lat,lon,t.lat,t.lon)<5.0))continue;
-    out.push({lon:Number(lon.toFixed(6)),lat:Number(lat.toFixed(6)),source:'procedural-density'});
+    out.push({lon:Number(lon.toFixed(6)),lat:Number(lat.toFixed(6)),source:'constrained-green-density'});
   }
   return out;
 }
@@ -430,7 +497,7 @@ function buildScene(osm,marker,heroPalette,environmentPalette,style,facade,treeD
     greens:(osm.greens||[]).slice(0,32).map(ring=>roundRing(ring)),
     barriers:(osm.barriers||[]).slice(0,48).map(x=>({kind:x.kind,coordinates:roundRing(x.coordinates)})),
     street_objects:(osm.streetObjects||[]).slice(0,120),
-    environment_revision:2
+    environment_revision:3
   };
 }
 
@@ -445,7 +512,7 @@ function mergeFreshEnvironment(saved,fresh){
     greens:fresh.greens,
     barriers:fresh.barriers,
     street_objects:fresh.street_objects,
-    environment_revision:2
+    environment_revision:3
   };
 }
 
@@ -510,4 +577,4 @@ async function analyzeRealCityProfile(marker){
   };
 }
 
-module.exports={PROFILE_VERSION,analyzeRealCityProfile,fetchBuffer,fetchVectorBuildings,_internals:{osmWorld,buildScene,mergeFreshEnvironment}};
+module.exports={PROFILE_VERSION,analyzeRealCityProfile,fetchBuffer,fetchVectorBuildings,fetchVectorEnvironment,_internals:{osmWorld,buildScene,mergeFreshEnvironment,geoLines,vectorLineKey}};

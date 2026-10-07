@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v7"
+APP_VERSION="realcity-photoreal-worker-v8"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -642,6 +642,21 @@ def onnx_relative_depth(image:Image.Image):
     raise RuntimeError("onnx_depth_variants_failed: "+" | ".join(errors))
 
 
+def scene_physical_envelope(job:Job):
+    radius=max(60.0,min(350.0,float(job.map_anchor.get("radius_m",190) or 190)))
+    heights=[]
+    for b in job.map_anchor.get("buildings",[]) or []:
+        try:
+            h=float(b.get("height_m") or 0)
+            base=float(b.get("base_m") or 0)
+            if math.isfinite(h) and h>base+.5:heights.append(h)
+        except Exception:
+            pass
+    mapped_max=max(heights) if heights else 12.0
+    z_min=-2.5
+    z_max=max(18.0,min(120.0,mapped_max+max(8.0,mapped_max*.30)))
+    return {"radius_m":radius,"z_min":z_min,"z_max":z_max,"mapped_max_height_m":mapped_max}
+
 def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     torch=None
     if not LIGHTWEIGHT_CPU:
@@ -654,7 +669,8 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     processor=model=None
     if device=="cuda":processor,model=get_depth_engine(device)
     origin=job.map_anchor["origin"]
-    radius=float(job.map_anchor.get("radius_m",190))
+    envelope=scene_physical_envelope(job)
+    radius=float(envelope["radius_m"]);z_min=float(envelope["z_min"]);z_max=float(envelope["z_max"])
     target=int(job.policy.get("max_points",150000))
     all_points=[];all_colors=[];all_conf=[];all_frames=[];onnx_variants=set()
     used=0;owner_used=0;owner_roles=set()
@@ -685,6 +701,20 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         match=source.get("match") if isinstance(source.get("match"),dict) else {}
         anchor=match.get("distance_m") if isinstance(match.get("distance_m"),(int,float)) else source.get("distance_m")
         cx,cy=local_xy(float(coords[0]),float(coords[1]),origin)
+        inferred_heading=None
+        if not (isinstance(anchor,(int,float)) and math.isfinite(float(anchor)) and float(anchor)>3):
+            hit=facade_candidate(source,job)
+            if hit:
+                building,edge,_=hit
+                ring=building.get("ring") or []
+                if 0<=edge<len(ring)-1:
+                    a,bp=ring[edge],ring[edge+1]
+                    ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
+                    mx,my=(ax+bx)*.5,(ay+by)*.5
+                    inferred_distance=math.hypot(mx-cx,my-cy)
+                    if 3.0<=inferred_distance<=140.0:
+                        anchor=inferred_distance
+                        inferred_heading=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
         camera_distance=max(5.0,min(100.0,float(anchor) if isinstance(anchor,(int,float)) and float(anchor)>3 else math.hypot(cx,cy)))
         if device=="cuda":
             depth=np.clip(np.nan_to_num(d,nan=0.0,posinf=80.0,neginf=0.0),.55,min(radius*1.25,80.0))
@@ -704,7 +734,8 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
             med=float(np.median(inv[finite]))
             depth=np.clip(camera_distance*med/np.maximum(inv,.05),1.0,min(radius*1.25,160.0))
         heading=source.get("heading")
-        if not isinstance(heading,(int,float)):heading=bearing_deg(coords,source_target(source,job))
+        if not isinstance(heading,(int,float)):
+            heading=inferred_heading if inferred_heading is not None else bearing_deg(coords,source_target(source,job))
         pitch=float(source.get("pitch") or 0.0) if isinstance(source.get("pitch"),(int,float)) else 0.0
         yaw=math.radians(float(heading));pit=math.radians(max(-30,min(30,pitch)))
         forward=np.array([math.sin(yaw)*math.cos(pit),math.cos(yaw)*math.cos(pit),math.sin(pit)],np.float32)
@@ -723,7 +754,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         cols=rgb[yy,xx].astype(np.float32)/255.0
         rr=np.linalg.norm(pts[...,:2],axis=2)
         sky=(yy<h*.48)&(cols[...,2]>cols[...,0]*1.08)&(cols[...,2]>cols[...,1]*1.03)&(cols[...,2]>.42)&(z>camera_distance*.8)
-        valid=np.isfinite(pts).all(axis=2)&(rr<radius*1.18)&(pts[...,2]>-5)&(pts[...,2]<90)&(~sky)
+        valid=np.isfinite(pts).all(axis=2)&(rr<=radius)&(pts[...,2]>=z_min)&(pts[...,2]<=z_max)&(~sky)
         if not valid.any():continue
         p=pts[valid];col=cols[valid]
         center=1-np.minimum(1,np.sqrt(((xx[valid]-(w-1)/2)/(w*.55))**2+((yy[valid]-(h-1)/2)/(h*.7))**2))
@@ -732,8 +763,14 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
     if not all_points:raise RuntimeError("depth_fallback_no_geotagged_views")
     pts=np.concatenate(all_points);cols=np.concatenate(all_colors);conf=np.concatenate(all_conf);frames=np.concatenate(all_frames)
+    before_envelope=len(pts)
+    physical=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>=z_min)&(pts[:,2]<=z_max)&np.isfinite(pts).all(axis=1)
+    pts,cols,conf,frames=pts[physical],cols[physical],conf[physical],frames[physical]
+    envelope_removed=before_envelope-len(pts)
     pts,cols,conf,frames,removed=multiview_filter(pts,cols,conf,frames)
     pts,cols,conf=voxel_reduce(pts,cols,conf,min(target,160000))
+    physical=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>=z_min)&(pts[:,2]<=z_max)&np.isfinite(pts).all(axis=1)
+    pts,cols,conf=pts[physical],cols[physical],conf[physical]
     radial=np.linalg.norm(pts[:,:2],axis=1)
     base=np.clip(.04+radial*.00135,.04,.19).astype(np.float32)
     scales=np.column_stack([base,base,np.clip(base*.55,.018,.11)]).astype(np.float32)
@@ -745,7 +782,7 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     else:
         tag="q4" if onnx_variants=={"onnx/model_q4.onnx"} else ("fp32" if onnx_variants=={"onnx/model.onnx"} else "hybrid")
         backend="depth-anything-v2-small-"+tag+"-onnx+osm-scale"
-    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"owner_frames":owner_used,"owner_roles":sorted(owner_roles),"dynamic_removed":removed,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants)}
+    return pts,cols,conf,scales,quats,alignment,{"backend":backend,"gpu":gpu,"frames":used,"owner_frames":owner_used,"owner_roles":sorted(owner_roles),"dynamic_removed":removed,"envelope_removed":envelope_removed,"physical_envelope":envelope,"bundle_adjustment":False,"gaussian_optimized":False,"fallback":True,"depth_3d":True,"onnx_variants":sorted(onnx_variants)}
 
 
 def wrap_angle_deg(value:float)->float:
@@ -1067,6 +1104,14 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     return pts,cols,scores,scales_xyz,quats,alignment,{"backend":backend,"gpu":gpu,"frames":len(image_paths),"owner_frames":sum(1 for s in sources[:len(image_paths)] if s.get("kind")=="owner"),"owner_roles":sorted({str(s.get("role") or s.get("category") or "owner") for s in sources[:len(image_paths)] if s.get("kind")=="owner"}),"dynamic_removed":dynamic_removed,**ba,**gs}
 
 def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
+    envelope=scene_physical_envelope(job)
+    points=np.asarray(points,dtype=np.float32);colors=np.asarray(colors);conf=np.asarray(conf)
+    scales_xyz=np.asarray(scales_xyz);quats=np.asarray(quats)
+    before=len(points)
+    keep=(np.linalg.norm(points[:,:2],axis=1)<=float(envelope["radius_m"]))&(points[:,2]>=float(envelope["z_min"]))&(points[:,2]<=float(envelope["z_max"]))&np.isfinite(points).all(axis=1)
+    points,colors,conf,scales_xyz,quats=points[keep],colors[keep],conf[keep],scales_xyz[keep],quats[keep]
+    stats={**stats,"envelope_removed":int(stats.get("envelope_removed",0))+int(before-len(points)),"physical_envelope":envelope}
+    if len(points)<5000:raise RuntimeError("physical_envelope_too_sparse")
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
     source_meta=[{k:s.get(k) for k in ("id","kind","provider","category","subtype","role","license","license_url","attribution","page_url","captured_at")} for s in job.sources]

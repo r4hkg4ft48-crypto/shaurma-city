@@ -702,7 +702,7 @@ test('v26 seeds В Лепёшке from a curated master reference and removes pr
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(api,/PIPELINE_REVISION='v26-lepeshka-master-reference-v1'/);
-  assert.match(api,/REALCITY_LEPESHKA_MASTER_WEBP_B64_/);
+  assert.match(api,/REALCITY_LEPESHKA_MASTER_[AB]_WEBP_B64_/);
   assert.match(api,/subtype:'generated_master'/);
   assert.match(api,/reference_master:true/);
   assert.match(routes,/\/realcity\/reference\/:slug/);

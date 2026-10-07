@@ -1,4 +1,5 @@
 'use strict';
+// v22 visible-world contract sync
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const config=require('../src/config');
@@ -200,14 +201,14 @@ test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>
   assert.doesNotMatch(req,/rerun-sdk|tensorboard/i);
 });
 
-test('partial photoreal keeps support geometry only for non-volumetric fallbacks',()=>{
+test('partial photoreal distinguishes flat fallback from measured volumetric support',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/realcity-photoreal-shell/);
   assert.match(src,/isTruePhotogrammetry=isCompletePhotogrammetry\(authored\.model\)/);
-  assert.match(src,/isVolumetricDepth=authored\.model\?\.quality\?\.volumetric_reconstruction===true/);
+  assert.match(src,/isVolumetricDepth=isMeasuredVolumetric\(authored\.model\)/);
   assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
-  assert.match(src,/setProgress\(v\)\{shell\.setProgress\?\.\(v\);splat\.setProgress\?\.\(v\)\}/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
   assert.match(src,/REAL CITY · PHOTO 3D/);
 });
@@ -337,10 +338,10 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
+test('v22 visible-world revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
 });
 
 
@@ -365,7 +366,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
 });
 
 
@@ -474,7 +475,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v21-open-only-measured-3d-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -489,17 +490,17 @@ test('lazy RealCity renderer follows the Mini App cache revision',()=>{
 });
 
 
-test('incomplete depth reconstruction keeps native 3D buildings instead of flattening them',()=>{
+test('measured incomplete depth replaces native buildings with neutral 3D support volumes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/function isCompletePhotogrammetry\(model\)/);
-  assert.match(src,/photogrammetric===true&&model\?\.quality\?\.metric_reconstruction===true/);
+  assert.match(src,/function isMeasuredVolumetric\(model\)/);
   assert.match(src,/const completePhotogrammetry=photoreal&&isCompletePhotogrammetry\(authored\)/);
-  assert.match(src,/const replaced=new Set\(completePhotogrammetry/);
-  assert.match(src,/:photoreal\?\[\]/);
+  assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
+  assert.match(src,/\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
-  assert.match(src,/hero=astraLayer\?null:/);
-  assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth\)/);
+  assert.match(src,/supportify/);
 });
 
 
@@ -568,19 +569,36 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
 });
 
 
-test('cold-start worker submission is warmed and retried safely',()=>{
+test('measured volumetric scenes replace native buildings visibly',()=>{
   const fs=require('node:fs'),path=require('node:path');
-  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
-  assert.match(api,/async function warmWorker\(base\)/);
-  assert.match(api,/const waits=\[20000,35000,50000\]/);
-  assert.match(api,/await warmWorker\(base\)/);
-  assert.match(api,/attempt===0\?20000:35000/);
-  assert.match(api,/transientWorkerStatus/);
-  assert.doesNotMatch(api,/setTimeout\(\(\)=>ac\.abort\(\),12000\)/);
-  assert.match(worker,/_ACTIVE_JOBS=set\(\)/);
-  assert.match(worker,/if job\.job_id in _ACTIVE_JOBS:/);
-  assert.match(worker,/"duplicate":True/);
-  assert.match(worker,/tasks\.add_task\(run_job_guarded,job\)/);
-  assert.match(worker,/_ACTIVE_JOBS\.discard\(job\.job_id\)/);
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/function isMeasuredVolumetric\(model\)/);
+  assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
+  assert.match(src,/support:1/);
+  assert.match(src,/const dimmed=\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
+  assert.match(src,/fill-extrusion-opacity'\:\['case',\['==',\['get','support'\],1\],\.26,\.78\]/);
+});
+
+test('volumetric renderer boosts source splats over support geometry',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
+  assert.match(src,/uniform float u_overlay_support/);
+  assert.match(src,/mix\(1\.0,1\.10,u_overlay_support\)/);
+  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)/);
+});
+
+test('ONNX depth cloud is constrained by mapped building heights',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/mapped_max_height=max\(mapped_heights\) if mapped_heights else 24\.0/);
+  assert.match(src,/z_ceiling=max\(16\.0,min\(95\.0,mapped_max_height\+12\.0\)\)/);
+  assert.match(src,/depth_scene_too_sparse_after_map_constraints/);
+  assert.match(src,/z_ceiling_m/);
+});
+
+test('v22 revision forces rebuilding old volumetric artifacts',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
 });

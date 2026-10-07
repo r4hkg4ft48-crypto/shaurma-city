@@ -24,6 +24,7 @@ USE_GSPLAT=os.getenv("REALCITY_USE_GSPLAT","true").lower() not in ("0","false","
 GSPLAT_STEPS=max(120,min(1800,int(os.getenv("REALCITY_GSPLAT_STEPS","720"))))
 ALLOW_DEPTH_FALLBACK=os.getenv("REALCITY_ALLOW_DEPTH_FALLBACK","true").lower() not in ("0","false","off","no")
 LIGHTWEIGHT_CPU=os.getenv("REALCITY_LIGHTWEIGHT_CPU","false").lower() in ("1","true","on","yes")
+HIGH_MEMORY_CPU=os.getenv("REALCITY_HIGH_MEMORY_CPU","false").lower() in ("1","true","on","yes")
 DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
@@ -883,7 +884,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     from mapanything.utils.image import load_images
     if len(image_paths)<1:raise RuntimeError("mapanything_requires_one_view")
     device="cuda" if torch.cuda.is_available() else "cpu"
-    if device=="cpu" and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
+    if device=="cpu" and not HIGH_MEMORY_CPU and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
         raise RuntimeError("high_memory_compute_required_for_mapanything")
     model=get_mapanything(device)
     views=load_images(image_paths,resolution_set=518,norm_type="dinov2",patch_size=14)
@@ -1100,7 +1101,7 @@ async def health():
             gpu=torch.cuda.get_device_name(0) if cuda else ""
         except Exception:
             cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

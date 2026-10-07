@@ -1295,8 +1295,10 @@ async def run_job(job:Job):
     async with SEM:
         root=Path(tempfile.mkdtemp(prefix="realcity_"))
         try:
-            requested=max(1,min(int(job.policy.get("max_frames",24)),len(job.sources)))
-            selected=job.sources[:frame_budget(requested)]
+            evidence=[source for source in job.sources if source.get("reference_only") is not True]
+            if not evidence:raise RuntimeError("no_calibrated_photo_evidence")
+            requested=max(1,min(int(job.policy.get("max_frames",24)),len(evidence)))
+            selected=evidence[:frame_budget(requested)]
             paths=[];kept=[];source_errors=[];fallback_sources=0
             for i,s in enumerate(selected):
                 if s.get("reference_only") is True:

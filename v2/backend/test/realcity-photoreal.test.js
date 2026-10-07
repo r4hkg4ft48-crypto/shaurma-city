@@ -280,7 +280,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v6/);
+  assert.match(src,/realcity-photoreal-worker-v7/);
 });
 
 
@@ -330,16 +330,16 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.match(src,/depth-anything-v2-small-.*-onnx\+osm-scale/);
   assert.match(src,/cpu_onnx_depth/);
   assert.match(src,/CPU ONNX depth unavailable; using photoplane safety fallback/);
-  assert.match(src,/realcity-photoreal-worker-v6/);
+  assert.match(src,/realcity-photoreal-worker-v7/);
   assert.match(req,/onnxruntime==1\.23\.2/);
   assert.match(req,/huggingface_hub/);
   assert.doesNotMatch(req,/torch|transformers/i);
 });
 
-test('v18 source resolver revision invalidates old reconstruction artifacts',()=>{
+test('v19 photo-first revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v18-source-resolver-v3'/);
+  assert.match(src,/PIPELINE_REVISION='v19-photo-first-v1'/);
 });
 
 
@@ -365,4 +365,65 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
   assert.match(src,/PIPELINE_REVISION='v18-source-resolver-v3'/);
+});
+
+
+test('photo-first owner observations carry exact camera and world roles',()=>{
+  const P=require('../src/realcity-photoreal');
+  const fov=P._internals.fovFromAsset({metadata:{focal_length_35mm:35}});
+  assert.ok(fov>50&&fov<60);
+  const coords=P._internals.ownerCameraCoordinates(
+    {lat:55.75,lon:37.61},
+    {category:'main_building',camera:{heading_deg:180,distance_m:20}}
+  );
+  assert.ok(Array.isArray(coords)&&coords.length===2);
+  assert.ok(Math.abs(coords[0]-37.61)<.001);
+  assert.ok(coords[1]>55.75);
+  assert.ok(P._internals.ownerPriority({category:'main_building',priority:5,primary:true})>
+            P._internals.ownerPriority({category:'street_object',priority:3}));
+});
+
+test('photo-first config enables owner originals by default',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/config.js'),'utf8');
+  assert.match(src,/REALCITY_PHOTOREAL_USE_OWNER_ASSETS.*\|\|'true'/);
+  assert.match(src,/v2-realcity-photo-first-19/);
+});
+
+test('stored originals expose EXIF pose migration without altering originals',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photo.js'),'utf8');
+  const pkg=require('../package.json');
+  assert.equal(pkg.dependencies.exifr,'7.1.3');
+  assert.match(src,/async function inspectPose\(buffer\)/);
+  assert.match(src,/exif_pose_v:1/);
+  assert.match(src,/module\.exports=.*inspectPose/);
+  assert.match(src,/FocalLengthIn35mmFormat/);
+  assert.match(src,/GPSImgDirection/);
+});
+
+test('owner-photo dataset can never silently publish a flat photoplane',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/forbid_flat_owner_fallback/);
+  assert.match(src,/photo_first_volumetric_required/);
+  assert.match(src,/owner_photo_not_used_in_volume/);
+  assert.match(src,/flat_owner_reconstruction_rejected/);
+  assert.match(src,/"owner_frames":owner_used/);
+  assert.match(src,/"volumetric_reconstruction"/);
+});
+
+test('Astra master UI models the full world instead of only facade and panorama',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const server=fs.readFileSync(path.join(__dirname,'../../../backend/server.js'),'utf8');
+  const ui=fs.readFileSync(path.join(__dirname,'../../../backend/master-admin.html'),'utf8');
+  for(const category of ['landscape','road_ground','neighbor_building','vegetation','street_object']){
+    assert.match(server,new RegExp(category));
+    assert.match(ui,new RegExp(category));
+  }
+  assert.match(ui,/id="astraWorldCategory"/);
+  assert.match(ui,/Мир вокруг/);
+  assert.match(ui,/GPS ✓/);
+  assert.match(ui,/data-astra-camera="lat"/);
+  assert.match(ui,/data-astra-camera="distance_m"/);
 });

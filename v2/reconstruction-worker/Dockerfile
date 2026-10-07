@@ -10,7 +10,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 WORKDIR /app
 COPY v2/reconstruction-worker/requirements.txt /app/requirements.txt
-RUN python -m pip install --upgrade pip && pip install -r /app/requirements.txt\nRUN pip install --no-deps git+https://github.com/facebookresearch/map-anything.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9
+RUN python -m pip install --upgrade pip && pip install -r /app/requirements.txt
+RUN pip install --no-deps git+https://github.com/facebookresearch/map-anything.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9
 RUN python - <<'PY'
 import torch
 import pycolmap

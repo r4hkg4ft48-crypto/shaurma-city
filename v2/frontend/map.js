@@ -552,8 +552,11 @@
     }
     box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
+  function isPhotorealDisplaySafe(model){
+    return model?.quality?.display_safe===true&&model?.quality?.map_registered_surface===true;
+  }
   function isCompletePhotogrammetry(model){
-    return model?.quality?.photogrammetric===true&&model?.quality?.metric_reconstruction===true;
+    return isPhotorealDisplaySafe(model)&&model?.quality?.photogrammetric===true&&model?.quality?.metric_reconstruction===true;
   }
   function photorealVolume(model){
     const chunks=Array.isArray(model?.chunks)?model.chunks:[];
@@ -567,7 +570,7 @@
     return {span:[mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]],min:mn,max:mx};
   }
   function isMeasuredVolumetric(model){
-    if(model?.quality?.volumetric_reconstruction!==true)return false;
+    if(!isPhotorealDisplaySafe(model)||model?.quality?.volumetric_reconstruction!==true)return false;
     const v=photorealVolume(model),points=Number(model?.stats?.points)||0;
     return !!(v&&points>=5000&&v.span[2]>=3&&Math.max(v.span[0],v.span[1])>=8);
   }
@@ -592,7 +595,7 @@
         {mode:'photoreal',model:j.profile?.photoreal},
         {mode:'astra',model:j.profile?.astra},
         {mode:'open-world',model:j.profile?.real_world}
-      ].filter(x=>x.model?.status==='ready');
+      ].filter(x=>x.model?.status==='ready'&&(x.mode!=='photoreal'||isPhotorealDisplaySafe(x.model)));
       if(authoredCandidates.length){
         await loadAstraRenderer();if(token!==focusToken)return;
         const authored=authoredCandidates.find(x=>x.mode==='photoreal'?window.RealCitySpatial.boundPhotoreal(x.model,p,j.profile.scene):window.RealCitySpatial.bound(x.model,p,j.profile.scene));
@@ -618,7 +621,7 @@
             }
             const splat=window.RealCitySplatLayer.create({
               marker:p,profile:j.profile,model:authored.model,layerId:'realcity-photoreal-splats',
-              reducedMotion:reduceMotion,overlaySupport:!isTruePhotogrammetry&&isVolumetricDepth,
+              reducedMotion:reduceMotion,overlaySupport:authored.model?.quality?.surface_projection===true||(!isTruePhotogrammetry&&isVolumetricDepth),
               onError:e=>console.warn('RealCity photoreal fallback',e.message)
             });
             if(splat){
@@ -645,7 +648,7 @@
       if(astraLayer&&activeRealCityModel){
         const cam=activeRealCityModel.camera||j.profile?.camera||(activeRealCityMode==='photoreal'?{zoom:19.05,pitch:67,bearing:-20,views:[]}:{zoom:18.35,pitch:61,bearing:-20,views:[]}),offset=Math.max(24,Math.min(120,innerHeight/2-$('#venueCard').offsetHeight-124));
         map.easeTo({center:[+p.lon,+p.lat],zoom:cam.zoom,pitch:cam.pitch,bearing:cam.bearing,offset:[0,offset],duration:reduceMotion?0:850});
-        $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':'REAL CITY · PHOTO 3D'):activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
+        $('#realBadge').textContent=activeRealCityMode==='photoreal'?(activeRealCityModel?.quality?.photogrammetric?'REAL CITY · PHOTOGRAMMETRY':activeRealCityModel?.quality?.surface_projection?'REAL CITY · PHOTO FACADE':'REAL CITY · PHOTO 3D'):activeRealCityMode==='astra'?'REAL CITY · ASTRA':'REAL CITY · OPEN WORLD';
         if(preview&&activeRealCityMode==='astra'&&String(preview.marker.id)===String(p.id))previewSignature=preview.draft.input_revision+':'+new Date(preview.draft.updated_at).toISOString();
         const views=cam.views||[],box=$('#realCityViews');
         box.replaceChildren();box.classList.toggle('hidden',!views.length);

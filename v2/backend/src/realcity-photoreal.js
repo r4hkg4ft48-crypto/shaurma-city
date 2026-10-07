@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v22-visible-world-depth-sanity-v1';
+const PIPELINE_REVISION='v24-spatial-lock-map-surfaces-v1';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -263,7 +263,7 @@ function buildPayload(marker,profile,assets,sources,inputSignature,jobId){
       buildings:(scene.buildings||[]).slice(0,32).map(b=>({building_id:String(b.id),role:b.role,ring:b.ring,height_m:Number(b.height)||9,base_m:Number(b.base_m)||0,geometry_key:S.geometryKey(b.ring)})),
       roads:(scene.roads||[]).slice(0,96),greens:(scene.greens||[]).slice(0,64)},
     sources,
-    policy:{preserve_map_geometry:true,remove_dynamic_objects:true,prefer_observed_pixels:true,forbid_unlicensed_derivatives:true,source_mix:sourceMix(sources),
+    policy:{preserve_map_geometry:true,require_map_registration:true,remove_dynamic_objects:true,prefer_observed_pixels:true,forbid_unlicensed_derivatives:true,source_mix:sourceMix(sources),
       photo_first:sources.some(s=>s.kind==='owner'),owner_source_count:sources.filter(s=>s.kind==='owner').length,
       owner_world_source_count:sources.filter(s=>s.kind==='owner'&&s.category!=='main_building').length,
       forbid_flat_owner_fallback:sources.some(s=>s.kind==='owner'),min_owner_frames:sources.filter(s=>s.kind==='owner').length>=3?2:1,
@@ -305,13 +305,15 @@ function validateArtifact(body,row){
   if(a.input_signature!==body.input_signature)throw new Error('photoreal_signature');
   if(!Array.isArray(a.origin)||a.origin.length!==3||Math.abs(Number(a.origin[0])-Number(row.lon))>1e-7||Math.abs(Number(a.origin[1])-Number(row.lat))>1e-7)throw new Error('photoreal_origin');
   const anchor=heroAnchor(row.realcity_profile||{});if(!anchor||a.anchor?.building_id!==anchor.building_id||a.anchor?.geometry_key!==anchor.geometry_key)throw new Error('photoreal_anchor');
+  const quality=a.quality||{},alignment=a.alignment||{};
+  if(quality.display_safe!==true||quality.map_registered_surface!==true)throw new Error('photoreal_spatial_registration');
   const chunks=(a.chunks||[]).slice(0,MAX_CHUNKS).map(validateChunk);if(!chunks.length)throw new Error('photoreal_chunks_required');
   if(chunks.reduce((n,c)=>n+c.data.length,0)>MAX_ARTIFACT_B64)throw new Error('photoreal_artifact_too_large');
   return {
     schema:SCHEMA,status:'ready',engine:ENGINE,representation:String(a.representation||'gaussian-splats-v2'),generated_at:new Date().toISOString(),
     input_signature:a.input_signature,target:{marker_id:String(row.id),establishment_id:row.establishment_id,venue_id:row.venue_id},
     origin:a.origin.map(Number),anchor:a.anchor,chunks,
-    camera:a.camera||null,alignment:a.alignment||{},quality:a.quality||{},environment:a.environment||{},
+    camera:a.camera||null,alignment,quality,environment:a.environment||{},
     sources:(a.sources||[]).slice(0,96).map(s=>({id:clean(s.id,140),kind:clean(s.kind,30),provider:clean(s.provider,50),category:clean(s.category,40),subtype:clean(s.subtype,60),role:clean(s.role,50),captured_at:clean(s.captured_at,80),license:clean(s.license,120),license_url:clean(s.license_url,800),attribution:clean(s.attribution,300),page_url:clean(s.page_url,1200)})),
     stats:{frames:Number(a.stats?.frames)||0,points:chunks.reduce((n,c)=>n+c.point_count,0),dynamic_removed:Number(a.stats?.dynamic_removed)||0,confidence_mean:Number(a.stats?.confidence_mean)||0,
       backend:clean(a.stats?.backend,80),gpu:clean(a.stats?.gpu,120)}
@@ -390,6 +392,7 @@ function volumeDiagnostics(chunks=[]){
 function publicSummary(p){
   if(!p)return null;return {status:p.status,engine:p.engine,representation:p.representation,generated_at:p.generated_at,
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
-    alignment:p.alignment||{},quality:p.quality||{},volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
+    alignment:p.alignment||{},quality:p.quality||{},display_safe:p.quality?.display_safe===true,map_registered_surface:p.quality?.map_registered_surface===true,
+    volume:volumeDiagnostics(p.chunks),source_count:p.sources?.length||0};
 }
 module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,isCurrent,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,sourceMix,volumeDiagnostics,transientWorkerStatus,warmWorker,submitWorkerJob}};

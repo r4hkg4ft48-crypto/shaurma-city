@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v7"
+APP_VERSION="realcity-photoreal-worker-v8-spatial-lock"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -806,9 +806,9 @@ def facade_candidate(source:dict,job:Job):
 def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     origin=job.map_anchor.get("origin") or job.target.get("coordinates")
     if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
-    max_points=min(int(job.policy.get("max_points",120000)),120000)
+    max_points=min(int(job.policy.get("max_points",80000)),80000)
     all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
-    used=0;inferred=0;masked=0;facades=set()
+    used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set()
     per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))
     for path,source in zip(image_paths,sources):
         hit=facade_candidate(source,job)
@@ -898,6 +898,7 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
 
         all_points.append(p);all_colors.append(cols);all_conf.append(cf);all_scales.append(scales);all_quats.append(quat)
         used+=1;inferred+=1 if is_inferred else 0
+        if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
         facades.add(str(building.get("building_id"))+":"+str(edge))
 
     if not all_points:raise RuntimeError("photoplane_no_visible_facades")
@@ -909,9 +910,10 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     alignment={"method":"osm-facade-ray-projection","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
     stats={
       "backend":"open-pixel-osm-facade-projection","gpu":"CPU-lightweight","frames":used,
+      "owner_frames":owner_used,"owner_roles":sorted(owner_roles),
       "dynamic_removed":masked,"bundle_adjustment":False,"gaussian_optimized":False,
-      "fallback":True,"projection":True,"inferred_facade_matches":inferred,
-      "covered_facades":len(facades)
+      "fallback":True,"projection":True,"map_registered_surface":True,
+      "inferred_facade_matches":inferred,"covered_facades":len(facades)
     }
     return pts,cols,conf,scales,quats,alignment,stats
 
@@ -1086,17 +1088,23 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
     declared_radius=float(job.map_anchor.get("radius_m",190))
     coverage_radius=max(12.0,min(declared_radius,observed_radius+6.0))
+    safe_3d_methods=("gps-rigid-metric-3d","gps-heading-metric-3d")
+    registered_3d=bool(stats.get("universal_3d")) and alignment.get("method") in safe_3d_methods
+    registered_surface=bool(stats.get("map_registered_surface")) or registered_3d
     quality={
-      "geometry":"metric_multiview_mapanything" if stats.get("universal_3d") else ("osm_facade_ray_projection" if stats.get("projection") else ("gps_monocular_depth_fallback" if stats.get("fallback") else "dense_multi_view_depth")),
+      "geometry":"metric_multiview_mapanything" if registered_3d else ("osm_registered_facade_pixels" if stats.get("map_registered_surface") else ("gps_monocular_depth_unregistered" if stats.get("fallback") else "dense_multi_view_depth")),
       "appearance":"source_pixels","alignment":alignment.get("method"),
       "confidence_mean":float(np.mean(conf)) if len(conf) else 0,
       "coverage_radius_m":coverage_radius,
       "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
       "photo_first":bool(job.policy.get("photo_first")),"owner_frames":int(stats.get("owner_frames",0)),"owner_roles":stats.get("owner_roles",[]),
-      "volumetric_reconstruction":bool(stats.get("universal_3d") or stats.get("depth_3d") or not stats.get("projection")),
-      "photogrammetric":not bool(stats.get("fallback")) and int(stats.get("frames",0))>=2,
-      "metric_reconstruction":bool(stats.get("universal_3d")) or alignment.get("method") in ("gps-rigid-metric","gps-heading-metric")
+      "map_registered_surface":registered_surface,
+      "display_safe":registered_surface,
+      "surface_projection":bool(stats.get("map_registered_surface") and stats.get("projection")),
+      "volumetric_reconstruction":registered_3d,
+      "photogrammetric":registered_3d and int(stats.get("frames",0))>=2,
+      "metric_reconstruction":registered_3d
     }
     return {
       "schema":1,"engine":ENGINE,"input_signature":job.input_signature,
@@ -1137,47 +1145,57 @@ async def run_job(job:Job):
                 raise RuntimeError("no_decodable_views: "+"; ".join(source_errors[:4]))
 
             loop=asyncio.get_running_loop()
-            if LIGHTWEIGHT_CPU:
+            require_registration=bool(job.policy.get("require_map_registration"))
+            if LIGHTWEIGHT_CPU and require_registration:
+                # Monocular depth can look detailed while still being spatially
+                # wrong when phone GPS/heading is noisy. Production therefore
+                # locks observed pixels to exact OSM/OpenFreeMap facade planes.
+                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
+                stats["primary_error"]="spatial_lock_cpu";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+            elif LIGHTWEIGHT_CPU:
                 try:
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    min_owner=int(job.policy.get("min_owner_frames",0) or 0)
-                    if job.policy.get("photo_first") and int(stats.get("owner_frames",0))<min_owner:
-                        raise RuntimeError("owner_photo_pose_required:"+str(stats.get("owner_frames",0))+"/"+str(min_owner))
                     stats["primary_error"]="cpu_onnx_depth";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
                 except Exception as depth_exc:
-                    if job.policy.get("forbid_flat_owner_fallback"):
-                        raise RuntimeError("photo_first_volumetric_required:"+str(depth_exc)[:260])
-                    print("CPU ONNX depth unavailable; using photoplane safety fallback:",repr(depth_exc),flush=True)
+                    print("CPU ONNX depth unavailable; using map-registered facade fallback:",repr(depth_exc),flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
                     stats["primary_error"]="cpu_onnx_failed:"+str(depth_exc)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
                 primary_errors=[];points=None
-                # MapAnything is metric and explicitly supports monocular as well
-                # as multi-view reconstruction, so it must be attempted before
-                # the one/two-view fallback.
+                # Free-form dense reconstruction may replace the map only after
+                # its camera/world frame is resolved into the exact ENU anchor.
                 if MAX_BACKEND in ("mapanything","auto"):
                     try:
                         points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,mapanything_reconstruct,paths,kept,job)
+                        if require_registration and alignment.get("method") not in ("gps-rigid-metric-3d","gps-heading-metric-3d"):
+                            primary_errors.append("mapanything_unregistered:"+str(alignment.get("method")));points=None
                     except Exception as exc:
                         primary_errors.append("mapanything:"+str(exc)[:160]);points=None
-                if points is None and len(paths)>=3 and MAX_BACKEND in ("vggt","auto","mapanything"):
+                if points is None and not require_registration and len(paths)>=3 and MAX_BACKEND in ("vggt","auto","mapanything"):
                     try:
                         points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
                     except Exception as exc:
                         primary_errors.append("vggt:"+str(exc)[:160]);points=None
                 if points is None:
-                    if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("; ".join(primary_errors) or "max_reconstruction_unavailable")
-                    print("MAX paths unavailable; using metric depth fallback:",primary_errors,flush=True)
-                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    stats["primary_error"]="; ".join(primary_errors)[:360] or ("partial_view_metric_fallback" if len(paths)<3 else "metric_depth_fallback")
+                    if require_registration:
+                        print("MAX metric registration unavailable; locking pixels to mapped facades:",primary_errors,flush=True)
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,facade_plane_reconstruct,paths,kept,job)
+                        stats["primary_error"]="; ".join(primary_errors)[:360] or "spatial_lock_fallback"
+                    else:
+                        if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("; ".join(primary_errors) or "max_reconstruction_unavailable")
+                        print("MAX paths unavailable; using metric depth fallback:",primary_errors,flush=True)
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
+                        stats["primary_error"]="; ".join(primary_errors)[:360] or ("partial_view_metric_fallback" if len(paths)<3 else "metric_depth_fallback")
                     stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             min_owner=int(job.policy.get("min_owner_frames",0) or 0)
             if job.policy.get("photo_first") and int(stats.get("owner_frames",0))<min_owner:
-                raise RuntimeError("owner_photo_not_used_in_volume:"+str(stats.get("owner_frames",0))+"/"+str(min_owner))
-            if job.policy.get("forbid_flat_owner_fallback") and stats.get("projection"):
-                raise RuntimeError("flat_owner_reconstruction_rejected")
+                raise RuntimeError("owner_photo_not_used_in_registered_scene:"+str(stats.get("owner_frames",0))+"/"+str(min_owner))
+            if job.policy.get("forbid_flat_owner_fallback") and stats.get("projection") and not stats.get("map_registered_surface"):
+                raise RuntimeError("unregistered_owner_projection_rejected")
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
+            if require_registration and artifact.get("quality",{}).get("display_safe") is not True:
+                raise RuntimeError("spatial_registration_required")
             await callback(job,"ready",artifact=artifact)
         except Exception as e:
             traceback.print_exc()

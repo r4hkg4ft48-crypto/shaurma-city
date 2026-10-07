@@ -18,6 +18,7 @@ uniform vec2 u_viewport;
 uniform float u_progress;
 uniform float u_zoom;
 uniform float u_overlay_support;
+uniform float u_density_boost;
 varying vec3 v_color;
 varying vec3 v_inv_cov;
 varying float v_size;
@@ -36,7 +37,7 @@ vec2 screenDelta(vec4 c,vec4 p){
 void main(){
   float grow=1.0-pow(1.0-clamp(u_progress,0.0,1.0),3.0);
   vec3 pos=a_position;pos.z*=grow;
-  vec3 sc=max(a_scale*max(grow,.08)*mix(1.0,1.10,u_overlay_support),vec3(.001));
+  vec3 sc=max(a_scale*max(grow,.08)*mix(1.0,1.14,u_overlay_support)*u_density_boost,vec3(.001));
   vec4 c=u_matrix*vec4(pos,1.0);
   gl_Position=c;
   vec3 ax=qrotate(vec3(sc.x,0.0,0.0),a_quat);
@@ -52,10 +53,10 @@ void main(){
   v_inv_cov=vec3(D/det,-B/det,A/det);
   float root=sqrt(max(0.0,(A-D)*(A-D)+4.0*B*B));
   float lambda=max(.25,.5*(A+D+root));
-  float radius=3.15*sqrt(lambda);
-  float size=clamp(radius*2.0,1.8,96.0);
+  float radius=3.55*sqrt(lambda);
+  float size=clamp(radius*2.0,2.8,128.0);
   gl_PointSize=size;
-  v_size=size;v_color=a_color;v_opacity=min(1.0,a_opacity*mix(1.0,1.14,u_overlay_support));v_confidence=a_confidence;v_semantic=a_semantic;
+  v_size=size;v_color=a_color;v_opacity=min(1.0,a_opacity*mix(1.0,1.34,u_overlay_support));v_confidence=a_confidence;v_semantic=a_semantic;
 }`;
   const FS=`precision highp float;
 varying vec3 v_color;
@@ -69,8 +70,8 @@ void main(){
   float mahal=v_inv_cov.x*p.x*p.x+2.0*v_inv_cov.y*p.x*p.y+v_inv_cov.z*p.y*p.y;
   if(mahal>10.0)discard;
   float gaussian=exp(-.5*mahal);
-  float alpha=clamp(gaussian*v_opacity*(.55+.45*v_confidence),0.0,.985);
-  if(alpha<.018)discard;
+  float alpha=clamp(gaussian*v_opacity*(.68+.32*v_confidence),0.0,.992);
+  if(alpha<.008)discard;
   vec3 c=clamp(v_color,0.0,1.0);
   gl_FragColor=vec4(c*alpha,alpha);
 }`;
@@ -152,7 +153,7 @@ void main(){
     let cloud;try{cloud=decode(model)}catch(e){onError(e);return null}
     const frame=S.frame([Number(marker.lon),Number(marker.lat)]);
     const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,overlaySupport:!!overlaySupport,
-      stats:{points:cloud.count,chunks:cloud.chunks,bytes:cloud.vertices.byteLength,representation:model.representation,overlaySupport:!!overlaySupport},
+      stats:{points:cloud.count,chunks:cloud.chunks,bytes:cloud.vertices.byteLength,representation:model.representation,overlaySupport:!!overlaySupport,densityBoost:Math.max(1,Math.min(2.15,Math.sqrt(95000/Math.max(cloud.count,1))))},
       onAdd(map,gl){
         this.map=map;this.gl=gl;
         try{
@@ -167,7 +168,7 @@ void main(){
           for(const [name,size,offset] of [['a_position',3,0],['a_color',3,3],['a_scale',3,6],['a_quat',4,9],['a_opacity',1,13],['a_confidence',1,14],['a_semantic',1,15]]){
             const loc=gl.getAttribLocation(this.program,name);if(loc<0)continue;this.attributes.push({loc,size,offset});
           }
-          this.uniforms={};for(const n of ['u_matrix','u_viewport','u_progress','u_zoom','u_overlay_support'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
+          this.uniforms={};for(const n of ['u_matrix','u_viewport','u_progress','u_zoom','u_overlay_support','u_density_boost'])this.uniforms[n]=gl.getUniformLocation(this.program,n);
           this.ready=true;
         }catch(e){onError(e);this.onRemove(map,gl)}
       },
@@ -178,7 +179,8 @@ void main(){
         gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
         for(const a of this.attributes){gl.enableVertexAttribArray(a.loc);gl.vertexAttribPointer(a.loc,a.size,gl.FLOAT,false,STRIDE*4,a.offset*4)}
         const canvas=this.map.getCanvas(),matrix=localMatrix(m,frame.origin,frame.scale);
-        gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform2f(this.uniforms.u_viewport,canvas.width,canvas.height);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,this.map.getZoom());gl.uniform1f(this.uniforms.u_overlay_support,this.overlaySupport?1:0);
+        const densityBoost=Math.max(1,Math.min(2.15,Math.sqrt(95000/Math.max(cloud.count,1))));
+        gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform2f(this.uniforms.u_viewport,canvas.width,canvas.height);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,this.map.getZoom());gl.uniform1f(this.uniforms.u_overlay_support,this.overlaySupport?1:0);gl.uniform1f(this.uniforms.u_density_boost,densityBoost);
         const depthWasEnabled=gl.isEnabled(gl.DEPTH_TEST);
         if(this.overlaySupport)gl.disable(gl.DEPTH_TEST);else{gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL)}
         gl.depthMask(false);gl.disable(gl.CULL_FACE);

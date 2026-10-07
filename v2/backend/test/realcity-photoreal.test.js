@@ -600,8 +600,8 @@ test('volumetric renderer boosts source splats over support geometry',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
   assert.match(src,/uniform float u_overlay_support/);
-  assert.match(src,/mix\(1\.0,1\.10,u_overlay_support\)/);
-  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)/);
+  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)\*u_density_boost/);
+  assert.match(src,/mix\(1\.0,1\.34,u_overlay_support\)/);
 });
 
 test('ONNX depth cloud is constrained by mapped building heights',()=>{
@@ -617,4 +617,30 @@ test('v22 revision forces rebuilding old volumetric artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+});
+
+
+test('v23 renderer densifies sparse volumetric splats and suppresses toy support visuals',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const splat=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(splat,/uniform float u_density_boost/);
+  assert.match(splat,/sqrt\(95000\/Math\.max\(cloud\.count,1\)\)/);
+  assert.match(splat,/clamp\(radius\*2\.0,2\.8,128\.0\)/);
+  assert.match(splat,/\.68\+\.32\*v_confidence/);
+  assert.match(splat,/if\(alpha<\.008\)discard/);
+  assert.match(map,/support'\],1\],\.08,.78/);
+  assert.match(map,/support'\],1\],\.11,.97/);
+  assert.match(map,/photoreal\?\.28:photoGround\?\.64/);
+  assert.match(map,/photoreal\?\.14:\.86/);
+});
+
+test('Telegram entrypoint cache-busts map and RealCity renderer assets per open',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const index=fs.readFileSync(path.join(__dirname,'../../frontend/index.html'),'utf8');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(index,/__SHAURMEG_ASSET_VERSION__=Date\.now\(\)\.toString\(36\)/);
+  assert.match(index,/load\(entry\)/);
+  assert.match(map,/realcity-splat-layer\.js/);
+  assert.match(map,/\?v='\+encodeURIComponent\(revision\)/);
 });

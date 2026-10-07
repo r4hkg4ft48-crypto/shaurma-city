@@ -321,6 +321,11 @@ async function acceptResult(body){
   const currentSig=sceneSignature(marker,marker.realcity_profile,marker.realcity_astra_assets||[]);
   if(currentSig!==body.input_signature)throw Object.assign(new Error('photoreal_inputs_changed'),{status:409});
   const summary={engine:artifact.engine,representation:artifact.representation,points:artifact.stats.points,chunks:artifact.chunks.length,frames:artifact.stats.frames,backend:artifact.stats.backend,gpu:artifact.stats.gpu,alignment:artifact.alignment,volume:volumeDiagnostics(artifact.chunks),source_mix:sourceMix(artifact.sources)};
+  console.log('RealCity reconstruction accepted',JSON.stringify({
+    marker_id:Number(row.marker_id),job_id:body.job_id,backend:summary.backend,
+    frames:summary.frames,points:summary.points,volume:summary.volume,
+    source_mix:summary.source_mix,alignment:summary.alignment
+  }));
   await db.tx(async client=>{
     await client.query("UPDATE realcity_reconstruction_jobs SET status='ready',result_summary=$2::jsonb,updated_at=NOW() WHERE job_id=$1",[body.job_id,JSON.stringify(summary)]);
     await client.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal}',$2::jsonb),'{photoreal_job}',$3::jsonb),realcity_quality='photoreal',realcity_updated_at=NOW() WHERE id=$1",[row.marker_id,JSON.stringify(artifact),JSON.stringify({job_id:body.job_id,status:'ready',input_signature:body.input_signature,completed_at:new Date().toISOString(),summary})]);

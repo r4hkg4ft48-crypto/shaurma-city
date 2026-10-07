@@ -340,7 +340,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
 test('v21 open-only measured revision invalidates old reconstruction artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v24.1-facade-pose-recovery-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
 });
 
 
@@ -365,7 +365,7 @@ test('deep reconstruction merges persisted references before live discovery',()=
   assert.match(src,/openWorld\.resolveReferences\(persistedRefs\)/);
   assert.match(src,/for\(const candidate of \[\.\.\.persisted,\.\.\.live\]\)/);
   assert.match(src,/match:c\.persisted_match\|\|ref\?\.match\|\|null/);
-  assert.match(src,/PIPELINE_REVISION='v24.1-facade-pose-recovery-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
 });
 
 
@@ -475,7 +475,7 @@ test('provider mix reports reconstruction evidence explicitly',()=>{
 test('v20 source revision forces requeue after street discovery changes',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v24.1-facade-pose-recovery-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
@@ -617,7 +617,7 @@ test('ONNX depth cloud is constrained by mapped building heights',()=>{
 test('v22 revision forces rebuilding old volumetric artifacts',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
-  assert.match(src,/PIPELINE_REVISION='v24.1-facade-pose-recovery-v1'/);
+  assert.match(src,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
 });
 
 
@@ -652,7 +652,7 @@ test('v24 spatial lock refuses raw depth takeover and invalidates v23 artifacts'
   const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
   const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
-  assert.match(api,/PIPELINE_REVISION='v24.1-facade-pose-recovery-v1'/);
+  assert.match(api,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
   assert.match(api,/require_map_registration:true/);
   assert.match(api,/photoreal_spatial_registration/);
   assert.match(worker,/if LIGHTWEIGHT_CPU and require_registration:/);
@@ -674,4 +674,21 @@ test('v24.1 recovers missing or unreliable photo pose without leaving map geomet
   assert.match(worker,/if is_inferred and not panoramic:hfov=max\(hfov,92\.0\)/);
   assert.match(worker,/photoplane_no_mapped_facade_evidence/);
   assert.doesNotMatch(worker,/photoplane_no_visible_facades/);
+});
+
+
+test('v25 keeps owner facade photos authoritative and rejects wall-incompatible evidence',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const api=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  const worker=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(api,/PIPELINE_REVISION='v25-owner-surface-routing-v1'/);
+  assert.match(api,/anchor_only:hasOwner/);
+  assert.match(api,/const publicBudget=hasOwner\?2:MAX_SOURCES/);
+  assert.match(api,/angle:a\.angle\|\|'unknown'/);
+  assert.match(worker,/category not in \("main_building","neighbor_building"\)/);
+  assert.match(worker,/if kind!="owner":return None/);
+  assert.match(worker,/match_quality<\.12/);
+  assert.match(worker,/def _owner_semantic_edge/);
+  assert.match(worker,/Without pose or a persisted assignment we cannot know which neighboring/);
+  assert.match(worker,/max_points=min\(int\(job\.policy\.get\("max_points",48000\)\),48000\)/);
 });

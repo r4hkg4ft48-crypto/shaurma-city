@@ -12,7 +12,7 @@ const openWorld=require('./realcity-open-world');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v18-onnx-depth-v1';
+const PIPELINE_REVISION='v18-onnx-q4-v2';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;

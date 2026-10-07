@@ -174,10 +174,16 @@ try{
 const j=await api(endpoint('/preview'));window.RealCityProStudio.previewData=j;
 $('#previewBox').classList.add('open');
 $('#previewFrame').src='/realcity-preview/index.html?marker='+encodeURIComponent(state.marker.id)+'&realcity_preview=1&pro='+Date.now();
-previewOpened=true;updateButtons();status('Проверьте геометрию и материалы с разных углов перед подтверждением.');
+previewOpened=false;updateButtons();status('Откройте разные ракурсы, проверьте текстуру. Закройте предпросмотр после отображения реальной карты.');
 }catch(e){status('Предпросмотр не работает: '+e.message)}
 };
-$('#closePreview').onclick=()=>{$('#previewFrame').src='about:blank';$('#previewBox').classList.remove('open');};
+$('#closePreview').onclick=()=>{
+ const frame=$('#previewFrame');let ready=false;
+ try{ready=frame.contentWindow.__SHAURMEG_REALCITY_PREVIEW_READY__===state?.revision;}catch{}
+ previewOpened=ready;frame.src='about:blank';$('#previewBox').classList.remove('open');updateButtons();
+ status(ready?'Предпросмотр действительно отрисован. Сравните его с реальными фото и подтвердите вручную.':
+ 'Предпросмотр не подтвердил отрисовку PHOTO VERIFIED. Публикация недоступна.');
+};
 $('#review').onclick=async()=>{
 if(!$('#visualOk').checked)return status('Сначала сравните фасады на карте и поставьте отметку проверки.');
 try{await api(endpoint('/review'),{method:'POST',body:JSON.stringify({marker_id:state.marker.id,expected_revision:state.revision,visually_verified:true})});

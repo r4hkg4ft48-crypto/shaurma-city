@@ -9,11 +9,13 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v2"
+APP_VERSION="realcity-photoreal-worker-v3"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
 VGGT_MODEL=os.getenv("REALCITY_VGGT_MODEL","facebook/VGGT-1B-Commercial")
+MAPANYTHING_MODEL=os.getenv("REALCITY_MAPANYTHING_MODEL","facebook/map-anything-apache")
+MAX_BACKEND=os.getenv("REALCITY_MAX_BACKEND","mapanything").strip().lower()
 HF_TOKEN=os.getenv("HF_TOKEN","")
 MAX_DOWNLOAD=20*1024*1024
 WORKERS=max(1,int(os.getenv("REALCITY_GPU_CONCURRENCY","1")))
@@ -25,6 +27,7 @@ LIGHTWEIGHT_CPU=os.getenv("REALCITY_LIGHTWEIGHT_CPU","false").lower() in ("1","t
 DEPTH_MODEL=os.getenv("REALCITY_DEPTH_MODEL","depth-anything/Depth-Anything-V2-Metric-Outdoor-Small-hf")
 SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
+_MAPANYTHING_CACHE=None
 _DEPTH_CACHE=None
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
@@ -716,6 +719,105 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     }
     return pts,cols,conf,scales,quats,alignment,stats
 
+def get_mapanything(device):
+    global _MAPANYTHING_CACHE
+    if _MAPANYTHING_CACHE is not None:return _MAPANYTHING_CACHE
+    from mapanything.models import MapAnything
+    model=MapAnything.from_pretrained(MAPANYTHING_MODEL).to(device).eval()
+    _MAPANYTHING_CACHE=model
+    return model
+
+def invert_c2w(c2w:np.ndarray)->np.ndarray:
+    out=[]
+    for pose in c2w:
+        inv=np.linalg.inv(pose.astype(np.float64)).astype(np.float32)
+        out.append(inv[:3,:4])
+    return np.stack(out)
+
+def unproject_depth_np(depth:np.ndarray,extrinsic:np.ndarray,intrinsic:np.ndarray)->np.ndarray:
+    maps=[]
+    for d,E,K in zip(depth,extrinsic,intrinsic):
+        if d.ndim==3:d=d[...,0]
+        h,w=d.shape
+        yy,xx=np.meshgrid(np.arange(h,dtype=np.float32),np.arange(w,dtype=np.float32),indexing="ij")
+        z=d.astype(np.float32)
+        fx,fy=max(float(K[0,0]),1e-6),max(float(K[1,1]),1e-6)
+        x=(xx-float(K[0,2]))/fx*z
+        y=(yy-float(K[1,2]))/fy*z
+        cam=np.stack([x,y,z],axis=-1).reshape(-1,3)
+        R=E[:,:3].astype(np.float32);t=E[:,3].astype(np.float32)
+        world=(R.T@(cam-t[None,:]).T).T.reshape(h,w,3)
+        maps.append(world)
+    return np.stack(maps)
+
+def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
+    import torch
+    from mapanything.utils.image import load_images
+    if len(image_paths)<2:raise RuntimeError("mapanything_requires_two_views")
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    if device=="cpu" and os.getenv("REALCITY_ALLOW_CPU_MAPANYTHING","false").lower()!="true":
+        raise RuntimeError("high_memory_compute_required_for_mapanything")
+    model=get_mapanything(device)
+    views=load_images(image_paths,resolution_set=518,norm_type="dinov2",patch_size=14)
+    with torch.inference_mode():
+        preds=model.infer(
+            views,
+            memory_efficient_inference=True,
+            minibatch_size=1,
+            use_amp=device=="cuda",
+            amp_dtype="bf16",
+            apply_mask=True,
+            mask_edges=True,
+            apply_confidence_mask=False,
+            confidence_percentile=8,
+            use_multiview_confidence=True,
+        )
+    if not preds:raise RuntimeError("mapanything_empty")
+    points=[];confs=[];images=[];poses=[];intr=[];depths=[]
+    for pred in preds:
+        def arr(name):
+            x=pred[name]
+            if hasattr(x,"detach"):x=x.detach().float().cpu().numpy()
+            return np.asarray(x)
+        p=arr("pts3d");cf=arr("conf");im=arr("img_no_norm");pose=arr("camera_poses");K=arr("intrinsics");dep=arr("depth_z")
+        if p.ndim==4:p=p[0]
+        if cf.ndim==3:cf=cf[0]
+        if im.ndim==4:im=im[0]
+        if pose.ndim==3:pose=pose[0]
+        if K.ndim==3:K=K[0]
+        if dep.ndim==4:dep=dep[0]
+        points.append(p.astype(np.float32));confs.append(cf.astype(np.float32));images.append(im.astype(np.float32))
+        poses.append(pose.astype(np.float32));intr.append(K.astype(np.float32));depths.append(dep.astype(np.float32))
+    p=np.stack(points);cf=np.stack(confs);ims_hwc=np.stack(images);c2w=np.stack(poses);intr_np=np.stack(intr);depth_np=np.stack(depths)
+    if ims_hwc.max()>1.5:ims_hwc=ims_hwc/255.0
+    ims_hwc=np.clip(ims_hwc,0,1)
+    ex=invert_c2w(c2w)
+    torch_images=torch.from_numpy(ims_hwc).permute(0,3,1,2).contiguous().float().to(device)
+    dtype=torch.bfloat16 if device=="cuda" and torch.cuda.get_device_capability()[0]>=8 else (torch.float16 if device=="cuda" else torch.float32)
+    ex2,intr2,ba=refine_cameras_with_ba(torch_images,cf,p,ex,intr_np,dtype)
+    if ba.get("bundle_adjustment"):
+        p=unproject_depth_np(depth_np,ex2,intr2)
+        ex,intr_np=ex2,intr2
+    centers=camera_centers(ex)
+    target=int(job.policy.get("max_points",150000))
+    ims_chw=ims_hwc.transpose(0,3,1,2)
+    pts,cols,scores,frames=choose_samples(p,cf,ims_chw,target*4)
+    pts,cols,scores,frames,dynamic_removed=multiview_filter(pts,cols,scores,frames)
+    pts,cols,scores=voxel_reduce(pts,cols,scores,min(target,180000))
+    pts,cols,scores,scales_xyz,quats,gs=gsplat_refine(pts,cols,scores,torch_images,ex,intr_np,cf)
+    pts,centers,alignment=anchor_points(pts,centers,sources,job.map_anchor["origin"],job.map_anchor)
+    world_scale=float(alignment.get("scale",1.0));scales_xyz=scales_xyz*world_scale
+    quats=rotate_quats_z(quats,float(alignment.get("yaw_deg",0.0)))
+    radius=float(job.map_anchor.get("radius_m",190))*1.18
+    m=(np.linalg.norm(pts[:,:2],axis=1)<=radius)&(pts[:,2]>-8)&(pts[:,2]<180)
+    pts,cols,scores,scales_xyz,quats=pts[m],cols[m],scores[m],scales_xyz[m],quats[m]
+    hardware=torch.cuda.get_device_name(0) if device=="cuda" else "CPU-high-memory"
+    backend="mapanything-apache-1b"+("+colmap-ba" if ba.get("bundle_adjustment") else "")+("+gsplat" if gs.get("gaussian_optimized") else "")
+    return pts,cols,scores,scales_xyz,quats,alignment,{
+        "backend":backend,"gpu":hardware,"frames":len(image_paths),"dynamic_removed":dynamic_removed,
+        "metric":True,"universal_3d":True,**ba,**gs
+    }
+
 def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     import torch
     from vggt.utils.load_fn import load_and_preprocess_images
@@ -823,13 +925,26 @@ async def run_job(job:Job):
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
                 stats["primary_error"]="partial_view_metric_fallback";stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             else:
-                try:
-                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
-                except Exception as primary:
-                    if not ALLOW_DEPTH_FALLBACK:raise
-                    print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
+                primary_errors=[]
+                if MAX_BACKEND in ("mapanything","auto"):
+                    try:
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,mapanything_reconstruct,paths,kept,job)
+                    except Exception as exc:
+                        primary_errors.append("mapanything:"+str(exc)[:160])
+                        points=None
+                else:
+                    points=None
+                if points is None and MAX_BACKEND in ("vggt","auto","mapanything"):
+                    try:
+                        points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+                    except Exception as exc:
+                        primary_errors.append("vggt:"+str(exc)[:160])
+                        points=None
+                if points is None:
+                    if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("; ".join(primary_errors) or "max_reconstruction_unavailable")
+                    print("MAX paths unavailable; using metric depth fallback:",primary_errors,flush=True)
                     points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                    stats["primary_error"]=str(primary)[:180];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
+                    stats["primary_error"]="; ".join(primary_errors)[:360];stats["source_fetch_errors"]=source_errors[:8];stats["fallback_sources"]=fallback_sources
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
@@ -851,7 +966,7 @@ async def health():
             gpu=torch.cuda.get_device_name(0) if cuda else ""
         except Exception:
             cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else VGGT_MODEL,"commercial_checkpoint_required":not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"osm-photoplane" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

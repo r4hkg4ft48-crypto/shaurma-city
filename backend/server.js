@@ -1006,30 +1006,51 @@ function normalizeAstraRealCityConfig(raw={}){
 }
 function normalizeAstraRealCityAssets(value){
  if(!Array.isArray(value))return [];
- const mainTypes=new Set(['main_facade','entrance','signage','left_facade','right_facade','rear_facade','detail']);
- const panoTypes=new Set(['front_panorama','street_left','street_right','opposite','intersection','courtyard','district','detail']);
+ const types={
+  main_building:new Set(['main_facade','entrance','signage','left_facade','right_facade','rear_facade','roof','storefront','detail']),
+  panorama:new Set(['front_panorama','street_left','street_right','opposite','intersection','courtyard','district','detail']),
+  landscape:new Set(['ground','terrain','courtyard','green_zone','parking','embankment','detail']),
+  road_ground:new Set(['road','sidewalk','curb','crossing','parking','ground','detail']),
+  neighbor_building:new Set(['front','left','right','rear','roof','storefront','detail']),
+  vegetation:new Set(['trees','bushes','lawn','flowerbed','detail']),
+  street_object:new Set(['lamp','fence','sign','stop','bench','bollard','parking_object','detail'])
+ };
+ const roles={main_building:'hero_facade',panorama:'environment',landscape:'landscape',road_ground:'ground',neighbor_building:'context_building',vegetation:'vegetation',street_object:'street_object'};
+ const categories=new Set(Object.keys(types));
  const angles=new Set(['front','left','right','rear','up','down','panorama','detail','unknown']);
+ const finite=v=>Number.isFinite(Number(v)),clamp=(v,a,b)=>Math.max(a,Math.min(b,Number(v)));
  return value.slice(0,120).map((item,index)=>{
   if(!item||typeof item!=='object')return null;
-  const category=item.category==='panorama'?'panorama':'main_building';
+  const category=categories.has(String(item.category||''))?String(item.category):'main_building';
   const rawSrc=String(item.src||item.url||item.image||'').trim();
-  const isImage=rawSrc.startsWith('data:image/');
-  const isExternal=/^https:\/\//i.test(rawSrc);
+  const isImage=rawSrc.startsWith('data:image/'),isExternal=/^https:\/\//i.test(rawSrc);
   if(!isImage&&!isExternal)return null;
-  const allowed=category==='main_building'?mainTypes:panoTypes;
-  const subtype=allowed.has(String(item.subtype||''))?String(item.subtype):(category==='main_building'?(index===0?'main_facade':'detail'):'district');
-  const role=category==='main_building'?'hero_facade':'environment';
-  const seed=rawSrc.slice(0,160)+category+subtype+index;
+  const allowed=types[category];
+  const subtype=allowed.has(String(item.subtype||''))?String(item.subtype):(category==='main_building'?(index===0?'main_facade':'detail'):category==='panorama'?'district':'detail');
+  const role=roles[category],seed=rawSrc.slice(0,160)+category+subtype+index;
   const id=/^[a-zA-Z0-9_-]{4,80}$/.test(String(item.id||''))?String(item.id):'astra_'+crypto.createHash('sha1').update(seed).digest('hex').slice(0,16);
+  const metadata=item.metadata&&typeof item.metadata==='object'&&!Array.isArray(item.metadata)?item.metadata:{};
+  const rawCamera=item.camera&&typeof item.camera==='object'&&!Array.isArray(item.camera)?item.camera:{};
+  const gps=metadata.gps&&finite(metadata.gps.lat)&&finite(metadata.gps.lon)?{lat:Number(metadata.gps.lat),lon:Number(metadata.gps.lon)}:null;
+  const camera={
+   ...(gps?gps:{}),
+   ...(finite(rawCamera.lat)&&finite(rawCamera.lon)?{lat:Number(rawCamera.lat),lon:Number(rawCamera.lon)}:{}),
+   heading_deg:finite(rawCamera.heading_deg)?clamp(rawCamera.heading_deg,0,359):(finite(item.direction_deg)?clamp(item.direction_deg,0,359):(finite(metadata.heading_deg)?clamp(metadata.heading_deg,0,359):null)),
+   pitch_deg:finite(rawCamera.pitch_deg)?clamp(rawCamera.pitch_deg,-45,45):null,
+   fov_deg:finite(rawCamera.fov_deg)?clamp(rawCamera.fov_deg,25,140):null,
+   distance_m:finite(rawCamera.distance_m)?clamp(rawCamera.distance_m,1,220):null,
+   altitude_m:finite(rawCamera.altitude_m)?clamp(rawCamera.altitude_m,-50,500):null
+  };
   return {
    id,category,subtype,role,src:rawSrc.slice(0,isImage?1800000:2200),
    kind:isImage?'image':'external_file',
-   ...(item.stored===true?{stored:true,sha256:String(item.sha256||''),metadata:item.metadata||{}}:{}),
+   ...(item.stored===true?{stored:true,sha256:String(item.sha256||''),metadata}:{}),
    filename:String(item.filename||'').trim().slice(0,180),
    label:String(item.label||'').trim().slice(0,180),
    notes:String(item.notes||'').trim().slice(0,900),
    angle:angles.has(String(item.angle||''))?String(item.angle):'unknown',
-   direction_deg:(item.direction_deg===null||item.direction_deg===''||item.direction_deg===undefined)?null:(Number.isFinite(Number(item.direction_deg))?Math.max(0,Math.min(359,Number(item.direction_deg))):null),
+   direction_deg:camera.heading_deg,
+   camera,
    priority:Math.max(1,Math.min(5,Number(item.priority)||3)),
    primary:item.primary===true,
    created_at:String(item.created_at||new Date().toISOString()).slice(0,40)
@@ -1038,12 +1059,17 @@ function normalizeAstraRealCityAssets(value){
 }
 function astraReadiness(assets){
  const list=Array.isArray(assets)?assets:[],main=list.filter(x=>x.category==='main_building'),pano=list.filter(x=>x.category==='panorama');
+ const world=list.filter(x=>['panorama','landscape','road_ground','neighbor_building','vegetation','street_object'].includes(x.category));
  const mainPrimary=main.some(x=>x.primary)||main.some(x=>x.subtype==='main_facade'),entrance=main.some(x=>x.subtype==='entrance');
- const panoSpread=new Set(pano.map(x=>x.subtype)).size;
+ const sectors=new Set(world.map(x=>x.category+':'+x.subtype)),positioned=list.filter(x=>Number.isFinite(Number(x.camera?.lat))&&Number.isFinite(Number(x.camera?.lon))).length;
+ const headed=list.filter(x=>Number.isFinite(Number(x.camera?.heading_deg))).length;
  let score=0;
- if(main.length)score+=20;if(main.length>=3)score+=15;if(mainPrimary)score+=10;if(entrance)score+=10;
- if(pano.length)score+=20;if(pano.length>=4)score+=15;if(panoSpread>=3)score+=10;
- return {score:Math.min(100,score),ready:main.length>=2&&pano.length>=3,main_count:main.length,panorama_count:pano.length,has_main_facade:mainPrimary,has_entrance:entrance,panorama_coverage:panoSpread};
+ if(main.length)score+=15;if(main.length>=4)score+=15;if(mainPrimary)score+=10;if(entrance)score+=8;
+ if(world.length)score+=12;if(world.length>=6)score+=15;if(sectors.size>=5)score+=10;if(positioned>=2)score+=8;if(headed>=3)score+=7;
+ const needs=[];if(main.length<3)needs.push('main_building_views');if(world.length<5)needs.push('environment_views');if(positioned<2)needs.push('gps_or_camera_positions');if(headed<2)needs.push('camera_directions');
+ return {score:Math.min(100,score),ready:main.length>=2&&world.length>=3,photo_first_ready:main.length>=3&&world.length>=5,
+  main_count:main.length,panorama_count:pano.length,world_count:world.length,coverage_sectors:sectors.size,positioned_count:positioned,heading_count:headed,
+  has_main_facade:mainPrimary,has_entrance:entrance,needs};
 }
 function astraManifest(row){
  const assets=normalizeAstraRealCityAssets(row?.realcity_astra_assets),config=normalizeAstraRealCityConfig(row?.realcity_astra_config),readiness=astraReadiness(assets);

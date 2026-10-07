@@ -513,3 +513,17 @@ test('RCSP2 volume diagnostics detect collapsed height and true 3D extent',()=>{
   const flat=P._internals.volumeDiagnostics([{bounds_min:[-12,-8,0],bounds_max:[14,19,.7]}]);
   assert.equal(flat.volumetric,false);
 });
+
+
+test('volumetric ONNX splats overlay support geometry while metric photogrammetry keeps depth testing',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const map=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  const splat=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
+  assert.match(map,/overlaySupport:!isTruePhotogrammetry&&isVolumetricDepth/);
+  assert.match(map,/fill-extrusion-color','#8b8983'/);
+  assert.match(map,/fill-extrusion-opacity',\.46/);
+  assert.match(splat,/overlaySupport=false/);
+  assert.match(splat,/if\(this\.overlaySupport\)gl\.disable\(gl\.DEPTH_TEST\)/);
+  assert.match(splat,/else\{gl\.enable\(gl\.DEPTH_TEST\);gl\.depthFunc\(gl\.LEQUAL\)\}/);
+  assert.match(splat,/overlaySupport:!!overlaySupport/);
+});

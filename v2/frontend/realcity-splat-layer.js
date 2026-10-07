@@ -146,12 +146,12 @@ void main(){
     for(let i=0;i<n;i++){const k=keys[i];out[cursor[k]++]=i}
     return out;
   }
-  function create({marker,profile,model,layerId='realcity-photoreal-splats',reducedMotion=false,onError=()=>{}}){
+  function create({marker,profile,model,layerId='realcity-photoreal-splats',reducedMotion=false,overlaySupport=false,onError=()=>{}}){
     if(!S?.boundPhotoreal?.(model,marker,profile?.scene))return null;
     let cloud;try{cloud=decode(model)}catch(e){onError(e);return null}
     const frame=S.frame([Number(marker.lon),Number(marker.lat)]);
-    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
-      stats:{points:cloud.count,chunks:cloud.chunks,bytes:cloud.vertices.byteLength,representation:model.representation},
+    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,overlaySupport:!!overlaySupport,
+      stats:{points:cloud.count,chunks:cloud.chunks,bytes:cloud.vertices.byteLength,representation:model.representation,overlaySupport:!!overlaySupport},
       onAdd(map,gl){
         this.map=map;this.gl=gl;
         try{
@@ -178,7 +178,9 @@ void main(){
         for(const a of this.attributes){gl.enableVertexAttribArray(a.loc);gl.vertexAttribPointer(a.loc,a.size,gl.FLOAT,false,STRIDE*4,a.offset*4)}
         const canvas=this.map.getCanvas(),matrix=localMatrix(m,frame.origin,frame.scale);
         gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform2f(this.uniforms.u_viewport,canvas.width,canvas.height);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,this.map.getZoom());
-        gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.disable(gl.CULL_FACE);
+        const depthWasEnabled=gl.isEnabled(gl.DEPTH_TEST);
+        if(this.overlaySupport)gl.disable(gl.DEPTH_TEST);else{gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL)}
+        gl.depthMask(false);gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
         if(this.uintIndices){
           if(this.sortDirty){
@@ -188,6 +190,7 @@ void main(){
           gl.drawElements(gl.POINTS,cloud.count,gl.UNSIGNED_INT,0);
         }else gl.drawArrays(gl.POINTS,0,cloud.count);
         gl.depthMask(true);
+        if(depthWasEnabled)gl.enable(gl.DEPTH_TEST);else gl.disable(gl.DEPTH_TEST);
         for(const a of this.attributes)gl.disableVertexAttribArray(a.loc);
       },
       onRemove(map,gl){

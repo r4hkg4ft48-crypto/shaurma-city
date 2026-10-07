@@ -122,8 +122,8 @@ async function buildSources(marker,profile,assets){
   })).filter(x=>x.url);
   let publicCandidates=[];
   try{
-    const maxDistance=Math.max(180,Math.min(380,(Number(profile?.scene?.radius_m)||190)*1.7));
-    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,72,maxDistance);
+    const maxDistance=Math.max(220,Math.min(520,(Number(profile?.scene?.radius_m)||190)*2.35));
+    publicCandidates=photorealCandidates(await openWorld.collectCandidates(marker),marker,88,maxDistance);
   }catch{}
   const refs=new Map((profile?.real_world?.references||[]).map(r=>[String(r.source)+':'+String(r.source_id),r]));
   const pub=publicCandidates.map(c=>{

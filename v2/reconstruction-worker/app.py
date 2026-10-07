@@ -598,7 +598,7 @@ async def run_job(job:Job):
     async with SEM:
         root=Path(tempfile.mkdtemp(prefix="realcity_"))
         try:
-            requested=max(3,min(int(job.policy.get("max_frames",24)),len(job.sources)))
+            requested=max(1,min(int(job.policy.get("max_frames",24)),len(job.sources)))
             selected=job.sources[:frame_budget(requested)]
             paths=[];kept=[]
             for i,s in enumerate(selected):
@@ -607,15 +607,20 @@ async def run_job(job:Job):
                     p=root/f"{i:03d}.jpg";prepare_image(data,p);paths.append(str(p));kept.append(s)
                 except Exception:
                     continue
-            if len(paths)<3: raise RuntimeError("not_enough_decodable_views")
+            if len(paths)<1: raise RuntimeError("no_decodable_views")
             loop=asyncio.get_running_loop()
-            try:
-                points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
-            except Exception as primary:
-                if not ALLOW_DEPTH_FALLBACK:raise
-                print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
+            if len(paths)<3:
+                if not ALLOW_DEPTH_FALLBACK:raise RuntimeError("not_enough_views_for_multiview")
                 points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
-                stats["primary_error"]=str(primary)[:180]
+                stats["primary_error"]="partial_view_metric_fallback"
+            else:
+                try:
+                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,vggt_reconstruct,paths,kept,job)
+                except Exception as primary:
+                    if not ALLOW_DEPTH_FALLBACK:raise
+                    print("VGGT path unavailable; using depth fallback:",repr(primary),flush=True)
+                    points,colors,conf,scales_xyz,quats,alignment,stats=await loop.run_in_executor(None,gps_depth_reconstruct,paths,kept,job)
+                    stats["primary_error"]=str(primary)[:180]
             if len(points)<5000: raise RuntimeError("reconstruction_too_sparse")
             artifact=artifact_for(job,points,colors,conf,scales_xyz,quats,alignment,stats)
             await callback(job,"ready",artifact=artifact)
@@ -640,7 +645,7 @@ async def health():
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):
     if TOKEN and request.headers.get("authorization")!="Bearer "+TOKEN:
         raise HTTPException(401,"unauthorized")
-    if job.schema!=1 or not job.job_id.startswith("rc_") or len(job.sources)<3:
+    if job.schema!=1 or not job.job_id.startswith("rc_") or len(job.sources)<1:
         raise HTTPException(422,"invalid_job")
     tasks.add_task(run_job,job)
     return {"accepted":True,"job_id":job.job_id,"worker":APP_VERSION}

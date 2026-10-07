@@ -600,8 +600,8 @@ test('volumetric renderer boosts source splats over support geometry',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
   assert.match(src,/uniform float u_overlay_support/);
-  assert.match(src,/mix\(1\.0,1\.10,u_overlay_support\)/);
-  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)/);
+  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)\*u_density_boost/);
+  assert.match(src,/mix\(1\.0,1\.34,u_overlay_support\)/);
 });
 
 test('ONNX depth cloud is constrained by mapped building heights',()=>{

@@ -239,3 +239,17 @@ test('compute tier invalidates a photoreal signature only when explicitly set',(
     assert.notEqual(max,P.sceneSignature(marker,profile,[]));
   }finally{config.REALCITY_RECONSTRUCTION_TIER=before}
 });
+
+
+test('MapAnything applies full OpenCV-to-ENU 3D basis alignment to points and splat rotations',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/OpenCV camera axes are \+X right, \+Y down, \+Z forward/);
+  assert.match(src,/desired_basis=desired_camera_basis/);
+  assert.match(src,/Rbase=desired_basis@model_basis\.T/);
+  assert.match(src,/gps-heading-metric-3d/);
+  assert.match(src,/gps-rigid-metric-3d/);
+  assert.match(src,/rotation_matrix/);
+  assert.match(src,/def rotate_quats_matrix/);
+  assert.match(src,/quats=rotate_quats_matrix/);
+});

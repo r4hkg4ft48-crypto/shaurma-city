@@ -918,7 +918,7 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     if not (isinstance(origin,list) and len(origin)>=2):raise RuntimeError("photoplane_missing_origin")
     max_points=min(int(job.policy.get("max_points",48000)),48000)
     all_points=[];all_colors=[];all_conf=[];all_scales=[];all_quats=[]
-    used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set()
+    used=0;inferred=0;masked=0;facades=set();owner_used=0;owner_roles=set();master_used=0
     per_source=max(6500,min(30000,max_points//max(1,len(image_paths))))
     for path,source in zip(image_paths,sources):
         hit=facade_candidate(source,job)
@@ -1011,7 +1011,9 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
 
         all_points.append(p);all_colors.append(cols);all_conf.append(cf);all_scales.append(scales);all_quats.append(quat)
         used+=1;inferred+=1 if is_inferred else 0
-        if source.get("kind")=="owner":owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
+        if source.get("kind")=="owner":
+            owner_used+=1;owner_roles.add(str(source.get("role") or source.get("category") or "owner"))
+            if source.get("reference_master") is True or str(source.get("subtype") or "")=="generated_master":master_used+=1
         facades.add(str(building.get("building_id"))+":"+str(edge))
 
     if not all_points:raise RuntimeError("photoplane_no_mapped_facade_evidence")
@@ -1023,7 +1025,7 @@ def facade_plane_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
     alignment={"method":"osm-facade-ray-projection","rms_m":0.0,"scale":1.0,"yaw_deg":0.0,"geo_cameras":used}
     stats={
       "backend":"open-pixel-osm-facade-projection","gpu":"CPU-lightweight","frames":used,
-      "owner_frames":owner_used,"owner_roles":sorted(owner_roles),
+      "owner_frames":owner_used,"owner_roles":sorted(owner_roles),"reference_master_frames":master_used,
       "dynamic_removed":masked,"bundle_adjustment":False,"gaussian_optimized":False,
       "fallback":True,"projection":True,"map_registered_surface":True,
       "inferred_facade_matches":inferred,"covered_facades":len(facades)
@@ -1212,6 +1214,8 @@ def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
       "declared_radius_m":declared_radius,
       "generated_pixels_only":False,
       "photo_first":bool(job.policy.get("photo_first")),"owner_frames":int(stats.get("owner_frames",0)),"owner_roles":stats.get("owner_roles",[]),
+      "reference_master":int(stats.get("reference_master_frames",0))>0,
+      "reference_master_frames":int(stats.get("reference_master_frames",0)),
       "map_registered_surface":registered_surface,
       "display_safe":registered_surface,
       "surface_projection":bool(stats.get("map_registered_surface") and stats.get("projection")),

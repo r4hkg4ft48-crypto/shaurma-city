@@ -303,3 +303,16 @@ test('MAX source sweep reaches beyond the old narrow street radius',()=>{
   assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
   assert.match(photo,/photorealCandidates\(await openWorld\.collectCandidates\(marker\),marker,88,maxDistance\)/);
 });
+
+
+test('96GB CPU launch profile enables MapAnything without the lightweight photoplane',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const sh=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/run-max-cpu.sh'),'utf8');
+  assert.match(sh,/REALCITY_LIGHTWEIGHT_CPU=false/);
+  assert.match(sh,/REALCITY_HIGH_MEMORY_CPU=true/);
+  assert.match(sh,/REALCITY_ALLOW_CPU_MAPANYTHING=true/);
+  assert.match(sh,/REALCITY_MAX_BACKEND=mapanything/);
+  assert.match(sh,/REALCITY_CPU_MAX_FRAMES=.*32/);
+  assert.match(sh,/REALCITY_USE_GSPLAT=false/);
+  assert.match(sh,/uvicorn app:app/);
+});

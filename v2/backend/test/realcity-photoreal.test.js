@@ -178,3 +178,30 @@ test('lightweight CPU photoplane avoids ML runtime while MAX GPU path remains av
   assert.match(src,/def vggt_reconstruct/);
   assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
 });
+
+
+test('MAX worker prefers Apache MapAnything metric 3D before VGGT fallback',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  const req=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/requirements.txt'),'utf8');
+  assert.match(src,/facebook\/map-anything-apache/);
+  assert.match(src,/def mapanything_reconstruct/);
+  assert.match(src,/memory_efficient_inference=True/);
+  assert.match(src,/minibatch_size=1/);
+  assert.match(src,/pred\["pts3d"\]/);
+  assert.match(src,/pred\["camera_poses"\]/);
+  assert.match(src,/mapanything-apache-1b/);
+  assert.match(src,/MAX_BACKEND in \("mapanything","auto"\)/);
+  assert.match(req,/facebookresearch\/map-anything\.git@3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9/);
+});
+
+test('partial photoreal uses a volumetric support shell while true photogrammetry stays pure',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/realcity-photoreal-shell/);
+  assert.match(src,/isTruePhotogrammetry=authored\.model\?\.quality\?\.photogrammetric===true/);
+  assert.match(src,/if\(!isTruePhotogrammetry\)/);
+  assert.match(src,/setProgress\(v\)\{shell\.setProgress\?\.\(v\);splat\.setProgress\?\.\(v\)\}/);
+  assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
+  assert.match(src,/REAL CITY · PHOTO 3D/);
+});

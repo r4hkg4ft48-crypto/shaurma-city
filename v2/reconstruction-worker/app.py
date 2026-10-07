@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v7"
+APP_VERSION="realcity-photoreal-worker-v8"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -1068,7 +1068,7 @@ def vggt_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
 def artifact_for(job:Job,points,colors,conf,scales_xyz,quats,alignment,stats):
     data,mn,mx,count=encode_rcsp2(points,colors,conf,scales_xyz,quats)
     anchor=job.map_anchor.get("hero") or {}
-    source_meta=[{k:s.get(k) for k in ("id","kind","provider","category","subtype","role","license","license_url","attribution","page_url","captured_at")} for s in job.sources]
+    source_meta=[{k:s.get(k) for k in ("id","kind","provider","category","subtype","role","pose_source","evidence_refs","license","license_url","attribution","page_url","captured_at")} for s in job.sources]
     radial=np.linalg.norm(np.asarray(points,dtype=np.float32)[:,:2],axis=1) if len(points) else np.array([0.0],dtype=np.float32)
     observed_radius=float(np.percentile(radial[np.isfinite(radial)],98.5)) if np.any(np.isfinite(radial)) else 0.0
     declared_radius=float(job.map_anchor.get("radius_m",190))
@@ -1116,7 +1116,7 @@ async def run_job(job:Job):
                     loaded=await load_source_image(s,p)
                     paths.append(str(p));kept.append(s)
                     fallback_sources+=1 if loaded.get("fallback_used") else 0
-                    print("RealCity source ready",{"provider":s.get("provider"),"id":s.get("id"),"host":loaded.get("host"),"fallback":loaded.get("fallback_used")},flush=True)
+                    print("RealCity source ready",{"provider":s.get("provider"),"id":s.get("id"),"host":loaded.get("host"),"fallback":loaded.get("fallback_used"),"pose_source":s.get("pose_source"),"posed":isinstance(s.get("coordinates"),list),"role":s.get("role"),"evidence_refs":s.get("evidence_refs")},flush=True)
                 except Exception as exc:
                     msg=str(exc)[:240];source_errors.append(msg)
                     print("RealCity source rejected",msg,flush=True)
@@ -1184,7 +1184,7 @@ async def health():
             gpu=torch.cuda.get_device_name(0) if cuda else ""
         except Exception:
             cuda=False;gpu=""
-    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"depth-anything-v2-small-q4-fp32-onnx" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
+    return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"depth-anything-v2-small-q4-fp32-onnx" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (48 if LIGHTWEIGHT_CPU else None)}
 
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):

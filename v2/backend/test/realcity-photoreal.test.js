@@ -280,7 +280,7 @@ test('MapAnything does not request multiview confidence for a single observation
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
 });
 
 
@@ -330,7 +330,7 @@ test('lean worker prefers ONNX depth before photoplane and stays torch-free',()=
   assert.match(src,/depth-anything-v2-small-.*-onnx\+osm-scale/);
   assert.match(src,/cpu_onnx_depth/);
   assert.match(src,/CPU ONNX depth unavailable; using photoplane safety fallback/);
-  assert.match(src,/realcity-photoreal-worker-v7/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
   assert.match(req,/onnxruntime==1\.23\.2/);
   assert.match(req,/huggingface_hub/);
   assert.doesNotMatch(req,/torch|transformers/i);
@@ -458,4 +458,35 @@ test('ONNX depth preserves high-resolution source appearance and EXIF orientatio
   assert.match(src,/depth_im=base\.copy\(\);depth_im\.thumbnail\(\(518,392\)/);
   assert.match(src,/rgb=np\.asarray\(base\)/);
   assert.match(src,/resize\(\(w,h\),Image\.Resampling\.BICUBIC\)/);
+});
+
+
+test('legacy Astra observed edges recover camera poses without GPS',()=>{
+  const P=require('../src/realcity-photoreal');
+  const marker={lat:55.75,lon:37.61};
+  const profile={
+    scene:{buildings:[{id:'hero',ring:[[37.6099,55.7499],[37.6101,55.7499],[37.6101,55.7501],[37.6099,55.7501],[37.6099,55.7499]]}]},
+    astra:{buildings:[{building_id:'hero',facades:[{
+      evidence:'observed',confidence:.9,edge:[[37.6099,55.7499],[37.6101,55.7499]],
+      reference_ids:['owner-photo-3'],modules:[{kind:'entrance'}]
+    }]}]}
+  };
+  const ctx=P._internals.astraEvidenceIndex(profile);
+  const asset={id:'astra-x',filename:'photo 3.jpg',category:'main_building',subtype:'entrance',camera:{},metadata:{}};
+  assert.ok(P._internals.ownerReferenceKeys(asset).includes('owner-photo-3'));
+  const pose=P._internals.evidencePose(marker,profile,asset,ctx);
+  assert.equal(pose.source,'astra-evidence');
+  assert.ok(Array.isArray(pose.coordinates)&&pose.coordinates.length===2);
+  assert.ok(Number.isFinite(pose.heading));
+  assert.ok(pose.distance_m>=10);
+  assert.ok(pose.refs.includes('owner-photo-3'));
+});
+
+test('worker reports evidence pose provenance and 48-frame lightweight budget',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/pose_source/);
+  assert.match(src,/evidence_refs/);
+  assert.match(src,/48 if LIGHTWEIGHT_CPU/);
+  assert.match(src,/realcity-photoreal-worker-v8/);
 });

@@ -738,8 +738,10 @@ test('v27 refuses fictitious photo-camera registration and accepts only measured
   assert.equal(P._internals.isLepeshka({id:3139,name:'В Лепёшке'}),true);
   assert.equal(P._internals.isLepeshka({id:1,name:'В Лепёшке'}),false);
   assert.match(api,/reason:'awaiting_facade_calibration'/);
+  assert.match(api,/reference_only:true,anchor_only:true/);
   assert.match(api,/match:calibratedFacadeMatch\(a\)/);
   assert.match(worker,/if strict and not registered_quad:return None/);
+  assert.match(worker,/evidence=\[source for source in job\.sources if source\.get\("reference_only"\) is not True\]/);
   assert.match(worker,/def facade_source_homography\(quad:list\):/);
   assert.match(worker,/xn=\(H\[0\]\*uu\+H\[1\]\*vv\+H\[2\]\)\/den/);
   assert.match(worker,/"calibrated_facades":len\(calibrated_facades\)/);

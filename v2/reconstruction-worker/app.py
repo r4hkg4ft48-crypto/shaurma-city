@@ -32,6 +32,7 @@ SEM=asyncio.Semaphore(WORKERS)
 _VGGT_CACHE=None
 _MAPANYTHING_CACHE=None
 _DEPTH_CACHE=None
+_ACTIVE_JOBS=set()
 _ONNX_DEPTH_CACHE={}
 app=FastAPI(title="RealCity Photoreal Worker",version=APP_VERSION)
 
@@ -1186,11 +1187,20 @@ async def health():
             cuda=False;gpu=""
     return {"ok":True,"version":APP_VERSION,"cuda":cuda,"gpu":gpu,"model":"depth-anything-v2-small-q4-fp32-onnx" if LIGHTWEIGHT_CPU else MAPANYTHING_MODEL,"secondary_model":None if LIGHTWEIGHT_CPU else VGGT_MODEL,"max_backend":MAX_BACKEND,"commercial_checkpoint_required":False if MAX_BACKEND=="mapanything" else not LIGHTWEIGHT_CPU,"depth_fallback":ALLOW_DEPTH_FALLBACK,"depth_model":None if LIGHTWEIGHT_CPU else DEPTH_MODEL,"lightweight_cpu":LIGHTWEIGHT_CPU,"high_memory_cpu":HIGH_MEMORY_CPU,"frame_budget_max":32 if HIGH_MEMORY_CPU else (12 if LIGHTWEIGHT_CPU else None)}
 
+async def run_job_guarded(job:Job):
+    try:
+        await run_job(job)
+    finally:
+        _ACTIVE_JOBS.discard(job.job_id)
+
 @app.post("/v1/jobs")
 async def create_job(job:Job,request:Request,tasks:BackgroundTasks):
     if TOKEN and request.headers.get("authorization")!="Bearer "+TOKEN:
         raise HTTPException(401,"unauthorized")
     if job.schema!=1 or not job.job_id.startswith("rc_") or len(job.sources)<1:
         raise HTTPException(422,"invalid_job")
-    tasks.add_task(run_job,job)
-    return {"accepted":True,"job_id":job.job_id,"worker":APP_VERSION}
+    if job.job_id in _ACTIVE_JOBS:
+        return {"accepted":True,"job_id":job.job_id,"worker":APP_VERSION,"duplicate":True}
+    _ACTIVE_JOBS.add(job.job_id)
+    tasks.add_task(run_job_guarded,job)
+    return {"accepted":True,"job_id":job.job_id,"worker":APP_VERSION,"duplicate":False}

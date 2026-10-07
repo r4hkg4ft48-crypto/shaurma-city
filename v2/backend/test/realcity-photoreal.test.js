@@ -26,11 +26,18 @@ function artifact(){
   };
 }
 
-test('photoreal input signature is pinned to geometry and source revision',()=>{
-  const a=P.sceneSignature(marker,profile,[]);
-  const moved={...profile,scene:{...profile.scene,buildings:[{...profile.scene.buildings[0],ring:[[37,55],[37.0002,55],[37.0002,55.0001],[37,55.0001],[37,55]]}]}};
-  assert.notEqual(a,P.sceneSignature(marker,moved,[]));
-  assert.notEqual(a,P.sceneSignature(marker,profile,[{id:'p1',sha256:'abc',category:'main_building',subtype:'facade',priority:4}]));
+test('photoreal input signature is pinned to geometry and enabled source revision',()=>{
+  const before=config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS;
+  try{
+    config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=false;
+    const a=P.sceneSignature(marker,profile,[]);
+    const moved={...profile,scene:{...profile.scene,buildings:[{...profile.scene.buildings[0],ring:[[37,55],[37.0002,55],[37.0002,55.0001],[37,55.0001],[37,55]]}]}};
+    assert.notEqual(a,P.sceneSignature(marker,moved,[]));
+    const privateAssets=[{id:'p1',sha256:'abc',category:'main_building',subtype:'facade',priority:4}];
+    assert.equal(a,P.sceneSignature(marker,profile,privateAssets),'disabled private photos must not invalidate an open-only world');
+    config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=true;
+    assert.notEqual(a,P.sceneSignature(marker,profile,privateAssets),'opted-in private photos must bind the reconstruction signature');
+  }finally{config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS=before}
 });
 
 test('RCSP2 validates exact binary layout and bounds',()=>{
@@ -84,4 +91,44 @@ test('RCSP2 browser decoder preserves anisotropic scale and quaternion',()=>{
   assert.ok(Math.abs(out[9]-1)<1e-5);
   assert.ok(out[13]>.85&&out[14]>.9);
   assert.equal(out[15],2);
+});
+
+
+test('photoreal candidate sweep does not inherit two-image Commons cap',()=>{
+  const rows=Array.from({length:48},(_,i)=>({
+    id:'commons-'+i,source:'wikimedia',coordinates:[37+(i%12)*.00015,55+Math.floor(i/12)*.00015],
+    image_url:'https://upload.wikimedia.org/'+i+'.jpg',license:'CC BY-SA 4.0'
+  }));
+  const picked=P._internals.photorealCandidates(rows,marker,72,360);
+  assert.ok(picked.length>2);
+  assert.ok(picked.length<=32);
+  assert.ok(picked.every(x=>Number.isFinite(x.distance_m)));
+});
+
+test('photoreal source sweep rejects distant unrelated imagery',()=>{
+  const near={id:'near',source:'wikimedia',coordinates:[37.0002,55.0001],image_url:'https://upload.wikimedia.org/near.jpg',license:'CC BY-SA 4.0'};
+  const far={id:'far',source:'wikimedia',coordinates:[37.03,55.03],image_url:'https://upload.wikimedia.org/far.jpg',license:'CC BY-SA 4.0'};
+  const picked=P._internals.photorealCandidates([near,far],marker,72,320);
+  assert.equal(picked.some(x=>x.id==='near'),true);
+  assert.equal(picked.some(x=>x.id==='far'),false);
+});
+
+test('photoreal worker keeps commercial VGGT cache and metric fallback contracts',()=>{
+  const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/model=VGGT\.from_pretrained\(VGGT_MODEL\)\.to\(device\)\.eval\(\)/);
+  assert.match(src,/model=get_vggt\(device\)/);
+  assert.match(src,/Depth-Anything-V2-Metric-Outdoor-Small-hf/);
+  assert.doesNotMatch(src,/def get_vggt\([\s\S]{0,500}?model=get_vggt\(device\)/);
+});
+
+
+test('Gaussian depth bucket order is back-to-front and deterministic',()=>{
+  const vertices=new Float32Array(3*16);
+  vertices[2]=-.5;
+  vertices[16+2]=.2;
+  vertices[32+2]=.8;
+  const I=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+  const order=R.depthBucketOrder(vertices,I,3,32);
+  assert.deepEqual([...order],[2,1,0]);
+  assert.deepEqual([...R.depthBucketOrder(vertices,I,3,32)],[...order]);
 });

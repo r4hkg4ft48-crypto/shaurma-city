@@ -128,6 +128,24 @@ void main(){
     for(const x of decoded){out.set(x.data,offset);offset+=x.data.length}
     return {vertices:out,count,chunks:chunks.length};
   }
+  function depthBucketOrder(vertices,matrix,count,bucketCount=96){
+    const n=Math.max(0,Math.min(Number(count)||0,Math.floor(vertices.length/STRIDE))),identity=new Uint32Array(n);
+    if(!n||!matrix||matrix.length<16)return identity.map((_,i)=>i);
+    const depth=new Float32Array(n);let lo=Infinity,hi=-Infinity;
+    for(let i=0;i<n;i++){
+      identity[i]=i;const p=i*STRIDE,x=vertices[p],y=vertices[p+1],z=vertices[p+2];
+      const cz=matrix[2]*x+matrix[6]*y+matrix[10]*z+matrix[14],cw=matrix[3]*x+matrix[7]*y+matrix[11]*z+matrix[15];
+      const d=Math.abs(cw)>1e-8?cz/cw:0;depth[i]=d;if(Number.isFinite(d)){if(d<lo)lo=d;if(d>hi)hi=d}
+    }
+    if(!Number.isFinite(lo)||!Number.isFinite(hi)||hi-lo<1e-7)return identity;
+    const bins=Math.max(16,Math.min(256,Math.round(bucketCount)||96)),counts=new Uint32Array(bins),keys=new Uint16Array(n),span=hi-lo;
+    for(let i=0;i<n;i++){const k=Math.max(0,Math.min(bins-1,Math.floor((depth[i]-lo)/span*(bins-1))));keys[i]=k;counts[k]++}
+    const offsets=new Uint32Array(bins),cursor=new Uint32Array(bins);let at=0;
+    for(let k=bins-1;k>=0;k--){offsets[k]=at;cursor[k]=at;at+=counts[k]}
+    const out=new Uint32Array(n);
+    for(let i=0;i<n;i++){const k=keys[i];out[cursor[k]++]=i}
+    return out;
+  }
   function create({marker,profile,model,layerId='realcity-photoreal-splats',reducedMotion=false,onError=()=>{}}){
     if(!S?.boundPhotoreal?.(model,marker,profile?.scene))return null;
     let cloud;try{cloud=decode(model)}catch(e){onError(e);return null}
@@ -138,6 +156,12 @@ void main(){
         this.map=map;this.gl=gl;
         try{
           this.program=program(gl);this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,cloud.vertices,gl.STATIC_DRAW);
+          this.uintIndices=typeof WebGL2RenderingContext!=='undefined'&&gl instanceof WebGL2RenderingContext?true:!!gl.getExtension?.('OES_element_index_uint');
+          if(this.uintIndices){
+            this.indexBuffer=gl.createBuffer();this.sortDirty=true;
+            this.markSort=()=>{this.sortDirty=true;this.map?.triggerRepaint()};
+            map.on?.('moveend',this.markSort);map.on?.('resize',this.markSort);
+          }
           this.attributes=[];
           for(const [name,size,offset] of [['a_position',3,0],['a_color',3,3],['a_scale',3,6],['a_quat',4,9],['a_opacity',1,13],['a_confidence',1,14],['a_semantic',1,15]]){
             const loc=gl.getAttribLocation(this.program,name);if(loc<0)continue;this.attributes.push({loc,size,offset});
@@ -156,13 +180,23 @@ void main(){
         gl.uniformMatrix4fv(this.uniforms.u_matrix,false,matrix);gl.uniform2f(this.uniforms.u_viewport,canvas.width,canvas.height);gl.uniform1f(this.uniforms.u_progress,this.progress);gl.uniform1f(this.uniforms.u_zoom,this.map.getZoom());
         gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);gl.disable(gl.CULL_FACE);
         gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
-        gl.drawArrays(gl.POINTS,0,cloud.count);
+        if(this.uintIndices){
+          if(this.sortDirty){
+            const order=depthBucketOrder(cloud.vertices,matrix,cloud.count,innerWidth<600?72:112);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,order,gl.DYNAMIC_DRAW);this.sortDirty=false;
+          }else gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);
+          gl.drawElements(gl.POINTS,cloud.count,gl.UNSIGNED_INT,0);
+        }else gl.drawArrays(gl.POINTS,0,cloud.count);
         gl.depthMask(true);
         for(const a of this.attributes)gl.disableVertexAttribArray(a.loc);
       },
-      onRemove(map,gl){this.disposed=true;this.ready=false;if(this.buffer)gl.deleteBuffer(this.buffer);if(this.program)gl.deleteProgram(this.program)}
+      onRemove(map,gl){
+        this.disposed=true;this.ready=false;
+        if(this.markSort){map.off?.('moveend',this.markSort);map.off?.('resize',this.markSort)}
+        if(this.indexBuffer)gl.deleteBuffer(this.indexBuffer);if(this.buffer)gl.deleteBuffer(this.buffer);if(this.program)gl.deleteProgram(this.program)
+      }
     };
     return layer;
   }
-  root.RealCitySplatLayer={create,decodeChunk,decode,localMatrix};
+  root.RealCitySplatLayer={create,decodeChunk,decode,localMatrix,depthBucketOrder};
 })(globalThis);

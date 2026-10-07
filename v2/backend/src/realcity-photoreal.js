@@ -13,7 +13,7 @@ const photo=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 
 const ENGINE='realcity-photoreal-v1';
-const PIPELINE_REVISION='v19-photo-first-v1';
+const PIPELINE_REVISION='v19-evidence-poses-v2';
 const SCHEMA=1;
 const MAX_SOURCES=96;
 const MAX_CHUNKS=4;
@@ -127,6 +127,87 @@ function ownerCameraCoordinates(marker,asset){
   }
   return null;
 }
+function localMeters(marker,p){
+  const lat0=Number(marker.lat)*Math.PI/180,lon=Number(p?.[0]),lat=Number(p?.[1]);
+  return [(lon-Number(marker.lon))*111320*Math.max(.15,Math.cos(lat0)),(lat-Number(marker.lat))*110540];
+}
+function lonLatFromMeters(marker,p){
+  const lat0=Number(marker.lat)*Math.PI/180;
+  return [Number(marker.lon)+Number(p[0])/(111320*Math.max(.15,Math.cos(lat0))),Number(marker.lat)+Number(p[1])/110540];
+}
+function astraEvidenceIndex(profile){
+  const byRef=new Map(),observed=[],numbers=new Set();
+  const sceneById=new Map((profile?.scene?.buildings||[]).map(b=>[String(b.id),b]));
+  const addFacade=(f,buildingId)=>{
+    if(!f||f.evidence!=='observed'||!Array.isArray(f.edge)||f.edge.length!==2)return;
+    const refs=Array.isArray(f.reference_ids)?f.reference_ids.map(String):[];
+    const item={edge:f.edge,building_id:String(buildingId||''),confidence:Number(f.confidence)||.7,modules:Array.isArray(f.modules)?f.modules:[]};
+    observed.push(item);
+    for(const ref of refs){
+      if(!byRef.has(ref))byRef.set(ref,[]);byRef.get(ref).push(item);
+      const m=/owner[-_ ]?photo[-_ ]?(\d{1,2})/i.exec(ref);if(m)numbers.add(Number(m[1]));
+    }
+  };
+  for(const b of (profile?.astra?.buildings||[])){
+    const bid=String(b.building_id||'');
+    for(const f of (b.facades||[]))addFacade(f,bid);
+    for(const part of (b.parts||[]))for(const f of (part.facades||[]))addFacade(f,bid);
+  }
+  return {byRef,observed,numbers:[...numbers].sort((a,b)=>a-b),sceneById};
+}
+function ownerReferenceKeys(asset){
+  const out=new Set([String(asset?.id||'')]);
+  for(const raw of [asset?.filename,asset?.label,asset?.notes,asset?.id]){
+    const s=String(raw||'');
+    let m;
+    const re=/(?:owner[-_ ]?photo|photo|image|img|фото)[-_ .]*(\d{1,2})/ig;
+    while((m=re.exec(s)))out.add('owner-photo-'+Number(m[1]));
+    const base=s.split(/[\\/]/).pop()||'',stem=base.replace(/\.[a-z0-9]{2,6}$/i,'');
+    if(/^\d{1,2}$/.test(stem))out.add('owner-photo-'+Number(stem));
+  }
+  return [...out].filter(Boolean);
+}
+function semanticObservedFacade(asset,ctx){
+  if(asset?.category!=='main_building'||!ctx.observed.length)return null;
+  const subtype=String(asset.subtype||'');
+  const kind=subtype==='entrance'?'entrance':subtype==='signage'?'sign':subtype==='storefront'?'storefront':null;
+  if(kind){
+    const hit=ctx.observed.filter(x=>x.modules.some(m=>m?.kind===kind)).sort((a,b)=>b.confidence-a.confidence)[0];
+    if(hit)return hit;
+  }
+  return ctx.observed.slice().sort((a,b)=>b.confidence-a.confidence)[0];
+}
+function evidencePose(marker,profile,asset,ctx){
+  const explicit=ownerCameraCoordinates(marker,asset);
+  const headingExplicit=Number(asset?.camera?.heading_deg??asset?.direction_deg??asset?.metadata?.heading_deg);
+  if(explicit)return {coordinates:explicit,heading:Number.isFinite(headingExplicit)?headingExplicit:null,distance_m:Number(asset?.camera?.distance_m)||null,source:asset?.metadata?.gps?'exif-gps':'manual-camera',refs:[]};
+  const keys=ownerReferenceKeys(asset),entries=[];
+  for(const key of keys)for(const item of (ctx.byRef.get(key)||[]))entries.push({...item,ref:key});
+  if(!entries.length){
+    const semantic=semanticObservedFacade(asset,ctx);if(semantic)entries.push({...semantic,ref:'astra-semantic'});
+  }
+  if(!entries.length)return {coordinates:null,heading:Number.isFinite(headingExplicit)?headingExplicit:null,distance_m:null,source:'unposed',refs:keys};
+  let tx=0,ty=0,ox=0,oy=0,weight=0,maxLen=0;const refs=new Set();
+  for(const e of entries){
+    const a=localMeters(marker,e.edge[0]),b=localMeters(marker,e.edge[1]),mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    const scene=ctx.sceneById.get(String(e.building_id)),ring=scene?.ring||[];
+    let cx=0,cy=0,n=0;
+    for(const p of ring){const q=localMeters(marker,p);cx+=q[0];cy+=q[1];n++}
+    if(n){cx/=n;cy/=n}
+    let vx=mx-cx,vy=my-cy,norm=Math.hypot(vx,vy);
+    if(norm<.25){vx=-(b[1]-a[1]);vy=b[0]-a[0];norm=Math.hypot(vx,vy)}
+    vx/=Math.max(norm,1e-6);vy/=Math.max(norm,1e-6);
+    const w=Math.max(.15,Number(e.confidence)||.7);tx+=mx*w;ty+=my*w;ox+=vx*w;oy+=vy*w;weight+=w;
+    maxLen=Math.max(maxLen,Math.hypot(b[0]-a[0],b[1]-a[1]));refs.add(e.ref);
+  }
+  tx/=weight;ty/=weight;let on=Math.hypot(ox,oy);if(on<.1){ox=1;oy=0;on=1}ox/=on;oy/=on;
+  const fov=fovFromAsset(asset)||70,explicitDistance=Number(asset?.camera?.distance_m);
+  const estimated=maxLen>1?(maxLen/(2*Math.tan(fov*Math.PI/360)))*1.45:22;
+  const distance=Number.isFinite(explicitDistance)&&explicitDistance>=1?explicitDistance:Math.max(10,Math.min(65,estimated));
+  const coordinates=lonLatFromMeters(marker,[tx+ox*distance,ty+oy*distance]),target=lonLatFromMeters(marker,[tx,ty]);
+  const heading=Number.isFinite(headingExplicit)?headingExplicit:openWorld._internals.bearing(coordinates,target);
+  return {coordinates,heading,distance_m:distance,source:entries.some(e=>e.ref!=='astra-semantic')?'astra-evidence':'astra-semantic',refs:[...refs]};
+}
 function ownerPriority(asset){
   const category=String(asset?.category||''),base={main_building:90,neighbor_building:82,road_ground:78,landscape:76,panorama:72,vegetation:66,street_object:62}[category]||50;
   return base+(Number(asset?.priority)||3)*8+(asset?.primary?8:0)+(asset?.metadata?.gps?12:0);
@@ -154,14 +235,15 @@ function photorealCandidates(raw,marker,max=72,maxDistance=360){
 }
 async function buildSources(marker,profile,assets){
   const ownerAssets=(config.REALCITY_PHOTOREAL_USE_OWNER_ASSETS?assets:[]).slice(0,96).sort((a,b)=>ownerPriority(b)-ownerPriority(a));
+  const evidence=astraEvidenceIndex(profile);
   const own=ownerAssets.map(a=>{
-    const camera=a.camera||{},coordinates=ownerCameraCoordinates(marker,a);
-    const heading=finite(camera.heading_deg)?Number(camera.heading_deg):(finite(a.direction_deg)?Number(a.direction_deg):(finite(a.metadata?.heading_deg)?Number(a.metadata.heading_deg):null));
+    const camera=a.camera||{},pose=evidencePose(marker,profile,a,evidence),coordinates=pose.coordinates,heading=pose.heading;
     return {
       id:'owner:'+a.id,kind:'owner',provider:'owner',url:(a.kind==='external_file'&&/^https:\/\//i.test(String(a.src||''))?String(a.src):sourceUrl(marker,a)),asset_id:a.id,
       category:a.category||'main_building',subtype:a.subtype||'detail',role:a.role||'environment',priority:Number(a.priority)||3,primary:!!a.primary,
       coordinates,heading,pitch:finite(camera.pitch_deg)?Number(camera.pitch_deg):null,fov:fovFromAsset(a),
-      distance_m:finite(camera.distance_m)?Number(camera.distance_m):null,altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,
+      distance_m:pose.distance_m??(finite(camera.distance_m)?Number(camera.distance_m):null),altitude_m:finite(camera.altitude_m)?Number(camera.altitude_m):null,
+      pose_source:pose.source,evidence_refs:pose.refs,angle:a.angle||'unknown',filename:String(a.filename||'').slice(0,180),label:String(a.label||'').slice(0,180),
       captured_at:a.metadata?.captured_at||null,camera_make:a.metadata?.camera_make||'',camera_model:a.metadata?.camera_model||'',
       focal_length_mm:finite(a.metadata?.focal_length_mm)?Number(a.metadata.focal_length_mm):null,
       license:'owner supplied',attribution:'Venue supplied original',photo_first:true
@@ -324,4 +406,4 @@ function publicSummary(p){
     points:p.stats?.points||0,chunks:p.chunks?.length||0,frames:p.stats?.frames||0,backend:p.stats?.backend||'',gpu:p.stats?.gpu||'',
     alignment:p.alignment||{},quality:p.quality||{},source_count:p.sources?.length||0};
 }
-module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority}};
+module.exports={ENGINE,SCHEMA,ensureSchema,sceneSignature,heroAnchor,verifySource,readPrivateSource,queue,acceptResult,publicSummary,resultSignature,_internals:{artifactDigest,callbackDigest,validateArtifact,validateChunk,photorealCandidates,transientWorkerFailure,fovFromAsset,ownerCameraCoordinates,ownerPriority,astraEvidenceIndex,ownerReferenceKeys,evidencePose}};

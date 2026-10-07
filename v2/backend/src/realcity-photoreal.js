@@ -207,21 +207,28 @@ function validateArtifact(body,row){
 }
 async function queue(marker,profile=marker.realcity_profile||{}){
   await ensureSchema();
-  if(!db.configured||!config.REALCITY_PHOTOREAL_ENABLED||!config.REALCITY_RECONSTRUCTION_WORKER_URL||!config.REALCITY_RECONSTRUCTION_SECRET)return {queued:false,reason:'worker_not_configured'};
+  const report=result=>{
+    console.log('RealCity photoreal queue',String(marker?.id||''),{
+      queued:!!result?.queued,reason:result?.reason||null,sources:Number(result?.sources)||0,
+      signature:String(result?.input_signature||'').slice(0,12)
+    });
+    return result;
+  };
+  if(!db.configured||!config.REALCITY_PHOTOREAL_ENABLED||!config.REALCITY_RECONSTRUCTION_WORKER_URL||!config.REALCITY_RECONSTRUCTION_SECRET)return report({queued:false,reason:'worker_not_configured'});
   const assets=Array.isArray(marker.realcity_astra_assets)?marker.realcity_astra_assets:[];
   const inputSignature=sceneSignature(marker,profile,assets);
-  if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return {queued:false,reason:'current'};
+  if(profile.photoreal?.status==='ready'&&profile.photoreal.input_signature===inputSignature)return report({queued:false,reason:'current',input_signature:inputSignature});
   const sources=await buildSources(marker,profile,assets);
-  if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return {queued:false,reason:'insufficient_views',sources:sources.length};
+  if(sources.length<config.REALCITY_RECONSTRUCTION_MIN_VIEWS)return report({queued:false,reason:'insufficient_views',sources:sources.length,input_signature:inputSignature});
   // A GPU process can disappear without a callback. Do not let one dead job
   // permanently block a venue; fail stale work, then apply a short retry backoff.
   await db.query("UPDATE realcity_reconstruction_jobs SET status='failed',last_error='worker_timeout',updated_at=NOW() WHERE marker_id=$1 AND status IN ('queued','processing') AND updated_at<NOW()-INTERVAL '2 hours'",[marker.id]);
   const existing=await db.query("SELECT job_id,status FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status IN ('queued','processing') ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
-  if(existing.rows[0])return {queued:false,reason:'already_queued',job_id:existing.rows[0].job_id};
+  if(existing.rows[0])return report({queued:false,reason:'already_queued',job_id:existing.rows[0].job_id,sources:sources.length,input_signature:inputSignature});
   const recentFailure=await db.query("SELECT job_id,last_error,updated_at FROM realcity_reconstruction_jobs WHERE marker_id=$1 AND input_signature=$2 AND status='failed' AND updated_at>NOW()-INTERVAL '10 minutes' ORDER BY updated_at DESC LIMIT 1",[marker.id,inputSignature]);
   if(recentFailure.rows[0]){
     const transient=transientWorkerFailure(recentFailure.rows[0].last_error);
-    if(!transient)return {queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error};
+    if(!transient)return report({queued:false,reason:'retry_cooldown',job_id:recentFailure.rows[0].job_id,error:recentFailure.rows[0].last_error,sources:sources.length,input_signature:inputSignature});
   }
   const jobId='rc_'+crypto.randomBytes(12).toString('hex'),payload=buildPayload(marker,profile,assets,sources,inputSignature,jobId);
   await db.query("INSERT INTO realcity_reconstruction_jobs(job_id,marker_id,input_signature,status,source_count,attempts) VALUES($1,$2,$3,'queued',$4,1)",[jobId,marker.id,inputSignature,sources.length]);
@@ -231,11 +238,11 @@ async function queue(marker,profile=marker.realcity_profile||{}){
     const r=await fetch(config.REALCITY_RECONSTRUCTION_WORKER_URL.replace(/\/+$/,'')+'/v1/jobs',{method:'POST',signal:ac.signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+config.REALCITY_RECONSTRUCTION_WORKER_TOKEN},body:JSON.stringify(payload)});clearTimeout(timer);
     if(!r.ok)throw new Error('worker_http_'+r.status);
     const j=await r.json();await db.query("UPDATE realcity_reconstruction_jobs SET status='processing',worker_job_id=$2,updated_at=NOW() WHERE job_id=$1",[jobId,clean(j.job_id||jobId,140)]);
-    return {queued:true,job_id:jobId,sources:sources.length};
+    return report({queued:true,job_id:jobId,sources:sources.length,input_signature:inputSignature});
   }catch(e){
     await db.query("UPDATE realcity_reconstruction_jobs SET status='failed',last_error=$2,updated_at=NOW() WHERE job_id=$1",[jobId,clean(e.message,500)]).catch(()=>{});
     await db.query("UPDATE shaurmeg_markers SET realcity_profile=jsonb_set(COALESCE(realcity_profile,'{}'::jsonb),'{photoreal_job}',$2::jsonb) WHERE id=$1",[marker.id,JSON.stringify({job_id:jobId,status:'failed',error:clean(e.message,180),input_signature:inputSignature})]).catch(()=>{});
-    return {queued:false,reason:'submit_failed',error:e.message};
+    return report({queued:false,reason:'submit_failed',error:e.message,sources:sources.length,input_signature:inputSignature});
   }
 }
 async function acceptResult(body){

@@ -553,7 +553,8 @@
     box.title=[...new Set(refs.map(r=>[r.attribution,r.license].filter(Boolean).join(' · ')).filter(Boolean))].join('\n');
   }
   function isPhotorealDisplaySafe(model){
-    if(model?.quality?.reference_master===true&&model?.quality?.surface_projection===true&&
+    if(model?.quality?.surface_projection===true&&
+       (model?.quality?.reference_master===true||String(model?.target?.marker_id)==='3139')&&
        !(Number(model.quality.calibrated_facades)>=1))return false;
     return model?.quality?.display_safe===true&&model?.quality?.map_registered_surface===true;
   }
@@ -732,7 +733,7 @@
     const authored=astraLayer?activeRealCityModel:null,photoreal=!!(authored&&activeRealCityMode==='photoreal');
     const completePhotogrammetry=photoreal&&isCompletePhotogrammetry(authored);
     const measuredVolumetric=photoreal&&isMeasuredVolumetric(authored);
-    const referenceMaster=photoreal&&authored?.quality?.reference_master===true;
+    const referenceMaster=photoreal&&(isLepeshkaRealCity(p)||authored?.quality?.reference_master===true);
     const reconstructedRadius=completePhotogrammetry
       ?Math.max(80,Math.min(350,Number(authored.quality?.coverage_radius_m)||Number(profile.scene?.radius_m)||190))
       :measuredVolumetric?Math.max(45,Math.min(120,Number(authored.quality?.coverage_radius_m)||90)):0;

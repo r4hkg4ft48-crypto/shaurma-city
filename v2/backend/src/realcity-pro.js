@@ -2,18 +2,30 @@
 // RealCity Pro: isolated from Astra; photo truth, map geometry and human QA.
 const crypto=require('crypto');
 const express=require('express');
+const {Worker}=require('worker_threads');
 const P=require('./realcity-photo');
 const S=require('../../frontend/realcity-spatial');
 const fail=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 const surfaceId=c=>'pro_'+hash([c.building_id,c.edge_index].join(':')).slice(0,24);
+function buildOffThread(spec,sources){
+ return new Promise((resolve,reject)=>{
+  const worker=new Worker(require.resolve('./realcity-pro-worker'),{workerData:{spec,sources}});
+  let settled=false;
+  const timer=setTimeout(()=>{if(!settled){settled=true;worker.terminate().catch(()=>{});reject(fail('pro_photo_worker_timeout',504))}},120000);
+  const end=(error,material)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(material)};
+  worker.once('message',m=>m.ok?end(null,m.material):end(fail(m.error||'pro_photo_worker_failed')));
+  worker.once('error',err=>end(err));
+  worker.once('exit',code=>{if(code!==0)end(fail('pro_photo_worker_exit_'+code,500))});
+ });
+}
 const ROLES=new Set(['hero_front','hero_oblique','hero_side','hero_distance','neighbor','panorama','road','vegetation','landmark','environment']);
 const settings=Object.freeze({mode:'realcity-pro',geometry:'mapped-only',facade:'source-pixels',
   procedural_facades:false,synthetic_windows:false,synthetic_vegetation:false,
   source_fabrication:false,generated_images_as_geometry:false,
   uncalibrated_projection:false,manual_review_required:true,max_texture_size:2048});
 async function ensureSchema(db){
-  await db.query("CREATE TABLE IF NOT EXISTS realcity_pro_assets (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,role TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL,mime TEXT NOT NULL,content BYTEA NOT NULL,metadata JSONB NOT NULL,preview TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id),UNIQUE(marker_id,sha256)); CREATE TABLE IF NOT EXISTS realcity_pro_calibrations (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,building_id TEXT NOT NULL,geometry_key TEXT NOT NULL,edge_index INT NOT NULL,source_quad JSONB NOT NULL,exclude JSONB NOT NULL DEFAULT '[]'::jsonb,flip_u BOOLEAN NOT NULL DEFAULT FALSE,confirmed BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id,building_id,edge_index)); CREATE TABLE IF NOT EXISTS realcity_pro_drafts (marker_id BIGINT PRIMARY KEY REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,revision TEXT NOT NULL,output JSONB NOT NULL,report JSONB NOT NULL,reviewed_revision TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());");
+  await db.query("CREATE TABLE IF NOT EXISTS realcity_pro_assets (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,role TEXT NOT NULL,filename TEXT NOT NULL,sha256 TEXT NOT NULL,mime TEXT NOT NULL,content BYTEA NOT NULL,metadata JSONB NOT NULL,preview TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id),UNIQUE(marker_id,sha256)); CREATE TABLE IF NOT EXISTS realcity_pro_calibrations (marker_id BIGINT NOT NULL REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,asset_id TEXT NOT NULL,building_id TEXT NOT NULL,geometry_key TEXT NOT NULL,edge_index INT NOT NULL,source_quad JSONB NOT NULL,exclude JSONB NOT NULL DEFAULT '[]'::jsonb,flip_u BOOLEAN NOT NULL DEFAULT FALSE,confirmed BOOLEAN NOT NULL DEFAULT FALSE,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),PRIMARY KEY(marker_id,asset_id,building_id,edge_index)); CREATE TABLE IF NOT EXISTS realcity_pro_jobs (marker_id BIGINT PRIMARY KEY REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,job_id TEXT NOT NULL,revision TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'queued',completed INT NOT NULL DEFAULT 0,total INT NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()); CREATE TABLE IF NOT EXISTS realcity_pro_drafts (marker_id BIGINT PRIMARY KEY REFERENCES shaurmeg_markers(id) ON DELETE CASCADE,revision TEXT NOT NULL,output JSONB NOT NULL,report JSONB NOT NULL,reviewed_revision TEXT,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());");
 }
 function manifest(row){
  const scene=row.realcity_profile?.scene||{},point=[Number(row.lon),Number(row.lat)];
@@ -103,9 +115,9 @@ function install(app,{db,authorize}){
   return r.rows;
  }
  async function state(row){
-  const [a,c,d]=await Promise.all([assets(row),cals(row),db.query('SELECT revision,report,reviewed_revision,updated_at FROM realcity_pro_drafts WHERE marker_id=$1',[row.id])]);
+  const [a,c,d,j]=await Promise.all([assets(row),cals(row),db.query('SELECT revision,report,reviewed_revision,updated_at FROM realcity_pro_drafts WHERE marker_id=$1',[row.id]),db.query('SELECT job_id,revision,status,completed,total,last_error,updated_at FROM realcity_pro_jobs WHERE marker_id=$1',[row.id])]);
   return {marker:{id:String(row.id),name:row.name,establishment_id:row.establishment_id,venue_id:row.venue_id,lon:Number(row.lon),lat:Number(row.lat)},
-    manifest:manifest(row),settings,assets:a,calibrations:c,revision:revision(row,a,c),draft:d.rows[0]||null,
+    manifest:manifest(row),settings,assets:a,calibrations:c,revision:revision(row,a,c),draft:d.rows[0]||null,job:j.rows[0]||null,
     published:row.realcity_profile?.pro?{input_revision:row.realcity_profile.pro.input_revision,quality:row.realcity_profile.pro.quality}:null};
  }
  app.get(base,admin,route(async(req,res)=>res.json(await state(await select(req)))));

@@ -282,3 +282,24 @@ test('MapAnything does not request multiview confidence for a single observation
   assert.match(src,/use_multiview_confidence=len\(views\)>1/);
   assert.match(src,/realcity-photoreal-worker-v4/);
 });
+
+
+test('high-memory CPU MAX removes the six-frame ceiling',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/HIGH_MEMORY_CPU/);
+  assert.match(src,/if HIGH_MEMORY_CPU:return min\(requested,32\)/);
+  assert.match(src,/not HIGH_MEMORY_CPU and os\.getenv\("REALCITY_ALLOW_CPU_MAPANYTHING"/);
+  assert.match(src,/"high_memory_cpu":HIGH_MEMORY_CPU/);
+});
+
+test('MAX source sweep reaches beyond the old narrow street radius',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const open=fs.readFileSync(path.join(__dirname,'../src/realcity-open-world.js'),'utf8');
+  const photo=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(open,/bbox\(marker,520\)/);
+  assert.match(open,/radius:'520'/);
+  assert.match(open,/ggsradius:'650'/);
+  assert.match(photo,/Math\.min\(520,\(Number\(profile\?\.scene\?\.radius_m\)\|\|190\)\*2\.35\)/);
+  assert.match(photo,/photorealCandidates\(await openWorld\.collectCandidates\(marker\),marker,88,maxDistance\)/);
+});

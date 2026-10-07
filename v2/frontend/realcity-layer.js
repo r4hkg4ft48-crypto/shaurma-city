@@ -185,7 +185,7 @@ void main(){
   function makePhotoAtlas(astra){
     const materials=(astra.materials||[]).filter(m=>m.mode==='facade'),canvas=document.createElement('canvas');
     const size=materials.length?4096:1;canvas.width=canvas.height=size;
-    const slots=new Map(),params=new Float32Array(48),ctx=canvas.getContext('2d');
+    const slots=new Map(),params=new Float32Array(48),ctx=canvas.getContext('2d'),failures=[];
     let placement=[],scale=1;
     for(let attempt=0;attempt<12;attempt++){
       let x=0,y=0,row=0;placement=[];
@@ -205,9 +205,9 @@ void main(){
         // 16px gutters prevent neighboring facades leaking into oblique mipmaps.
         ctx.drawImage(img,0,0,1,img.height,x-16,y,16,h);ctx.drawImage(img,img.width-1,0,1,img.height,x+w,y,16,h);
         ctx.drawImage(canvas,x-16,y,w+32,1,x-16,y-16,w+32,16);ctx.drawImage(canvas,x-16,y+h-1,w+32,1,x-16,y+h,w+32,16);
-        resolve();};img.onerror=()=>resolve();img.src=m.data_url;});
+        resolve();};img.onerror=()=>{failures.push(m.id);resolve()};img.src=m.data_url;});
     });
-    return {canvas,slots,params,scale,ready:Promise.all(jobs)};
+    return {canvas,slots,params,scale,failures,ready:Promise.all(jobs)};
   }
   function subtractRectangles(rect,holes){
     let parts=[rect];
@@ -283,7 +283,7 @@ void main(){
           if(astra.mode!=='realcity-pro')for(const p of subtractRectangles([0,b.base_m,edge.length,height-b.base_m],surfaces.map(s=>[s.u_m,s.z_m,s.width_m,s.height_m])))plane(...p,0,f.wall.color,null);
           for(const s of surfaces){
             const slot=atlas.slots.get(s.material_id),w=s.width_m,h=s.height_m,d=s.depth_m,openings=s.openings||[];
-            if(!slot){plane(s.u_m,s.z_m,w,h,d,f.wall.color,null);continue;}
+            if(!slot){if(astra.mode!=='realcity-pro')plane(s.u_m,s.z_m,w,h,d,f.wall.color,null);continue;}
             const patch=(x,z,pw,ph,depth,glass=false)=>{
               const u=q=>slot.u0+(slot.u1-slot.u0)*(s.flip_u?1-q:q),v=q=>slot.v1-(slot.v1-slot.v0)*q;
               if(astra.mode!=='realcity-pro')plane(s.u_m+x,s.z_m+z,pw,ph,depth-.002,f.wall.color,null);
@@ -455,7 +455,7 @@ void main(){
       return S.edges(b.ring||base.ring,[Number(marker.lon),Number(marker.lat)]).map(e=>({building_id:parent.building_id,edge_index:e.index,role:b.role,evidence:b.facades.find(f=>f.edge_index===e.index)?.evidence||'inferred',vertices:[[...e.a,b.base_m],[...e.b,b.base_m],[...e.b,b.height_m],[...e.a,b.height_m]]}));
     }));
     if(mesh.triangles>180000){onError(new Error('astra_geometry_budget'));return null;}
-    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,disposed:false,progress:reducedMotion?1:0,
+    const layer={id:layerId,type:'custom',renderingMode:'3d',ready:false,photoReady:astra.mode!=='realcity-pro',photoPromise:atlas.ready,disposed:false,progress:reducedMotion?1:0,
       stats:{buildings:astra.buildings.length,triangles:mesh.triangles,bytes:mesh.vertices.byteLength,photo_atlas_scale:atlas.photos.scale,photo_materials:atlas.photos.slots.size},
       onAdd(map,gl){
         this.map=map;this.gl=gl;
@@ -487,7 +487,15 @@ void main(){
           if(anisotropy)gl.texParameterf(gl.TEXTURE_2D,anisotropy.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(anisotropy.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
           this.uploadAtlas();this.ready=true;this.light=lightMatrix();
           if(astra.materials?.length)this.setupShadow();
-          atlas.ready.then(()=>{if(!this.disposed){this.uploadAtlas();map.triggerRepaint()}});
+          atlas.ready.then(()=>{
+            if(this.disposed)return;
+            if(astra.mode==='realcity-pro'&&atlas.photos.failures.length){
+              this.ready=false;
+              onError(new Error('pro_photo_texture_failed:'+atlas.photos.failures.join(',')));
+              return;
+            }
+            this.uploadAtlas();this.photoReady=true;map.triggerRepaint();
+          });
         }catch(e){this.onRemove(map,gl);onError(e);}
       },
       uploadAtlas(){
@@ -539,7 +547,7 @@ void main(){
         }return hit;
       },
       render(gl,args){
-        if(!this.ready||this.disposed)return;
+        if(!this.ready||this.disposed||(astra.mode==='realcity-pro'&&!this.photoReady))return;
         const m=args?.defaultProjectionData?.mainMatrix||args?.modelViewProjectionMatrix||(Array.isArray(args)||ArrayBuffer.isView(args)?args:null);if(!m)return;
         this.drawShadow();
         gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);

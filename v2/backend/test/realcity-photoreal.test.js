@@ -132,3 +132,21 @@ test('Gaussian depth bucket order is back-to-front and deterministic',()=>{
   assert.deepEqual([...order],[2,1,0]);
   assert.deepEqual([...R.depthBucketOrder(vertices,I,3,32)],[...order]);
 });
+
+
+test('transient worker outages bypass retry cooldown policy',()=>{
+  assert.equal(P._internals.transientWorkerFailure('worker_http_502'),true);
+  assert.equal(P._internals.transientWorkerFailure('worker_http_503'),true);
+  assert.equal(P._internals.transientWorkerFailure('worker_timeout'),true);
+  assert.equal(P._internals.transientWorkerFailure('UND_ERR_CONNECT_TIMEOUT'),true);
+  assert.equal(P._internals.transientWorkerFailure('metric_fallback_too_sparse'),false);
+});
+
+test('worker contract permits one-view metric fallback but keeps three-view MAX path',()=>{
+  const fs=require('node:fs'),src=fs.readFileSync(require('node:path').join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/requested=max\(1,min\(/);
+  assert.match(src,/if len\(paths\)<1: raise RuntimeError\("no_decodable_views"\)/);
+  assert.match(src,/if len\(paths\)<3:/);
+  assert.match(src,/len\(job\.sources\)<1/);
+  assert.match(src,/partial_view_metric_fallback/);
+});

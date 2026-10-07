@@ -288,7 +288,7 @@ test('high-memory CPU MAX removes the six-frame ceiling',()=>{
   const fs=require('node:fs'),path=require('node:path');
   const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
   assert.match(src,/HIGH_MEMORY_CPU/);
-  assert.match(src,/if HIGH_MEMORY_CPU:return min\(requested,32\)/);
+  assert.match(src,/if HIGH_MEMORY_CPU:\s*return min\(requested,32\)/);
   assert.match(src,/not HIGH_MEMORY_CPU and os\.getenv\("REALCITY_ALLOW_CPU_MAPANYTHING"/);
   assert.match(src,/"high_memory_cpu":HIGH_MEMORY_CPU/);
 });

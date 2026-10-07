@@ -207,7 +207,7 @@ test('partial photoreal distinguishes flat fallback from measured volumetric sup
   assert.match(src,/isTruePhotogrammetry=isCompletePhotogrammetry\(authored\.model\)/);
   assert.match(src,/isVolumetricDepth=isMeasuredVolumetric\(authored\.model\)/);
   assert.match(src,/if\(!isTruePhotogrammetry&&!isVolumetricDepth&&!referenceMaster\)/);
-  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
+  assert.match(src,/supportMode=!proMode&&measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/REAL CITY · PHOTOGRAMMETRY/);
   assert.match(src,/REAL CITY · PHOTO 3D/);
   assert.match(src,/REAL CITY · PHOTO MASTER/);
@@ -273,7 +273,7 @@ test('RealCity world palette visibly replaces the dark city theme and restores o
   assert.match(src,/background-color','#9da5a7'/);
   assert.match(src,/fill-color','#7898a5'/);
   assert.match(src,/line-color','#55585a'/);
-  assert.match(src,/setRealCityWorldPalette\(!!astraLayer&&!referenceMaster\)/);
+  assert.match(src,/setRealCityWorldPalette\(!!astraLayer&&!referenceMaster&&!proMode\)/);
   assert.match(src,/setRealCityWorldPalette\(false\)/);
   assert.match(src,/zoom:19\.05,pitch:67/);
 });
@@ -499,7 +499,7 @@ test('measured incomplete depth replaces native buildings with neutral 3D suppor
   assert.match(src,/const completePhotogrammetry=photoreal&&isCompletePhotogrammetry\(authored\)/);
   assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
   assert.match(src,/\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
-  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
+  assert.match(src,/supportMode=!proMode&&measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/setBaseBuildingsDim\(dimmed\.length>0/);
   assert.match(src,/supportify/);
 });
@@ -597,9 +597,9 @@ test('measured volumetric scenes replace native buildings visibly',()=>{
   const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
   assert.match(src,/function isMeasuredVolumetric\(model\)/);
   assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
-  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
+  assert.match(src,/supportMode=!proMode&&measuredVolumetric&&!completePhotogrammetry/);
   assert.match(src,/support:1/);
-  assert.match(src,/const dimmed=\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
+  assert.match(src,/const dimmed=proMode\?\[\]:\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
 });
 
 test('volumetric renderer boosts source splats over support geometry',()=>{
@@ -717,7 +717,7 @@ test('v26.1 seeds В Лепёшке from both curated master references and remo
   assert.match(worker,/"reference_master":int\(stats\.get\("reference_master_frames",0\)\)>0/);
   assert.match(map,/!isTruePhotogrammetry&&!isVolumetricDepth&&!referenceMaster/);
   assert.match(map,/REAL CITY · PHOTO MASTER/);
-  assert.match(map,/referenceMaster\?0:photoreal\?\.045/);
+  assert.match(map,/referenceMaster\|\|proMode\?0:photoreal\?\.045/);
 });
 
 

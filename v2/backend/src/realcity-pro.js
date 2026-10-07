@@ -149,48 +149,70 @@ function install(app,{db,authorize}){
  }));
  app.post(base+'/build',admin,route(async(req,res)=>{
   const row=await select(req),key=String(row.id);
-  if(busy.has(key))fail('pro_build_in_progress',409);busy.add(key);
+  if(busy.has(key))fail('pro_build_in_progress',409);
+  const [a,c]=await Promise.all([assets(row,false),cals(row)]),rev=revision(row,a,c),mani=manifest(row);
+  if(req.body?.expected_revision!==rev)fail('pro_sources_changed',409);
+  const usable=c.filter(x=>x.confirmed&&a.some(v=>v.asset_id===x.asset_id));
+  if(!usable.length||usable.length>48)fail('pro_confirmed_facade_count');
+  const groups=new Map();
+  for(const cal of usable){
+   const b=mani.buildings.find(x=>x.building_id===cal.building_id),e=b?.edges.find(x=>x.edge_index===cal.edge_index);
+   if(!e||b.geometry_key!==cal.geometry_key)fail('pro_geometry_changed',409);
+   const edgeKey=cal.building_id+':'+cal.edge_index,list=groups.get(edgeKey)||[];
+   if(list.length>=4)fail('pro_max_four_views_per_surface');
+   list.push(cal);groups.set(edgeKey,list);
+  }
+  if(groups.size>12)fail('pro_facade_surface_limit_12');
+  const active=await db.query("SELECT job_id FROM realcity_pro_jobs WHERE marker_id=$1 AND status='processing' AND updated_at>NOW()-INTERVAL '10 minutes'",[row.id]);
+  if(active.rows.length)fail('pro_build_in_progress',409);
+  const jobId='rpro_'+crypto.randomBytes(12).toString('hex');
+  busy.add(key);
   try{
-   const [a,c]=await Promise.all([assets(row,false),cals(row)]),rev=revision(row,a,c),mani=manifest(row);
-   if(req.body?.expected_revision!==rev)fail('pro_sources_changed',409);
-   const usable=c.filter(x=>x.confirmed&&a.some(v=>v.asset_id===x.asset_id));
-   if(!usable.length||usable.length>48)fail('pro_confirmed_facade_count');
-   const groups=new Map();
-   for(const c of usable){
-    const b=mani.buildings.find(x=>x.building_id===c.building_id),e=b?.edges.find(x=>x.edge_index===c.edge_index);
-    if(!e||b.geometry_key!==c.geometry_key)fail('pro_geometry_changed',409);
-    const key=c.building_id+':'+c.edge_index,list=groups.get(key)||[];
-    if(list.length>=4)fail('pro_max_four_views_per_surface');
-    list.push(c);groups.set(key,list);
-   }
-   if(groups.size>12)fail('pro_facade_surface_limit_12');
-   const materials=[],used=[];
-   const photos=new Map();
-   for(const [edgeKey,views] of groups){
-    const c=views[0],b=mani.buildings.find(x=>x.building_id===c.building_id);
-    const e=b.edges.find(x=>x.edge_index===c.edge_index);
-    for(const view of views)if(!photos.has(view.asset_id)){
+   await db.query("INSERT INTO realcity_pro_jobs(marker_id,job_id,revision,status,completed,total,last_error,updated_at) VALUES($1,$2,$3,'processing',0,$4,'',NOW()) ON CONFLICT(marker_id) DO UPDATE SET job_id=EXCLUDED.job_id,revision=EXCLUDED.revision,status='processing',completed=0,total=EXCLUDED.total,last_error='',updated_at=NOW()",
+     [row.id,jobId,rev,groups.size]);
+  }catch(e){busy.delete(key);throw e}
+  // Long-running photo rectification never blocks the live HTTP event loop.
+  // Frontend polls the durable status; a render/restart is treated as a stale
+  // process rather than pretending an old unpublished draft is ready.
+  res.status(202).json({queued:true,job_id:jobId,revision:rev,total:groups.size});
+  const run=async()=>{
+   try{
+    const materials=[],used=[];
+    for(const [edgeKey,views] of groups){
+     const cal=views[0],b=mani.buildings.find(x=>x.building_id===cal.building_id);
+     const e=b.edges.find(x=>x.edge_index===cal.edge_index),sources=[];
+     for(const view of views){
       const q=await db.query('SELECT content FROM realcity_pro_assets WHERE marker_id=$1 AND asset_id=$2',[row.id,view.asset_id]);
       if(!q.rows[0])fail('pro_original_missing',409);
-      photos.set(view.asset_id,q.rows[0].content);
+      sources.push({id:view.asset_id,content:q.rows[0].content});
+     }
+     // Rectify up to four exact observations of this wall. Occlusion masks
+     // reveal pixels of a calibrated secondary view, never invented textures.
+     const m=await buildOffThread({
+       id:surfaceId(cal),width_m:e.length_m,height_m:b.height_m-b.base_m,
+       pixels_per_m:80,sharpen:0,roughness:1,metalness:0,lighting_mix:0,
+       views:views.map(v=>({source_asset_id:v.asset_id,source_quad:v.source_quad,exclude:v.exclude,
+        exposure_ev:0,white_balance:[1,1,1]}))
+     },sources);
+     m.edge_key=edgeKey;materials.push(m);used.push(...views);
+     await db.query("UPDATE realcity_pro_jobs SET completed=$3,updated_at=NOW() WHERE marker_id=$1 AND job_id=$2",
+       [row.id,jobId,materials.length]);
     }
-    // Explicit projective quads align every source to the SAME measured wall.
-    // Masked people/cars/trees are replaced from a confirmed alternate view,
-    // never synthesized or averaged into doubled ghost windows.
-    const m=await P.buildMaterial({id:surfaceId(c),width_m:e.length_m,height_m:b.height_m-b.base_m,
-      pixels_per_m:80,sharpen:0,roughness:1,metalness:0,lighting_mix:0,
-      views:views.map(v=>({source_asset_id:v.asset_id,source_quad:v.source_quad,exclude:v.exclude,
-        exposure_ev:0,white_balance:[1,1,1]}))},
-      async id=>photos.get(id));
-    m.edge_key=edgeKey;materials.push(m);used.push(...views);
-   }
-   const report=qualityGate(row,used,materials),output=outputModel(row,used,materials,rev,report);
-   if(JSON.stringify(output).length>16*1024*1024)fail('pro_material_budget');
-   if(revision(row,await assets(row,false),await cals(row))!==rev)fail('pro_sources_changed_during_build',409);
-   await db.query('INSERT INTO realcity_pro_drafts(marker_id,revision,output,report,reviewed_revision) VALUES($1,$2,$3::jsonb,$4::jsonb,NULL) ON CONFLICT(marker_id) DO UPDATE SET revision=EXCLUDED.revision,output=EXCLUDED.output,report=EXCLUDED.report,reviewed_revision=NULL,updated_at=NOW()',
+    const report=qualityGate(row,used,materials),output=outputModel(row,used,materials,rev,report);
+    if(JSON.stringify(output).length>16*1024*1024)fail('pro_material_budget');
+    const fresh=await db.query('SELECT * FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2',[row.id,row.establishment_id]);
+    const current=fresh.rows[0];
+    if(!current||revision(current,await assets(current,false),await cals(current))!==rev)fail('pro_sources_changed_during_build',409);
+    await db.query('INSERT INTO realcity_pro_drafts(marker_id,revision,output,report,reviewed_revision) VALUES($1,$2,$3::jsonb,$4::jsonb,NULL) ON CONFLICT(marker_id) DO UPDATE SET revision=EXCLUDED.revision,output=EXCLUDED.output,report=EXCLUDED.report,reviewed_revision=NULL,updated_at=NOW()',
       [row.id,rev,JSON.stringify(output),JSON.stringify(report)]);
-   res.json({ok:true,revision:rev,report});
-  }finally{busy.delete(key)}
+    await db.query("UPDATE realcity_pro_jobs SET status='ready',completed=total,updated_at=NOW() WHERE marker_id=$1 AND job_id=$2",[row.id,jobId]);
+   }catch(e){
+    console.error('realcity_pro_background',String(e?.message||e).slice(0,300));
+    await db.query("UPDATE realcity_pro_jobs SET status='failed',last_error=$3,updated_at=NOW() WHERE marker_id=$1 AND job_id=$2",
+      [row.id,jobId,String(e?.message||e).slice(0,200)]).catch(()=>{});
+   }finally{busy.delete(key)}
+  };
+  void run();
  }));
  app.get(base+'/preview',admin,route(async(req,res)=>{
   const row=await select(req),q=await db.query('SELECT revision,output,report FROM realcity_pro_drafts WHERE marker_id=$1',[row.id]);

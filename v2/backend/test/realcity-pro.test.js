@@ -33,11 +33,12 @@ test('RealCity Pro cannot publish a single wall and does not invent hidden geome
  const full=pro.qualityGate(row,[{building_id:'hero-1',edge_index:0,confirmed:true},{building_id:'hero-1',edge_index:1,confirmed:true}],
  [{quality:{missing_fraction:0}},{quality:{missing_fraction:0}}]);
  assert.equal(full.ready,true);
- const material=(id)=>({id:'pro_'+id,mode:'facade',rectified:true,source_asset_id:id,data_url:'data:image/webp;base64,YQ==',width:512,height:512,
+ const material=(c)=>({id:pro.surfaceId(c),mode:'facade',rectified:true,source_asset_id:id,data_url:'data:image/webp;base64,YQ==',width:512,height:512,
   roughness:1,metalness:0,lighting_mix:0});
  const cs=[0,1].map((edge_index)=>({asset_id:'pro'+edge_index,building_id:'hero-1',geometry_key:m.buildings[0].geometry_key,
    edge_index,flip_u:false,confirmed:true}));
- const model=pro.outputModel(row,cs,cs.map(c=>material(c.asset_id)),'rev-1',full);
+ const model=pro.outputModel(row,cs,cs.map(material),'rev-1',full);
+ assert.notEqual(pro.surfaceId(cs[0]),pro.surfaceId(cs[1]));
  assert.equal(model.mode,'realcity-pro');
  assert.equal(model.buildings.length,1);
  assert.equal(model.buildings[0].facades.length,2);
@@ -67,4 +68,14 @@ test('RealCity Pro editor inline JavaScript parses and avoids all-photo marker p
  const routes=fs.readFileSync(path.join(__dirname,'../src/routes.js'),'utf8');
  assert.match(routes,/m\.realcity_profile - ARRAY\['astra','real_world','pro','photoreal'\]/);
  assert.match(routes,/router\.get\('\/map\/markers\/:id\/realcity'/);
+});
+
+test('One photograph may calibrate two different map walls without sharing photo textures',()=>{
+ const b=pro.manifest(row).buildings[0];
+ const a={asset_id:'same-photo',building_id:b.building_id,edge_index:0};
+ const c={...a,edge_index:1};
+ assert.notEqual(pro.surfaceId(a),pro.surfaceId(c));
+ const src=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ assert.match(src,/PRIMARY KEY\(marker_id,asset_id,building_id,edge_index\)/);
+ assert.match(src,/ON CONFLICT\(marker_id,asset_id,building_id,edge_index\)/);
 });

@@ -134,7 +134,7 @@
     </div>
     <div class="astraActions">
       <button class="btn primary" id="saveAstra" type="button">Сохранить пакет Astra</button>
-      
+      <button class="btn primary" id="astraReconstruct" type="button">Собрать PHOTO-FIRST RealCity</button>
       <button class="btn" id="copyAstraManifest" type="button">Скопировать Astra manifest</button>
       <button class="btn" id="exportAstraPackage" type="button">Скачать задание</button>
       <button class="btn" id="importAstraOutput" type="button">Загрузить реконструкцию Astra</button>
@@ -514,7 +514,19 @@ $('#addAstraMainUrl').onclick=()=>addAstraUrl('main_building');$('#addAstraPanoU
 $('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});
-$('#saveAstra').onclick=saveAstraStudio;$('#copyAstraManifest').onclick=copyAstraManifest;
+$('#saveAstra').onclick=saveAstraStudio;
+$('#astraReconstruct').onclick=async e=>{
+ const b=e.currentTarget;b.disabled=true;
+ try{
+  if(!await saveAstraStudio())return;
+  const est=astraState.establishment_id,marker=astraState.marker_id;
+  $('#astraOutputStatus').textContent='PHOTO-FIRST: отправляем оригиналы в глубокую 3D-реконструкцию…';
+  const j=await api('/api/shaurma/admin/astra-realcity/'+encodeURIComponent(est)+'/reconstruct?marker_id='+encodeURIComponent(marker),{method:'POST',body:JSON.stringify({marker_id:marker})});
+  $('#astraOutputStatus').textContent=j.queued?'PHOTO-FIRST запущен · '+(j.sources||0)+' наблюдений':j.reason==='already_queued'?'Реконструкция уже выполняется':j.reason==='insufficient_views'?'Недостаточно наблюдений для объёмной реконструкции':'PHOTO-FIRST: '+(j.reason||'запрос принят');
+ }catch(err){$('#astraOutputStatus').textContent='Не удалось запустить PHOTO-FIRST: '+(err.body?.error||err.message)}
+ finally{b.disabled=false}
+};
+$('#copyAstraManifest').onclick=copyAstraManifest;
 $('#exportAstraPackage').onclick=exportAstraPackage;
 $('#importAstraOutput').onclick=()=>$('#astraOutputFile').click();
 $('#astraOutputFile').onchange=async e=>{await importAstraOutput(e.target.files[0]);e.target.value=''};

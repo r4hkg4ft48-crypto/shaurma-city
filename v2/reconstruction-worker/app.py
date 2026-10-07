@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 import numpy as np
 import httpx
-from PIL import Image
+from PIL import Image, ImageOps
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
@@ -128,8 +128,8 @@ async def download(url:str,provider:str="")->bytes:
                 if attempt==0:await asyncio.sleep(.35)
         raise RuntimeError(str(last)[:180] if last else "source_fetch_failed")
 
-def prepare_image(data:bytes,path:Path,max_side:int=1600)->dict:
-    im=Image.open(io.BytesIO(data)).convert("RGB")
+def prepare_image(data:bytes,path:Path,max_side:int=2048)->dict:
+    im=ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
     w,h=im.size
     scale=min(1.0,max_side/max(w,h))
     if scale<1:
@@ -661,10 +661,10 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
         coords=source.get("coordinates")
         if not (isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])):
             continue
-        im=Image.open(path).convert("RGB")
-        im.thumbnail((768,576) if device=="cuda" else (518,392),Image.Resampling.LANCZOS)
-        rgb=np.asarray(im);h,w=rgb.shape[:2]
+        base=Image.open(path).convert("RGB")
         if device=="cuda":
+            im=base.copy();im.thumbnail((768,576),Image.Resampling.LANCZOS)
+            rgb=np.asarray(im);h,w=rgb.shape[:2]
             inputs=processor(images=im,return_tensors="pt")
             inputs={k:v.to(device) for k,v in inputs.items()}
             with torch.inference_mode():
@@ -672,7 +672,13 @@ def gps_depth_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
                     pred=model(**inputs).predicted_depth
             d=torch.nn.functional.interpolate(pred.unsqueeze(1),size=(h,w),mode="bicubic",align_corners=False).squeeze().float().cpu().numpy()
         else:
-            d,variant=onnx_relative_depth(im);onnx_variants.add(variant)
+            depth_im=base.copy();depth_im.thumbnail((518,392),Image.Resampling.LANCZOS)
+            d_small,variant=onnx_relative_depth(depth_im);onnx_variants.add(variant)
+            # Geometry stays inexpensive; appearance is sampled from the
+            # higher-resolution stored original so signage/window/curb detail
+            # is not limited by the depth network resolution.
+            rgb=np.asarray(base);h,w=rgb.shape[:2]
+            d=np.asarray(Image.fromarray(d_small.astype(np.float32),mode="F").resize((w,h),Image.Resampling.BICUBIC),dtype=np.float32)
         finite=np.isfinite(d)&(d>.00001)
         if not finite.any():continue
         match=source.get("match") if isinstance(source.get("match"),dict) else {}

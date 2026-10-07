@@ -129,9 +129,9 @@ test('Wikimedia candidate preserves an original-image fallback for reconstructio
 });
 
 
-test('environment v16 refreshes roads independently while preserving saved building anchors',()=>{
+test('environment v17 refreshes roads independently while preserving saved building anchors',()=>{
   const A=require('../src/realcity-analyzer');
-  assert.equal(A.PROFILE_VERSION,16);
+  assert.equal(A.PROFILE_VERSION,17);
   const saved={
     radius_m:190,hero_building_id:'hero',
     buildings:[{id:'hero',ring:[[37,55],[37.0001,55],[37.0001,55.0001],[37,55.0001],[37,55]],height:18}],
@@ -146,7 +146,7 @@ test('environment v16 refreshes roads independently while preserving saved build
     trees:[{lon:37.0001,lat:55.0001,source:'osm'}],
     barriers:[{kind:'fence',coordinates:[[37,55],[37.0001,55]]}],
     street_objects:[{kind:'street_lamp',lon:37.0001,lat:55.0001,source:'osm'}],
-    environment_revision:2
+    environment_revision:3
   };
   const merged=A._internals.mergeFreshEnvironment(saved,fresh);
   assert.deepEqual(merged.buildings,saved.buildings);
@@ -156,7 +156,7 @@ test('environment v16 refreshes roads independently while preserving saved build
   assert.deepEqual(merged.greens,fresh.greens);
   assert.deepEqual(merged.barriers,fresh.barriers);
   assert.deepEqual(merged.street_objects,fresh.street_objects);
-  assert.equal(merged.environment_revision,2);
+  assert.equal(merged.environment_revision,3);
 });
 
 test('photoreal map keeps real environment visible instead of blanking it',()=>{
@@ -167,4 +167,20 @@ test('photoreal map keeps real environment visible instead of blanking it',()=>{
   assert.match(src,/realcity-barriers/);
   assert.match(src,/visibleTrees=photoreal\?data\.trees\.filter/);
   assert.match(src,/fill-opacity',photoreal\?\.18/);
+});
+
+
+test('OpenFreeMap environment fallback survives Overpass outages by contract',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const A=require('../src/realcity-analyzer');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-analyzer.js'),'utf8');
+  assert.equal(typeof A.fetchVectorEnvironment,'function');
+  assert.deepEqual(A._internals.geoLines({type:'LineString',coordinates:[[37,55],[37.1,55.1]]}),[[[37,55],[37.1,55.1]]]);
+  assert.match(src,/tile\.layers\?\.transportation/);
+  assert.match(src,/collectGreen\('park'/);
+  assert.match(src,/collectGreen\('landcover'/);
+  assert.match(src,/fetchVectorEnvironment\(marker,radius\)/);
+  assert.match(src,/Overpass outage can no longer erase roads\/greens/);
+  assert.match(src,/constrained-green-density/);
+  assert.doesNotMatch(src,/source:'procedural-density'/);
 });

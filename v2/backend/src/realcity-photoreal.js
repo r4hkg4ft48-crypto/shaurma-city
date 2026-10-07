@@ -127,7 +127,7 @@ async function buildSources(marker,profile,assets){
   const pub=publicCandidates.map(c=>{
     const ref=refs.get(String(c.source)+':'+String(c.id));
     return {
-      id:c.source+':'+c.id,kind:'open',url:c.image_url,provider:c.source,
+      id:c.source+':'+c.id,kind:'open',url:c.image_url,fallback_url:c.fallback_image_url||null,provider:c.source,
       coordinates:c.coordinates,heading:c.heading,fov:c.fov,panoramic:c.panoramic,distance_m:c.distance_m,
       captured_at:c.captured_at,license:c.license,license_url:c.license_url,attribution:c.attribution,page_url:c.page_url,
       match:ref?.match||null

@@ -253,3 +253,12 @@ test('MapAnything applies full OpenCV-to-ENU 3D basis alignment to points and sp
   assert.match(src,/def rotate_quats_matrix/);
   assert.match(src,/quats=rotate_quats_matrix/);
 });
+
+
+test('bundle-adjusted camera basis feeds final ENU alignment',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/def invert_w2c/);
+  assert.match(src,/anchor_c2w=invert_w2c\(ex\)/);
+  assert.match(src,/anchor_metric_points\(pts,centers,anchor_c2w/);
+});

@@ -305,7 +305,12 @@ function astraAssetCard(x){
    '<select data-astra-field="angle">'+astraAngleOptions(x.angle)+'</select>'+
    '<input class="full" data-astra-field="label" value="'+esc(x.label||'')+'" placeholder="Подпись: главный вход, дом напротив…">'+
    '<select data-astra-field="priority"><option value="5" '+(Number(x.priority)===5?'selected':'')+'>Приоритет 5 · критично</option><option value="4" '+(Number(x.priority)===4?'selected':'')+'>Приоритет 4</option><option value="3" '+(Number(x.priority)===3?'selected':'')+'>Приоритет 3</option><option value="2" '+(Number(x.priority)===2?'selected':'')+'>Приоритет 2</option><option value="1" '+(Number(x.priority)===1?'selected':'')+'>Приоритет 1</option></select>'+
-   '<input data-astra-field="direction_deg" type="number" min="0" max="359" value="'+(x.direction_deg??'')+'" placeholder="Направление °">'+
+   '<input data-astra-field="direction_deg" type="number" min="0" max="359" value="'+(x.direction_deg??x.camera?.heading_deg??'')+'" placeholder="Направление камеры °">'+
+   '<input data-astra-camera="pitch_deg" type="number" min="-45" max="45" step="0.1" value="'+(x.camera?.pitch_deg??'')+'" placeholder="Наклон камеры °">'+
+   '<input data-astra-camera="fov_deg" type="number" min="25" max="140" step="0.1" value="'+(x.camera?.fov_deg??'')+'" placeholder="FOV °">'+
+   '<input data-astra-camera="distance_m" type="number" min="1" max="220" step="0.1" value="'+(x.camera?.distance_m??'')+'" placeholder="До объекта, м">'+
+   '<input data-astra-camera="lat" type="number" min="-85" max="85" step="0.000001" value="'+(x.camera?.lat??x.metadata?.gps?.lat??'')+'" placeholder="Широта камеры">'+
+   '<input data-astra-camera="lon" type="number" min="-180" max="180" step="0.000001" value="'+(x.camera?.lon??x.metadata?.gps?.lon??'')+'" placeholder="Долгота камеры">'+
    '<textarea class="full" data-astra-field="notes" placeholder="Что Astra должна увидеть именно на этом кадре">'+esc(x.notes||'')+'</textarea>'+
    (x.metadata?'<small class="full">Оригинал '+Number(x.metadata.width)+' × '+Number(x.metadata.height)+' · '+(Number(x.metadata.bytes)/1048576).toFixed(1)+' МБ'+(x.metadata.gps?' · GPS ✓':'')+(Number.isFinite(Number(x.metadata.heading_deg))?' · направление '+Math.round(Number(x.metadata.heading_deg))+'°':'')+(x.metadata.focal_length_35mm?' · '+x.metadata.focal_length_35mm+' мм экв.':'')+(x.metadata.warnings?.length?' · проверьте качество':'')+'</small>':'')+
    '<div class="astraAssetTools"><label class="astraPrimary"><input type="checkbox" data-astra-primary '+(x.primary?'checked':'')+'> Главное фото в группе</label><button class="astraRemove" type="button" data-astra-remove>Удалить</button></div>'+
@@ -381,10 +386,15 @@ function addAstraUrl(category){
 }
 function updateAstraAsset(target){
  const card=target.closest('[data-astra-id]');if(!card)return;const x=astraAssets.find(v=>v.id===card.dataset.astraId);if(!x)return;
- const field=target.dataset.astraField;
+ const field=target.dataset.astraField,camField=target.dataset.astraCamera;
  if(field){
   x[field]=field==='priority'?Number(target.value):field==='direction_deg'?(target.value===''?null:Number(target.value)):target.value;
+  if(field==='direction_deg'){x.camera={...(x.camera||{}),heading_deg:x.direction_deg}}
   if(field==='category'){const tmp=document.createElement('select');tmp.innerHTML=astraSubtypeOptions(x.category,'');x.subtype=tmp.options[0]?.value||'detail';renderAstraAssets();return}
+ }
+ if(camField){
+  x.camera={...(x.camera||{})};
+  x.camera[camField]=target.value===''?null:Number(target.value);
  }
  if(target.matches('[data-astra-primary]')&&target.checked){astraAssets.forEach(v=>{if(v.category===x.category)v.primary=v.id===x.id});renderAstraAssets()}
  else if(target.matches('[data-astra-primary]'))x.primary=false;

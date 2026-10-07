@@ -388,12 +388,20 @@
 
     map.addSource('realcity-roads',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
     map.addLayer({id:'realcity-roads-glow',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#FFFFFF','line-width':['interpolate',['linear'],['zoom'],14,7,18,13],
-      'line-opacity':0,'line-blur':5,'line-opacity-transition':{duration:650,delay:120}
+      'line-color':['case',['==',['get','kind'],'sidewalk'],'#c8c2b7','#777b7e'],
+      'line-width':['case',['==',['get','kind'],'sidewalk'],['interpolate',['linear'],['zoom'],14,2.2,18,5.5],['interpolate',['linear'],['zoom'],14,7,18,13]],
+      'line-opacity':0,'line-blur':['case',['==',['get','kind'],'sidewalk'],.4,1.6],'line-opacity-transition':{duration:650,delay:120}
     }});
     map.addLayer({id:'realcity-roads-core',type:'line',source:'realcity-roads',paint:{
-      'line-color':'#E8EDF3','line-width':['interpolate',['linear'],['zoom'],14,2,18,5],
+      'line-color':['case',['==',['get','kind'],'sidewalk'],'#bdb7ab','#4f5356'],
+      'line-width':['case',['==',['get','kind'],'sidewalk'],['interpolate',['linear'],['zoom'],14,1.1,18,3.1],['interpolate',['linear'],['zoom'],14,2.8,18,6.5]],
       'line-opacity':0,'line-opacity-transition':{duration:650,delay:140}
+    }});
+
+    map.addSource('realcity-barriers',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'realcity-barriers-line',type:'line',source:'realcity-barriers',paint:{
+      'line-color':'#4d4d49','line-width':['interpolate',['linear'],['zoom'],15,.7,19,1.7],
+      'line-opacity':0,'line-opacity-transition':{duration:520,delay:150}
     }});
 
     map.addSource('realcity-context',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
@@ -561,27 +569,33 @@
       },geometry:{type:'Polygon',coordinates:[ring]}};
     };
     const heroFeature=hero?feature(hero):null,contextFeatures=context.map(feature).filter(Boolean);
-    const roads=(scene.roads||[]).slice(0,28).map(line=>{
+    const lineFeatures=(lines,kind,limit)=>((lines||[]).slice(0,limit).map(line=>{
       const coords=(Array.isArray(line)?line:[]).map(x=>[Number(x?.[0]),Number(x?.[1])]).filter(x=>Number.isFinite(x[0])&&Number.isFinite(x[1]));
-      return coords.length>1?{type:'Feature',properties:{},geometry:{type:'LineString',coordinates:coords}}:null;
+      return coords.length>1?{type:'Feature',properties:{kind},geometry:{type:'LineString',coordinates:coords}}:null;
+    }).filter(Boolean));
+    const roads=[...lineFeatures(scene.roads,'road',42),...lineFeatures(scene.sidewalks,'sidewalk',56)];
+    const barriers=(scene.barriers||[]).slice(0,48).map(item=>{
+      const line=Array.isArray(item)?item:item?.coordinates,coords=(Array.isArray(line)?line:[]).map(x=>[Number(x?.[0]),Number(x?.[1])]).filter(x=>Number.isFinite(x[0])&&Number.isFinite(x[1]));
+      return coords.length>1?{type:'Feature',properties:{kind:String(item?.kind||'barrier')},geometry:{type:'LineString',coordinates:coords}}:null;
     }).filter(Boolean);
     const greens=[...(activeRealCityModel?.environment?.greens||[]),...(scene.greens||[])].slice(0,48).map(ring=>{
       const coords=closeRing(ring);return coords.length>3?{type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[coords]}}:null;
     }).filter(Boolean);
-    const trees=(scene.trees||[]).slice(0,reduceMotion?22:48).map((t,i)=>({
-      type:'Feature',properties:{color:i%3===0?'#6f956b':i%3===1?'#547c58':'#618765'},
+    const trees=(scene.trees||[]).slice(0,reduceMotion?22:64).map((t,i)=>({
+      type:'Feature',properties:{source:String(t.source||''),color:i%3===0?'#6f956b':i%3===1?'#547c58':'#618765'},
       geometry:{type:'Point',coordinates:[Number(t.lon),Number(t.lat)]}
     })).filter(x=>Number.isFinite(x.geometry.coordinates[0])&&Number.isFinite(x.geometry.coordinates[1]));
-    return {heroFeature,contextFeatures,roads,greens,trees,radius:Math.max(80,Math.min(Number(scene.radius_m)||170,220))};
+    return {heroFeature,contextFeatures,roads,barriers,greens,trees,radius:Math.max(80,Math.min(Number(scene.radius_m)||170,220))};
   }
   function clearQuarter(){
     cancelAnimationFrame(quarterFrame);removeAstraLayer();
     $('#realCityViews').classList.add('hidden');$('#realCityViews').replaceChildren();document.body.classList.remove('realCityExploring','realCityPhotographic');
-    for(const id of ['realcity-ground','realcity-greens','realcity-roads','realcity-context','realcity-trees','focus-building'])map.getSource(id)?.setData(emptyGeo());
+    for(const id of ['realcity-ground','realcity-greens','realcity-roads','realcity-barriers','realcity-context','realcity-trees','focus-building'])map.getSource(id)?.setData(emptyGeo());
     try{map.setPaintProperty('realcity-ground-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-greens-fill','fill-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-glow','line-opacity',0)}catch{}
     try{map.setPaintProperty('realcity-roads-core','line-opacity',0)}catch{}
+    try{map.setPaintProperty('realcity-barriers-line','line-opacity',0)}catch{}
     setBaseBuildingsDim(false);setPhotoLabels(null);document.body.classList.remove('realCityActive','realCitySettled');
   }
   function revealQuarter(p,profile){
@@ -611,16 +625,21 @@
     const dimmed=photoreal?covered:astraLayer?(activeRealCityMode==='open-world'?[data.heroFeature,...covered]:[data.heroFeature]):[data.heroFeature,...data.contextFeatures,...covered];
     setBaseBuildingsDim(true,dimmed.filter(Boolean));
     map.getSource('realcity-ground')?.setData(circlePolygon(p,data.radius));
-    map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:photoreal?[]:data.greens});
-    map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:photoreal?[]:data.roads});
-    map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:photoreal?[]:data.trees});
+    map.getSource('realcity-greens')?.setData({type:'FeatureCollection',features:data.greens});
+    map.getSource('realcity-roads')?.setData({type:'FeatureCollection',features:data.roads});
+    map.getSource('realcity-barriers')?.setData({type:'FeatureCollection',features:data.barriers});
+    const visibleTrees=photoreal?data.trees.filter(f=>f.properties?.source==='osm'):data.trees;
+    map.getSource('realcity-trees')?.setData({type:'FeatureCollection',features:visibleTrees});
     const photoGround=!!(photoreal||(astraLayer&&authored?.environment?.roads?.length));
     setPhotoLabels(photoGround?p:null);
     document.body.classList.toggle('realCityPhotographic',photoGround);
-    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#9c9b93':photoGround?'#bbbdb2':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.9:photoGround?.86:daypart()==='night'?.16:.22)}catch{}
-    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoGround?.9:.34)}catch{}
-    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoGround?0:.16)}catch{}
-    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoGround?0:daypart()==='night'?.42:.56)}catch{}
+    // Keep the real base map visible. A flat 90%-opaque disk was one of the
+    // main reasons the quarter looked synthetic even when facade pixels were real.
+    try{map.setPaintProperty('realcity-ground-fill','fill-color',photoreal?'#a3a19a':photoGround?'#b3b0a7':['coalesce',['get','ground'],'#d8d3c8']);map.setPaintProperty('realcity-ground-fill','fill-opacity',photoreal?.18:photoGround?.32:daypart()==='night'?.12:.16)}catch{}
+    try{map.setPaintProperty('realcity-greens-fill','fill-opacity',photoreal?.58:photoGround?.62:.34)}catch{}
+    try{map.setPaintProperty('realcity-roads-glow','line-opacity',photoreal?.18:photoGround?.14:.12)}catch{}
+    try{map.setPaintProperty('realcity-roads-core','line-opacity',photoreal?.72:photoGround?.64:daypart()==='night'?.42:.56)}catch{}
+    try{map.setPaintProperty('realcity-barriers-line','line-opacity',photoreal?.62:photoGround?.5:.3)}catch{}
     $('#focusHudState').textContent='собираем цифровой квартал';
 
     const contextSource=map.getSource('realcity-context'),heroSource=map.getSource('focus-building');

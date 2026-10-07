@@ -556,3 +556,13 @@ test('accepted reconstruction emits measured release diagnostics',()=>{
   assert.match(src,/source_mix:summary\.source_mix/);
   assert.match(src,/alignment:summary\.alignment/);
 });
+
+
+test('release bootstrap proactively requeues current photoreal scenes',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-service.js'),'utf8');
+  assert.match(src,/realcity_astra_assets FROM shaurmeg_markers/);
+  assert.match(src,/photoreal\.queue\(x,x\.realcity_profile\|\|\{\}\)/);
+  assert.match(src,/RealCity photoreal bootstrap/);
+  assert.match(src,/waiting for a human to open a marker/);
+});

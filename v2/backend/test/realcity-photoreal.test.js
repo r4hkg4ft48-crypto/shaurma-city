@@ -476,3 +476,12 @@ test('v20 source revision forces requeue after street discovery changes',()=>{
   assert.match(src,/source_mix:sourceMix\(sources\)/);
   assert.match(src,/source_mix:sourceMix\(artifact\.sources\)/);
 });
+
+
+test('lazy RealCity renderer follows the Mini App cache revision',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/window\.__SHAURMEG_ASSET_VERSION__/);
+  assert.match(src,/src\+'\?v='\+encodeURIComponent\(revision\)/);
+  assert.doesNotMatch(src,/realcity-photoreal-1/);
+});

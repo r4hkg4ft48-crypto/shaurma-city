@@ -775,19 +775,91 @@ def anchor_buildings(job:Job):
             })
     return buildings
 
+def _segment_distance(px:float,py:float,ax:float,ay:float,bx:float,by:float)->float:
+    vx,vy=bx-ax,by-ay;den=vx*vx+vy*vy
+    if den<=1e-9:return math.hypot(px-ax,py-ay)
+    t=max(0.0,min(1.0,((px-ax)*vx+(py-ay)*vy)/den))
+    return math.hypot(px-(ax+t*vx),py-(ay+t*vy))
+
+def _front_edge(building:dict,job:Job,origin:list)->int:
+    ring=building.get("ring") or []
+    target=job.target.get("coordinates") or origin
+    try:px,py=local_xy(float(target[0]),float(target[1]),origin)
+    except Exception:px=py=0.0
+    best=(-1,float("inf"))
+    for edge in range(max(0,len(ring)-1)):
+        try:
+            a,b=ring[edge],ring[edge+1]
+            ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(b[0]),float(b[1]),origin)
+            d=_segment_distance(px,py,ax,ay,bx,by)
+            if d<best[1]:best=(edge,d)
+        except Exception:continue
+    return best[0]
+
+def _rear_edge(building:dict,job:Job,origin:list)->int:
+    ring=building.get("ring") or []
+    target=job.target.get("coordinates") or origin
+    try:px,py=local_xy(float(target[0]),float(target[1]),origin)
+    except Exception:px=py=0.0
+    best=(-1,-1.0)
+    for edge in range(max(0,len(ring)-1)):
+        try:
+            a,b=ring[edge],ring[edge+1]
+            ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(b[0]),float(b[1]),origin)
+            mx,my=(ax+bx)*.5,(ay+by)*.5;d=math.hypot(mx-px,my-py)
+            if d>best[1]:best=(edge,d)
+        except Exception:continue
+    return best[0]
+
+def _owner_semantic_edge(source:dict,building:dict,job:Job,origin:list)->int:
+    ring=building.get("ring") or [];n=max(0,len(ring)-1)
+    if n<1:return -1
+    front=_front_edge(building,job,origin)
+    if front<0:front=0
+    text=" ".join(str(source.get(k) or "") for k in ("subtype","angle","label","notes","role")).lower()
+    if any(t in text for t in ("rear","back","зад","сзади")):
+        rear=_rear_edge(building,job,origin)
+        return rear if rear>=0 else front
+    # Explicit side-facade labels may route to adjacent walls. Generic left/right
+    # panorama labels stay on the front because they usually describe viewpoint,
+    # not a different physical wall.
+    side_label=("facade" in text or "фасад" in text or "side" in text)
+    if side_label and any(t in text for t in ("left","лев")):return (front-1)%n
+    if side_label and any(t in text for t in ("right","прав")):return (front+1)%n
+    return front
+
 def facade_candidate(source:dict,job:Job):
     buildings=anchor_buildings(job)
     if not buildings:return None
+    origin=job.map_anchor.get("origin") or job.target.get("coordinates")
+    kind=str(source.get("kind") or "")
+    category=str(source.get("category") or "")
+    if source.get("anchor_only") is True:return None
+    if kind=="owner" and category not in ("main_building","neighbor_building"):
+        # Ground, panorama, vegetation and street-object photos must never be
+        # smeared across a vertical building wall in the surface fallback.
+        return None
+
     match=source.get("match") if isinstance(source.get("match"),dict) else {}
     wanted=str(match.get("building_id") or "")
     try:wanted_edge=int(match.get("edge_index"))
     except Exception:wanted_edge=-1
+    try:match_quality=float(match.get("quality"))
+    except Exception:match_quality=0.0
     for b in buildings:
         ring=b.get("ring") or []
         if wanted and str(b.get("building_id"))==wanted and 0<=wanted_edge<len(ring)-1:
+            if kind=="open" and match_quality<.12:return None
             return b,wanted_edge,False
 
-    origin=job.map_anchor.get("origin") or job.target.get("coordinates")
+    # Open web imagery without an explicit persisted building+edge assignment is
+    # not appearance evidence. Guessing from proximity caused unrelated photos to
+    # be painted on nearby buildings.
+    if kind!="owner":return None
+
+    hero=next((b for b in buildings if str(b.get("role") or "")=="hero"),buildings[0])
+    eligible=[hero] if category=="main_building" else [b for b in buildings if b is not hero and str(b.get("role") or "")!="hero"]
+    if not eligible:return None
     coords=source.get("coordinates")
     coords_ok=isinstance(coords,list) and len(coords)>=2 and all(isinstance(v,(int,float)) for v in coords[:2])
     if coords_ok:
@@ -795,47 +867,30 @@ def facade_candidate(source:dict,job:Job):
         heading=source.get("heading")
         if not isinstance(heading,(int,float)):
             heading=bearing_deg(coords,source_target(source,job))
-        panoramic=bool(source.get("panoramic"))
-        fov=360.0 if panoramic else max(35.0,min(120.0,float(source.get("fov") or 78.0)))
-        best=None
-        relaxed=None
-        for b in buildings:
+        fov=max(35.0,min(120.0,float(source.get("fov") or 78.0)))
+        best=None;relaxed=None
+        for b in eligible:
             ring=b.get("ring") or []
-            role=str(b.get("role") or "")
             for edge in range(max(0,len(ring)-1)):
                 a,bp=ring[edge],ring[edge+1]
                 ax,ay=local_xy(float(a[0]),float(a[1]),origin); bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
                 mx,my=(ax+bx)*.5,(ay+by)*.5
                 dist=math.hypot(mx-cx,my-cy)
-                if dist<1.0 or dist>190.0:continue
+                if dist<1.0 or dist>160.0:continue
                 target=(math.degrees(math.atan2(mx-cx,my-cy))+360.0)%360.0
                 err=abs(wrap_angle_deg(target-float(heading)))
-                role_bonus=-14.0 if role=="hero" else (-5.0 if role=="nearby" else 0.0)
-                score=err*1.65+dist*.055+role_bonus
+                score=err*1.65+dist*.055
                 if relaxed is None or score<relaxed[0]:relaxed=(score,b,edge,err)
-                if panoramic or err<=fov*.62+12.0:
-                    if best is None or score<best[0]:best=(score,b,edge,err)
+                if err<=fov*.62+12.0 and (best is None or score<best[0]):best=(score,b,edge,err)
         if best is not None:return best[1],best[2],True
-        # Heading metadata on mobile photos is often absent or wrong by tens of
-        # degrees. Keep the geometry exact and relax only the camera orientation.
         if relaxed is not None:return relaxed[1],relaxed[2],True
 
-    # Owner photos can arrive stripped of EXIF. They are still useful for
-    # appearance, but never invent free-form world geometry: attach them to the
-    # exact mapped hero wall and synthesize only a viewing ray for sampling.
-    hero=next((b for b in buildings if str(b.get("role") or "")=="hero"),buildings[0])
-    ring=hero.get("ring") or []
-    best_edge=-1;best_len=0.0
-    for edge in range(max(0,len(ring)-1)):
-        a,bp=ring[edge],ring[edge+1]
-        try:
-            ax,ay=local_xy(float(a[0]),float(a[1]),origin);bx,by=local_xy(float(bp[0]),float(bp[1]),origin)
-        except Exception:
-            continue
-        ln=math.hypot(bx-ax,by-ay)
-        if ln>best_len:best_len=ln;best_edge=edge
-    if best_edge>=0:return hero,best_edge,True
-    return None
+    if category=="neighbor_building":
+        # Without pose or a persisted assignment we cannot know which neighboring
+        # building the photo belongs to. Better omit it than create false geometry.
+        return None
+    edge=_owner_semantic_edge(source,hero,job,origin)
+    return (hero,edge,True) if edge>=0 else None
 
 def synthetic_camera_for_wall(building:dict,edge:int,origin:list,distance_m:float=18.0):
     ring=building.get("ring") or []

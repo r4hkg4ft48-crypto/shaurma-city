@@ -566,3 +566,38 @@ test('release bootstrap proactively requeues current photoreal scenes',()=>{
   assert.match(src,/RealCity photoreal bootstrap/);
   assert.match(src,/waiting for a human to open a marker/);
 });
+
+
+test('measured volumetric scenes replace native buildings visibly',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/map.js'),'utf8');
+  assert.match(src,/function isMeasuredVolumetric\(model\)/);
+  assert.match(src,/const measuredVolumetric=photoreal&&isMeasuredVolumetric\(authored\)/);
+  assert.match(src,/supportMode=measuredVolumetric&&!completePhotogrammetry/);
+  assert.match(src,/support:1/);
+  assert.match(src,/const dimmed=\(completePhotogrammetry\|\|measuredVolumetric\)\?covered/);
+  assert.match(src,/fill-extrusion-opacity'\:\['case',\['==',\['get','support'\],1\],\.26,\.78\]/);
+});
+
+test('volumetric renderer boosts source splats over support geometry',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../frontend/realcity-splat-layer.js'),'utf8');
+  assert.match(src,/uniform float u_overlay_support/);
+  assert.match(src,/mix\(1\.0,1\.10,u_overlay_support\)/);
+  assert.match(src,/mix\(1\.0,1\.14,u_overlay_support\)/);
+});
+
+test('ONNX depth cloud is constrained by mapped building heights',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../../reconstruction-worker/app.py'),'utf8');
+  assert.match(src,/mapped_max_height=max\(mapped_heights\) if mapped_heights else 24\.0/);
+  assert.match(src,/z_ceiling=max\(16\.0,min\(95\.0,mapped_max_height\+12\.0\)\)/);
+  assert.match(src,/depth_scene_too_sparse_after_map_constraints/);
+  assert.match(src,/z_ceiling_m/);
+});
+
+test('v22 revision forces rebuilding old volumetric artifacts',()=>{
+  const fs=require('node:fs'),path=require('node:path');
+  const src=fs.readFileSync(path.join(__dirname,'../src/realcity-photoreal.js'),'utf8');
+  assert.match(src,/PIPELINE_REVISION='v22-visible-world-depth-sanity-v1'/);
+});

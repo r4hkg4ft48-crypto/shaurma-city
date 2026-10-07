@@ -9,7 +9,7 @@ from PIL import Image
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 
-APP_VERSION="realcity-photoreal-worker-v3"
+APP_VERSION="realcity-photoreal-worker-v4"
 ENGINE="realcity-photoreal-v1"
 TOKEN=os.getenv("REALCITY_WORKER_TOKEN","")
 CALLBACK_SECRET=os.getenv("REALCITY_CALLBACK_SECRET","")
@@ -898,7 +898,7 @@ def mapanything_reconstruct(image_paths:list[str],sources:list[dict],job:Job):
             mask_edges=True,
             apply_confidence_mask=False,
             confidence_percentile=8,
-            use_multiview_confidence=True,
+            use_multiview_confidence=len(views)>1,
         )
     if not preds:raise RuntimeError("mapanything_empty")
     points=[];confs=[];images=[];poses=[];intr=[];depths=[]

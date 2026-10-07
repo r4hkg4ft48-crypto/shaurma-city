@@ -586,7 +586,7 @@
     try{
       let j,preview;
       if(location.pathname.startsWith('/realcity-preview/')&&new URLSearchParams(location.search).get('realcity_preview')==='1'){
-        try{preview=window.parent!==window&&window.parent.RealCityStudio?.previewData;}catch{}
+        try{preview=window.parent!==window&&(window.parent.RealCityProStudio?.previewData||window.parent.RealCityStudio?.previewData);}catch{}
       }
       if(preview&&String(preview.marker.id)===String(p.id))j={...preview.marker,marker_id:preview.marker.id,profile:preview.profile};
       else{

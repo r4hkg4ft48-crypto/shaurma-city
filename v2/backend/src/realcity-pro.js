@@ -122,6 +122,64 @@ function install(app,{db,authorize}){
  }
  app.get(base,admin,route(async(req,res)=>res.json(await state(await select(req)))));
 
+
+ // Import an explicit ZIP photograph pack: no automatic scene inference.
+ // Only originals/<basename> files listed in manifest.photos are accepted;
+ // manifest roles are user-authored labels, never geometric evidence.
+ app.post(base+'/import-package',admin,express.raw({type:'application/zip',limit:'18mb'}),route(async(req,res)=>{
+  const row=await select(req),input=req.body;
+  if(!Buffer.isBuffer(input)||input.length<50||input.length>18*1024*1024)fail('pro_invalid_zip');
+  const {unzipSync}=require('fflate');
+  let count=0,expanded=0;
+  const entries=unzipSync(new Uint8Array(input),{filter(e){
+   const name=String(e.name||'');
+   if(!(/^(?:manifest\.json|originals\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic))$/i).test(name))return false;
+   if(++count>41)fail('pro_zip_entry_limit');
+   const size=Number(e.originalSize);
+   if(!Number.isFinite(size)||size<0||size>16*1024*1024)fail('pro_zip_file_too_large');
+   expanded+=size;
+   if(expanded>200*1024*1024)fail('pro_zip_expanded_limit');
+   return true;
+  }});
+  const manifestBuffer=entries['manifest.json'];
+  if(!manifestBuffer||manifestBuffer.length>128*1024)fail('pro_manifest_missing');
+  let manifest;
+  try{manifest=JSON.parse(Buffer.from(manifestBuffer).toString('utf8'))}catch{fail('pro_manifest_invalid')}
+  if(!Array.isArray(manifest.photos)||!manifest.photos.length||manifest.photos.length>40)fail('pro_manifest_photo_count');
+  if(manifest.coordinate_anchor&&manifest.coordinate_anchor!=='unknown'&&String(manifest.coordinate_anchor)!==String(row.id))
+   fail('pro_manifest_different_marker',409);
+  const checks=[],seen=new Set();
+  for(const item of manifest.photos){
+   const filename=String(item?.filename||'');
+   if(!/^[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic)$/i.test(filename))fail('pro_package_filename');
+   const key='originals/'+filename,data=entries[key];
+   if(!data||data.length<64||data.length>16*1024*1024||seen.has(filename))fail('pro_package_original_missing');
+   seen.add(filename);
+   const role=String(item.role||'environment');
+   if(!ROLES.has(role))fail('pro_package_photo_role');
+   const bytes=Buffer.from(data),checked=await P.inspect(bytes);
+   if(item.sha256&&String(item.sha256)!==checked.sha256)fail('pro_package_checksum',409);
+   checks.push({filename,role,bytes,checked});
+  }
+  const client=await db.connect();let imported=0;
+  try{
+   await client.query('BEGIN');
+   const lock=await client.query('SELECT id FROM shaurmeg_markers WHERE id=$1 AND establishment_id=$2 AND is_active=TRUE FOR UPDATE',[row.id,row.establishment_id]);
+   if(!lock.rows.length)fail('pro_target_not_found',404);
+   const usage=await client.query('SELECT COUNT(*)::int count,COALESCE(SUM(octet_length(content)),0)::bigint bytes FROM realcity_pro_assets WHERE marker_id=$1',[row.id]);
+   const existing=await client.query('SELECT sha256 FROM realcity_pro_assets WHERE marker_id=$1',[row.id]);
+   const known=new Set(existing.rows.map(x=>x.sha256)),fresh=checks.filter(x=>!known.has(x.checked.sha256));
+   if(+usage.rows[0].count+fresh.length>100||+usage.rows[0].bytes+fresh.reduce((n,x)=>n+x.bytes.length,0)>256*1024*1024)
+    fail('pro_dataset_limit');
+   for(const a of fresh){
+    const q=await client.query('INSERT INTO realcity_pro_assets(marker_id,asset_id,role,filename,sha256,mime,content,metadata,preview) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9) ON CONFLICT(marker_id,sha256) DO NOTHING RETURNING asset_id',
+      [row.id,'pro_'+crypto.randomBytes(10).toString('hex'),a.role,a.filename,a.checked.sha256,a.checked.mime,a.bytes,JSON.stringify(a.checked.metadata),a.checked.preview]);
+    if(q.rowCount)imported++;
+   }
+   await client.query('COMMIT');
+  }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
+  res.json({ok:true,imported,total:checks.length,state:await state(row)});
+ }));
  app.post(base+'/import-astra',admin,route(async(req,res)=>{
   const row=await select(req);
   // Import means COPY of user-controlled originals for this same marker only.

@@ -136,3 +136,25 @@ test('RealCity Pro uses authenticated full-resolution photo and refuses filename
  assert.doesNotMatch(ui,/const sourceMap/);
  assert.match(ui,/const f=files\[i\],role=\$\('#role'\)\.value/);
 });
+
+test('RealCity Pro original-photo ZIP import verifies manifest, checksum, scope and preserves photos',()=>{
+ const api=fs.readFileSync(path.join(__dirname,'../src/realcity-pro.js'),'utf8');
+ const html=fs.readFileSync(path.join(__dirname,'../../../backend/realcity-pro.html'),'utf8');
+ const vm=require('node:vm'), js=html.match(/<script>([\s\S]*?)<\/script>/);
+ assert.ok(js);
+ assert.doesNotThrow(()=>new vm.Script(js[1],{filename:'realcity-pro.html'}));
+ assert.match(api,/app\.post\(base\+'\/import-package',admin,express\.raw/);
+ assert.match(api,/const \{unzipSync\}=require\('fflate'\)/);
+ assert.match(api,/manifest\.photos\.length>40/);
+ assert.match(api,/pro_package_checksum/);
+ assert.match(api,/WHERE id=\$1 AND establishment_id=\$2 AND is_active=TRUE FOR UPDATE/);
+ assert.match(api,/ON CONFLICT\(marker_id,sha256\) DO NOTHING/);
+ assert.match(html,/id="bundleZip"/);
+ assert.match(html,/endpoint\('\/import-package'\)/);
+ const {zipSync,unzipSync}=require('fflate');
+ const fake={photos:[{filename:'original.jpeg',role:'hero_front',sha256:'abc'}],coordinate_anchor:'unknown'};
+ const zip=zipSync({'manifest.json':new TextEncoder().encode(JSON.stringify(fake)),'originals/original.jpeg':new Uint8Array([1,2,3])});
+ const files=unzipSync(zip,{filter:e=>/^(manifest\.json|originals\/original\.jpeg)$/.test(e.name)});
+ assert.equal(JSON.parse(Buffer.from(files['manifest.json']).toString()).photos[0].role,'hero_front');
+ assert.equal(files['originals/original.jpeg'].length,3);
+});

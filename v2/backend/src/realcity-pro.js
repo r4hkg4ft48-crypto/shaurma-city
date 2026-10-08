@@ -133,7 +133,7 @@ function install(app,{db,authorize}){
   let count=0,expanded=0;
   const entries=unzipSync(new Uint8Array(input),{filter(e){
    const name=String(e.name||'');
-   if(!(/^(?:manifest\.json|originals\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic))$/i).test(name)))return false;
+   if(!(/^(?:manifest\.json|originals\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|heic))$/i).test(name))return false;
    if(++count>41)fail('pro_zip_entry_limit');
    const size=Number(e.originalSize);
    if(!Number.isFinite(size)||size<0||size>16*1024*1024)fail('pro_zip_file_too_large');

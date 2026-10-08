@@ -34,7 +34,8 @@ code{color:#8ee3dc}@media(max-width:760px){body{padding:10px}.grid,.fields{grid-
 <option value="landmark">Городской объект</option><option value="environment" selected>Общий вид — требует классификации</option></select></label>
 <label>Оригиналы JPG/PNG/HEIC/WebP<input type="file" id="photos" accept="image/*" multiple></label>
 <div><small>Исходные файлы сохраняются отдельно от Astra, проверяются размер, фокус, контраст и EXIF. Панорамы никогда не натягиваются на фасады.</small></div></div>
-<div class="actions"><button type="button" id="importAstra">Импортировать уже сохранённые фото из Astra</button></div><p class="muted">Копируются только оригиналы выбранной метки. Astra, её черновики и готовые модели не изменяются. После импорта Pro хранит снимки самостоятельно.</p>
+<div class="actions"><button type="button" id="importAstra">Импортировать уже сохранённые фото из Astra</button></div>
+<div class="fields"><label>Пакет оригиналов RealCity Pro (.zip c manifest.json)<input id="bundleZip" type="file" accept=".zip,application/zip"></label><div><button id="importZip" type="button">Загрузить весь фотопакет</button><p class="muted">Снимки сохраняются без изменения. Роли загружаются из манифеста, но точные грани здания обязательно подтверждаются отдельно.</p></div></div><p class="muted">Копируются только оригиналы выбранной метки. Astra, её черновики и готовые модели не изменяются. После импорта Pro хранит снимки самостоятельно.</p>
 <div id="photosList" class="list"></div></section>
 <div class="grid">
 <section><h2>3 · Калибровка поверхности</h2>
@@ -158,6 +159,20 @@ $('#finishMask').onclick=()=>{if(workingMask.length>=3)masks.push(workingMask);w
 $('#photosList').onclick=e=>{const b=e.target.closest('[data-id]');if(b)void choose(b.dataset.id)};
 $('#building').onchange=()=>{edges();surfaceSelection()};$('#edge').onchange=surfaceSelection;
 $('#venue').onchange=markers;$('#marker').onchange=load;
+$('#importZip').onclick=async()=>{
+ if(!state?.marker?.id)return status('Сначала выбери точку RealCity Pro');
+ const file=$('#bundleZip').files?.[0];
+ if(!file)return status('Выбери архив RealCity Pro с manifest.json и оригинальными фотографиями');
+ if(file.size>18*1024*1024)return status('Архив больше 18 МБ. Загрузите фото по отдельности или уменьшите число файлов в пакете.');
+ if(!confirm('Сохранить все исходники из архива в выбранной метке? Внимание: метка '+state.marker.id+'.'))return;
+ $('#importZip').disabled=true;status('Проверяем ZIP, контрольные суммы и исходное разрешение снимков…');
+ try{
+  const j=await api(endpoint('/import-package'),{method:'POST',body:file,headers:{'Content-Type':'application/zip'}});
+  state=j.state;renderPhotos();updateButtons();
+  status('Импортировано '+j.imported+' оригиналов из '+j.total+'. Открой фотографию, выбери грань и проверь точную привязку.');
+ }catch(e){status('Фотопакет отклонён: '+e.message)}
+ finally{$('#importZip').disabled=false}
+};
 $('#importAstra').onclick=async()=>{
  if(!state?.marker?.id||!confirm('Скопировать исходные снимки этой метки из Astra в независимое хранилище RealCity Pro?'))return;
  $('#importAstra').disabled=true;status('Импортируем исходные фотографии без изменения Astra…');

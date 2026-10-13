@@ -53,6 +53,8 @@ function extractEntities(row){
     if(seen.has(stable))throw error('В заведении обнаружены повторяющиеся внутренние ID меню: '+x.name+'. Сначала исправьте дубли.',409);
     seen.add(stable);
   }
+  const identities=new Set();
+  for(const entity of out){const identity=entity.kind+':'+entity.id;if(identities.has(identity))throw error('Дублирующийся внутренний ID в меню заведения: '+identity,409);identities.add(identity)}
   return out;
 }
 async function ensureCodes(est){

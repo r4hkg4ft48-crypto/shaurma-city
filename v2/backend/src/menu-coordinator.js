@@ -222,8 +222,19 @@ async function execute(telegramId,text){
       else section.active=restore||act==='показать';
       cfg.menu_sections=sections;
     }else if(obj.entity_type==='group'&&loc.options){
-      if(!(stop||restore||act==='скрыть'||act==='показать'))throw error('Для группы вариантов: стоп лист, в наличии.');
-      for(const opt of loc.options)opt.active=restore||act==='показать';
+      const add=command.match(/^добавить вариант\s+(.+)$/i);
+      if(add){
+        const fields=add[1].split('|').map(x=>x.trim()),name=fields[0],price=fields[1]===undefined?0:Number(fields[1].replace(',','.'));
+        if(!name||name.length>120||fields.length>2||!Number.isInteger(price)||Math.abs(price)>100000||loc.options.length>=60)throw error('Формат: КОД_ГРУППЫ добавить вариант Название | 25');
+        loc.options.push({id:'coord_o_'+crypto.randomBytes(5).toString('hex'),name,price,active:true,default:false});
+      }else{
+        if(!(stop||restore||act==='скрыть'||act==='показать'))throw error('Для группы вариантов: стоп лист, в наличии или добавить вариант.');
+        for(const opt of loc.options)opt.active=restore||act==='показать';
+      }
+    }else if(obj.entity_type==='group'&&loc.target?.options&&/^добавить вариант\s+/.test(command)){
+      const fields=command.replace(/^добавить вариант\s+/i,'').split('|').map(x=>x.trim()),name=fields[0],price=fields[1]===undefined?0:Number(fields[1].replace(',','.'));
+      if(!name||name.length>120||fields.length>2||!Number.isInteger(price)||Math.abs(price)>100000||loc.target.options.length>=60)throw error('Формат: КОД_ГРУППЫ добавить вариант Название | 25');
+      loc.target.options.push({id:'coord_o_'+crypto.randomBytes(5).toString('hex'),name,price_delta:price,active:true,default:false});
     }else if(stop||restore){
       target[obj.entity_type==='item'?'available':'active']=restore;
     }else if(act==='скрыть'||act==='показать'||act==='удалить'){
@@ -271,7 +282,7 @@ async function execute(telegramId,text){
   rt.pushOwner('venue',result.row);
   return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:result.text};
 }
-const help='🥙 КООРДИНАТОР · ШАУРМЕГ\nКОД стоп лист — приостановить продажу\nКОД в наличии — вернуть в продажу\nКОД скрыть / показать — управлять отображением\nКОД цена 350 — новая цена\nКОД название Новое название\nКОД описание Новый текст\nКОД состав + сыр — добавить ингредиент\nКОД состав = мясо, сыр, соус — заменить состав\nКОД состав КОД_ИНГРЕДИЕНТА убрать — убрать ингредиент\nКОД_ИНГРЕДИЕНТА стоп лист — заблокировать блюдо при отсутствии ингредиента\nКОД удалить — архивировать, сохранив историю.\nсоздать позицию Новая шаурма | 350 | КОД_КАТЕГОРИИ\nсоздать категорию Сезонное';
+const help='🥙 КООРДИНАТОР · ШАУРМЕГ\nКОД стоп лист — приостановить продажу\nКОД в наличии — вернуть в продажу\nКОД скрыть / показать — управлять отображением\nКОД цена 350 — новая цена\nКОД название Новое название\nКОД описание Новый текст\nКОД состав + сыр — добавить ингредиент\nКОД состав = мясо, сыр, соус — заменить состав\nКОД состав КОД_ИНГРЕДИЕНТА убрать — убрать ингредиент\nКОД_ИНГРЕДИЕНТА стоп лист — заблокировать блюдо при отсутствии ингредиента\nКОД удалить — архивировать, сохранив историю.\nсоздать позицию Новая шаурма | 350 | КОД_КАТЕГОРИИ\nсоздать категорию Сезонное\nКОД_ГРУППЫ добавить вариант Халапеньо | 30';
 function install(app){
   app.get('/api/v2/coordinator/codes',async(req,res)=>{
     try{await ensureSchema();const est=D.establishmentId(req.query.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est);res.setHeader('Cache-Control','no-store');res.json({ok:true,project:'shaurmeg',establishmentId:est,items:await ensureCodes(est)});}

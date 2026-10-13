@@ -80,13 +80,13 @@ async function ensureCodes(est){
     return entries.map(x=>({...x,code:map.get(x.kind+':'+x.id)||null,label:labels[x.kind]}));
   });
 }
-async function ownerAccess(req,est){
+async function ownerAccess(req,est,ownerOnly=false){
   if(auth.ownerOk(req))return true;
   const session=auth.readToken(req,'venue');
   if(!session)throw error('Требуется авторизация владельца.',401);
   const r=await db.query('SELECT role,permissions FROM shaurma_venue_admins WHERE telegram_user_id=$1 AND establishment_id=$2 AND is_active=true',[String(session.sub),est]);
   const a=r.rows[0];
-  if(!a||!(a.role==='owner'||a.role==='manager'||(Array.isArray(a.permissions)&&a.permissions.includes('menu'))))throw error('Нет прав на это заведение.',403);
+  if(!a||(ownerOnly&&a.role!=='owner')||(!ownerOnly&&!(a.role==='owner'||a.role==='manager'||(Array.isArray(a.permissions)&&a.permissions.includes('menu')))))throw error('Нет прав на это заведение.',403);
   return true;
 }
 function authorizeBridge(req){
@@ -236,7 +236,7 @@ function install(app){
     try{
       await ensureSchema();const est=D.establishmentId(req.query.establishment_id);
       if(!est)throw error('bad_establishment_id');
-      await ownerAccess(req,est);
+      await ownerAccess(req,est,true);
       const r=await db.query('SELECT telegram_id,enabled,created_at,updated_at FROM shaurma_coordinator_bindings WHERE establishment_id=$1 ORDER BY updated_at DESC',[est]);
       res.json({ok:true,staff:r.rows});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
@@ -245,7 +245,7 @@ function install(app){
     try{
       await ensureSchema();const est=D.establishmentId(req.query.establishment_id);
       if(!est)throw error('bad_establishment_id');
-      await ownerAccess(req,est);
+      await ownerAccess(req,est,true);
       const r=await db.query('SELECT telegram_id,entity_type,entity_id,command,old_value,new_value,created_at FROM shaurma_coordinator_audit WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 100',[est]);
       res.json({ok:true,events:r.rows});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
@@ -254,7 +254,7 @@ function install(app){
     try{
       await ensureSchema();const est=D.establishmentId(req.body?.establishment_id),telegramId=String(req.body?.telegramId||'');
       if(!est||!/^\d{4,20}$/.test(telegramId))throw error('invalid_staff_binding');
-      await ownerAccess(req,est);
+      await ownerAccess(req,est,true);
       const r=await db.query('UPDATE shaurma_coordinator_bindings SET enabled=false,updated_at=now() WHERE establishment_id=$1 AND telegram_id=$2 RETURNING telegram_id',[est,telegramId]);
       if(!r.rowCount)throw error('Сотрудник не подключён к этому заведению.',404);
       res.json({ok:true,revoked:telegramId});
@@ -273,7 +273,7 @@ function install(app){
   });
   app.post('/api/v2/coordinator/key',async(req,res)=>{
     try{
-      await ensureSchema();const est=D.establishmentId(req.body?.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est);
+      await ensureSchema();const est=D.establishmentId(req.body?.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est,true);
       const venue=await db.query('SELECT name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[est]);if(!venue.rowCount)throw error('Заведение не найдено.',404);
       const code='SHA-MNU-'+crypto.randomBytes(8).toString('hex').toUpperCase();
       const hours=Math.max(1,Math.min(168,Number(req.body?.hours)||24));

@@ -86,7 +86,8 @@ async function ownerAccess(req,est){
 function authorizeBridge(req){
   const expected=String(process.env.COORDINATOR_SHA_SECRET||'');
   const actual=String(req.headers['x-coordinator-secret']||'');
-  if(expected.length<32||actual.length!==expected.length||!crypto.timingSafeEqual(Buffer.from(expected),Buffer.from(actual)))throw error('coordinator_access_denied',401);
+  const expectedBytes=Buffer.from(expected),actualBytes=Buffer.from(actual);
+  if(expectedBytes.length<32||actualBytes.length!==expectedBytes.length||!crypto.timingSafeEqual(expectedBytes,actualBytes))throw error('coordinator_access_denied',401);
 }
 async function binding(telegramId){
   const r=await db.query("SELECT b.establishment_id,v.name FROM shaurma_coordinator_bindings b JOIN shaurma_venues v ON v.establishment_id=b.establishment_id WHERE b.telegram_id=$1 AND b.enabled=true AND v.is_active=true",[String(telegramId)]);

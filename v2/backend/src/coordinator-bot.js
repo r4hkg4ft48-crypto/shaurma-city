@@ -42,7 +42,7 @@ async function coffee(action,telegramId,payload={}){
 }
 async function coffeeResolve(telegramId){
   const secret=coffeeSecret();
-  if(secret.length<32)return {ok:true,linked:false,project:'kofeyok'};
+  if(secret.length<32)throw fail('Соединение с Кофейком не настроено.',503);
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
     const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.resolve&telegramId='+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
@@ -80,6 +80,7 @@ async function handle(message){
     const current=await locations(uid);
     if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Сейчас не удалось проверить все привязки. Для безопасности укажите проект перед командой: «шаурмег 7777 стоп лист» или «кофеёк 7777 стоп лист».');
     const active=current.filter(x=>x.linked);
+    if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Не удалось проверить все подключения. Чтобы исключить ошибочное изменение чужого меню, укажите проект перед кодом: «Шаурмег 7777 стоп лист» или «Кофеёк 7777 стоп лист».');
     if(active.length!==1)return reply(chatId,active.length?'Подключены два проекта. Добавьте «Шаурмег» или «Кофеёк» перед кодом.':'Нет однозначного подключения. /connect СЕКРЕТНЫЙ_КЛЮЧ\n'+HELP);
     project=active[0].project;
   }

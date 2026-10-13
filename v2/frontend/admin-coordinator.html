@@ -7,6 +7,8 @@ header{display:flex;gap:14px;align-items:center;justify-content:space-between;ma
 <small class="eyebrow">Координатор / Словарь заведения</small><h1>Идентификаторы<br>меню.</h1><p>Каждой позиции, категории, добавке и ингредиенту присвоен собственный короткий код. Коды свободно меняются и действуют <b>только внутри выбранной заведения</b>. ID в базе остаётся неизменным.</p>
 <div class="card"><h2>🔐 Подключение сотрудника</h2><p>Сгенерируйте одноразовый ключ, передайте сотруднику лично. В боте Координатора: <code>/connect КЛЮЧ</code>. Ключ сгорает после первого использования.</p><div class="actions"><button id="generate" class="btn primary">Создать ключ на 24 часа</button><button id="copyKey" class="btn" hidden>Скопировать ключ</button></div><div class="keyBox key" id="secret" hidden></div><div class="status" id="keyStatus"></div></div>
 <div class="card"><h2>Словарь объектов</h2><p>Изменения кода сохраняются сразу. Совпадение между разными типами объектов в одном заведении запрещено.</p><input id="search" class="filter" placeholder="Найти блюдо, вариант или код…"><div class="tabs" id="tabs"></div><div id="rows"></div><div class="status" id="saveStatus"></div></div>
+<div class="card"><h2>🔒 Подключённый персонал</h2><p>Вы можете мгновенно отозвать право управления меню. Отзыв не влияет на приём заказов и остальные права сотрудника.</p><div class="actions"><button class="btn" id="staffRefresh">Обновить список</button></div><div id="staffRows" class="muted">Нажмите «Обновить список»</div></div>
+<div class="card"><h2>История изменений</h2><p>Последние 100 команд. Каждая запись относится исключительно к этому заведению.</p><div class="actions"><button class="btn" id="auditRefresh">Показать журнал</button></div><div id="auditRows" class="muted"></div></div>
 <div class="card"><h2>Памятка команд</h2><div class="guide">7777 стоп лист
 7777 в наличии
 7777 скрыть
@@ -38,7 +40,8 @@ async function login(){
  session=j.session;sessionStorage.setItem('shaurmeg_venue_owner_session',session);
 }
 async function api(action,method='GET',body){
- const path=action==='codes'?'/coordinator/codes':action==='setCode'?'/coordinator/set-code':'/coordinator/key';
+ const path=({codes:'/coordinator/codes',setCode:'/coordinator/set-code',key:'/coordinator/key',staff:'/coordinator/staff',audit:'/coordinator/audit',revokeStaff:'/coordinator/revoke'})[action];
+ if(!path)throw Error('Unknown command');
  const url=base+path+(method==='GET'?'?establishment_id='+encodeURIComponent(placeId):'');
  const r=await fetch(url,{method,headers:{'content-type':'application/json','Authorization':'Bearer '+session},body:body?JSON.stringify({...body,establishment_id:placeId}):undefined,cache:'no-store'});
  const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'HTTP '+r.status);return j;
@@ -61,6 +64,25 @@ $('rows').onclick=async e=>{
 $('generate').onclick=async()=>{try{const r=await api('key','POST',{hours:24});keyValue=r.key;$('secret').textContent=r.key;$('secret').hidden=false;$('copyKey').hidden=false;$('keyStatus').textContent='Ключ действителен 24 часа и может быть активирован один раз.'}catch(e){$('keyStatus').textContent=e.message}};
 $('copyKey').onclick=()=>{if(navigator.clipboard?.writeText)navigator.clipboard.writeText(keyValue);else tg?.showAlert?.(keyValue)};
 $('search').oninput=render;
+async function loadStaff(){
+ $('staffRows').textContent='Загружаю…';
+ try{const r=await api('staff');const staff=r.staff||[];
+ $('staffRows').innerHTML=staff.length?staff.map(x=>'<div class="row"><div><b>Telegram '+escapeHtml(x.telegram_id)+'</b><small>'+escapeHtml(x.enabled?'Активен':'Доступ отозван')+'</small></div><span>'+escapeHtml(x.enabled?'●':'—')+'</span>'+(x.enabled?'<button data-revoke="'+escapeHtml(x.telegram_id)+'">Отозвать</button>':'<span></span>')+'</div>').join(''):'Привязанных сотрудников пока нет';}
+ catch(e){$('staffRows').textContent='⚠️ '+e.message}
+}
+async function loadAudit(){
+ $('auditRows').textContent='Загружаю…';
+ try{const r=await api('audit');$('auditRows').innerHTML=(r.events||[]).slice(0,100).map(x=>'<div style="border-top:1px solid #343038;padding:12px 0"><b>'+escapeHtml(x.command)+'</b><small style="display:block;color:var(--muted)">'+escapeHtml(x.telegram_id)+' · '+escapeHtml(new Date(x.created_at).toLocaleString('ru-RU'))+'</small></div>').join('')||'Изменений пока нет';}
+ catch(e){$('auditRows').textContent='⚠️ '+e.message}
+}
+$('staffRefresh').onclick=loadStaff;
+$('auditRefresh').onclick=loadAudit;
+$('staffRows').onclick=async e=>{
+ const b=e.target.closest('[data-revoke]');if(!b)return;
+ if(!confirm('Отключить управление меню для Telegram '+b.dataset.revoke+'?'))return;
+ try{await api('revokeStaff','POST',{telegramId:b.dataset.revoke});await loadStaff()}catch(err){$('staffRows').textContent='⚠️ '+err.message}
+};
+
 $('back').onclick=()=>location.href='admin-venue-pro.html?tab=settings&establishment='+encodeURIComponent(placeId);
 (async()=>{tg?.ready?.();tg?.expand?.();try{if(!tg?.initData)throw Error('Откройте страницу через Telegram-админку');await login();const r=await api('codes');data=r.items||[];render()}catch(e){$('saveStatus').textContent='⚠️ '+e.message}})();
 </script></body></html>

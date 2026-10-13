@@ -140,6 +140,7 @@
       <div class="astraActions">
         <button class="btn" id="astraAccess" type="button">Дать Astra доступ к этой точке</button>
         <button class="btn" id="astraRevoke" type="button">Отозвать доступ</button>
+        <button class="btn primary" id="astraOpenPro" type="button">Перейти к точной сборке и проверке →</button>
       </div>
       <div id="astraAccessResult" hidden><p>Ссылка действует 7 дней. Отправьте её Astra в этом чате: доступны фото, инструкции и подготовка черновика. Публикация остаётся здесь.</p><textarea id="astraAccessLink" readonly aria-label="Ссылка для Astra"></textarea><button class="btn" id="astraCopyAccess" type="button">Скопировать ссылку</button></div>
       <div class="astraActions">
@@ -535,6 +536,12 @@ $('#astraPane').addEventListener('input',e=>{if(e.target.closest('[data-astra-id
 $('#astraPane').addEventListener('change',e=>{if(e.target.closest('[data-astra-id]'))updateAstraAsset(e.target)});
 $('#astraPane').addEventListener('click',e=>{const rm=e.target.closest('[data-astra-remove]');if(rm){const card=rm.closest('[data-astra-id]');astraAssets=astraAssets.filter(x=>x.id!==card.dataset.astraId);renderAstraAssets()}});
 $('#saveAstra').onclick=saveAstraStudio;
+$('#astraOpenPro').onclick=()=>{
+  if(!astraState)return toast('Сначала выберите точку RealCity');
+  const u=new URL('/realcity-pro',location.origin);
+  u.searchParams.set('from','master');u.searchParams.set('establishment',astraState.establishment_id);u.searchParams.set('marker',String(astraState.marker_id));
+  $('#proFrame').src=u.pathname+u.search;activate('pro');
+};
 $('#astraReconstruct').onclick=async e=>{
  const b=e.currentTarget;b.disabled=true;
  try{

@@ -31,7 +31,7 @@ async function coffee(action,telegramId,payload={}){
   if(secret.length<32)throw fail('Соединение с «Кофейком» пока не настроено.',503);
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
-    const r=await fetch(coffeeBase()+'/api/coordinator?action='+encodeURIComponent(action),{
+    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.'+encodeURIComponent(action),{
       method:'POST',headers:{'content-type':'application/json','x-coordinator-secret':secret},
       body:JSON.stringify({telegramId,...payload}),signal:controller.signal
     });
@@ -45,7 +45,7 @@ async function coffeeResolve(telegramId){
   if(secret.length<32)return {ok:true,linked:false,project:'kofeyok'};
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
-    const r=await fetch(coffeeBase()+'/api/coordinator?action=resolve&telegramId='+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
+    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.resolve&telegramId=+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
     const data=await r.json();
     if(!r.ok||!data.ok)throw fail('Связь с Кофейком недоступна.',503);
     return data;

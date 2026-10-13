@@ -33,8 +33,12 @@ test('original upload → scoped Astra read → material draft → guarded publi
  assert.equal((await request(base+'?marker_id=3139',null,'GET',false)).status,401);
  assert.equal((await request(base+'/access',{marker_id:'3140'})).status,404);
  const original=await sharp({create:{width:256,height:128,channels:3,background:'#cc8844'}}).png().toBuffer();
- const upload=()=>fetch(root+base+'/assets?marker_id=3139&category=main_building&filename=front.png',{method:'POST',headers:{Authorization:'Bearer admin-test','Content-Type':'application/octet-stream'},body:original});
+ const upload=()=>fetch(root+base+'/assets?marker_id=3139&shot_id=RC01&category=main_building&filename=front.png',{method:'POST',headers:{Authorization:'Bearer admin-test','Content-Type':'application/octet-stream'},body:original});
  assert.equal((await upload()).status,200);assert.equal((await upload()).status,200);assert.equal(state.originals.length,1);assert.equal(state.row.realcity_astra_assets.length,1);
+  assert.equal(state.row.realcity_astra_assets[0].shot_id,'RC01');
+  assert.equal(state.row.realcity_astra_assets[0].subject_id,'hero_front');
+  assert.equal(state.row.realcity_astra_assets[0].subtype,'main_facade');
+  assert.equal((await fetch(root+base+'/assets?marker_id=3139&shot_id=UNKNOWN',{method:'POST',headers:{Authorization:'Bearer admin-test','Content-Type':'application/octet-stream'},body:original})).status,422);
  const uploaded=state.row.realcity_astra_assets[0],before=JSON.stringify(state.row.realcity_profile.scene);
  const access=await (await request(base+'/access',{marker_id:'3139'})).json();assert.equal(access.publish,false);assert.ok(!JSON.stringify(state.access).includes(access.path.split('/').at(-1)));
  const pack=await (await request(access.path,null,'GET',false)).json();assert.equal(pack.permissions.publish,false);assert.equal(pack.manifest.processing.method,'photo-facades-v3');

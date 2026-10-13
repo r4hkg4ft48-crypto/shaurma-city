@@ -56,3 +56,30 @@ test('original upload → scoped Astra read → material draft → guarded publi
  state.row.realcity_astra_config.notes='new observation';assert.equal((await request(base+'/publish',publish)).status,409);
  assert.equal((await request(base+'/access?marker_id=3139',null,'DELETE')).status,200);assert.equal((await request(access.path,null,'GET',false)).status,401);
 });
+
+
+test('guided 30-photo replacement is atomic and keeps the old original for reassignment',async t=>{
+ const {db,state}=store(),app=express();app.use(express.json({limit:'24mb'}));
+ Studio.install(app,{db,authorize:req=>req.get('Authorization')==='Bearer admin-test',manifest:row=>({geometry:A.geometryManifest(row)}),normalizeAssets:a=>structuredClone(a||[]),normalizeConfig:c=>({...c}),readiness:a=>({main_count:a.length})});
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>server.close());
+ const root='http://127.0.0.1:'+server.address().port,base='/api/shaurma/admin/astra-realcity/'+state.row.establishment_id;
+ const photo=async color=>sharp({create:{width:256,height:128,channels:3,background:color}}).png().toBuffer();
+ const one=await photo('#aa3311'),two=await photo('#1188aa'),three=await photo('#22bb44');
+ const send=(bytes,params='')=>fetch(root+base+'/assets?marker_id=3139&shot_id=RC01&filename=photo.png'+params,{method:'POST',headers:{Authorization:'Bearer admin-test','Content-Type':'application/octet-stream'},body:bytes});
+ assert.equal((await send(one)).status,200);
+ const old=state.row.realcity_astra_assets[0].id;
+ assert.equal((await send(two)).status,409);
+ assert.equal(state.row.realcity_astra_assets.length,1);
+ assert.equal((await send(two,'&replace_shot=1')).status,200);
+ const current=state.row.realcity_astra_assets;
+ assert.equal(current.length,2);
+ assert.equal(current.find(a=>a.id===old).shot_id,null);
+ assert.equal(current.filter(a=>a.shot_id==='RC01').length,1);
+ assert.equal(state.originals.length,2);
+ assert.equal((await send(three)).status,409);
+ assert.equal(state.row.realcity_astra_assets.length,2);
+ const dupe=structuredClone(current);dupe[0].shot_id='RC01';
+ const response=await fetch(root+base+'?marker_id=3139',{method:'PUT',headers:{Authorization:'Bearer admin-test','Content-Type':'application/json'},body:JSON.stringify({marker_id:'3139',expected_revision:A.revision(state.row),assets:dupe,config:{}})});
+ assert.equal(response.status,409);
+ assert.equal(state.row.realcity_astra_assets.filter(a=>a.shot_id==='RC01').length,1);
+});

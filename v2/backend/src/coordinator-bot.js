@@ -45,7 +45,7 @@ async function coffeeResolve(telegramId){
   if(secret.length<32)return {ok:true,linked:false,project:'kofeyok'};
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
-    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.resolve&telegramId=+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
+    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.resolve&telegramId='+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
     const data=await r.json();
     if(!r.ok||!data.ok)throw fail('Связь с Кофейком недоступна.',503);
     return data;

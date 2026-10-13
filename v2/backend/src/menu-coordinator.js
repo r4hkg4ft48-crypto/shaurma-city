@@ -296,4 +296,4 @@ function install(app){
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
 }
-module.exports={ensureSchema,install,claim,binding,execute,help};
+module.exports={ensureSchema,install,claim,binding,execute,help,extractEntities};

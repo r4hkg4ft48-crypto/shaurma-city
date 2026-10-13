@@ -50,3 +50,13 @@ test('Admin and restaurant user share normalizer that honours stop-list',()=>{
   const domain=read('v2/backend/src/domain.js');
   assert.match(domain,/coordinator_blocked_ingredients\.length>0/);
 });
+
+
+test('Create commands lock only the bound establishment and reject duplicate menu IDs',()=>{
+  const source=read('v2/backend/src/menu-coordinator.js');
+  assert.match(source,/createScopedMenuObject\(bind,telegramId,text\)/);
+  assert.match(source,/SELECT menu,config,name FROM shaurma_venues WHERE establishment_id=\$1 AND is_active=true FOR UPDATE/);
+  assert.match(source,/entity_type='category' AND normalized_code=\$2/);
+  assert.match(source,/Дублирующийся внутренний ID/);
+  assert.match(source,/добавить вариант/);
+});

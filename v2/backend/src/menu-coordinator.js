@@ -137,6 +137,7 @@ async function execute(telegramId,text){
   await ensureSchema();
   const bind=await binding(telegramId);
   if(!bind)throw error('Сначала подключите заведение ключом.',403);
+  await ensureCodes(bind.establishment_id);
   const match=String(text||'').trim().match(/^(\S+)\s+(.+)$/s);
   if(!match)throw error('Формат: КОД действие. Например: 7777 стоп лист');
   const command=match[2].trim(),act=norm(command);
@@ -155,17 +156,18 @@ async function execute(telegramId,text){
     const restore=['в наличии','вернуть','снять стоп','снять стоп лист','включить'].includes(act);
     if(obj.entity_type==='ingredient'){
       const blocked=Array.isArray(loc.item.coordinator_blocked_ingredients)?loc.item.coordinator_blocked_ingredients:[];
-      if(stop)loc.item.coordinator_blocked_ingredients=[...new Set([...blocked,obj.code])];
-      else if(restore)loc.item.coordinator_blocked_ingredients=blocked.filter(x=>norm(x)!==norm(obj.code));
+      if(stop)loc.item.coordinator_blocked_ingredients=[...new Set([...blocked,obj.entity_id])];
+      else if(restore)loc.item.coordinator_blocked_ingredients=blocked.filter(x=>x!==obj.entity_id&&norm(x)!==norm(obj.code));
       else if(act==='удалить'||act==='убрать'){
         loc.item.composition=String(loc.item.composition||'').split(/[,;\n]+/).map(x=>x.trim()).filter(x=>x&&norm(x)!==norm(loc.ingredient)).join(', ');
-        loc.item.coordinator_blocked_ingredients=blocked.filter(x=>norm(x)!==norm(obj.code));
+        loc.item.coordinator_blocked_ingredients=blocked.filter(x=>x!==obj.entity_id&&norm(x)!==norm(obj.code));
       }else throw error('Для ингредиента: стоп лист, в наличии, убрать.');
     }else if(obj.entity_type==='category'){
-      if(!(stop||restore||act==='скрыть'||act==='показать'||act==='удалить'))throw error('Для категории: стоп лист, в наличии, скрыть, показать.');
+      if(!(stop||restore||act==='скрыть'||act==='показать'||act==='удалить'||/^название\s+.+/i.test(command)))throw error('Для категории: стоп лист, в наличии, скрыть, показать, название.');
       const sections=D.menuSectionsAll(cfg,menu);
       const section=sections.find(x=>String(x.id)===obj.entity_id);
-      section.active=restore||act==='показать';
+      if(/^название\s+.+/i.test(command))section.name=command.replace(/^название\s+/i,'').trim().slice(0,120);
+      else section.active=restore||act==='показать';
       cfg.menu_sections=sections;
     }else if(obj.entity_type==='group'&&loc.options){
       if(!(stop||restore||act==='скрыть'||act==='показать'))throw error('Для группы вариантов: стоп лист, в наличии.');
@@ -178,15 +180,12 @@ async function execute(telegramId,text){
       const price=Number(command.replace(/^цена\s+/i,'').replace(',','.'));
       if(price>1000000)throw error('Недопустимая цена.');
       if(obj.entity_type==='item')target.p=price;
-      else if(obj.entity_type==='option')target.price=price;
+      else if(obj.entity_type==='option')target[(JSON.parse(obj.entity_id)[1]==='choice')?'price_delta':'price']=price;
       else throw error('Цену можно задать только позиции или варианту.');
     }else if(/^название\s+.+/i.test(command)){
       const name=command.replace(/^название\s+/i,'').trim().slice(0,140);
       if(obj.entity_type==='item')target.n=name;
-      else if(obj.entity_type==='category'){
-        const sections=D.menuSectionsAll(cfg,menu);
-        sections.find(x=>String(x.id)===obj.entity_id).name=name;cfg.menu_sections=sections;
-      }else if(obj.entity_type==='option'||obj.entity_type==='group')target.name=name;
+      else if(obj.entity_type==='option'||obj.entity_type==='group')target.name=name;
       else throw error('Тип не поддерживает переименование.');
     }else if(/^описание\s+.+/i.test(command)){
       if(obj.entity_type!=='item')throw error('Описание поддерживается только для блюд.');

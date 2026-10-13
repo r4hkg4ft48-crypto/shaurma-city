@@ -149,7 +149,7 @@ jobs:
       - name: Photoreal worker syntax
         run: python3 -m py_compile v2/reconstruction-worker/app.py
       - name: Menu catalog and deep editor contract
-        run: node --test v2/backend/test/menu-domain.test.js v2/backend/test/admin-design-contract.test.js
+        run: node --test v2/backend/test/menu-domain.test.js v2/backend/test/admin-design-contract.test.js v2/backend/test/menu-coordinator-contract.test.js v2/backend/test/coordinator-contract.test.js
       - name: Photographic builder contract
         run: node --test v2/backend/test/builder-cinema.test.js
       - name: Voice assistant contract

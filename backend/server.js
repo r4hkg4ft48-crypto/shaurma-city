@@ -1004,6 +1004,7 @@ function normalizeAstraRealCityConfig(raw={}){
   updated_at:String(src.updated_at||new Date().toISOString()).slice(0,40)
  };
 }
+const RealCityShotPlan=require('./realcity-shot-plan');
 function normalizeAstraRealCityAssets(value){
  if(!Array.isArray(value))return [];
  const types={
@@ -1021,12 +1022,13 @@ function normalizeAstraRealCityAssets(value){
  const finite=v=>Number.isFinite(Number(v)),clamp=(v,a,b)=>Math.max(a,Math.min(b,Number(v)));
  return value.slice(0,120).map((item,index)=>{
   if(!item||typeof item!=='object')return null;
-  const category=categories.has(String(item.category||''))?String(item.category):'main_building';
+  const shot=RealCityShotPlan.get(item.shot_id);
+   const category=shot?shot.category:(categories.has(String(item.category||''))?String(item.category):'main_building');
   const rawSrc=String(item.src||item.url||item.image||'').trim();
   const isImage=rawSrc.startsWith('data:image/'),isExternal=/^https:\/\//i.test(rawSrc);
   if(!isImage&&!isExternal)return null;
   const allowed=types[category];
-  const subtype=allowed.has(String(item.subtype||''))?String(item.subtype):(category==='main_building'?(index===0?'main_facade':'detail'):category==='panorama'?'district':'detail');
+  const subtype=shot?shot.subtype:(allowed.has(String(item.subtype||''))?String(item.subtype):(category==='main_building'?(index===0?'main_facade':'detail'):category==='panorama'?'district':'detail'));
   const role=roles[category],seed=rawSrc.slice(0,160)+category+subtype+index;
   const id=/^[a-zA-Z0-9_-]{4,80}$/.test(String(item.id||''))?String(item.id):'astra_'+crypto.createHash('sha1').update(seed).digest('hex').slice(0,16);
   const metadata=item.metadata&&typeof item.metadata==='object'&&!Array.isArray(item.metadata)?item.metadata:{};
@@ -1042,13 +1044,13 @@ function normalizeAstraRealCityAssets(value){
    altitude_m:finite(rawCamera.altitude_m)?clamp(rawCamera.altitude_m,-50,500):null
   };
   return {
-   id,category,subtype,role,src:rawSrc.slice(0,isImage?1800000:2200),
+   id,category,subtype,role,shot_id:shot?.id||null,subject_id:shot?.subject||null,view_zone:shot?.position||null,src:rawSrc.slice(0,isImage?1800000:2200),
    kind:isImage?'image':'external_file',
    ...(item.stored===true?{stored:true,sha256:String(item.sha256||''),metadata}:{}),
    filename:String(item.filename||'').trim().slice(0,180),
    label:String(item.label||'').trim().slice(0,180),
    notes:String(item.notes||'').trim().slice(0,900),
-   angle:angles.has(String(item.angle||''))?String(item.angle):'unknown',
+   angle:shot?.angle||(angles.has(String(item.angle||''))?String(item.angle):'unknown'),
    direction_deg:camera.heading_deg,
    camera,
    priority:Math.max(1,Math.min(5,Number(item.priority)||3)),
@@ -1095,11 +1097,11 @@ function astraManifest(row){
    hero_building_ring:(row?.realcity_profile?.scene?.buildings||[]).find(x=>x?.role==='hero')?.ring||null,
    scene_radius_m:Number(row?.realcity_profile?.scene?.radius_m||config.radius_m)||config.radius_m
   },
-  config,readiness,
+  config,readiness,shot_plan:RealCityShotPlan.describe(assets),
   references:{
-   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
-   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
-   world:assets.filter(x=>!['main_building','panorama'].includes(x.category)).map(x=>({asset_id:x.id,category:x.category,subtype:x.subtype,role:x.role,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
+   main_building:assets.filter(x=>x.category==='main_building').map(x=>({asset_id:x.id,shot_id:x.shot_id,subject_id:x.subject_id,view_zone:x.view_zone,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   panorama:assets.filter(x=>x.category==='panorama').map(x=>({asset_id:x.id,shot_id:x.shot_id,subject_id:x.subject_id,view_zone:x.view_zone,subtype:x.subtype,angle:x.angle,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,primary:x.primary,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id})),
+   world:assets.filter(x=>!['main_building','panorama'].includes(x.category)).map(x=>({asset_id:x.id,shot_id:x.shot_id,subject_id:x.subject_id,view_zone:x.view_zone,category:x.category,subtype:x.subtype,role:x.role,direction_deg:x.direction_deg,camera:x.camera,priority:x.priority,label:x.label,notes:x.notes,source:x.kind==='external_file'?x.src:'embedded:'+x.id}))
   },
   requested_output:{
    hero_building:'accurate facade, entrance, signage, windows, balconies, roof and storefront mapped to the correct footprint',

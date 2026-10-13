@@ -394,6 +394,7 @@ function bind(){
   $('#navBuilderStudio').onclick=openBuilderStudio;
   $('#view-settings').onclick=e=>{const b=e.target.closest('[data-settings-view]');if(b)setView(b.dataset.settingsView)};
   $('#advancedProfile').onclick=()=>openAdvanced('profile');$('#advancedSite').onclick=()=>setView('design');
+  $('#openCoordinatorIdentifiers').onclick=()=>{if(!est)return toast('Выберите заведение');location.href='admin-coordinator.html?establishment_id='+encodeURIComponent(est)};
   $('#orderStatusFilter').onclick=e=>{const b=e.target.closest('[data-filter]');if(b){orderFilter=b.dataset.filter;renderOrders()}};
   $('#profileHero').oninput=updateProfilePhoto;$('#profilePhotoFile').onchange=async e=>{if(e.target.files?.[0]){try{$('#profileHero').value=await compressImage(e.target.files[0],1100,.8);updateProfilePhoto();toast('Фото подготовлено · сохраните профиль')}catch(x){toast(x.message)}}};
   $('#venueSelect').onchange=async()=>{if(designBusy||saveBusy){$('#venueSelect').value=est;return toast('Дождитесь завершения сохранения')}if((profileDirty||designDirty)&&!await window.ShaurmegConsole.dialog({title:'Переключить заведение?',message:'Несохранённые изменения текущей точки будут отменены.',confirm:'Переключить'})){$('#venueSelect').value=est;return}est=$('#venueSelect').value;profileDirty=false;designDirty=false;currentCategory='';await loadVenue()};

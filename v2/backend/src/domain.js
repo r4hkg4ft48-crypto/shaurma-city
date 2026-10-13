@@ -361,7 +361,7 @@ function normalizeMenu(input){
       tags:(Array.isArray(x.tags)?x.tags:[]).map(v=>String(v).trim().slice(0,40)).filter(Boolean).slice(0,20),
       card_color:hex(x.card_color||'#FFFFFF','#FFFFFF'),
       composition:String(x.composition||x.ingredients||'').trim().slice(0,1200),
-      coordinator_blocked_ingredients:(Array.isArray(x.coordinator_blocked_ingredients)?x.coordinator_blocked_ingredients:[]).map(v=>String(v).slice(0,32)).slice(0,100),
+      coordinator_blocked_ingredients:(Array.isArray(x.coordinator_blocked_ingredients)?x.coordinator_blocked_ingredients:[]).map(v=>String(v).slice(0,256)).slice(0,100),
       schedule:{enabled:schedule.enabled===true,days:(Array.isArray(schedule.days)?schedule.days:[]).map(Number).filter(v=>v>=0&&v<=6).slice(0,7),from:String(schedule.from||'').slice(0,5),to:String(schedule.to||'').slice(0,5)},
       options:{
         meats:menuOptionList(opts.meats),sizes:menuOptionList(opts.sizes),bases:menuOptionList(opts.bases),sauces:menuOptionList(opts.sauces),extras:menuOptionList(opts.extras,60),

@@ -140,11 +140,56 @@ function deref(menu,obj){
   }
   return null;
 }
+async function createScopedMenuObject(bind,telegramId,raw){
+  const match=String(raw||'').trim().match(/^создать\s+(позицию|блюдо|напиток|категорию)\s+(.+)$/i);
+  if(!match)return null;
+  const kind=norm(match[1]),pieces=match[2].split('|').map(x=>x.trim()),name=pieces[0];
+  if(!name||name.length>120||pieces.length>3||/[\u0000-\u001F]/.test(name))throw error('Неверное название объекта');
+  let created;
+  const updated=await db.tx(async c=>{
+    const query=await c.query('SELECT menu,config,name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true FOR UPDATE',[bind.establishment_id]);
+    if(!query.rowCount)throw error('Заведение не найдено или закрыто',404);
+    const row=query.rows[0],menu=Array.isArray(row.menu)?row.menu:[],config=row.config||{};
+    let newMenu=menu;
+    if(kind==='категорию'){
+      if(pieces.length!==1)throw error('Формат: создать категорию Название');
+      const categories=D.menuSectionsAll(config,menu);
+      if(categories.some(x=>norm(x.name)===norm(name)))throw error('Категория с таким названием уже есть',409);
+      const id='coord_c_'+crypto.randomBytes(6).toString('hex');
+      config.menu_sections=[...categories,{id,name,active:true,order:categories.length*10}];
+      created={kind:'category',id,name};
+    }else{
+      if(pieces.length!==3)throw error('Формат: создать позицию Название | 350 | КОД_КАТЕГОРИИ');
+      const price=Number(pieces[1].replace(',','.'));
+      if(!Number.isInteger(price)||price<0||price>100000||menu.length>=400)throw error('Цена должна быть целым числом от 0 до 100000, меню до 400 позиций');
+      const cat=await c.query("SELECT entity_id FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND entity_type='category' AND normalized_code=$2",[bind.establishment_id,norm(pieces[2])]);
+      const availableCats=D.menuSectionsAll(config,menu);
+      const section=availableCats.find(x=>x.active!==false&&x.id===cat.rows[0]?.entity_id);
+      if(!section)throw error('Категория не найдена в выбранном заведении или отключена',404);
+      if(menu.some(x=>norm(x.n)===norm(name)))throw error('Позиция с таким названием уже есть в этом заведении',409);
+      const id='coord_p_'+crypto.randomBytes(6).toString('hex');
+      newMenu=D.normalizeMenu([...menu,{id,n:name,c:section.id,p:price,d:'',active:true,available:true}]);
+      created={kind:'item',id,name};
+    }
+    config.menu_revision=(Number(config.menu_revision)||0)+1;
+    const saved=await c.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[bind.establishment_id,JSON.stringify(newMenu),JSON.stringify(config)]);
+    await c.query('INSERT INTO shaurma_coordinator_audit(establishment_id,telegram_id,entity_type,entity_id,command,old_value,new_value) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)',[bind.establishment_id,String(telegramId),created.kind,created.id,raw,'null',JSON.stringify(created)]);
+    return {row:saved.rows[0],revision:config.menu_revision};
+  });
+  rt.pushVenue(bind.establishment_id,'menu_changed',{establishment_id:bind.establishment_id,revision:updated.revision});
+  rt.pushVenue(bind.establishment_id,'venue',updated.row);
+  rt.pushOwner('venue',updated.row);
+  const codes=await ensureCodes(bind.establishment_id);
+  const entry=codes.find(x=>x.kind===created.kind&&x.id===created.id);
+  return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:'✅ Создано: '+created.name+(entry?.code?'\n🔖 Идентификатор: '+entry.code:'\nКод появится в настройках заведения.')};
+}
 async function execute(telegramId,text){
   await ensureSchema();
   const bind=await binding(telegramId);
   if(!bind)throw error('Сначала подключите заведение ключом.',403);
   await ensureCodes(bind.establishment_id);
+  const created=await createScopedMenuObject(bind,telegramId,text);
+  if(created)return created;
   const match=String(text||'').trim().match(/^(\S+)\s+(.+)$/s);
   if(!match)throw error('Формат: КОД действие. Например: 7777 стоп лист');
   const command=match[2].trim(),act=norm(command);
@@ -226,7 +271,7 @@ async function execute(telegramId,text){
   rt.pushOwner('venue',result.row);
   return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:result.text};
 }
-const help='🥙 КООРДИНАТОР · ШАУРМЕГ\nКОД стоп лист — приостановить продажу\nКОД в наличии — вернуть в продажу\nКОД скрыть / показать — управлять отображением\nКОД цена 350 — новая цена\nКОД название Новое название\nКОД описание Новый текст\nКОД состав + сыр — добавить ингредиент\nКОД состав = мясо, сыр, соус — заменить состав\nКОД состав КОД_ИНГРЕДИЕНТА убрать — убрать ингредиент\nКОД_ИНГРЕДИЕНТА стоп лист — заблокировать блюдо при отсутствии ингредиента\nКОД удалить — архивировать, сохранив историю.';
+const help='🥙 КООРДИНАТОР · ШАУРМЕГ\nКОД стоп лист — приостановить продажу\nКОД в наличии — вернуть в продажу\nКОД скрыть / показать — управлять отображением\nКОД цена 350 — новая цена\nКОД название Новое название\nКОД описание Новый текст\nКОД состав + сыр — добавить ингредиент\nКОД состав = мясо, сыр, соус — заменить состав\nКОД состав КОД_ИНГРЕДИЕНТА убрать — убрать ингредиент\nКОД_ИНГРЕДИЕНТА стоп лист — заблокировать блюдо при отсутствии ингредиента\nКОД удалить — архивировать, сохранив историю.\nсоздать позицию Новая шаурма | 350 | КОД_КАТЕГОРИИ\nсоздать категорию Сезонное';
 function install(app){
   app.get('/api/v2/coordinator/codes',async(req,res)=>{
     try{await ensureSchema();const est=D.establishmentId(req.query.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est);res.setHeader('Cache-Control','no-store');res.json({ok:true,project:'shaurmeg',establishmentId:est,items:await ensureCodes(est)});}

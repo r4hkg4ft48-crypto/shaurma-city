@@ -32,14 +32,9 @@ async function coffee(action,telegramId,payload={}){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
   try{
     const r=await fetch(coffeeBase()+'/api/coordinator?action='+encodeURIComponent(action),{
-      method:action==='resolve'?'GET':'POST',
-      headers:{'content-type':'application/json','x-coordinator-secret':secret},
-      ...(action==='resolve'?{}:{body:JSON.stringify({telegramId,...payload})}),
-      signal:controller.signal
-    }.method==='GET'
-      ?{method:'GET',headers:{'x-coordinator-secret':secret},signal:controller.signal}
-      :{method:'POST',headers:{'content-type':'application/json','x-coordinator-secret':secret},body:JSON.stringify({telegramId,...payload}),signal:controller.signal}
-    );
+      method:'POST',headers:{'content-type':'application/json','x-coordinator-secret':secret},
+      body:JSON.stringify({telegramId,...payload}),signal:controller.signal
+    });
     const data=await r.json();
     if(!r.ok||data.ok===false)throw fail(String(data.message||data.error||'Ошибка кофейни'),r.status);
     return data;
@@ -82,7 +77,9 @@ async function handle(message){
   const prefix=command.match(/^(шаурмег|shaurmeg|шаурма|кофеек|кофеёк|kofeyok)\s+(.+)$/is);
   if(prefix){project=/^(кофе|kofeyok)/i.test(norm(prefix[1]))?'kofeyok':'shaurmeg';command=prefix[2].trim();}
   if(!project){
-    const current=await locations(uid),active=current.filter(x=>x.linked);
+    const current=await locations(uid);
+    if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Сейчас не удалось проверить все привязки. Для безопасности укажите проект перед командой: «шаурмег 7777 стоп лист» или «кофеёк 7777 стоп лист».');
+    const active=current.filter(x=>x.linked);
     if(active.length!==1)return reply(chatId,active.length?'Подключены два проекта. Добавьте «Шаурмег» или «Кофеёк» перед кодом.':'Нет однозначного подключения. /connect СЕКРЕТНЫЙ_КЛЮЧ\n'+HELP);
     project=active[0].project;
   }

@@ -23,7 +23,7 @@
 .astraActions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.astraManifest{margin-top:10px;max-height:200px;overflow:auto;white-space:pre-wrap;font:700 9px/1.45 ui-monospace,SFMono-Regular,monospace}
 @media(max-width:720px){.astraHead,.astraDataset{grid-template-columns:1fr}.astraConfig{grid-template-columns:1fr 1fr}.astraAssetCard{grid-template-columns:90px minmax(0,1fr)}}
 @media(max-width:520px){.astraConfig{grid-template-columns:1fr}.astraConfig .wide{grid-column:1}.astraDataset{grid-template-columns:1fr}.astraAssetCard{grid-template-columns:1fr}.astraThumb{min-height:180px}.astraThumb img{height:180px}.astraReadiness{grid-template-columns:1fr}.astraScore{margin:auto}}
-</style><link rel="stylesheet" href="/realcity-preview/admin-map-workbench.css?v=20261006-menu2"></head>
+</style><link rel="stylesheet" href="/realcity-preview/admin-map-workbench.css?v=20261006-menu2"><link rel="stylesheet" href="/realcity-photo-guide.css?v=20261013"></head>
 <body class="consoleModule consoleMaster">
 <div class="app" id="app" hidden>
   <header class="top"><button class="backBtn" id="masterBack" type="button" aria-label="Назад" hidden>←</button><img class="consoleEmblem" src="/realcity-preview/shaurmeg-emblem.svg" alt=""><div class="brand"><b>Шаур<span>мег</span></b><small>ЦЕНТР УПРАВЛЕНИЯ СЕТЬЮ</small></div><div class="grow"></div><div class="status"><i></i><span>LIVE</span></div></header>
@@ -36,7 +36,7 @@
   </nav>
   <div class="consolePageHeading"><div><small id="consoleEyebrow">ОПЕРАЦИОННЫЙ ОБЗОР</small><h1 id="consolePageTitle">Вся сеть под контролем</h1></div><span class="consoleBuild">ASTRA / 03</span></div>
   <div class="stats"><div class="stat"><small>ЗАВЕДЕНИЯ</small><b id="stVenues">—</b><span>активных точек</span></div><div class="stat"><small>ЗАКАЗЫ ЗА 24 ЧАСА</small><b id="stToday">—</b><span>по всей сети</span></div><div class="stat"><small>НОВЫЕ ЗАКАЗЫ</small><b id="stNew">—</b><span>ожидают кухни</span></div><div class="stat"><small>ВЫРУЧКА ЗА 24 ЧАСА</small><b id="stRevenue">—</b><span>без отменённых</span></div></div>
-  <nav class="tabs" id="tabs" aria-label="Системные модули"><button data-tab="tools">Все инструменты</button><button data-tab="astra">Astra / RealCity</button><button data-tab="pro">RealCity Pro · Фото</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="bots">Боты</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Системные модули"><button data-tab="tools">Все инструменты</button><button data-tab="astra">RealCity · 30 фото</button><button data-tab="pro">RealCity Pro · Фото</button><button data-tab="access">Доступы</button><button data-tab="owners">Владельцы</button><button data-tab="bots">Боты</button></nav>
 
   <section class="pane active" id="overviewPane">
     <div class="consoleNetworkStrip"><div><small>ЗАВЕДЕНИЯ СЕТИ</small><h2>На связи с каждой точкой</h2></div><div id="networkVenues" class="consoleVenueStrip"></div><button class="btn" data-tab-open="sites">Весь каталог →</button></div><div class="sectionTitle"><h2>Рабочие пространства</h2><small>Быстрый переход</small></div>
@@ -56,7 +56,7 @@
   <section class="pane" id="proPane"><div class="sectionTitle"><h2>RealCity Pro · фотограмметрическая студия</h2><small>независимая от Astra обработка</small></div><iframe id="proFrame" title="RealCity Pro" src="about:blank" style="width:100%;min-height:calc(100vh - 205px);border:0;border-radius:19px;background:#071320"></iframe></section>
 
   <section class="pane" id="astraPane">
-    <div class="sectionTitle"><h2>Astra / RealCity</h2><small>digital twin dataset · per establishment</small></div>
+    <div class="sectionTitle"><h2>RealCity · 30 связанных ракурсов</h2><small>Astra · реальные фотографии для каждой точки</small></div>
 
     <div class="astraHead">
       <div class="astraIntro">
@@ -71,6 +71,17 @@
       </div>
     </div>
 
+    <section class="rcGuide" id="rcGuide" aria-label="План съёмки для цифровой копии">
+      <div class="rcGuideHeader"><div><span class="rcGuideKicker">RealCity / Фотоархив / Понятная загрузка</span><h2>30 ракурсов одного места</h2><p>Каждому кадру — своя точка съёмки и понятная цель. Выбери карточку, загрузи оригинал. Система закрепит, что изображено, свяжет ракурсы одного объекта и сохранит данные для Astra. Указывать градусы и FOV не нужно.</p></div><span class="rcGuideCount" id="rcGuideCount">0 / 30 фотографий</span></div>
+      <div class="rcGuideProgress" aria-hidden="true"><div id="rcGuideBar"></div></div><div id="rcGuideHelp">Выбери заведение и начни с главного фасада.</div>
+      <div class="rcGuideGroups" id="rcGuideGroups" role="group" aria-label="Группы съёмки"></div>
+      <div class="rcGuideSlots" id="rcGuideSlots"></div>
+      <div id="rcExtras" class="rcExtras" hidden><h3>Сохранённые фото без назначения · <span id="rcExtraCount">0</span></h3><p>Уже загруженные фотографии не пропадут. Для каждой выбери, что на ней изображено, чтобы связать её с нужным ракурсом без повторной загрузки.</p><div class="rcExtraAssets" id="rcExtraAssets"></div></div>
+      <input id="rcGuideFile" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,image/tiff" hidden>
+      <p id="rcGuideStatus" class="rcGuideStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <details class="rcAdvanced"><summary>Дополнительные настройки задания Astra</summary>
     <div class="panel">
       <div class="sectionTitle" style="margin-top:0"><h2 style="font-size:18px">Задание Astra</h2><small>как строить эту цифровую копию</small></div>
       <div class="astraConfig">
@@ -87,8 +98,9 @@
         <div class="field wide"><label>Комментарии к месту</label><textarea id="astraNotes" placeholder="Что особенно важно сохранить: цвета, этажность, вывеска, парковка, забор, вход со двора…"></textarea></div>
         <div class="field wide"><label>Дополнительная инструкция Astra</label><textarea id="astraInstruction" placeholder="Дополнительные требования именно для этой точки. Базовый spatial contract уже зафиксирован системой."></textarea></div>
       </div>
-    </div>
+    </div></details>
 
+    <details class="rcAdvanced"><summary>Дополнительные фотографии и ручные параметры (для эксперта)</summary>
     <div class="astraDataset">
       <section class="astraDatasetBlock">
         <div class="astraDatasetHead"><div><b>1 · Главное здание и вход</b><small>Точная цифровая копия фасада заведения: вход, вывеска, двери, окна, отделка, боковые стены и архитектурные детали.</small></div><span class="astraBadge" id="astraMainCount">0 фото</span></div>
@@ -111,7 +123,7 @@
         <div class="astraUrlRow"><input id="astraPanoUrl" placeholder="https://… ссылка на исходный файл"><button class="btn" id="addAstraPanoUrl" type="button">Добавить ссылку</button></div>
         <div class="astraAssetList" id="astraPanoList"></div>
       </section>
-    </div>
+    </div></details>
 
     <div class="astraReadiness">
       <div class="astraScore"><div><b id="astraScore">0%</b><small>КОМПЛЕКТНОСТЬ</small></div></div>
@@ -344,6 +356,7 @@ function applyAstraState(j){
  const output=j.output;
  $('#astraOutputStatus').textContent=output?.version===2&&output.status==='ready'&&Array.isArray(output.buildings)?'На карте: '+output.buildings.length+' зданий · '+(output.coverage?.observed_edges||0)+' фасадов по фото':output?.status==='stale'?'Материалы изменились. Обновите реконструкцию Astra.':'Реконструкция ещё не загружена.';
  window.RealCityStudio?.refresh(j);
+  window.RealCityPhotoGuide?.render();
 }
 function renderAstraReadiness(r){
  const score=Number(r.score||0);$('#astraScore').textContent=score+'%';$('#astraReadyBadge').textContent=r.photo_first_ready?'PHOTO-FIRST готов':r.ready?'базовый пакет готов':'сбор наблюдений';$('#astraReadyBadge').classList.toggle('good',!!r.ready);
@@ -544,5 +557,7 @@ $('#createKey').onclick=createKey;$('#loadAdmins').onclick=()=>{loadAdmins();loa
 })();
 </script>
 <script src="/realcity-studio-ui.js?v=3"></script>
+<script src="/realcity-shot-plan.js?v=20261013"></script>
+<script src="/realcity-photo-guide.js?v=20261013"></script>
 </body>
 </html>

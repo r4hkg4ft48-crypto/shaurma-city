@@ -4,6 +4,7 @@ const express=require('express');
 const A=require('./realcity-astra');
 const P=require('./realcity-photo');
 const R=require('./realcity-photoreal');
+const ShotPlan=require('../../../backend/realcity-shot-plan');
 const error=(message,status=422)=>{throw Object.assign(new Error(message),{status})};
 async function ensureSchema(db){
  await db.query(`
@@ -95,6 +96,8 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
    const row=await select(req,client,true);if(req.body.expected_revision!==A.revision(row))error('astra_inputs_changed_reload_package',409);
    if(!Array.isArray(req.body.assets)||req.body.assets.length>120)error('photo_asset_limit_120');
    const assets=normalizeAssets(req.body.assets),old=new Map((row.realcity_astra_assets||[]).map(a=>[a.id,a]));
+   const assigned=assets.filter(a=>a.shot_id).map(a=>a.shot_id);
+   if(new Set(assigned).size!==assigned.length)error('photo_shot_already_filled',409);
    for(const asset of assets){
     if(asset.stored){const before=old.get(asset.id);if(!before?.stored||before.sha256!==asset.sha256)error('photo_original_binding_mismatch');asset.src=before.src;asset.metadata=before.metadata;}
    }
@@ -104,12 +107,17 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
  // One original per request; no base64 batch in a JSON column. Hash deduplication
  // is scoped to the exact marker; there is no cross-venue private source lookup.
  app.post(base+'/assets',admin,express.raw({type:'application/octet-stream',limit:'16mb'}),route(async(req,res)=>{
-  const row=await select(req),photo=await P.inspect(req.body);
+  const row=await select(req),shot=ShotPlan.get(req.query.shot_id);
+   if(req.query.shot_id&&!shot)error('photo_shot_invalid',422);
+   const photo=await P.inspect(req.body);
   const saved=await transaction(async client=>{
    const latest=await select(req,client,true),assets=normalizeAssets(latest.realcity_astra_assets);
    const duplicate=await client.query('SELECT asset_id FROM realcity_astra_originals WHERE marker_id=$1 AND sha256=$2',[row.id,photo.sha256]);
    const id=duplicate.rows[0]?.asset_id||'photo_'+crypto.randomBytes(12).toString('hex');
-   if(assets.some(a=>a.id===id))return latest;
+   if(assets.some(a=>a.id===id)){
+     if(shot&&assets.find(a=>a.id===id)?.shot_id!==shot.id)error('photo_already_uploaded_assign_existing',409);
+     return latest;
+    }
    if(assets.length>=120)error('photo_asset_limit_120');
    if(!duplicate.rows.length){
     const total=await client.query('SELECT COALESCE(SUM(octet_length(content)),0) AS bytes FROM realcity_astra_originals WHERE marker_id=$1',[row.id]);
@@ -117,7 +125,7 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
     await client.query('INSERT INTO realcity_astra_originals(marker_id,asset_id,sha256,mime,content,metadata,preview) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)',[row.id,id,photo.sha256,photo.mime,req.body,JSON.stringify(photo.metadata),photo.preview]);
    }
    const categories=new Set(['main_building','panorama','landscape','road_ground','neighbor_building','vegetation','street_object']);
-   const category=categories.has(String(req.query.category||''))?String(req.query.category):'main_building';
+   const category=shot?shot.category:(categories.has(String(req.query.category||''))?String(req.query.category):'main_building');
    const defaults={main_building:'main_facade',panorama:'district',landscape:'terrain',road_ground:'road',neighbor_building:'front',vegetation:'trees',street_object:'detail'};
    const roles={main_building:'hero_facade',panorama:'environment',landscape:'landscape',road_ground:'ground',neighbor_building:'context_building',vegetation:'vegetation',street_object:'street_object'};
    const qnum=(name,min,max)=>{const n=Number(req.query[name]);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):null};
@@ -128,9 +136,10 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
     pitch_deg:qnum('pitch_deg',-45,45),fov_deg:qnum('fov_deg',25,140),distance_m:qnum('distance_m',1,220),altitude_m:qnum('altitude_m',-50,500)
    };
    assets.push({id,src:photo.preview,stored:true,sha256:photo.sha256,metadata:photo.metadata,kind:'image',category,
-    subtype:String(req.query.subtype||defaults[category]).slice(0,60),role:roles[category],camera,
-    filename:String(req.query.filename||'photo').slice(0,180),label:String(req.query.label||'').slice(0,180),notes:String(req.query.notes||'').slice(0,900),
-    angle:String(req.query.angle||'unknown').slice(0,30),direction_deg:camera.heading_deg,priority:Math.max(1,Math.min(5,Number(req.query.priority)||4)),
+    subtype:shot?shot.subtype:String(req.query.subtype||defaults[category]).slice(0,60),role:roles[category],camera,
+     shot_id:shot?.id||null,subject_id:shot?.subject||null,view_zone:shot?.position||null,
+    filename:String(req.query.filename||'photo').slice(0,180),label:shot?.title||String(req.query.label||'').slice(0,180),notes:String(req.query.notes||'').slice(0,900),
+    angle:shot?.angle||String(req.query.angle||'unknown').slice(0,30),direction_deg:camera.heading_deg,priority:Math.max(1,Math.min(5,Number(req.query.priority)||4)),
     primary:!assets.some(a=>a.category===category),created_at:new Date().toISOString()});
    return updateInput(client,latest,assets,normalizeConfig(latest.realcity_astra_config));
   });res.json(await current(saved));

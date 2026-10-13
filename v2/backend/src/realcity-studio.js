@@ -132,7 +132,7 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
    const camera={
     ...(Number.isFinite(Number(photo.metadata?.gps?.lat))&&Number.isFinite(Number(photo.metadata?.gps?.lon))?{lat:Number(photo.metadata.gps.lat),lon:Number(photo.metadata.gps.lon)}:{}),
     ...(qnum('camera_lat',-85,85)!==null&&qnum('camera_lon',-180,180)!==null?{lat:qnum('camera_lat',-85,85),lon:qnum('camera_lon',-180,180)}:{}),
-    heading_deg:qnum('heading_deg',0,359)??(Number.isFinite(Number(photo.metadata?.heading_deg))?Number(photo.metadata.heading_deg):null),
+    heading_deg:qnum('heading_deg',0,359)??(photo.metadata?.heading_deg!=null&&Number.isFinite(Number(photo.metadata.heading_deg))?Number(photo.metadata.heading_deg):null),
     pitch_deg:qnum('pitch_deg',-45,45),fov_deg:qnum('fov_deg',25,140),distance_m:qnum('distance_m',1,220),altitude_m:qnum('altitude_m',-50,500)
    };
    assets.push({id,src:photo.preview,stored:true,sha256:photo.sha256,metadata:photo.metadata,kind:'image',category,

@@ -114,10 +114,15 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
    const latest=await select(req,client,true),assets=normalizeAssets(latest.realcity_astra_assets);
    const duplicate=await client.query('SELECT asset_id FROM realcity_astra_originals WHERE marker_id=$1 AND sha256=$2',[row.id,photo.sha256]);
    const id=duplicate.rows[0]?.asset_id||'photo_'+crypto.randomBytes(12).toString('hex');
-   if(assets.some(a=>a.id===id)){
-     if(shot&&assets.find(a=>a.id===id)?.shot_id!==shot.id)error('photo_already_uploaded_assign_existing',409);
-     return latest;
-    }
+   // Every slot is unique. Replacement clears the old association and creates
+   // the new association in the SAME marker transaction (never two owners).
+   const existing=assets.find(a=>a.id===id);
+   if(existing){
+    if(shot&&existing.shot_id!==shot.id)error('photo_already_uploaded_assign_existing',409);
+    return latest;
+   }
+   const occupied=shot?assets.find(a=>a.shot_id===shot.id):null;
+   if(occupied&&req.query.replace_shot!=='1')error('photo_shot_already_filled',409);
    if(assets.length>=120)error('photo_asset_limit_120');
    if(!duplicate.rows.length){
     const total=await client.query('SELECT COALESCE(SUM(octet_length(content)),0) AS bytes FROM realcity_astra_originals WHERE marker_id=$1',[row.id]);
@@ -128,13 +133,14 @@ function install(app,{db,authorize,manifest,normalizeAssets,normalizeConfig,read
    const category=shot?shot.category:(categories.has(String(req.query.category||''))?String(req.query.category):'main_building');
    const defaults={main_building:'main_facade',panorama:'district',landscape:'terrain',road_ground:'road',neighbor_building:'front',vegetation:'trees',street_object:'detail'};
    const roles={main_building:'hero_facade',panorama:'environment',landscape:'landscape',road_ground:'ground',neighbor_building:'context_building',vegetation:'vegetation',street_object:'street_object'};
-   const qnum=(name,min,max)=>{const n=Number(req.query[name]);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):null};
+   const qnum=(name,min,max)=>{const v=req.query[name];if(v===undefined||v===null||v==='')return null;const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):null};
    const camera={
     ...(Number.isFinite(Number(photo.metadata?.gps?.lat))&&Number.isFinite(Number(photo.metadata?.gps?.lon))?{lat:Number(photo.metadata.gps.lat),lon:Number(photo.metadata.gps.lon)}:{}),
     ...(qnum('camera_lat',-85,85)!==null&&qnum('camera_lon',-180,180)!==null?{lat:qnum('camera_lat',-85,85),lon:qnum('camera_lon',-180,180)}:{}),
     heading_deg:qnum('heading_deg',0,359)??(photo.metadata?.heading_deg!=null&&Number.isFinite(Number(photo.metadata.heading_deg))?Number(photo.metadata.heading_deg):null),
     pitch_deg:qnum('pitch_deg',-45,45),fov_deg:qnum('fov_deg',25,140),distance_m:qnum('distance_m',1,220),altitude_m:qnum('altitude_m',-50,500)
    };
+   if(occupied)occupied.shot_id=null; // Keep its immutable original in the archive.
    assets.push({id,src:photo.preview,stored:true,sha256:photo.sha256,metadata:photo.metadata,kind:'image',category,
     subtype:shot?shot.subtype:String(req.query.subtype||defaults[category]).slice(0,60),role:roles[category],camera,
      shot_id:shot?.id||null,subject_id:shot?.subject||null,view_zone:shot?.position||null,

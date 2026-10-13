@@ -10,7 +10,7 @@ const coffeeBase=()=>String(process.env.COORDINATOR_COFFEE_URL||'https://kofeyok
 const coffeeSecret=()=>String(process.env.COORDINATOR_COFFEE_SECRET||'').trim();
 const norm=x=>String(x||'').trim().toLowerCase().replace(/ё/g,'е');
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
-const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
+const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n8. Создать: создать позицию Название | 350 | КОД_КАТЕГОРИИ\n9. Создать ингредиент (Кофеёк): создать ингредиент Сироп | ml | 150\n10. Добавить вариант: КОД_ГРУППЫ добавить вариант Название | 25\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
 function equal(a,b){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}
 async function telegram(method,body){
   if(!token())throw fail('COORDINATOR_BOT_TOKEN missing',503);

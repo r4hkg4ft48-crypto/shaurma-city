@@ -47,6 +47,12 @@ function extractEntities(row){
       out.push({kind:'ingredient',id:codeId(itemId,'ingredient',norm(part)),name:(item.n||itemId)+' · '+part});
     }
   }
+  const seen=new Set();
+  for(const x of out){
+    const stable=x.kind+':'+x.id;
+    if(seen.has(stable))throw error('В заведении обнаружены повторяющиеся внутренние ID меню: '+x.name+'. Сначала исправьте дубли.',409);
+    seen.add(stable);
+  }
   return out;
 }
 async function ensureCodes(est){

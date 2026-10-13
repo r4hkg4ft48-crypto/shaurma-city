@@ -200,9 +200,25 @@ function install(app,{db,authorize}){
   };
   const roles=Object.fromEntries((Array.isArray(row.realcity_astra_assets)?row.realcity_astra_assets:[])
     .filter(a=>a?.id).map(a=>[String(a.id),categoryRole(a)]));
+  // Carry the curated viewpoint map across the optional Astra → Pro import.
+  // These names are photography metadata, not evidence of calibrated geometry.
+  const shotPlan=require('../../../backend/realcity-shot-plan');
+  const guided=Object.fromEntries((Array.isArray(row.realcity_astra_assets)?row.realcity_astra_assets:[])
+    .filter(a=>a?.id&&shotPlan.get(a.shot_id)).map(a=>{
+      const s=shotPlan.get(a.shot_id);
+      return [String(a.id),{id:s.id,subject:s.subject,title:s.title,position:s.position,
+        focus:s.focus,linked_viewpoints:s.links,pose_verified:false}];
+    }));
+
   if(fresh.length){
-   await db.query("INSERT INTO realcity_pro_assets(marker_id,asset_id,role,filename,sha256,mime,content,metadata,preview) SELECT o.marker_id,'pro_'+left(md5(o.asset_id),20),COALESCE($2::jsonb->>o.asset_id,'environment'),'Astra · '||o.asset_id,o.sha256,o.mime,o.content,o.metadata,o.preview FROM realcity_astra_originals o WHERE o.marker_id=$1 AND o.asset_id=ANY($3::text[]) ON CONFLICT(marker_id,sha256) DO NOTHING",
-    [row.id,JSON.stringify(roles),fresh.map(x=>x.asset_id)]);
+   await db.query("INSERT INTO realcity_pro_assets(marker_id,asset_id,role,filename,sha256,mime,content,metadata,preview) SELECT o.marker_id,'pro_'+left(md5(o.asset_id),20),COALESCE($2::jsonb->>o.asset_id,'environment'),'Astra · '||o.asset_id,o.sha256,o.mime,o.content,o.metadata || jsonb_build_object('astra_guided_shot',COALESCE($4::jsonb->o.asset_id,'{}'::jsonb)),o.preview FROM realcity_astra_originals o WHERE o.marker_id=$1 AND o.asset_id=ANY($3::text[]) ON CONFLICT(marker_id,sha256) DO NOTHING",
+    [row.id,JSON.stringify(roles),fresh.map(x=>x.asset_id),JSON.stringify(guided)]);
+  }
+  // A photo may have been imported before the user labeled its viewpoint.
+  // Update only Pro-side descriptive metadata; never touch Astra originals.
+  if(Object.keys(guided).length){
+   await db.query("UPDATE realcity_pro_assets p SET metadata=p.metadata || jsonb_build_object('astra_guided_shot',$2::jsonb->a.asset_id) FROM realcity_astra_originals a WHERE a.marker_id=$1 AND p.marker_id=a.marker_id AND p.sha256=a.sha256 AND $2::jsonb ? a.asset_id",
+      [row.id,JSON.stringify(guided)]);
   }
   res.json({ok:true,imported:fresh.length,state:await state(row)});
  }));

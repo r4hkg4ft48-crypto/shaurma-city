@@ -1019,7 +1019,7 @@ function normalizeAstraRealCityAssets(value){
  const roles={main_building:'hero_facade',panorama:'environment',landscape:'landscape',road_ground:'ground',neighbor_building:'context_building',vegetation:'vegetation',street_object:'street_object'};
  const categories=new Set(Object.keys(types));
  const angles=new Set(['front','left','right','rear','up','down','panorama','detail','unknown']);
- const finite=v=>Number.isFinite(Number(v)),clamp=(v,a,b)=>Math.max(a,Math.min(b,Number(v)));
+ const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v)),clamp=(v,a,b)=>Math.max(a,Math.min(b,Number(v)));
  return value.slice(0,120).map((item,index)=>{
   if(!item||typeof item!=='object')return null;
   const shot=RealCityShotPlan.get(item.shot_id);
@@ -1063,8 +1063,9 @@ function astraReadiness(assets){
  const list=Array.isArray(assets)?assets:[],main=list.filter(x=>x.category==='main_building'),pano=list.filter(x=>x.category==='panorama');
  const world=list.filter(x=>['panorama','landscape','road_ground','neighbor_building','vegetation','street_object'].includes(x.category));
  const mainPrimary=main.some(x=>x.primary)||main.some(x=>x.subtype==='main_facade'),entrance=main.some(x=>x.subtype==='entrance');
- const sectors=new Set(world.map(x=>x.category+':'+x.subtype)),positioned=list.filter(x=>Number.isFinite(Number(x.camera?.lat))&&Number.isFinite(Number(x.camera?.lon))).length;
- const headed=list.filter(x=>Number.isFinite(Number(x.camera?.heading_deg))).length;
+ const hasPoseNumber=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
+  const sectors=new Set(world.map(x=>x.category+':'+x.subtype)),positioned=list.filter(x=>hasPoseNumber(x.camera?.lat)&&hasPoseNumber(x.camera?.lon)).length;
+ const headed=list.filter(x=>hasPoseNumber(x.camera?.heading_deg)).length;
  let score=0;
  if(main.length)score+=15;if(main.length>=4)score+=15;if(mainPrimary)score+=10;if(entrance)score+=8;
  if(world.length)score+=12;if(world.length>=6)score+=15;if(sectors.size>=5)score+=10;if(positioned>=2)score+=8;if(headed>=3)score+=7;

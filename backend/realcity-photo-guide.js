@@ -58,17 +58,12 @@
   $('#rcGuide').classList.add('rcWorking');
   try{
    if(!await saveAstraStudio())throw new Error('Сначала сохраните текущие настройки');
-   const url='/api/shaurma/admin/astra-realcity/'+encodeURIComponent(priorEst)+'/assets?marker_id='+encodeURIComponent(priorTarget)+'&shot_id='+slot.id+'&filename='+encodeURIComponent(file.name);
+   const url='/api/shaurma/admin/astra-realcity/'+encodeURIComponent(priorEst)+'/assets?marker_id='+encodeURIComponent(priorTarget)+'&shot_id='+slot.id+'&filename='+encodeURIComponent(file.name)+(occupied?'&replace_shot=1':'');
    const j=await api(url,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
    if(String(priorTarget)!==String(astraState.marker_id)||priorEst!==astraState.establishment_id)throw new Error('Точка изменилась. Перезагрузите раздел.');
    applyAstraState({...astraState,...j,markers:astraState.markers});
-   // A previous observation is retained, not deleted, when a slot is replaced.
-   const duplicates=astraAssets.filter(a=>a.shot_id===slotId);
-   if(duplicates.length>1){
-    const justAdded=duplicates.find(a=>a.filename===file.name&&a.id!==occupied?.id)||duplicates[duplicates.length-1];
-    duplicates.filter(a=>a.id!==justAdded.id).forEach(a=>{a.shot_id=null});
-    if(!await saveAstraStudio())throw new Error('Оригинал загружен, но назначение замены не сохранено. Проверьте список.');
-   }
+   // Backend atomically moves the slot; the previous original remains unassigned.
+   if(astraAssets.filter(a=>a.shot_id===slotId).length!==1)throw new Error('Не подтверждена однозначная привязка. Проверьте архив.');
    notice('Снимок '+slot.id+' сохранён с меткой «'+slot.title+'». Извлечённые EXIF/качество доступны в карточке.');
   }catch(e){notice('Не удалось загрузить '+file.name+': '+(e.body?.error||e.message));}
   finally{busy=false;$('#rcGuide').classList.remove('rcWorking');render();}

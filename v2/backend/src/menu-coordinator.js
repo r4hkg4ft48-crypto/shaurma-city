@@ -349,9 +349,14 @@ function install(app){
       if(action==='resolve'){
         const b=await binding(actor);return res.json({ok:true,linked:!!b,project:'shaurmeg',venueId:b?.establishment_id||null,venue:b?.name||null});
       }
+      if(action==='catalog'){
+        const b=await binding(actor);
+        if(!b)throw error('Заведение не подключено.',403);
+        return res.json({ok:true,project:'shaurmeg',venue:b.name,venueId:b.establishment_id,items:await ensureCodes(b.establishment_id)});
+      }
       if(action==='execute')return res.json(await execute(actor,req.body?.text));
       throw error('unknown_action',404);
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
 }
-module.exports={ensureSchema,install,claim,binding,execute,help,extractEntities};
+module.exports={ensureSchema,ensureCodes,install,claim,binding,execute,help,extractEntities};

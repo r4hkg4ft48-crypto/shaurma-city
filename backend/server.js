@@ -679,7 +679,9 @@ async function syncAggregatorTelegramMiniApp(){
   await aggregatorTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}});
   await aggregatorTelegramApi('setMyCommands',{commands:[
     {command:'start',description:'Открыть карту Шаурмега'},
-    {command:'map',description:'Карта заведений'}
+    {command:'map',description:'Карта заведений'},
+    {command:'quick',description:'Как заказать сообщением'},
+    {command:'favorites',description:'Мои избранные блюда'}
   ]});
   if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
@@ -1892,7 +1894,7 @@ app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
    if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return res.sendStatus(200);
    await aggregatorTelegramApi('sendMessage',{
      chat_id:msg.chat.id,
-     text:'🗺 Шаурмег — карта заведений.\n\nВыберите точку на карте, затем нажмите «Меню и заказ». Заказ откроется отдельно в @LepeshkaJulbot.',
+     text:'🥙 Шаурмег — карта и быстрые заказы.\n\nОткройте карту, выберите заведение и добавьте любимое блюдо в избранное. Затем просто напишите мне: «Закажи лепёшку с сыром».\n\nОтправлю заказ в заведение без Mini App. Оплата при получении.\n\n/favorites — любимые блюда\n/quick — как это работает.',
      reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:aggregatorMapUrl()}}]]}
    });
    res.sendStatus(200);

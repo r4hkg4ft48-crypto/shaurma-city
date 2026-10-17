@@ -11,6 +11,7 @@ const {installVenueOwner}=require('./venue-owner');
 const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const v2Realtime=require('../v2/backend/src/realtime');
 const astraRealCity=require('../v2/backend/src/realcity-astra');
+const quickFavoriteOrder=require('../v2/backend/src/quick-order-bot');
 
 const app=express();
 app.use(express.json({limit:'24mb'}));
@@ -680,7 +681,7 @@ async function syncAggregatorTelegramMiniApp(){
   ]});
   if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
-    allowed_updates:['message'],drop_pending_updates:false
+    allowed_updates:['message','callback_query','pre_checkout_query'],drop_pending_updates:false
   });
   console.log('Telegram aggregator bot synced @'+String(info?.username||'')+' · map-only');
  }catch(e){console.error('Telegram aggregator bot sync:',e.message)}
@@ -1881,6 +1882,7 @@ app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
  if(!AGGREGATOR_BOT_WEBHOOK_SECRET||req.params.secret!==AGGREGATOR_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
  res.sendStatus(200);
  try{
+   if(await quickFavoriteOrder.handleUpdate(req.body||{},aggregatorTelegramApi))return;
    const msg=req.body?.message;if(!msg?.chat?.id)return;
    const raw=String(msg.text||'').trim();
    if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return;
@@ -1970,4 +1972,4 @@ v2ChannelAssets.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await quickFavoriteOrder.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));

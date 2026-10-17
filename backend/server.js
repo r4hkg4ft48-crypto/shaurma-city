@@ -1884,18 +1884,19 @@ app.get('/api/shaurma/stats',async(req,res)=>{
 app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
  if(!AGGREGATOR_BOT_WEBHOOK_SECRET||req.params.secret!==AGGREGATOR_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
  if(req.get('x-telegram-bot-api-secret-token')!==AGGREGATOR_BOT_HEADER_SECRET)return res.sendStatus(403);
- res.sendStatus(200);
  try{
-   if(await quickFavoriteOrder.handleUpdate(req.body||{},aggregatorTelegramApi))return;
-   const msg=req.body?.message;if(!msg?.chat?.id)return;
+   if(await quickFavoriteOrder.handleUpdate(req.body||{},aggregatorTelegramApi))return res.sendStatus(200);
+   const msg=req.body?.message;
+   if(!msg?.chat?.id)return res.sendStatus(200);
    const raw=String(msg.text||'').trim();
-   if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return;
+   if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return res.sendStatus(200);
    await aggregatorTelegramApi('sendMessage',{
      chat_id:msg.chat.id,
      text:'🗺 Шаурмег — карта заведений.\n\nВыберите точку на карте, затем нажмите «Меню и заказ». Заказ откроется отдельно в @LepeshkaJulbot.',
      reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:aggregatorMapUrl()}}]]}
    });
- }catch(e){console.error('aggregator bot webhook:',e.message)}
+   res.sendStatus(200);
+ }catch(e){console.error('aggregator bot webhook:',e.message);res.sendStatus(503)}
 });
 
 app.post('/api/client-bot/webhook/:secret',async(req,res)=>{

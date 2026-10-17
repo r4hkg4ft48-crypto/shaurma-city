@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto=require('crypto');
+const rich=require('./telegram-rich');
 const path=require('path');
 const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const {createVenueCommandBus}=require('./venue-command');
@@ -209,13 +210,20 @@ function installVenueOwner(app,{DB,verifyTelegramInitDataWithToken,ownerOk,norma
   }
   async function botApi(method,body={}){
     if(!BOT_TOKEN)throw new Error('telegram_not_configured');
-    const r=await fetch('https://api.telegram.org/bot'+BOT_TOKEN+'/'+method,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||!j.ok)throw new Error(j.description||('telegram_'+method+'_failed'));
-    return j.result;
+    return rich.withRich(method,body,async(name,payload)=>{
+      const r=await fetch('https://api.telegram.org/bot'+BOT_TOKEN+'/'+name,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.ok){
+        const error=new Error(j.description||('telegram_'+name+'_failed'));
+        error.status=Number(j.error_code||r.status);
+        throw error;
+      }
+      return j.result;
+    });
   }
   async function sendOwnerBotMessage(chatId,text,extra={}){
-    return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',disable_web_page_preview:true,...extra});
+    const clean=String(text||'').replace(/<\/?(?:b|code)>/gi,'');
+    return botApi('sendMessage',{chat_id:chatId,text,parse_mode:'HTML',__rich_html:rich.textToHtml(clean),disable_web_page_preview:true,...extra});
   }
   async function sendOwnerPlainMessage(chatId,text,extra={}){
     const plain=String(text||'').replace(/<\/?(?:b|code)>/gi,'').slice(0,3900);

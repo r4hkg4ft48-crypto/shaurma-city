@@ -2,13 +2,14 @@
 
 const config=require('./config');
 const db=require('./db');
+const rich=require('../../../backend/telegram-rich');
 const content=require('./channel-content');
 
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let runtimeUsername='';
 let runtimeChannelChatId='';
 
-async function call(method,body={},attempt=0){
+async function callRaw(method,body={},attempt=0){
   const token=config.CHANNEL_BOT_TOKEN;
   if(!token)return null;
   const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{
@@ -21,7 +22,7 @@ async function call(method,body={},attempt=0){
   if((r.status===429||j.error_code===429)&&attempt<3){
     const delay=(Math.max(1,Number(j.parameters?.retry_after)||1)*1000)+250;
     await sleep(delay);
-    return call(method,body,attempt+1);
+    return callRaw(method,body,attempt+1);
   }
   if(!r.ok||!j.ok){
     const e=new Error(j.description||method+'_failed');
@@ -30,6 +31,9 @@ async function call(method,body={},attempt=0){
     throw e;
   }
   return j.result;
+}
+async function call(method,body={},attempt=0){
+  return rich.withRich(method,body,(name,payload)=>callRaw(name,payload,attempt));
 }
 
 function allAdminIds(){

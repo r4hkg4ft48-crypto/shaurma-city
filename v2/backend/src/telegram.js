@@ -112,6 +112,8 @@ function kitchenOrderText(order){
   if(order?.phone)lines.push('Телефон: '+String(order.phone));
   if(order?.comment)lines.push('Комментарий: '+String(order.comment));
   lines.push('Итого: '+Number(order?.total||0)+' ₽');
+  if(order?.payment_method==='on_receipt')lines.push('Оплата: при получении (не оплачено)');
+  else if(order?.payment_status==='paid')lines.push('Оплата: оплачено');
   lines.push('');
   lines.push('Статус: '+orderStatusLabel(order?.status));
   return lines.join('\n').slice(0,3900);
@@ -149,11 +151,17 @@ async function saveKitchenMessage(order,chatId,message){
 }
 
 async function notifyKitchenOrder(order){
-  if(!config.KITCHEN_BOT_TOKEN||!order?.establishment_id)return {sent:0};
+  if(!config.KITCHEN_BOT_TOKEN||!order?.establishment_id)return {sent:0,expected:0};
   const q=await db.query('SELECT DISTINCT chat_id FROM shaurma_kitchen_access WHERE establishment_id=$1 AND is_active=TRUE',[order.establishment_id]);
-  let sent=0;
+  // Persistent receipts allow safely retrying transient Telegram failures.
+  const saved=await db.query('SELECT chat_id FROM shaurma_kitchen_order_messages WHERE order_id=$1',[order.id]);
+  const acknowledged=new Set(saved.rows.map(x=>String(x.chat_id)));
+  let sent=q.rows.filter(x=>acknowledged.has(String(x.chat_id))).length,attempted=0;
+  if(!q.rows.length)return {sent:0,expected:0};
   const visual=await kitchenOrderRich(order);
   for(const row of q.rows){
+    if(acknowledged.has(String(row.chat_id)))continue;
+    attempted++;
     try{
       const message=await call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:row.chat_id,
@@ -162,12 +170,13 @@ async function notifyKitchenOrder(order){
         disable_web_page_preview:true,
         reply_markup:nextKitchenButton(order.status,order.id)||{inline_keyboard:[]}
       });
+      if(!message?.message_id)throw new Error('kitchen_message_unacknowledged');
       await saveKitchenMessage(order,row.chat_id,message);
       sent++;
     }catch(e){console.error('kitchen order notify',order.id,row.chat_id,e.message)}
     await sleep(80);
   }
-  return {sent};
+  return {sent,expected:q.rows.length,attempted};
 }
 
 async function refreshKitchenOrderMessages(order){
@@ -689,7 +698,7 @@ async function sync(){
 
   if(config.AGGREGATOR_BOT_TOKEN){
     add('aggregator.menu',()=>call(config.AGGREGATOR_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}}));
-    add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'}]}));
+    add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'},{command:'quick',description:'Как заказать сообщением'},{command:'favorites',description:'Мои избранные блюда'}]}));
     add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',secret_token:AGGREGATOR_DELIVERY_SECRET,allowed_updates:['message','callback_query','pre_checkout_query']}));
   }
 
@@ -748,7 +757,7 @@ function install(app){
       if(!/^\/(start|map)/i.test(String(msg.text||'')))return res.sendStatus(200);
       await call(config.AGGREGATOR_BOT_TOKEN,'sendMessage',{
         chat_id:msg.chat.id,
-        text:'🗺 Шаурмег — выберите заведение на карте.',
+        text:'🥙 Шаурмег — карта и быстрые заказы.\n\nДобавьте блюдо в избранное на карте и напишите: «Закажи лепёшку с сыром». Отправлю заказ в заведение без Mini App, оплата при получении.\n\n/favorites — любимые блюда\n/quick — помощь.',
         reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:config.PUBLIC_APP_URL+'/index.html'}}]]}
       });
       res.sendStatus(200);

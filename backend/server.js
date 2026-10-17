@@ -679,7 +679,9 @@ async function syncAggregatorTelegramMiniApp(){
   await aggregatorTelegramApi('setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}});
   await aggregatorTelegramApi('setMyCommands',{commands:[
     {command:'start',description:'Открыть карту Шаурмега'},
-    {command:'map',description:'Карта заведений'}
+    {command:'map',description:'Карта заведений'},
+    {command:'quick',description:'Как заказать сообщением'},
+    {command:'favorites',description:'Мои избранные блюда'}
   ]});
   if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
@@ -1892,7 +1894,7 @@ app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
    if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return res.sendStatus(200);
    await aggregatorTelegramApi('sendMessage',{
      chat_id:msg.chat.id,
-     text:'🗺 Шаурмег — карта заведений.\n\nВыберите точку на карте, затем нажмите «Меню и заказ». Заказ откроется отдельно в @LepeshkaJulbot.',
+     text:'🥙 Шаурмег — карта и быстрые заказы.\n\nОткройте карту, выберите заведение и добавьте любимое блюдо в избранное. Затем просто напишите мне: «Закажи лепёшку с сыром».\n\nОтправлю заказ в заведение без Mini App. Оплата при получении.\n\n/favorites — любимые блюда\n/quick — как это работает.',
      reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:aggregatorMapUrl()}}]]}
    });
    res.sendStatus(200);
@@ -1978,4 +1980,4 @@ v2ChannelAssets.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await quickFavoriteOrder.ensureSchema();await autopay.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);const paymentRecheck=setInterval(()=>quickFavoriteOrder.reconcilePendingProviderPayments().catch(e=>console.error('quick order payment recovery',e.message)),60000);paymentRecheck.unref?.();v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await quickFavoriteOrder.ensureSchema();await autopay.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);const quickOrderRetry=setInterval(()=>Promise.allSettled([quickFavoriteOrder.retryPendingKitchenOrders(),quickFavoriteOrder.reconcilePendingProviderPayments()]).catch(e=>console.error('quick order delivery recovery',e.message)),60000);quickOrderRetry.unref?.();v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));

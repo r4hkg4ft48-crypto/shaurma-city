@@ -8,6 +8,8 @@ const config=require('./config');
 const payment=require('./yookassa');
 const {parseRequest,matchFavorites}=require('./quick-order-core');
 const PAYMENT_TOKEN=String(process.env.SHAURMEG_PAYMENT_PROVIDER_TOKEN||'').trim();
+// Keep card integrations dormant until explicitly enabled after merchant onboarding.
+const QUICK_PAYMENT_MODE=String(process.env.SHAURMEG_QUICK_ORDER_PAYMENT_MODE||'').toLowerCase()==='card'?'card':'on_receipt';
 const amount=n=>Math.round(Number(n)||0);
 const privateMessage=m=>!!(m&&m.chat?.type==='private'&&String(m.chat.id)===String(m.from?.id)&&/^\d+$/.test(String(m.from.id)));
 const say=(api,uid,text,reply_markup)=>api('sendMessage',{chat_id:uid,text,...(reply_markup?{reply_markup}:{})});
@@ -16,6 +18,7 @@ async function ensureSchema(){
  if(!db.configured)return;
  await db.query("CREATE TABLE IF NOT EXISTS shaurma_quick_order_intents (id UUID PRIMARY KEY, telegram_user_id TEXT NOT NULL, source_message_id BIGINT NOT NULL, establishment_id TEXT, venue_id TEXT, marker_id BIGINT, item_id TEXT, quantity INT NOT NULL DEFAULT 1, items JSONB NOT NULL DEFAULT '[]'::jsonb, choices JSONB NOT NULL DEFAULT '[]'::jsonb, total INT NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'selecting', expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '15 minutes', invoice_message_id BIGINT, telegram_payment_charge_id TEXT, provider_payment_charge_id TEXT, order_id BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(telegram_user_id,source_message_id))");
  await db.query("CREATE UNIQUE INDEX IF NOT EXISTS quick_order_payment_charge_unique ON shaurma_quick_order_intents(telegram_payment_charge_id) WHERE telegram_payment_charge_id IS NOT NULL");
+ await db.query("ALTER TABLE shaurma_quick_order_intents ADD COLUMN IF NOT EXISTS kitchen_confirmed_at TIMESTAMPTZ");
 }
 async function candidatesFor(uid){
  const r=await db.query('SELECT favorites,first_name,username FROM shaurma_users WHERE telegram_user_id=$1',[uid]);
@@ -59,6 +62,126 @@ async function makeIntent(uid,messageId,matches,quantity){
    JSON.stringify(item?[item]:[]),JSON.stringify(matches.map(snapshot)),item?amount(item.p*quantity):0,single?'draft':'selecting']);
  return q.rows[0]||null;
 }
+
+/**
+ * A text message is an explicit order instruction. Until card payments are
+ * launched we create a real pickup order, with payment due at collection.
+ * Client cannot supply price, venue, Telegram identity or recipe in the bot.
+ */
+async function placeUnpaidOrder(id,uid,api){
+ const outcome=await db.tx(async client=>{
+  const intentResult=await client.query(
+   "SELECT * FROM shaurma_quick_order_intents WHERE id=$1 AND telegram_user_id=$2 FOR UPDATE",[id,uid]);
+  const intent=intentResult.rows[0];
+  if(!intent||intent.state!=='draft'||new Date(intent.expires_at).getTime()<=Date.now())return {expired:true};
+  if(!intent.establishment_id||!intent.venue_id||!intent.marker_id||!intent.item_id||
+     !Number.isInteger(Number(intent.quantity))||Number(intent.quantity)<1||Number(intent.quantity)>10)return {invalid:true};
+  // Serialize purchase creation per Telegram ID. Separate messages/callbacks
+  // cannot both register the same accidental repeat within thirty seconds.
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['shaurmeg-quick-order:'+uid]);
+  const duplicate=await client.query(
+   "SELECT id FROM shaurma_quick_order_intents "+
+   "WHERE telegram_user_id=$1 AND establishment_id=$2 AND item_id=$3 AND quantity=$4 "+
+   "AND state='completed' AND created_at>NOW()-INTERVAL '30 seconds' AND id<>$5 LIMIT 1",
+   [uid,intent.establishment_id,intent.item_id,intent.quantity,id]);
+  if(duplicate.rows.length){
+   await client.query("UPDATE shaurma_quick_order_intents SET state='duplicate_suppressed',updated_at=NOW() WHERE id=$1",[id]);
+   return {duplicate:true};
+  }
+  const uq=await client.query(
+   'SELECT favorites,first_name,username FROM shaurma_users WHERE telegram_user_id=$1 FOR SHARE',[uid]);
+  const user=uq.rows[0];
+  const favorites=Array.isArray(user?.favorites)?user.favorites:[];
+  const ref=favorites.find(x=>x&&x.establishment_id===intent.establishment_id&&
+    String(x.item_id)===String(intent.item_id));
+  if(!ref)return {stale:true,reason:'favorite_removed'};
+  const venueResult=await client.query(
+   "SELECT v.venue_id,v.establishment_id,v.name,v.menu,v.config,m.id AS marker_id "+
+   "FROM shaurma_venues v JOIN shaurmeg_markers m ON m.venue_id=v.venue_id AND m.establishment_id=v.establishment_id "+
+   "WHERE v.establishment_id=$1 AND v.venue_id=$2 AND m.id=$3 "+
+   "AND v.is_active=TRUE AND m.is_active=TRUE AND COALESCE(m.source_suppressed,FALSE)=FALSE FOR SHARE OF v,m",
+   [intent.establishment_id,intent.venue_id,intent.marker_id]);
+  const venue=venueResult.rows[0];
+  if(!venue)return {stale:true,reason:'venue_unavailable'};
+  const src=(Array.isArray(venue.menu)?venue.menu:[]).find(x=>String(x?.id)===intent.item_id);
+  const qty=Number(intent.quantity);
+  let item;
+  if(ref.builder_data){
+   if(String(ref.marker_id)!==String(intent.marker_id)||String(ref.venue_id)!==intent.venue_id||
+      !/^custom_[a-z0-9_-]+$/i.test(String(intent.item_id)))return {stale:true,reason:'recipe_mismatch'};
+   const priced=D.priceBuilder(venue.config||{},ref.builder_data);
+   if(!priced)return {stale:true,reason:'recipe_unavailable'};
+   item={id:String(intent.item_id),n:priced.n,p:priced.p,q:qty,detail:priced.detail,builder:priced.builder};
+  }else{
+   const menu=Array.isArray(venue.menu)?venue.menu:[];
+   const categories=new Set(D.menuSections(venue.config||{},menu).map(x=>String(x.id)));
+   if(!src||!categories.has(String(src.c||src.category||''))||
+      !D.menuItemAvailableNow(src,venue.config?.timezone||'Europe/Moscow'))
+      return {stale:true,reason:'item_unavailable'};
+   const minimum=Math.max(1,Math.floor(Number(src.min_qty)||1));
+   const maximum=Math.max(minimum,Math.min(50,Math.floor(Number(src.max_qty)||50)));
+   if(qty<minimum||qty>maximum)return {stale:true,reason:'quantity_unavailable'};
+   // Simple fixed favorite: do not fabricate selections/optional modifiers.
+   const priced=D.menuSelectionPrice(src,{},{});
+   if(!priced)return {stale:true,reason:'item_options_changed'};
+   item={id:String(src.id),n:String(src.n||src.name||''),p:priced.price,q:qty,
+     detail:String(priced.detail||''),selection:{},choices:{}};
+  }
+  const total=Math.round(Number(item.p)*qty);
+  if(!Number.isFinite(total)||total<=0||total>100000||total!==Number(intent.total)||
+      String(intent.items?.[0]?.n)!==item.n||Number(intent.items?.[0]?.q)!==qty)
+   return {stale:true,reason:'price_or_recipe_changed'};
+  const number='SC-Q-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(4).toString('hex').toUpperCase();
+  const inserted=await client.query(
+   "INSERT INTO shaurma_orders(order_number,items,total,customer_name,status,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name,establishment_id,marker_id) "+
+   "VALUES($1,$2::jsonb,$3,$4,'new','telegram-quick-order',$5,$6,$7,'cafe','pending','on_receipt',$8,$9,$10,$11) RETURNING *",
+   [number,JSON.stringify([item]),total,String(user.first_name||'Гость').slice(0,120),uid,user.username||null,
+    user.first_name||null,venue.venue_id,venue.name,venue.establishment_id,venue.marker_id]);
+  const order=inserted.rows[0];
+  await client.query(
+   "UPDATE shaurma_quick_order_intents SET state='completed',order_id=$2,items=$3::jsonb,total=$4,updated_at=NOW() WHERE id=$1",
+   [intent.id,order.id,JSON.stringify([item]),total]);
+  return {order};
+ });
+ if(outcome.duplicate){
+  await say(api,uid,'Похожий заказ только что оформлен. Проверьте историю, чтобы избежать повторного заказа.');
+  return outcome;
+ }
+ if(outcome.stale){
+  await db.query("UPDATE shaurma_quick_order_intents SET state='stale',updated_at=NOW() WHERE id=$1 AND state='draft'",[id]);
+  await say(api,uid,'Блюдо, его состав или цена изменились. Заказ не создан. Проверьте избранное и напишите команду ещё раз.');
+  return outcome;
+ }
+ if(outcome.invalid||outcome.expired){
+  await say(api,uid,'Этот заказ больше недействителен. Напишите «Закажи…» ещё раз.');
+  return outcome;
+ }
+ const order=outcome.order;
+ rt.pushOwner('order',order);
+ rt.pushVenue(order.establishment_id,'order',order);
+ rt.pushUser(uid,'order',order);
+ // Telegram's database-backed kitchen order card is the same as in the Mini App.
+ let delivered=0;
+ try{
+  const result=await telegram.notifyKitchenOrder(order);
+  delivered=Number(result?.sent||0);
+ }catch(e){console.error('quick_order_kitchen_send',order.id,e.message)}
+ if(delivered>0)await db.query("UPDATE shaurma_quick_order_intents SET kitchen_confirmed_at=NOW() WHERE id=$1 AND kitchen_confirmed_at IS NULL",[id]).catch(e=>console.error('quick_order_kitchen_confirm',e.message));
+ const text='🥙 Заказ '+order.order_number+' оформлен\n'+order.venue_name+'\n'+
+  order.items.map(i=>'• '+i.n+' × '+i.q).join('\n')+
+  '\nИтого: '+order.total+' ₽\nПолучение: самовывоз\nОплата: при получении\n'+
+  (delivered>0?'✅ Передан на кухню. Статусы будут обновляться в Telegram и Mini App.':
+    '⚠️ Заказ сохранён, но доставка сообщения на кухню ещё не подтверждена. Мы повторим отправку. При необходимости уточните заказ в заведении.');
+ try{await say(api,uid,text)}catch(e){console.error('quick_order_customer_receipt',order.id,e.message)}
+ db.query("INSERT INTO shaurma_venue_audit(establishment_id,telegram_user_id,action,payload) VALUES($1,$2,'quick_order_created',$3::jsonb)",
+  [order.establishment_id,uid,JSON.stringify({order_id:order.id,order_number:order.order_number,marker_id:order.marker_id,total:order.total,payment_method:'on_receipt'})])
+  .catch(e=>console.error('quick_order_audit',e.message));
+ return {order,delivered};
+}
+async function checkoutIntent(id,uid,api){
+ return QUICK_PAYMENT_MODE==='card'?invoice(id,uid,api):placeUnpaidOrder(id,uid,api);
+}
+
 async function invoice(id,uid,api){
  if(await attemptAutopay(id,uid,api))return;
  const q=await db.query("UPDATE shaurma_quick_order_intents SET state='invoicing',updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW() RETURNING *",[id,uid]);
@@ -134,6 +257,33 @@ async function reconcileProviderPayment(paymentId,api=null){
  }
  return result;
 }
+async function retryPendingKitchenOrders(){
+ if(!db.configured)return {checked:0,delivered:0};
+ const pending=await db.query(
+  "SELECT o.*,i.id intent_id FROM shaurma_orders o "+
+  "JOIN shaurma_quick_order_intents i ON i.order_id=o.id "+
+  "WHERE o.source='telegram-quick-order' AND o.status IN ('new','cooking') "+
+  "AND i.kitchen_confirmed_at IS NULL AND o.created_at>NOW()-INTERVAL '60 minutes' "+
+  "ORDER BY o.created_at ASC LIMIT 20");
+ let delivered=0;
+ for(const row of pending.rows){
+  try{
+   const result=await telegram.notifyKitchenOrder(row);
+   if(Number(result?.sent||0)<1)continue;
+   const confirmed=await db.query(
+    "UPDATE shaurma_quick_order_intents SET kitchen_confirmed_at=NOW(),updated_at=NOW() "+
+    "WHERE id=$1 AND kitchen_confirmed_at IS NULL RETURNING id",[row.intent_id]);
+   if(confirmed.rows.length){
+    delivered++;
+    try{await telegram.sendClientMessage(row.telegram_user_id,
+       '✅ Заказ '+row.order_number+' передан на кухню заведения «'+row.venue_name+'».')}
+    catch(e){console.error('quick_order_delayed_customer_notice',e.message)}
+   }
+  }catch(e){console.error('quick_order_kitchen_retry',row.id,e.message)}
+ }
+ return {checked:pending.rows.length,delivered};
+}
+
 async function reconcilePendingProviderPayments(){
  if(!db.configured||!payment.enabled())return {checked:0,completed:0};
  const q=await db.query("SELECT DISTINCT provider_payment_charge_id AS id FROM shaurma_quick_order_intents WHERE state IN ('charging','charge_pending') AND provider_payment_charge_id IS NOT NULL AND created_at>NOW()-INTERVAL '36 hours' ORDER BY id LIMIT 40");
@@ -192,7 +342,28 @@ async function attemptAutopay(id,uid,api){
 async function onMessage(m,api){
  if(!privateMessage(m))return false;
  if(m.successful_payment){await onPayment(m,api);return true}
- const parsed=parseRequest(m.text);if(!parsed)return false;
+ const text=String(m.text||'').trim();
+ if(/^\/(?:quick|help)(?:@[a-z0-9_]+)?$/iu.test(text)){
+  await say(api,String(m.from.id),
+   '🥙 Быстрый заказ Шаурмега\n\n'+
+   '1. Добавьте блюдо в избранное в Mini App.\n'+
+   '2. Напишите: «Закажи лепёшку с сыром».\n'+
+   '3. Заказ сразу отправится в заведение. Оплата — при получении.\n\n'+
+   'Можно указать количество и заведение, например: «Закажи две лепёшки с сыром в Лепёшке».\n'+
+   'Команда /favorites покажет доступные избранные блюда.',mapButton());
+  return true;
+ }
+ if(/^\/(?:favorites|favorite|izbrannoe)(?:@[a-z0-9_]+)?$/iu.test(text)||/^мо[иё]\s+избранное$/iu.test(text)){
+  const saved=await candidatesFor(String(m.from.id));
+  if(!saved.length){await say(api,String(m.from.id),'Пока нет доступных избранных блюд. Добавьте их в Mini App.',mapButton());return true}
+  const lines=['❤️ Ваши доступные избранные блюда',''];
+  for(const v of saved.slice(0,25))lines.push('• '+v.name+' — '+v.price+' ₽ · '+v.venue_name);
+  if(saved.length>25)lines.push('И ещё '+(saved.length-25)+' позиций в Mini App.');
+  lines.push('','Чтобы оформить заказ, напишите: «Закажи [название блюда]». Оплата при получении.');
+  await say(api,String(m.from.id),lines.join('\n').slice(0,3850),mapButton());
+  return true;
+ }
+ const parsed=parseRequest(text);if(!parsed)return false;
  const uid=String(m.from.id);
  if(parsed.error){await say(api,uid,'Уточните количество и название: «Закажи две лепёшки с сыром».');return true}
  const fav=await candidatesFor(uid);
@@ -207,7 +378,7 @@ async function onMessage(m,api){
  }
  const x=await makeIntent(uid,m.message_id,matches,parsed.quantity);
  if(!x)return true; // Deduplicate Telegram redelivery.
- if(matches.length===1){await invoice(x.id,uid,api);return true}
+ if(matches.length===1){await checkoutIntent(x.id,uid,api);return true}
  await say(api,uid,'Есть несколько совпадений. Выберите конкретное заведение и блюдо:',
   {inline_keyboard:matches.map((c,i)=>[{text:(c.venue_name+' · '+c.name+' · '+amount(c.price*parsed.quantity)+' ₽').slice(0,64),
     callback_data:'qf:'+x.id+':'+i}])});
@@ -231,7 +402,7 @@ async function onCallback(cb,api){
  const u=await db.query("UPDATE shaurma_quick_order_intents SET state='draft',establishment_id=$3,venue_id=$4,marker_id=$5,item_id=$6,items=$7::jsonb,choices=$8::jsonb,total=$9,updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='selecting' RETURNING id",
   [x.id,uid,c.establishment_id,c.venue_id,c.marker_id,c.item_id,JSON.stringify([item]),JSON.stringify([snapshot(c)]),amount(item.p*item.q)]);
  await api('answerCallbackQuery',{callback_query_id:cb.id,text:u.rows[0]?'Выбрано':'Уже обработано'});
- if(u.rows[0])await invoice(x.id,uid,api);
+ if(u.rows[0])await checkoutIntent(x.id,uid,api);
  return true;
 }
 async function onPreCheckout(p,api){
@@ -286,4 +457,4 @@ async function handleUpdate(update,api){
  if(update?.message)return onMessage(update.message,api);
  return false;
 }
-module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment,reconcilePendingProviderPayments};
+module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment,reconcilePendingProviderPayments,retryPendingKitchenOrders,placeUnpaidOrder,checkoutIntent,QUICK_PAYMENT_MODE};

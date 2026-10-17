@@ -18,6 +18,7 @@ async function ensureSchema(){
  if(!db.configured)return;
  await db.query("CREATE TABLE IF NOT EXISTS shaurma_quick_order_intents (id UUID PRIMARY KEY, telegram_user_id TEXT NOT NULL, source_message_id BIGINT NOT NULL, establishment_id TEXT, venue_id TEXT, marker_id BIGINT, item_id TEXT, quantity INT NOT NULL DEFAULT 1, items JSONB NOT NULL DEFAULT '[]'::jsonb, choices JSONB NOT NULL DEFAULT '[]'::jsonb, total INT NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'selecting', expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '15 minutes', invoice_message_id BIGINT, telegram_payment_charge_id TEXT, provider_payment_charge_id TEXT, order_id BIGINT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(telegram_user_id,source_message_id))");
  await db.query("CREATE UNIQUE INDEX IF NOT EXISTS quick_order_payment_charge_unique ON shaurma_quick_order_intents(telegram_payment_charge_id) WHERE telegram_payment_charge_id IS NOT NULL");
+ await db.query("ALTER TABLE shaurma_quick_order_intents ADD COLUMN IF NOT EXISTS kitchen_confirmed_at TIMESTAMPTZ");
 }
 async function candidatesFor(uid){
  const r=await db.query('SELECT favorites,first_name,username FROM shaurma_users WHERE telegram_user_id=$1',[uid]);
@@ -149,6 +150,7 @@ async function placeUnpaidOrder(id,uid,api){
   const result=await telegram.notifyKitchenOrder(order);
   delivered=Number(result?.sent||0);
  }catch(e){console.error('quick_order_kitchen_send',order.id,e.message)}
+ if(delivered>0)await db.query("UPDATE shaurma_quick_order_intents SET kitchen_confirmed_at=NOW() WHERE id=$1 AND kitchen_confirmed_at IS NULL",[id]).catch(e=>console.error('quick_order_kitchen_confirm',e.message));
  const text='🥙 Заказ '+order.order_number+' оформлен\n'+order.venue_name+'\n'+
   order.items.map(i=>'• '+i.n+' × '+i.q).join('\n')+
   '\nИтого: '+order.total+' ₽\nПолучение: самовывоз\nОплата: при получении\n'+
@@ -239,6 +241,33 @@ async function reconcileProviderPayment(paymentId,api=null){
  }
  return result;
 }
+async function retryPendingKitchenOrders(){
+ if(!db.configured)return {checked:0,delivered:0};
+ const pending=await db.query(
+  "SELECT o.*,i.id intent_id FROM shaurma_orders o "+
+  "JOIN shaurma_quick_order_intents i ON i.order_id=o.id "+
+  "WHERE o.source='telegram-quick-order' AND o.status IN ('new','cooking') "+
+  "AND i.kitchen_confirmed_at IS NULL AND o.created_at>NOW()-INTERVAL '60 minutes' "+
+  "ORDER BY o.created_at ASC LIMIT 20");
+ let delivered=0;
+ for(const row of pending.rows){
+  try{
+   const result=await telegram.notifyKitchenOrder(row);
+   if(Number(result?.sent||0)<1)continue;
+   const confirmed=await db.query(
+    "UPDATE shaurma_quick_order_intents SET kitchen_confirmed_at=NOW(),updated_at=NOW() "+
+    "WHERE id=$1 AND kitchen_confirmed_at IS NULL RETURNING id",[row.intent_id]);
+   if(confirmed.rows.length){
+    delivered++;
+    try{await telegram.sendClientMessage(row.telegram_user_id,
+       '✅ Заказ '+row.order_number+' передан на кухню заведения «'+row.venue_name+'».')}
+    catch(e){console.error('quick_order_delayed_customer_notice',e.message)}
+   }
+  }catch(e){console.error('quick_order_kitchen_retry',row.id,e.message)}
+ }
+ return {checked:pending.rows.length,delivered};
+}
+
 async function reconcilePendingProviderPayments(){
  if(!db.configured||!payment.enabled())return {checked:0,completed:0};
  const q=await db.query("SELECT DISTINCT provider_payment_charge_id AS id FROM shaurma_quick_order_intents WHERE state IN ('charging','charge_pending') AND provider_payment_charge_id IS NOT NULL AND created_at>NOW()-INTERVAL '36 hours' ORDER BY id LIMIT 40");
@@ -391,4 +420,4 @@ async function handleUpdate(update,api){
  if(update?.message)return onMessage(update.message,api);
  return false;
 }
-module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment,reconcilePendingProviderPayments,placeUnpaidOrder,checkoutIntent,QUICK_PAYMENT_MODE};
+module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment,reconcilePendingProviderPayments,retryPendingKitchenOrders,placeUnpaidOrder,checkoutIntent,QUICK_PAYMENT_MODE};

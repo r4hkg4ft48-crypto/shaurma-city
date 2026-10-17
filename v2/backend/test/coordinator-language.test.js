@@ -32,7 +32,7 @@ test('Exact code is unambiguous despite duplicate names',()=>{
 });
 test('Duration is never silently discarded',()=>{
  assert.equal(parseText('Убери сырную шаурму до завтра').type,'unsupported');
- assert.equal(resolve('Поставь сырную шаурму в стоп на два часа',catalog).type,'ambiguous');
+ assert.equal(resolve('Поставь сырную шаурму в стоп на два часа',catalog).type,'unsupported');
 });
 test('Natural price command is previewed, not executed',()=>{
  const r=resolve('Установи цену на сырную шаурму 400',catalog);

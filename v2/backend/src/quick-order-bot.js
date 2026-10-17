@@ -76,6 +76,18 @@ async function placeUnpaidOrder(id,uid,api){
   if(!intent||intent.state!=='draft'||new Date(intent.expires_at).getTime()<=Date.now())return {expired:true};
   if(!intent.establishment_id||!intent.venue_id||!intent.marker_id||!intent.item_id||
      !Number.isInteger(Number(intent.quantity))||Number(intent.quantity)<1||Number(intent.quantity)>10)return {invalid:true};
+  // Serialize purchase creation per Telegram ID. Separate messages/callbacks
+  // cannot both register the same accidental repeat within thirty seconds.
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['shaurmeg-quick-order:'+uid]);
+  const duplicate=await client.query(
+   "SELECT id FROM shaurma_quick_order_intents "+
+   "WHERE telegram_user_id=$1 AND establishment_id=$2 AND item_id=$3 AND quantity=$4 "+
+   "AND state='completed' AND created_at>NOW()-INTERVAL '30 seconds' AND id<>$5 LIMIT 1",
+   [uid,intent.establishment_id,intent.item_id,intent.quantity,id]);
+  if(duplicate.rows.length){
+   await client.query("UPDATE shaurma_quick_order_intents SET state='duplicate_suppressed',updated_at=NOW() WHERE id=$1",[id]);
+   return {duplicate:true};
+  }
   const uq=await client.query(
    'SELECT favorites,first_name,username FROM shaurma_users WHERE telegram_user_id=$1 FOR SHARE',[uid]);
   const user=uq.rows[0];
@@ -131,6 +143,10 @@ async function placeUnpaidOrder(id,uid,api){
    [intent.id,order.id,JSON.stringify([item]),total]);
   return {order};
  });
+ if(outcome.duplicate){
+  await say(api,uid,'Похожий заказ только что оформлен. Проверьте историю, чтобы избежать повторного заказа.');
+  return outcome;
+ }
  if(outcome.stale){
   await db.query("UPDATE shaurma_quick_order_intents SET state='stale',updated_at=NOW() WHERE id=$1 AND state='draft'",[id]);
   await say(api,uid,'Блюдо, его состав или цена изменились. Заказ не создан. Проверьте избранное и напишите команду ещё раз.');

@@ -4166,3 +4166,22 @@ body.venuePage[data-card-style="solid"] .foodCardRef .foodBody{background:#10223
 @media(prefers-reduced-motion:reduce){
   .ordersPanelSummary:after{animation:none}.orderPreviewCard,.orderDetailOverlay,.orderDetailCard,.orderPreviewProgress>i,.orderTimelineRail i{transition:none}
 }
+
+
+/* Saved-card quick orders: compact, readable and visually consistent with profile */
+.autopayCard{margin:18px 0;padding:20px;border:1px solid rgba(255,255,255,.13);border-radius:22px;background:linear-gradient(145deg,rgba(19,41,68,.95),rgba(11,26,44,.97));box-shadow:0 14px 40px rgba(0,0,0,.15);color:#f7f9fc}
+.autopayCardHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.autopayCardHead small{display:block;color:#a9bfcb;letter-spacing:.15em;font-size:10px}
+.autopayCardHead h3{font-size:21px;margin:5px 0 3px}
+.autopayCardHead>span{font-size:28px}
+.autopayCard p{font-size:13px;line-height:1.55;color:#cbd6e2;margin:13px 0}
+.autopayStatus{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.07);font-size:13px;line-height:1.5;color:#f7f9fc;margin:12px 0}
+.autopayLimit{display:grid;gap:7px;font-size:12px;color:#cbd6e2;margin:14px 0}
+.autopayLimit select{width:100%;min-height:40px;border:1px solid rgba(255,255,255,.17);border-radius:12px;color:#f7f9fc;background:#19324d;padding:8px 11px;font:inherit}
+.autopayConsent{display:flex;align-items:flex-start;gap:10px;font-size:12px;line-height:1.55;color:#e5ecf3;margin:12px 0 16px}
+.autopayConsent input{width:20px;height:20px;flex-shrink:0;accent-color:#f9b750;margin:0}
+.autopayButton{width:100%;min-height:46px;padding:12px 14px;border-radius:13px;background:#f4d29c;color:#1e2f42;font-weight:750;cursor:pointer;margin-top:10px;border:0}
+.autopayButton:disabled{opacity:.5;cursor:progress}
+.autopayDisable{background:transparent;color:#f1d4cb;border:1px solid rgba(255,180,150,.28)}
+.autopayFootnote{display:block;color:#95a9b8;font-size:11px;line-height:1.6;margin-top:14px}
+.autopayCard [hidden]{display:none!important}

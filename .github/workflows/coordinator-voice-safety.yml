@@ -1,0 +1,31 @@
+name: Coordinator Voice Safety
+on:
+  push:
+    branches: [feature/voice-menu-control-v1]
+  pull_request:
+    paths:
+      - 'v2/backend/src/coordinator-*'
+      - 'v2/backend/src/menu-coordinator.js'
+      - 'v2/backend/test/coordinator-language.test.js'
+      - 'v2/frontend/coordinator-console.html'
+      - '.github/workflows/coordinator-voice-safety.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JavaScript syntax
+        run: |
+          node --check v2/backend/src/coordinator-language.js
+          node --check v2/backend/src/coordinator-bot.js
+          node --check v2/backend/src/menu-coordinator.js
+      - name: Russian menu resolution and isolation
+        run: node --test v2/backend/test/coordinator-language.test.js
+      - name: Menu coordinator contracts
+        run: |
+          cd v2/backend
+          npm install --ignore-scripts --no-audit --no-fund
+          node --test test/menu-coordinator-contract.test.js

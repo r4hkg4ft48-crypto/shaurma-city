@@ -11,6 +11,8 @@ const {installVenueOwner}=require('./venue-owner');
 const {normalizeBuilderConfig,normalizeMenu}=require('../v2/backend/src/domain');
 const v2Realtime=require('../v2/backend/src/realtime');
 const astraRealCity=require('../v2/backend/src/realcity-astra');
+const quickFavoriteOrder=require('../v2/backend/src/quick-order-bot');
+const autopay=require('../v2/backend/src/autopay');
 
 const app=express();
 app.use(express.json({limit:'24mb'}));
@@ -501,6 +503,7 @@ function aggregatorBotToken(){
 }
 const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/index.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
+const AGGREGATOR_BOT_HEADER_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator-header:'+aggregatorBotToken()).digest('hex'):'';
 const ADMIN_BOT_WEBHOOK_SECRET=adminTelegramBotToken()?crypto.createHash('sha256').update('shaurmeg-admin:'+adminTelegramBotToken()).digest('hex').slice(0,32):'';
 const MASTER_ADMIN_BOT_WEBHOOK_SECRET=masterAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-master-admin:'+masterAdminBotToken()).digest('hex').slice(0,32):'';
 const ACCESS_ADMIN_BOT_WEBHOOK_SECRET=accessAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-access-admin:'+accessAdminBotToken()).digest('hex').slice(0,32):'';
@@ -680,7 +683,8 @@ async function syncAggregatorTelegramMiniApp(){
   ]});
   if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
-    allowed_updates:['message'],drop_pending_updates:false
+    secret_token:AGGREGATOR_BOT_HEADER_SECRET,
+    allowed_updates:['message','callback_query','pre_checkout_query'],drop_pending_updates:false
   });
   console.log('Telegram aggregator bot synced @'+String(info?.username||'')+' · map-only');
  }catch(e){console.error('Telegram aggregator bot sync:',e.message)}
@@ -1879,17 +1883,20 @@ app.get('/api/shaurma/stats',async(req,res)=>{
 
 app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
  if(!AGGREGATOR_BOT_WEBHOOK_SECRET||req.params.secret!==AGGREGATOR_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
- res.sendStatus(200);
+ if(req.get('x-telegram-bot-api-secret-token')!==AGGREGATOR_BOT_HEADER_SECRET)return res.sendStatus(403);
  try{
-   const msg=req.body?.message;if(!msg?.chat?.id)return;
+   if(await quickFavoriteOrder.handleUpdate(req.body||{},aggregatorTelegramApi))return res.sendStatus(200);
+   const msg=req.body?.message;
+   if(!msg?.chat?.id)return res.sendStatus(200);
    const raw=String(msg.text||'').trim();
-   if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return;
+   if(!/^\/(?:start|map)(?:@[A-Za-z0-9_]+)?/i.test(raw))return res.sendStatus(200);
    await aggregatorTelegramApi('sendMessage',{
      chat_id:msg.chat.id,
      text:'🗺 Шаурмег — карта заведений.\n\nВыберите точку на карте, затем нажмите «Меню и заказ». Заказ откроется отдельно в @LepeshkaJulbot.',
      reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:aggregatorMapUrl()}}]]}
    });
- }catch(e){console.error('aggregator bot webhook:',e.message)}
+   res.sendStatus(200);
+ }catch(e){console.error('aggregator bot webhook:',e.message);res.sendStatus(503)}
 });
 
 app.post('/api/client-bot/webhook/:secret',async(req,res)=>{
@@ -1962,6 +1969,7 @@ const v2ChannelAssets=require('../v2/backend/src/channel-assets');
 const v2ChannelLaunchRebuild=require('../v2/backend/src/channel-launch-rebuild');
 const v2Config=require('../v2/backend/src/config');
 app.use('/api/v2',v2Router);
+autopay.install(app);
 v2Telegram.install(app);
 v2MenuCoordinator.install(app);
 v2CoordinatorBot.install(app);
@@ -1970,4 +1978,4 @@ v2ChannelAssets.install(app);
 
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
-initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));
+initDb().then(async()=>{console.log('Shaurma City database ready');await v2Schema.ensureSchema();await quickFavoriteOrder.ensureSchema();await autopay.ensureSchema();await v2MenuCoordinator.ensureSchema();await v2ChannelBot.bootstrap();await catalogCleanup.run(DB);await v2RealCity.bootstrap();console.log('Shaurmeg v2 API mounted at /api/v2');console.log('Shaurmeg map config · v'+String(MAP_CONFIG.version||104)+' · RealCity profile v'+String(PROFILE_VERSION));await bootstrapRealCityProfiles();await syncMasterAdminBot();await syncAdminTelegramMiniApp();await syncAggregatorTelegramMiniApp();await syncTelegramMiniApp();await venueOwnerSystem.syncBot();if(v2Config.TELEGRAM_CUTOVER){await v2Telegram.sync()}else console.log('Shaurmeg v2 Telegram cutover disabled');await v2CoordinatorBot.sync().catch(e=>console.error('Coordinator bot setup:',e.message));console.log('Automatic venue import removed · manual catalog')}).catch(e=>console.error('DB init:',e.message)).finally(()=>app.listen(PORT,()=>{console.log('Shaurma City API on '+PORT);const paymentRecheck=setInterval(()=>quickFavoriteOrder.reconcilePendingProviderPayments().catch(e=>console.error('quick order payment recovery',e.message)),60000);paymentRecheck.unref?.();v2ChannelBot.sync().catch(e=>console.error('channel bot post-start sync',e.message));setTimeout(()=>v2ChannelLaunchRebuild.run().then(r=>{if(r?.enabled)console.log('Channel clean launch · '+JSON.stringify(r))}).catch(e=>console.error('channel clean launch',e.message)),5000)}));

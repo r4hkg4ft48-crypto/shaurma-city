@@ -2,6 +2,7 @@
 const crypto=require('crypto');
 const rich=require('../../../backend/telegram-rich');
 const config=require('./config');
+const AGGREGATOR_DELIVERY_SECRET=config.AGGREGATOR_BOT_TOKEN?crypto.createHash('sha256').update('shaurmeg-aggregator-header:'+config.AGGREGATOR_BOT_TOKEN).digest('hex'):'';
 const db=require('./db');
 const rt=require('./realtime');
 const voice=require('./voice-assistant');
@@ -689,7 +690,7 @@ async function sync(){
   if(config.AGGREGATOR_BOT_TOKEN){
     add('aggregator.menu',()=>call(config.AGGREGATOR_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}}));
     add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'}]}));
-    add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',allowed_updates:['message']}));
+    add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',secret_token:AGGREGATOR_DELIVERY_SECRET,allowed_updates:['message','callback_query','pre_checkout_query']}));
   }
 
   if(config.CLIENT_BOT_TOKEN){
@@ -739,17 +740,19 @@ async function sync(){
 
 function install(app){
   app.post('/api/v2/telegram/aggregator',async(req,res)=>{
-    res.sendStatus(200);
+    if(!AGGREGATOR_DELIVERY_SECRET||req.get('x-telegram-bot-api-secret-token')!==AGGREGATOR_DELIVERY_SECRET)return res.sendStatus(403);
     try{
+      if(await require('./quick-order-bot').handleUpdate(req.body||{},(method,body)=>call(config.AGGREGATOR_BOT_TOKEN,method,body)))return res.sendStatus(200);
       const msg=req.body?.message;
-      if(!msg?.chat?.id)return;
-      if(!/^\/(start|map)/i.test(String(msg.text||'')))return;
+      if(!msg?.chat?.id)return res.sendStatus(200);
+      if(!/^\/(start|map)/i.test(String(msg.text||'')))return res.sendStatus(200);
       await call(config.AGGREGATOR_BOT_TOKEN,'sendMessage',{
         chat_id:msg.chat.id,
         text:'🗺 Шаурмег — выберите заведение на карте.',
         reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:config.PUBLIC_APP_URL+'/index.html'}}]]}
       });
-    }catch(e){console.error('aggregator webhook',e.message)}
+      res.sendStatus(200);
+    }catch(e){console.error('aggregator webhook',e.message);res.sendStatus(503)}
   });
 
   app.post('/api/v2/telegram/client',async(req,res)=>{

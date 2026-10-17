@@ -89,13 +89,20 @@ async function catalogFor(uid,project){
   throw fail('Укажите проект',400);
 }
 async function projectFor(uid,requested){
-  const list=await locations(uid);
-  if(list.some(x=>x.unavailable))throw fail('Не удалось безопасно проверить подключение Кофейка',503);
-  const connected=list.filter(x=>x.linked);
-  if(requested){
-    if(!connected.some(x=>x.project===requested))throw fail('Вы не подключены к выбранному проекту',403);
+  // An explicitly selected project is verified directly against its own store.
+  // Coffee downtime must never authorize Coffee writes or block a scoped Shaurmeg command.
+  if(requested==='shaurmeg'){
+    if(!(await coordinator.binding(uid)))throw fail('Шаурмег: нет привязки к заведению',403);
     return requested;
   }
+  if(requested==='kofeyok'){
+    const b=await coffeeResolve(uid);
+    if(!b.linked)throw fail('Кофеёк: нет привязки к заведению',403);
+    return requested;
+  }
+  const list=await locations(uid);
+  if(list.some(x=>x.unavailable))throw fail('Не удалось проверить все подключения, выберите проект',503);
+  const connected=list.filter(x=>x.linked);
   if(connected.length!==1)throw fail('Выберите конкретный проект: Шаурмег или Кофеёк',409);
   return connected[0].project;
 }

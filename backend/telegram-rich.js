@@ -88,11 +88,11 @@ function orderHtml(order){
   ].join('\n');
 }
 function prepare(method,body){
-  if(!body||typeof body!=='object'||!['sendMessage','editMessageText'].includes(method)||typeof body.text!=='string'||body.parse_mode||body.entities)return null;
+  if(!body||typeof body!=='object'||!['sendMessage','editMessageText'].includes(method)||typeof body.text!=='string'||(body.parse_mode&&!body.__rich_html)||body.entities)return null;
   if(body.chat_id===undefined||body.chat_id===null)return null;
   const keyboard=buttonsFromMarkup(body.reply_markup);
   const embeds=keyboard!==null;
-  const {text,disable_web_page_preview,link_preview_options,reply_markup,__rich_html,...others}=body;
+  const {text,disable_web_page_preview,link_preview_options,parse_mode,entities,reply_markup,__rich_html,...others}=body;
   const html=String(body.__rich_html||textToHtml(text))+(embeds?'\n'+keyboard:'');
   const next={...others,rich_message:{html}};
   if(!embeds&&reply_markup)next.reply_markup=reply_markup;

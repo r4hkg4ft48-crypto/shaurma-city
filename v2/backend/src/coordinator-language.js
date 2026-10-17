@@ -22,7 +22,7 @@ function parseText(input){
   const s=normalize(input);
   if(!s||s.length>280)return null;
   // Timed changes need an external scheduler; never silently ignore a duration.
-  if(/(?:\bдо завтра\b|\bдо утра\b|\bна\s+\d+\s*(?:час|минут|дн|сут)|\bчерез\s+\d+\s*(?:час|минут))/.test(s))
+  if(/(?:\bдо завтра\b|\bдо утра\b|\bна\s+(?:\d+|один|одну|два|две|три|полтора|несколько)\s*(?:час|минут|дн|сут)|\bчерез\s+\d+\s*(?:час|минут))/.test(s))
     return {type:'unsupported',message:'Временные команды пока не активированы. Укажите действие без срока.'};
   let m=s.match(/^([a-zа-я0-9_-]{1,32})\s+(стоп(?:\s+лист)?|стоп-лист|в наличии|цена\s+\d+(?:[.,]\d{1,2})?)$/i);
   if(m)return {type:'direct',code:m[1],command:safeAction(m[2])};

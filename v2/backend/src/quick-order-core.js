@@ -24,14 +24,18 @@ function parseRequest(text){
   if(digits){quantity=Number(digits[1]);tail=tail.slice(digits[0].length)}
   else if(num){quantity=NUMBERS[num[1].toLowerCase()];tail=tail.slice(num[0].length)}
   if(!Number.isInteger(quantity)||quantity<1||quantity>10)return {error:'invalid_quantity'};
-  const terms=tokens(tail);
+  const venueSplit=tail.match(/^(.*?)\s+(?:в|во|из|у)\s+([а-яa-z0-9 -]+)$/iu);
+  const dish=venueSplit?venueSplit[1]:tail;
+  const venueTerms=venueSplit?tokens(venueSplit[2]):[];
+  const terms=tokens(dish);
   if(!terms.length)return {error:'empty_query'};
-  return {quantity,terms,text:tail};
+  return {quantity,terms,venueTerms,text:tail};
 }
 function matchFavorites(request,candidates){
   if(!request||!request.terms||!Array.isArray(candidates))return [];
   const matches=[];
   for(const c of candidates){
+    if(request.venueTerms?.length&&!request.venueTerms.every(v=>tokens(c.venue_name).includes(v)))continue;
     const nameTokens=tokens(c.name);
     const allTokens=tokens([c.name,c.detail,c.venue_name].filter(Boolean).join(' '));
     if(!request.terms.every(q=>allTokens.some(t=>t===q||t.startsWith(q)&&q.length>=5)))continue;

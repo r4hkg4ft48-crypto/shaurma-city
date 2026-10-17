@@ -154,7 +154,7 @@ function verifyMiniApp(initData){
   if(!token())throw fail('Бот не настроен',503);
   if(typeof initData!=='string'||initData.length>4096)throw fail('telegram_identity_required',401);
   const p=new URLSearchParams(initData),received=p.get('hash'),auth=Number(p.get('auth_date'));
-  if(!received||!/^[a-f0-9]{64}$/i.test(received)||!Number.isSafeInteger(auth)||Math.abs(Date.now()/1000-auth)>300)
+  if(!received||!/^[a-f0-9]{64}$/i.test(received)||!Number.isSafeInteger(auth)||auth>Date.now()/1000+60||Date.now()/1000-auth>12*60*60)
     throw fail('telegram_identity_expired',401);
   p.delete('hash');
   const check=[...p.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>k+'='+v).join('\n');
@@ -166,7 +166,7 @@ function verifyMiniApp(initData){
   return String(user.id);
 }
 async function transcribe(bytes,mime){
-  const key=String(process.env.COORDINATOR_STT_API_KEY||'').trim();
+  const key=String(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY||'').trim();
   if(!key)throw fail('Голос пока не подключён: настройте COORDINATOR_STT_API_KEY на сервере.',503);
   if(!bytes?.length||bytes.length>8*1024*1024)throw fail('Запись должна быть не больше 8 МБ',413);
   const type=/^(audio\/ogg|audio\/webm|audio\/mp4|audio\/mpeg)$/.test(mime)?mime:'audio/ogg';
@@ -306,7 +306,7 @@ function install(app){
       if(!connections.some(x=>x.linked))throw fail('Сначала подключите заведение',403);
       audioRate.set(uid,Date.now());
       if(audioRate.size>3000)audioRate.clear();
-      const text=await transcribe(req.body,req.get('content-type').split(';')[0]);
+      const text=await transcribe(req.body,String(req.get('content-type')||'').split(';')[0]);
       res.json({ok:true,text});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message})}
   });

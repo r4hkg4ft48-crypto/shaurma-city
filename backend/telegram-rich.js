@@ -60,10 +60,22 @@ function textToHtml(text){
   }
   return parts.join('\n');
 }
-function orderHtml(order){
+function safeImageUrl(value){
+  const valueText=String(value||'').trim();
+  if(!valueText||valueText.length>1400)return '';
+  try{
+    const u=new URL(valueText);
+    if(u.protocol!=='https:'||u.username||u.password)return '';
+    if(!u.hostname||u.hostname==='localhost'||/^(?:127\\.|10\\.|192\\.168\\.|169\\.254\\.)/.test(u.hostname))return '';
+    return u.toString();
+  }catch{return ''}
+}
+function orderHtml(order,{photoUrl=''}={}){
   const items=Array.isArray(order?.items)?order.items:[];
   const esc=escapeHtml;
   const cell=(value)=>'<td>'+esc(value)+'</td>';
+  const photo=safeImageUrl(photoUrl);
+  const photoBlock=photo?'<figure><img src="'+esc(photo)+'"/><figcaption>'+esc(String(items[0]?.n||items[0]?.name||'Блюдо').slice(0,100))+'</figcaption></figure>':'';
   const lines=items.slice(0,80).map(item=>
     '<tr>'+cell(String(item?.n||item?.name||'Позиция').slice(0,150))+
     '<td align="right">'+esc(Math.max(1,Number(item?.q)||1))+'</td></tr>'
@@ -79,6 +91,7 @@ function orderHtml(order){
   return [
     '<h2>🥙 '+esc(String(order?.venue_name||'Заведение'))+'</h2>',
     '<h3>Заказ '+esc(String(order?.order_number||('#'+order?.id)))+'</h3>',
+    photoBlock,
     '<table bordered compact><tr><th>Позиция</th><th>Кол-во</th></tr>'+lines.join('')+'</table>',
     details?'<details><summary>Состав и пожелания</summary><ul>'+details+'</ul></details>':'',
     ...extra,
@@ -116,4 +129,4 @@ async function withRich(method,body,perform){
     return perform(method,clean);
   }
 }
-module.exports={escapeHtml,buttonRow,buttonsFromMarkup,textToHtml,orderHtml,prepare,withRich,canFallback};
+module.exports={escapeHtml,buttonRow,buttonsFromMarkup,textToHtml,orderHtml,safeImageUrl,prepare,withRich,canFallback};

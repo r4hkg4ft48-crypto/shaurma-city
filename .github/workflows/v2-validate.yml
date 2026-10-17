@@ -155,7 +155,7 @@ jobs:
       - name: Photographic builder contract
         run: node --test v2/backend/test/builder-cinema.test.js
       - name: Telegram quick ordering contract
-        run: node --test v2/backend/test/quick-order.test.js
+        run: node --test v2/backend/test/quick-order.test.js v2/backend/test/yookassa.test.js
       - name: Voice assistant contract
         run: node --test v2/backend/test/voice-assistant.test.js
       - name: Venue command assistant contract

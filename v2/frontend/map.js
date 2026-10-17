@@ -327,7 +327,7 @@
     $('#panelBackdrop').classList.toggle('show',!!id);document.body.classList.toggle('panelOpen',!!id);
     document.querySelectorAll('.dockBtn').forEach(x=>x.classList.toggle('active',x.dataset.dock===(kind||'map')));
     $('#profileBtn')?.classList.toggle('active',kind==='profile');
-    if(kind==='orders')loadOrders();if(kind==='favorites')loadFavorites();if(kind==='profile'){loadDashboard();refreshAutopay()}
+    if(kind==='orders')loadOrders();if(kind==='favorites')loadFavorites();if(kind==='profile')loadDashboard();
     tg?.HapticFeedback?.selectionChanged?.();
   }
   function closePanels(){openPanel('map')}
@@ -1060,64 +1060,10 @@
   }
 
 
-  async function refreshAutopay(){
-    const state=$('#autopayState'),setup=$('#autopaySetup'),confirm=$('#autopayConfirmBtn'),disable=$('#autopayDisableBtn');
-    if(!state||!setup||!confirm||!disable)return;
-    setup.hidden=true;confirm.hidden=true;disable.hidden=true;
-    if(!session){state.textContent='Откройте Шаурмег через Telegram для подключения карты.';return}
-    try{
-      const r=await fetch(api+'/me/autopay/status',{headers:authHeaders(),cache:'no-store'});
-      if(!r.ok)throw new Error('status_'+r.status);
-      const p=await r.json();
-      if(!p.configured){state.textContent='Подключение автоплаты станет доступно после настройки платёжного провайдера.';return}
-      if(p.linked){
-        state.textContent='Активна · '+String(p.card_brand||'Карта')+' •••• '+String(p.card_last4||'')+
-          ' · лимит '+money(p.maximum||0)+' за заказ';
-        disable.hidden=false;return;
-      }
-      setup.hidden=false;
-      if(p.pending_binding_id){
-        state.textContent='Привязка ожидает подтверждения на стороне банка.';
-        confirm.hidden=false;setup.hidden=true;
-      }else state.textContent='Не подключено · деньги не спишутся без вашего согласия.';
-    }catch(e){state.textContent='Не удалось проверить настройки оплаты. Попробуйте позднее.'}
-  }
-  async function autopayRequest(action,data=null){
-    if(!session)throw new Error('Откройте приложение через Telegram');
-    const r=await fetch(api+'/me/autopay/'+action,{
-      method:'POST',headers:{...authHeaders(),'Content-Type':'application/json'},
-      body:JSON.stringify(data||{})});
-    const result=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(result.error||'payment_operation_failed');
-    return result;
-  }
-  $('#autopayBindBtn').onclick=async()=>{
-    if(!$('#autopayConsent').checked)return toast('Для подключения необходимо согласие на списания');
-    const btn=$('#autopayBindBtn');btn.disabled=true;
-    try{
-      const p=await autopayRequest('bind',{accept_recurring_terms:true,max_order_rub:Number($('#autopayLimit').value)});
-      if(!/^https:\/\//.test(String(p.confirmation_url||'')))throw new Error('invalid_card_link');
-      $('#autopayState').textContent='Подтвердите привязку на защищённой странице, затем вернитесь в Шаурмег.';
-      try{if(tg?.openLink)tg.openLink(p.confirmation_url);else window.open(p.confirmation_url,'_blank','noopener')}catch{window.open(p.confirmation_url,'_blank','noopener')}
-      $('#autopayConfirmBtn').hidden=false;$('#autopaySetup').hidden=true;
-    }catch(e){toast('Не удалось начать привязку: '+String(e.message||'ошибка'))}
-    finally{btn.disabled=false}
-  };
-  $('#autopayConfirmBtn').onclick=async()=>{
-    const btn=$('#autopayConfirmBtn');btn.disabled=true;
-    try{
-      const r=await autopayRequest('confirm');
-      toast('Карта •••• '+r.card_last4+' привязана ✓');
-      await refreshAutopay();
-    }catch(e){toast(e.message==='card_not_confirmed'?'Сначала подтвердите карту в банке':'Не удалось подтвердить привязку')}
-    finally{btn.disabled=false}
-  };
-  $('#autopayDisableBtn').onclick=async()=>{
-    if(!window.confirm('Отключить автоматические списания за заказы через сообщения?'))return;
-    const btn=$('#autopayDisableBtn');btn.disabled=true;
-    try{await autopayRequest('disable');toast('Автооплата отключена');$('#autopayConsent').checked=false;await refreshAutopay()}
-    catch{toast('Не удалось отключить автооплату')}
-    finally{btn.disabled=false}
+  $('#openQuickOrderBot').onclick=()=>{
+    const url='https://t.me/Shaurmeggbot';
+    try{if(tg?.openTelegramLink)tg.openTelegramLink(url);else window.open(url,'_blank','noopener')}
+    catch{window.open(url,'_blank','noopener')}
   };
 
   $('#searchToggle').onclick=()=>{$('#searchBox').classList.toggle('hidden');if(!$('#searchBox').classList.contains('hidden'))setTimeout(()=>$('#search').focus(),60);else $('#results').classList.add('hidden')};
@@ -1131,7 +1077,7 @@
   $('#openMenu').onclick=()=>{if(!selected)return;const u=new URL('menu.html',location.href);u.searchParams.set('marker',selected.id);u.searchParams.set('establishment',selected.establishment_id);u.searchParams.set('from','map');u.hash=location.hash;location.assign(u.toString())};
 
   $('#bottomDock').onclick=e=>{const b=e.target.closest('[data-dock]');if(b)openPanel(b.dataset.dock)};
-  $('#profileBtn').onclick=()=>{openPanel('profile');refreshAutopay()};
+  $('#profileBtn').onclick=()=>openPanel('profile');
   $('#panelBackdrop').onclick=closePanels;document.querySelectorAll('[data-panel-close]').forEach(x=>x.onclick=closePanels);
   $('#orderFilter').onclick=e=>{const b=e.target.closest('[data-order-filter]');if(!b)return;orderFilter=b.dataset.orderFilter;document.querySelectorAll('[data-order-filter]').forEach(x=>x.classList.toggle('active',x===b));renderOrdersPanel()};
   $('#ordersPanelList').onclick=e=>{
@@ -1173,6 +1119,6 @@
 
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
   warmPoints().catch(e=>console.warn('points warmup failed',e));
-  authClient().then(async ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream();if(qs.get('autopay_return')==='1'){try{await autopayRequest('confirm');toast('Банковская карта успешно привязана ✓')}catch{toast('Подтвердите карту через профиль Шаурмега')}refreshAutopay()}}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
+  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

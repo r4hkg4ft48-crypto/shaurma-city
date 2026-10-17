@@ -86,6 +86,7 @@ function orderHtml(order,{photoUrl=''}={}){
   for(const [label,value] of [
     ['Получение',order?.fulfillment_type==='cafe'?'В заведении / самовывоз':'Доставка'],
     ['Адрес',order?.fulfillment_type==='cafe'?'':order?.address],
+    ['Оплата',order?.payment_method==='on_receipt'?'При получении (не оплачено)':order?.payment_status==='paid'?'Оплачено':''],
     ['Клиент',order?.customer_name],['Телефон',order?.phone],['Комментарий',order?.comment]
   ])if(value)extra.push('<p><b>'+label+':</b> '+esc(String(value).slice(0,300))+'</p>');
   return [

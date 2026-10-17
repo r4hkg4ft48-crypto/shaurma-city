@@ -326,7 +326,28 @@ async function attemptAutopay(id,uid,api){
 async function onMessage(m,api){
  if(!privateMessage(m))return false;
  if(m.successful_payment){await onPayment(m,api);return true}
- const parsed=parseRequest(m.text);if(!parsed)return false;
+ const text=String(m.text||'').trim();
+ if(/^\/(?:quick|help)(?:@[a-z0-9_]+)?$/iu.test(text)){
+  await say(api,String(m.from.id),
+   '🥙 Быстрый заказ Шаурмега\n\n'+
+   '1. Добавьте блюдо в избранное в Mini App.\n'+
+   '2. Напишите: «Закажи лепёшку с сыром».\n'+
+   '3. Заказ сразу отправится в заведение. Оплата — при получении.\n\n'+
+   'Можно указать количество и заведение, например: «Закажи две лепёшки с сыром в Лепёшке».\n'+
+   'Команда /favorites покажет доступные избранные блюда.',mapButton());
+  return true;
+ }
+ if(/^\/(?:favorites|favorite|izbrannoe)(?:@[a-z0-9_]+)?$/iu.test(text)||/^мо[иё]\s+избранное$/iu.test(text)){
+  const saved=await candidatesFor(String(m.from.id));
+  if(!saved.length){await say(api,String(m.from.id),'Пока нет доступных избранных блюд. Добавьте их в Mini App.',mapButton());return true}
+  const lines=['❤️ Ваши доступные избранные блюда',''];
+  for(const v of saved.slice(0,25))lines.push('• '+v.name+' — '+v.price+' ₽ · '+v.venue_name);
+  if(saved.length>25)lines.push('И ещё '+(saved.length-25)+' позиций в Mini App.');
+  lines.push('','Чтобы оформить заказ, напишите: «Закажи [название блюда]». Оплата при получении.');
+  await say(api,String(m.from.id),lines.join('\n').slice(0,3850),mapButton());
+  return true;
+ }
+ const parsed=parseRequest(text);if(!parsed)return false;
  const uid=String(m.from.id);
  if(parsed.error){await say(api,uid,'Уточните количество и название: «Закажи две лепёшки с сыром».');return true}
  const fav=await candidatesFor(uid);

@@ -189,6 +189,11 @@ async function onMessage(m,api){
  const matches=matchFavorites(parsed,fav).filter(x=>parsed.quantity>=x.min&&parsed.quantity<=x.max);
  if(!matches.length){await say(api,uid,'Точного совпадения среди доступных избранных блюд нет. Уточните название.',mapButton());return true}
  if(matches.length>6){await say(api,uid,'Нашлось слишком много вариантов. Уточните заведение и название.');return true}
+ if(matches.length===1){
+  const match=matches[0];
+  const repeated=await db.query("SELECT id FROM shaurma_quick_order_intents WHERE telegram_user_id=$1 AND establishment_id=$2 AND item_id=$3 AND quantity=$4 AND state IN ('draft','charging','charge_pending','invoiced','completed') AND created_at>NOW()-INTERVAL '30 seconds' LIMIT 1",[uid,match.establishment_id,match.item_id,parsed.quantity]);
+  if(repeated.rows.length){await say(api,uid,'Похожий заказ уже оформляется или только что оформлен. Проверьте сообщения и историю заказов.');return true}
+ }
  const x=await makeIntent(uid,m.message_id,matches,parsed.quantity);
  if(!x)return true; // Deduplicate Telegram redelivery.
  if(matches.length===1){await invoice(x.id,uid,api);return true}

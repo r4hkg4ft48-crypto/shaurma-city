@@ -66,7 +66,7 @@ function safeImageUrl(value){
   try{
     const u=new URL(valueText);
     if(u.protocol!=='https:'||u.username||u.password)return '';
-    if(!u.hostname||u.hostname==='localhost'||/^(?:127\\.|10\\.|192\\.168\\.|169\\.254\\.)/.test(u.hostname))return '';
+    if(!u.hostname||u.hostname==='localhost'||/^(?:127\.|10\.|192\.168\.|169\.254\.)/.test(u.hostname))return '';
     return u.toString();
   }catch{return ''}
 }

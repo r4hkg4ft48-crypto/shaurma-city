@@ -5,6 +5,7 @@ const D=require('./domain');
 const rt=require('./realtime');
 const telegram=require('./telegram');
 const config=require('./config');
+const payment=require('./yookassa');
 const {parseRequest,matchFavorites}=require('./quick-order-core');
 const PAYMENT_TOKEN=String(process.env.SHAURMEG_PAYMENT_PROVIDER_TOKEN||'').trim();
 const amount=n=>Math.round(Number(n)||0);
@@ -59,6 +60,7 @@ async function makeIntent(uid,messageId,matches,quantity){
  return q.rows[0]||null;
 }
 async function invoice(id,uid,api){
+ if(await attemptAutopay(id,uid,api))return;
  const q=await db.query("UPDATE shaurma_quick_order_intents SET state='invoicing',updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW() RETURNING *",[id,uid]);
  const x=q.rows[0];if(!x)return;
  if(!PAYMENT_TOKEN){
@@ -78,6 +80,90 @@ async function invoice(id,uid,api){
   await say(api,uid,'Не удалось выставить счёт. Заказ не создан, списания нет.');
  }
 }
+
+async function afterPaidOrder(order,uid,api,method){
+ rt.pushOwner('order',order);
+ rt.pushVenue(order.establishment_id,'order',order);
+ rt.pushUser(uid,'order',order);
+ telegram.notifyKitchenOrder(order).catch(e=>console.error('quick_order_kitchen',order.id,e.message));
+ await say(api,uid,'✅ '+(method==='yookassa'?'Автоплатёж':'Оплата')+' прошёл · '+order.order_number+
+   '\n'+order.venue_name+'\n'+order.items.map(i=>'• '+i.n+' × '+i.q).join('\n')+
+   '\nИтого: '+order.total+' ₽\nПолучение: самовывоз. Заказ отправлен на кухню.');
+}
+async function reconcileProviderPayment(paymentId,api=null){
+ if(!payment.uuid(paymentId))return false;
+ const paid=await payment.getCharge(paymentId);
+ const intentId=String(paid?.metadata?.quick_order_id||''),uid=String(paid?.metadata?.telegram_user_id||'');
+ if(!payment.uuid(intentId)||!/^\d+$/.test(uid))return false;
+ const result=await db.tx(async client=>{
+  const q=await client.query('SELECT * FROM shaurma_quick_order_intents WHERE id=$1 FOR UPDATE',[intentId]);
+  const x=q.rows[0];
+  if(!x||x.telegram_user_id!==uid||x.telegram_payment_charge_id||
+      x.provider_payment_charge_id&&x.provider_payment_charge_id!==paymentId||
+      !['charging','charge_pending','completed'].includes(x.state))return {invalid:true};
+  if(x.state==='completed')return {duplicate:true};
+  if(paid.status==='canceled'){
+   await client.query("UPDATE shaurma_quick_order_intents SET state='payment_failed',provider_payment_charge_id=$2,updated_at=NOW() WHERE id=$1",[intentId,paymentId]);
+   return {failed:true,uid};
+  }
+  if(!payment.validatedCharge(paid,{intentId,userId:uid,total:x.total,paymentId})){
+   if(paid.status==='pending'||paid.status==='waiting_for_capture'){
+    await client.query("UPDATE shaurma_quick_order_intents SET state='charge_pending',provider_payment_charge_id=$2,updated_at=NOW() WHERE id=$1",[intentId,paymentId]);
+    return {pending:true,uid};
+   }
+   return {invalid:true};
+  }
+  const userq=await client.query('SELECT first_name,username FROM shaurma_users WHERE telegram_user_id=$1',[uid]);
+  const user=userq.rows[0]||{},choice=x.choices[0]||{};
+  const num='SC-Q-'+Date.now().toString(36).toUpperCase()+'-'+crypto.randomBytes(3).toString('hex').toUpperCase();
+  const oq=await client.query("INSERT INTO shaurma_orders(order_number,items,total,customer_name,status,source,telegram_user_id,telegram_username,telegram_first_name,fulfillment_type,payment_status,payment_method,venue_id,venue_name,establishment_id,marker_id) VALUES($1,$2::jsonb,$3,$4,'new','telegram-autopay',$5,$6,$7,'cafe','paid','card',$8,$9,$10,$11) RETURNING *",
+   [num,JSON.stringify(x.items),x.total,String(user.first_name||'Гость').slice(0,120),uid,user.username||null,
+    user.first_name||null,x.venue_id,choice.venue_name||'Заведение',x.establishment_id,x.marker_id]);
+  const order=oq.rows[0];
+  await client.query("UPDATE shaurma_quick_order_intents SET state='completed',order_id=$2,provider_payment_charge_id=$3,updated_at=NOW() WHERE id=$1",[intentId,order.id,paymentId]);
+  return {order,uid};
+ });
+ if(result.order){
+  // Telegram notification uses the same kitchen/status path as the Mini App.
+  const notify=api||((method,body)=>telegram.sendClientMessage(body.chat_id,body.text,body.reply_markup));
+  await afterPaidOrder(result.order,uid,notify,'yookassa');
+ }
+ if(result.failed&&api)await say(api,uid,'❌ Автоплатёж отклонён. Заказ не отправлен.');
+ return result;
+}
+async function attemptAutopay(id,uid,api){
+ if(!payment.enabled())return false;
+ const uq=await db.query("SELECT payment_provider,payment_method_id,autopay_enabled,autopay_max_rub,autopay_consent_at,autopay_consent_version FROM shaurma_users WHERE telegram_user_id=$1",[uid]);
+ const u=uq.rows[0]||{};
+ if(!u.autopay_enabled||u.payment_provider!=='yookassa'||!payment.uuid(u.payment_method_id)||
+    u.autopay_consent_version!=='quick-orders-v1'||!u.autopay_consent_at)return false;
+ const claimed=await db.query("UPDATE shaurma_quick_order_intents SET state='charging',updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW() AND total>0 AND total<=$3 RETURNING *",[id,uid,Number(u.autopay_max_rub)||0]);
+ const x=claimed.rows[0];
+ if(!x){
+  await say(api,uid,'Сумма заказа превышает установленный лимит автосписания. Вы можете оформить заказ через обычную оплату.');
+  return false; // Fallback to invoice when available.
+ }
+ try{
+  const result=await payment.createCharge({id,userId:uid,amount:x.total,methodId:u.payment_method_id,description:'Shaurmeg · '+String(x.items[0]?.n||'Заказ')});
+  if(!payment.uuid(result?.id))throw new Error('no_gateway_payment_id');
+  // Must commit the gateway charge ID before processing the success event.
+  await db.query("UPDATE shaurma_quick_order_intents SET provider_payment_charge_id=$2,updated_at=NOW() WHERE id=$1 AND state='charging'",[id,result.id]);
+  const status=await reconcileProviderPayment(result.id,api);
+  if(status?.pending){
+   const link=String(result?.confirmation?.confirmation_url||'');
+   await say(api,uid,'💳 Платёж проходит проверку. Заказ на кухню будет отправлен только после подтверждения оплаты.'+
+    (link&&/^https:\/\//.test(link)?'\nДополнительное подтверждение: '+link:''));
+  }else if(status?.failed)await say(api,uid,'❌ Оплата не прошла. Заказ не отправлен.');
+  return true;
+ }catch(e){
+  // This might be an indeterminate network result. NEVER issue a second charge
+  // with a different idempotency key or silently submit an unpaid order.
+  console.error('quick_order_charge_uncertain',id,String(e.message).slice(0,100));
+  await say(api,uid,'💳 Проверяем результат оплаты. Пока нет подтверждения, заказ не отправлен. Не повторяйте команду до проверки статуса.');
+  return true;
+ }
+}
+
 async function onMessage(m,api){
  if(!privateMessage(m))return false;
  if(m.successful_payment){await onPayment(m,api);return true}
@@ -170,4 +256,4 @@ async function handleUpdate(update,api){
  if(update?.message)return onMessage(update.message,api);
  return false;
 }
-module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout};
+module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment};

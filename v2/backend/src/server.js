@@ -22,6 +22,7 @@ app.use((req,res,next)=>{
 });
 app.use('/api/v2',router);
 telegram.install(app);
+require('./autopay').install(app);
 coordinator.install(app);
 coordinatorBot.install(app);
 channelBot.install(app);
@@ -30,6 +31,7 @@ app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
 ensureSchema()
  .then(()=>require('./quick-order-bot').ensureSchema())
+ .then(()=>require('./autopay').ensureSchema())
  .then(()=>coordinator.ensureSchema())
  .then(()=>realcity.bootstrap())
  .then(()=>channelBot.bootstrap())

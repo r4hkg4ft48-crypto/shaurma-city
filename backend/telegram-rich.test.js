@@ -88,3 +88,13 @@ test('owner HTML fallback retains original parse_mode while rich parses clean ve
   assert.equal(calls[1].payload.parse_mode,'HTML');
   assert.equal(calls[1].payload.text,'Доступ <b>подключён</b>');
 });
+
+test('uses actual HTTPS menu photo in a rich card and rejects unsafe URLs',()=>{
+  const order={id:1042,venue_name:'В Лепёшке',order_number:'SC-1042',items:[{n:'Шаурма сырная',q:1}],status:'ready'};
+  const html=rich.orderHtml(order,{photoUrl:'https://example.com/shawarma.webp?i=1&v=3'});
+  assert.match(html,/<figure><img src="https:\/\/example.com\/shawarma.webp\?i=1&amp;v=3"/);
+  assert.match(html,/<figcaption>Шаурма сырная<\/figcaption>/);
+  assert.equal(rich.safeImageUrl('http://localhost/secret'),'');
+  assert.equal(rich.safeImageUrl('https://127.0.0.1/secret'),'');
+  assert.equal(rich.safeImageUrl('file:///etc/passwd'),'');
+});

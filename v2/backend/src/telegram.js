@@ -116,6 +116,29 @@ function kitchenOrderText(order){
   return lines.join('\n').slice(0,3900);
 }
 
+
+async function kitchenOrderRich(order){
+  const defaultHtml=rich.orderHtml(order);
+  if(!order?.establishment_id||!Array.isArray(order.items)||!order.items.length)return defaultHtml;
+  try{
+    // The dish photo is chosen only from the authoritative menu of this exact venue.
+    const q=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 LIMIT 1',[order.establishment_id]);
+    const menu=Array.isArray(q.rows?.[0]?.menu)?q.rows[0].menu:[];
+    const byId=new Map(menu.map(item=>[String(item.id),item]));
+    for(const ordered of order.items){
+      const menuItem=byId.get(String(ordered.id||''));
+      if(!menuItem)continue;
+      const raw=String(menuItem.image||menuItem.i||'');
+      const url=/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw)
+        ?config.PUBLIC_API_URL+'/api/v2/menu-image/'+encodeURIComponent(order.establishment_id)+'/'+encodeURIComponent(String(menuItem.id))
+        :raw;
+      const safe=rich.safeImageUrl(url);
+      if(safe)return rich.orderHtml(order,{photoUrl:safe});
+    }
+  }catch(e){console.warn('kitchen menu photo',String(order.id||''),String(e.message||''));}
+  return defaultHtml;
+}
+
 async function saveKitchenMessage(order,chatId,message){
   if(!message?.message_id)return;
   await db.query(`INSERT INTO shaurma_kitchen_order_messages(order_id,establishment_id,chat_id,message_id,updated_at)
@@ -128,12 +151,13 @@ async function notifyKitchenOrder(order){
   if(!config.KITCHEN_BOT_TOKEN||!order?.establishment_id)return {sent:0};
   const q=await db.query('SELECT DISTINCT chat_id FROM shaurma_kitchen_access WHERE establishment_id=$1 AND is_active=TRUE',[order.establishment_id]);
   let sent=0;
+  const visual=await kitchenOrderRich(order);
   for(const row of q.rows){
     try{
       const message=await call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:row.chat_id,
         text:kitchenOrderText(order),
-        __rich_html:rich.orderHtml(order),
+        __rich_html:visual,
         disable_web_page_preview:true,
         reply_markup:nextKitchenButton(order.status,order.id)||{inline_keyboard:[]}
       });
@@ -148,13 +172,14 @@ async function notifyKitchenOrder(order){
 async function refreshKitchenOrderMessages(order){
   if(!config.KITCHEN_BOT_TOKEN||!order?.id)return;
   const q=await db.query('SELECT chat_id,message_id FROM shaurma_kitchen_order_messages WHERE order_id=$1',[order.id]);
+  const visual=await kitchenOrderRich(order);
   for(const row of q.rows){
     try{
       await call(config.KITCHEN_BOT_TOKEN,'editMessageText',{
         chat_id:row.chat_id,
         message_id:row.message_id,
         text:kitchenOrderText(order),
-        __rich_html:rich.orderHtml(order),
+        __rich_html:visual,
         disable_web_page_preview:true,
         reply_markup:nextKitchenButton(order.status,order.id)||{inline_keyboard:[]}
       });

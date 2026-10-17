@@ -128,7 +128,10 @@ async function reconcileProviderPayment(paymentId,api=null){
   const notify=api||((method,body)=>telegram.sendClientMessage(body.chat_id,body.text,body.reply_markup));
   await afterPaidOrder(result.order,uid,notify,'yookassa');
  }
- if(result.failed&&api)await say(api,uid,'❌ Автоплатёж отклонён. Заказ не отправлен.');
+ if(result.failed){
+  const notifier=api||((method,body)=>telegram.sendClientMessage(body.chat_id,body.text,body.reply_markup));
+  await say(notifier,uid,'❌ Автоплатёж отклонён. Заказ не отправлен.');
+ }
  return result;
 }
 async function attemptAutopay(id,uid,api){
@@ -137,6 +140,17 @@ async function attemptAutopay(id,uid,api){
  const u=uq.rows[0]||{};
  if(!u.autopay_enabled||u.payment_provider!=='yookassa'||!payment.uuid(u.payment_method_id)||
     u.autopay_consent_version!=='quick-orders-v1'||!u.autopay_consent_at)return false;
+ const currentQ=await db.query("SELECT * FROM shaurma_quick_order_intents WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW()",[id,uid]);
+ const draft=currentQ.rows[0];
+ if(!draft)return true;
+ const choices=await candidatesFor(uid);
+ const item=choices.find(v=>v.establishment_id===draft.establishment_id&&v.venue_id===draft.venue_id&&
+   v.item_id===draft.item_id&&v.marker_id===String(draft.marker_id));
+ if(!item||draft.quantity<item.min||draft.quantity>item.max||item.price*draft.quantity!==Number(draft.total)){
+  await db.query("UPDATE shaurma_quick_order_intents SET state='stale',updated_at=NOW() WHERE id=$1 AND state='draft'",[id]);
+  await say(api,uid,'Цена или доступность избранного блюда изменились. Заказ не оплачен. Отправьте команду ещё раз.');
+  return true;
+ }
  const claimed=await db.query("UPDATE shaurma_quick_order_intents SET state='charging',updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW() AND total>0 AND total<=$3 RETURNING *",[id,uid,Number(u.autopay_max_rub)||0]);
  const x=claimed.rows[0];
  if(!x){
@@ -153,7 +167,7 @@ async function attemptAutopay(id,uid,api){
    const link=String(result?.confirmation?.confirmation_url||'');
    await say(api,uid,'💳 Платёж проходит проверку. Заказ на кухню будет отправлен только после подтверждения оплаты.'+
     (link&&/^https:\/\//.test(link)?'\nДополнительное подтверждение: '+link:''));
-  }else if(status?.failed)await say(api,uid,'❌ Оплата не прошла. Заказ не отправлен.');
+  }
   return true;
  }catch(e){
   // This might be an indeterminate network result. NEVER issue a second charge

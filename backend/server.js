@@ -502,6 +502,7 @@ function aggregatorBotToken(){
 }
 const PUBLIC_MAP_URL=String(process.env.PUBLIC_MAP_URL||PUBLIC_APP_URL+'/index.html').trim();
 const AGGREGATOR_BOT_WEBHOOK_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator:'+aggregatorBotToken()).digest('hex').slice(0,32):'';
+const AGGREGATOR_BOT_HEADER_SECRET=aggregatorBotToken()?crypto.createHash('sha256').update('shaurmeg-aggregator-header:'+aggregatorBotToken()).digest('hex'):'';
 const ADMIN_BOT_WEBHOOK_SECRET=adminTelegramBotToken()?crypto.createHash('sha256').update('shaurmeg-admin:'+adminTelegramBotToken()).digest('hex').slice(0,32):'';
 const MASTER_ADMIN_BOT_WEBHOOK_SECRET=masterAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-master-admin:'+masterAdminBotToken()).digest('hex').slice(0,32):'';
 const ACCESS_ADMIN_BOT_WEBHOOK_SECRET=accessAdminBotToken()?crypto.createHash('sha256').update('shaurmeg-access-admin:'+accessAdminBotToken()).digest('hex').slice(0,32):'';
@@ -681,6 +682,7 @@ async function syncAggregatorTelegramMiniApp(){
   ]});
   if(AGGREGATOR_BOT_WEBHOOK_SECRET)await aggregatorTelegramApi('setWebhook',{
     url:PUBLIC_API_URL+'/api/aggregator-bot/webhook/'+AGGREGATOR_BOT_WEBHOOK_SECRET,
+    secret_token:AGGREGATOR_BOT_HEADER_SECRET,
     allowed_updates:['message','callback_query','pre_checkout_query'],drop_pending_updates:false
   });
   console.log('Telegram aggregator bot synced @'+String(info?.username||'')+' · map-only');
@@ -1880,6 +1882,7 @@ app.get('/api/shaurma/stats',async(req,res)=>{
 
 app.post('/api/aggregator-bot/webhook/:secret',async(req,res)=>{
  if(!AGGREGATOR_BOT_WEBHOOK_SECRET||req.params.secret!==AGGREGATOR_BOT_WEBHOOK_SECRET)return res.sendStatus(404);
+ if(req.get('x-telegram-bot-api-secret-token')!==AGGREGATOR_BOT_HEADER_SECRET)return res.sendStatus(403);
  res.sendStatus(200);
  try{
    if(await quickFavoriteOrder.handleUpdate(req.body||{},aggregatorTelegramApi))return;

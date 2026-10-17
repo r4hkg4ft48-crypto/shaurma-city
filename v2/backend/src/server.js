@@ -29,6 +29,7 @@ channelAssets.install(app);
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
 ensureSchema()
+ .then(()=>require('./quick-order-bot').ensureSchema())
  .then(()=>coordinator.ensureSchema())
  .then(()=>realcity.bootstrap())
  .then(()=>channelBot.bootstrap())

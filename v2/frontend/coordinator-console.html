@@ -38,7 +38,7 @@ a{color:var(--gold)}.count{color:var(--gold);font-size:12px;font-weight:700}#sco
 <div class="microhint">Например: «Убери сырную шаурму» или «Поставь цену на капучино 250». Запись не ведётся без нажатия.</div>
 </div><textarea id="requestText" placeholder="Или напишите команду обычными словами…" maxlength="350"></textarea>
 <div class="flex" style="margin-top:9px"><button id="send" class="gold" style="flex:1">Проверить команду →</button><button id="clear">Очистить</button></div>
-<div id="result" role="status" aria-live="polite"></div>
+<div id="result" role="status" aria-live="polite"></div><button id="speak" type="button" aria-label="Озвучить ответ" style="width:100%;margin-top:5px">🔊 Озвучить ответ</button>
 </section>
 <section class="panel"><div class="flex" style="justify-content:space-between"><h2>Каталог заведения</h2><span id="count" class="count">—</span></div>
 <input id="search" class="search" placeholder="Поиск по названию или коду…" aria-label="Поиск позиции">
@@ -58,6 +58,7 @@ const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
 let catalog=[],scope='',pending='',recorder=null,stream=null,started=0;
 function status(text,error=false){$('result').textContent=text;$('result').classList.toggle('error',error)}
+$('speak').addEventListener('click',()=>{const message=$('result').textContent.trim();if(!message)return;if(!('speechSynthesis' in window))return status('Озвучивание не поддерживается устройством.',true);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message.slice(0,500));utterance.lang='ru-RU';utterance.rate=0.98;window.speechSynthesis.speak(utterance)});
 async function api(action,extra={}){
   if(!tg||!tg.initData)throw Error('Откройте Menu Control через кнопку в Telegram-боте.');
   const r=await fetch('/api/v2/coordinator-app',{method:'POST',headers:{'content-type':'application/json'},

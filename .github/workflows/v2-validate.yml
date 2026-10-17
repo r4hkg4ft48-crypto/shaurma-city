@@ -154,6 +154,8 @@ jobs:
         run: node --test v2/backend/test/menu-domain.test.js v2/backend/test/admin-design-contract.test.js v2/backend/test/menu-coordinator-contract.test.js v2/backend/test/coordinator-contract.test.js
       - name: Photographic builder contract
         run: node --test v2/backend/test/builder-cinema.test.js
+      - name: Telegram quick ordering contract
+        run: node --test v2/backend/test/quick-order.test.js
       - name: Voice assistant contract
         run: node --test v2/backend/test/voice-assistant.test.js
       - name: Venue command assistant contract

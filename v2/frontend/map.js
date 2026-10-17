@@ -1173,6 +1173,6 @@
 
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
   warmPoints().catch(e=>console.warn('points warmup failed',e));
-  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
+  authClient().then(async ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream();if(qs.get('autopay_return')==='1'){try{await autopayRequest('confirm');toast('Банковская карта успешно привязана ✓')}catch{toast('Подтвердите карту через профиль Шаурмега')}refreshAutopay()}}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

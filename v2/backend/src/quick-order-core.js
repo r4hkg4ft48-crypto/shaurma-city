@@ -33,7 +33,7 @@ function matchFavorites(request,candidates){
   const matches=[];
   for(const c of candidates){
     const nameTokens=tokens(c.name);
-    const allTokens=tokens([c.name,c.detail].filter(Boolean).join(' '));
+    const allTokens=tokens([c.name,c.detail,c.venue_name].filter(Boolean).join(' '));
     if(!request.terms.every(q=>allTokens.some(t=>t===q||t.startsWith(q)&&q.length>=5)))continue;
     const exactName=request.terms.every(q=>nameTokens.includes(q));
     const nameHits=request.terms.filter(q=>nameTokens.includes(q)).length;

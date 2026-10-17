@@ -25,3 +25,13 @@ test('no substring match when only one of two ingredients matches',()=>{
  const matches=matchFavorites(parseRequest('Закажи лепёшку с сыром'),[{name:'Лепёшка с курицей',detail:'курица'}]);
  assert.equal(matches.length,0);
 });
+
+test('venue name in a command selects the exact favorite venue',()=>{
+ const choices=[
+  {...dish,venue_name:'В Лепёшке',item_id:'lepyoshka'},
+  {...dish,venue_name:'Другая точка',item_id:'another'}
+ ];
+ const found=matchFavorites(parseRequest('Закажи лепёшку с сыром в Лепёшке'),choices);
+ assert.equal(found.length,1);
+ assert.equal(found[0].item_id,'lepyoshka');
+});

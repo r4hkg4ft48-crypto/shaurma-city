@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('crypto');
+const rich=require('../../../backend/telegram-rich');
 const coordinator=require('./menu-coordinator');
 const db=require('./db');
 const config=require('./config');
@@ -12,19 +13,26 @@ const norm=x=>String(x||'').trim().toLowerCase().replace(/ё/g,'е');
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n8. Создать: создать позицию Название | 350 | КОД_КАТЕГОРИИ\n9. Создать ингредиент (Кофеёк): создать ингредиент Сироп | ml | 150\n10. Добавить вариант: КОД_ГРУППЫ добавить вариант Название | 25\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
 function equal(a,b){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}
-async function telegram(method,body){
+async function telegramRaw(method,body){
   if(!token())throw fail('COORDINATOR_BOT_TOKEN missing',503);
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),10000);
   try{
     const r=await fetch('https://api.telegram.org/bot'+token()+'/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
     const data=await r.json();
-    if(!r.ok||!data.ok)throw fail('Telegram '+method+': '+String(data.description||r.status),502);
+    if(!r.ok||!data.ok)throw fail('Telegram '+method+': '+String(data.description||r.status),Number(data.error_code||r.status));
     return data.result;
   }finally{clearTimeout(timeout);}
 }
-async function reply(chatId,text){
-  return telegram('sendMessage',{chat_id:chatId,text:String(text).slice(0,3800),disable_web_page_preview:true});
+async function telegram(method,body){
+  return rich.withRich(method,body,(name,payload)=>telegramRaw(name,payload));
+}
+const homeKeyboard={inline_keyboard:[[
+  {text:'📍 Мои подключения',callback_data:'cm:status'},
+  {text:'📒 Команды',callback_data:'cm:help'}
+]]};
+async function reply(chatId,text,replyMarkup=null){
+  return telegram('sendMessage',{chat_id:chatId,text:String(text).slice(0,3800),disable_web_page_preview:true,...(replyMarkup?{reply_markup:replyMarkup}:{})});
 }
 async function coffee(action,telegramId,payload={}){
   const secret=coffeeSecret();
@@ -63,7 +71,7 @@ async function handle(message){
   if(!chatId||!uid||String(message.chat.type)!=='private')return;
   const text=String(message.text||'').trim();
   if(!text)return reply(chatId,'Пока доступны текстовые команды. Наберите /помощь.');
-  if(/^\/(?:start|help|помощь)(?:@\S+)?$/i.test(text))return reply(chatId,HELP);
+  if(/^\/(?:start|help|помощь)(?:@\S+)?$/i.test(text))return reply(chatId,HELP,homeKeyboard);
   const connect=text.match(/^\/(?:connect|подключить)(?:@\S+)?\s+(\S+)$/i)||text.match(/^((?:SHA|KOF)-MNU-[A-F0-9]{16})$/i);
   if(connect){
     const code=connect[1].toUpperCase(),response=code.startsWith('SHA-')?await coordinator.claim(uid,code):await coffee('claim',uid,{key:code});
@@ -91,15 +99,26 @@ async function prepareUpdate(updateId){
   const res=await db.query("INSERT INTO shaurma_coordinator_updates(update_id,received_at) VALUES($1,now()) ON CONFLICT DO NOTHING RETURNING update_id",[updateId]);
   return res.rowCount>0;
 }
+async function handleCallback(query){
+  const chatId=query?.message?.chat?.id,uid=query?.from?.id;
+  if(!chatId||!uid||query?.message?.chat?.type!=='private')return;
+  const data=String(query.data||'');
+  if(data!=='cm:status'&&data!=='cm:help')return;
+  try{await telegram('answerCallbackQuery',{callback_query_id:query.id})}catch(e){console.warn('coordinator callback ack',e.message)}
+  if(data==='cm:help')return reply(chatId,HELP,homeKeyboard);
+  const rows=await locations(uid);
+  return reply(chatId,'🔒 Подключения:\n'+rows.map(x=>(x.project==='shaurmeg'?'Шаурмег':'Кофеёк')+': '+(x.unavailable?'⚠️ сервис временно недоступен':x.linked?'✅ '+x.venue:'не подключён')).join('\n'),homeKeyboard);
+}
 async function processUpdate(update){
   const id=Number(update?.update_id);
   if(!Number.isSafeInteger(id))return;
   if(!(await prepareUpdate(id)))return;
   const message=update.message;
-  try{await handle(message);}
+  try{if(update.callback_query)await handleCallback(update.callback_query);else await handle(message);}
   catch(e){
     console.error('coordinator_message_failed',String(e.message||'unknown').slice(0,200));
-    if(message?.chat?.id)try{await reply(message.chat.id,'⚠️ '+String(e.message||'Ошибка команды').slice(0,500));}catch(err){console.error('coordinator_reply_failed',err.message)}
+    const chatId=message?.chat?.id||update.callback_query?.message?.chat?.id;
+    if(chatId)try{await reply(chatId,'⚠️ '+String(e.message||'Ошибка команды').slice(0,500));}catch(err){console.error('coordinator_reply_failed',err.message)}
   }
 }
 function install(app){
@@ -121,7 +140,7 @@ async function sync(){
     {command:'connect',description:'Подключить заведение по ключу'},
     {command:'status',description:'Показать привязанные заведения'},
     {command:'help',description:'Команды меню'}]});
-  await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message']});
+  await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message','callback_query']});
   return {enabled:true};
 }
 module.exports={install,sync,handle};

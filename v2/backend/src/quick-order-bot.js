@@ -134,6 +134,17 @@ async function reconcileProviderPayment(paymentId,api=null){
  }
  return result;
 }
+async function reconcilePendingProviderPayments(){
+ if(!db.configured||!payment.enabled())return {checked:0,completed:0};
+ const q=await db.query("SELECT DISTINCT provider_payment_charge_id AS id FROM shaurma_quick_order_intents WHERE state IN ('charging','charge_pending') AND provider_payment_charge_id IS NOT NULL AND created_at>NOW()-INTERVAL '36 hours' ORDER BY id LIMIT 40");
+ let completed=0;
+ for(const row of q.rows){
+  try{const result=await reconcileProviderPayment(row.id);if(result?.order)completed++}
+  catch(e){console.error('quick_order_reconcile',String(row.id),String(e.message).slice(0,100))}
+ }
+ return {checked:q.rows.length,completed};
+}
+
 async function attemptAutopay(id,uid,api){
  if(!payment.enabled())return false;
  const uq=await db.query("SELECT payment_provider,payment_method_id,autopay_enabled,autopay_max_rub,autopay_consent_at,autopay_consent_version FROM shaurma_users WHERE telegram_user_id=$1",[uid]);
@@ -275,4 +286,4 @@ async function handleUpdate(update,api){
  if(update?.message)return onMessage(update.message,api);
  return false;
 }
-module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment};
+module.exports={ensureSchema,handleUpdate,candidatesFor,onMessage,onCallback,onPreCheckout,reconcileProviderPayment,reconcilePendingProviderPayments};

@@ -698,7 +698,7 @@ async function sync(){
 
   if(config.AGGREGATOR_BOT_TOKEN){
     add('aggregator.menu',()=>call(config.AGGREGATOR_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Карта',web_app:{url:mapUrl}}}));
-    add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'}]}));
+    add('aggregator.commands',()=>call(config.AGGREGATOR_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть карту Шаурмега'},{command:'map',description:'Карта заведений'},{command:'quick',description:'Как заказать сообщением'},{command:'favorites',description:'Мои избранные блюда'}]}));
     add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',secret_token:AGGREGATOR_DELIVERY_SECRET,allowed_updates:['message','callback_query','pre_checkout_query']}));
   }
 
@@ -757,7 +757,7 @@ function install(app){
       if(!/^\/(start|map)/i.test(String(msg.text||'')))return res.sendStatus(200);
       await call(config.AGGREGATOR_BOT_TOKEN,'sendMessage',{
         chat_id:msg.chat.id,
-        text:'🗺 Шаурмег — выберите заведение на карте.',
+        text:'🥙 Шаурмег — карта и быстрые заказы.\n\nДобавьте блюдо в избранное на карте и напишите: «Закажи лепёшку с сыром». Отправлю заказ в заведение без Mini App, оплата при получении.\n\n/favorites — любимые блюда\n/quick — помощь.',
         reply_markup:{inline_keyboard:[[{text:'Открыть карту',web_app:{url:config.PUBLIC_APP_URL+'/index.html'}}]]}
       });
       res.sendStatus(200);

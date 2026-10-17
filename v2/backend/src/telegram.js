@@ -156,7 +156,7 @@ async function notifyKitchenOrder(order){
   // Persistent receipts allow safely retrying transient Telegram failures.
   const saved=await db.query('SELECT chat_id FROM shaurma_kitchen_order_messages WHERE order_id=$1',[order.id]);
   const acknowledged=new Set(saved.rows.map(x=>String(x.chat_id)));
-  let sent=acknowledged.size,attempted=0;
+  let sent=q.rows.filter(x=>acknowledged.has(String(x.chat_id))).length,attempted=0;
   if(!q.rows.length)return {sent:0,expected:0};
   const visual=await kitchenOrderRich(order);
   for(const row of q.rows){

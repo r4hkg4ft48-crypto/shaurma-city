@@ -1,5 +1,6 @@
 'use strict';
 const crypto=require('crypto');
+const rich=require('../../../backend/telegram-rich');
 const config=require('./config');
 const db=require('./db');
 const rt=require('./realtime');
@@ -22,7 +23,7 @@ const venueCommandBus=createVenueCommandBus({
 });
 const venueDialogAgent=createVenueDialogAgent({DB:db,commandBus:venueCommandBus});
 
-async function call(token,method,body={},attempt=0){
+async function callRaw(token,method,body={},attempt=0){
   if(!token)return null;
   const r=await fetch('https://api.telegram.org/bot'+token+'/'+method,{
     method:'POST',
@@ -36,7 +37,7 @@ async function call(token,method,body={},attempt=0){
     const delay=retryAfter*1000+300;
     console.warn('Shaurmeg v2 Telegram rate limit '+method+' · retry '+(attempt+1)+'/'+TELEGRAM_MAX_RETRIES+' in '+delay+'ms');
     await sleep(delay);
-    return call(token,method,body,attempt+1);
+    return callRaw(token,method,body,attempt+1);
   }
 
   if(!r.ok||!j.ok){
@@ -46,6 +47,9 @@ async function call(token,method,body={},attempt=0){
     throw error;
   }
   return j.result;
+}
+async function call(token,method,body={},attempt=0){
+  return rich.withRich(method,body,(name,payload)=>callRaw(token,name,payload,attempt));
 }
 
 async function sendClientMessage(chatId,text,replyMarkup=null){
@@ -129,6 +133,7 @@ async function notifyKitchenOrder(order){
       const message=await call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
         chat_id:row.chat_id,
         text:kitchenOrderText(order),
+        __rich_html:rich.orderHtml(order),
         disable_web_page_preview:true,
         reply_markup:nextKitchenButton(order.status,order.id)||{inline_keyboard:[]}
       });
@@ -149,6 +154,7 @@ async function refreshKitchenOrderMessages(order){
         chat_id:row.chat_id,
         message_id:row.message_id,
         text:kitchenOrderText(order),
+        __rich_html:rich.orderHtml(order),
         disable_web_page_preview:true,
         reply_markup:nextKitchenButton(order.status,order.id)||{inline_keyboard:[]}
       });

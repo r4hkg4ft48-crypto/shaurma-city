@@ -96,20 +96,18 @@
       <div><small>ЛЮБИМОЕ МЕСТО</small><b id="favoriteVenue">Пока определяем</b><span id="favoriteMeta">Сделайте первый заказ</span></div><strong>⌁</strong>
     </article>
 
-    <article class="autopayCard" id="autopayCard">
-      <div class="autopayCardHead"><div><small>⚡ БЫСТРЫЙ ЗАКАЗ</small><h3>Заказ сообщением</h3></div><span>💳</span></div>
-      <p>Напишите боту «Закажи лепёшку с сыром» — выбранное блюдо из избранного оплачивается привязанной картой и отправляется на кухню без открытия меню.</p>
-      <div class="autopayStatus" id="autopayState" role="status" aria-live="polite">Проверяем возможность подключения…</div>
-      <div id="autopaySetup" hidden>
-        <label class="autopayLimit">Максимальная сумма одного заказа
-          <select id="autopayLimit"><option value="500">500 ₽</option><option value="1000">1 000 ₽</option><option value="1500" selected>1 500 ₽</option><option value="2000">2 000 ₽</option><option value="3000">3 000 ₽</option><option value="5000">5 000 ₽</option></select>
-        </label>
-        <label class="autopayConsent"><input id="autopayConsent" type="checkbox">Разрешаю списывать с сохраняемой карты сумму каждого моего сообщения «Закажи…», не превышающую выбранный лимит, без дополнительного подтверждения. Только блюда из моего избранного. В любое время могу отключить.</label>
-        <button id="autopayBindBtn" type="button" class="autopayButton">Привязать карту для быстрых заказов</button>
+    <article class="autopayCard" id="quickOrderCard">
+      <div class="autopayCardHead"><div><small>⚡ SHAURMEG QUICK ORDER</small><h3>Заказ одним сообщением</h3></div><span>🥙</span></div>
+      <p>Добавьте любимое блюдо в избранное любого заведения и просто напишите Шаурмегу. Никакой корзины и переходов в меню.</p>
+      <div class="autopayStatus" role="status"><strong>Быстрый заказ включён</strong><div>Оплата — при получении. Онлайн-списаний нет.</div></div>
+      <div class="quickOrderExamples">
+        <small>НАПРИМЕР</small>
+        <div>«Закажи лепёшку с сыром»</div>
+        <div>«Закажи две сырные шаурмы»</div>
+        <div>«Закажи лепёшку с сыром в Лепёшке»</div>
       </div>
-      <button id="autopayConfirmBtn" type="button" class="autopayButton" hidden>Проверить привязку карты</button>
-      <button id="autopayDisableBtn" type="button" class="autopayButton autopayDisable" hidden>Отключить автоматическую оплату</button>
-      <small class="autopayFootnote">Данные карты вводятся только на защищённой странице платёжного провайдера, а не в Шаурмеге. Заказ отправляется заведению только после успешной оплаты.</small>
+      <button id="openQuickOrderBot" type="button" class="autopayButton">Написать Шаурмегу →</button>
+      <small class="autopayFootnote">Бот использует ваш Telegram ID, сохранённый рецепт и текущую цену. Если одинаковое блюдо есть в разных заведениях, предложит выбрать нужное. Заказ сразу попадёт в историю и на кухню.</small>
     </article>
 
     <article class="bonusCard">

@@ -38,4 +38,4 @@ ensureSchema()
  .then(()=>telegram.sync())
  .then(()=>coordinatorBot.sync())
  .catch(e=>console.error('bootstrap',e.message))
- .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);channelBot.sync().then(()=>channelBot.publishLaunchMissing()).then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel bot post-start sync',e.message))}));
+ .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);const paymentRecheck=setInterval(()=>require('./quick-order-bot').reconcilePendingProviderPayments().catch(e=>console.error('quick order payment recovery',e.message)),60000);paymentRecheck.unref?.();channelBot.sync().then(()=>channelBot.publishLaunchMissing()).then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel bot post-start sync',e.message))}));

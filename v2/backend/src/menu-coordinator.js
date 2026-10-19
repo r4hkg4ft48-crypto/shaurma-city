@@ -298,7 +298,14 @@ async function execute(telegramId,text){
       else throw error('Цену можно задать только позиции или варианту.');
     }else if(/^название\s+.+/i.test(command)){
       const name=command.replace(/^название\s+/i,'').trim().slice(0,140);
-      if(obj.entity_type==='item')target.n=name;
+      if(obj.entity_type==='item'){
+        if(menu.some(x=>String(x.id)!==String(obj.entity_id)&&friendlyNorm(x.n)===friendlyNorm(name)))
+          throw error('Блюдо с таким названием уже есть. Используйте настройки внутри существующей позиции.',409);
+        const aliases=await c.query('SELECT entity_type,entity_id,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND normalized_spoken_name=$2',[bind.establishment_id,friendlyNorm(name)]);
+        if(aliases.rows.some(x=>!(x.entity_type==='item'&&String(x.entity_id)===String(obj.entity_id))))
+          throw error('Название совпадает с идентификатором другого объекта заведения.',409);
+        target.n=name;
+      }
       else if(obj.entity_type==='option'||obj.entity_type==='group')target.name=name;
       else throw error('Тип не поддерживает переименование.');
     }else if(/^описание\s+.+/i.test(command)){

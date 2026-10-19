@@ -55,12 +55,12 @@ function resolve(input,items){
   const explicitIngredient=/^(?:ингредиент|ингредиента)\s+/.test(parsed.name);
   const wanted=parsed.name.replace(/^(?:ингредиент|ингредиента)\s+/,'').trim();
   const objects=catalog.filter(x=>explicitIngredient?x.kind==='ingredient':(x.kind==='item'||x.kind==='product'));
-  const strict=objects.filter(x=>normalize(x.name)===wanted||key(x.name)===key(wanted));
+  const strict=objects.filter(x=>normalize(x.name)===wanted||key(x.name)===key(wanted)||(x.spokenName&&(normalize(x.spokenName)===wanted||key(x.spokenName)===key(wanted))));
   if(strict.length===1)return parsed.type==='search'?{type:'found',items:strict}:proposal(strict[0],parsed.command);
   if(strict.length>1)return {type:'ambiguous',message:'Найдено несколько позиций. Уточните по коду:',items:strict.slice(0,8)};
   const words=key(wanted).split(' ').filter(Boolean);
   const candidates=objects.map(x=>{
-    const parts=key(x.name).split(' ');
+    const parts=[...key(x.name).split(' '),...(x.spokenName?key(x.spokenName).split(' '):[])];
     const overlap=words.filter(w=>parts.includes(w)).length;
     const score=overlap*100-Math.abs(parts.length-words.length)*12;
     return {item:x,score};

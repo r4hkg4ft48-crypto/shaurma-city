@@ -96,3 +96,15 @@ test('Dangerous time-limited commands remain unsupported',()=>{
  assert.notEqual(r.type,'proposal');
  assert.match(r.text,/Временные команды/);
 });
+
+test('24-hour audit intent is explicit and cannot be confused with all-time changes',()=>{
+ assert.equal(dialog.step('Что изменилось за сутки?',catalog).topic,'audit24h');
+ assert.equal(dialog.step('Последние изменения',catalog).topic,'audit');
+});
+test('A report interrupts a pending write and never turns the question into a mutation',()=>{
+ const unresolved=dialog.step('Убери сырную',catalog);
+ const report=dialog.step('Что в стоп-листе?',catalog,unresolved.state);
+ assert.equal(report.type,'report');
+ assert.equal(report.topic,'stopped');
+ assert.equal(report.state.wait,null);
+});

@@ -57,7 +57,7 @@ function resolve(input,items){
   const objects=catalog.filter(x=>explicitIngredient?x.kind==='ingredient':(x.kind==='item'||x.kind==='product'));
   const strict=objects.filter(x=>normalize(x.name)===wanted||key(x.name)===key(wanted)||(x.spokenName&&(normalize(x.spokenName)===wanted||key(x.spokenName)===key(wanted))));
   if(strict.length===1)return parsed.type==='search'?{type:'found',items:strict}:proposal(strict[0],parsed.command);
-  if(strict.length>1)return {type:'ambiguous',message:'Найдено несколько позиций. Уточните по коду:',items:strict.slice(0,8)};
+  if(strict.length>1)return {type:'ambiguous',message:'Найдено несколько позиций. Уточните полное название:',items:strict.slice(0,8)};
   const words=key(wanted).split(' ').filter(Boolean);
   const candidates=objects.map(x=>{
     const parts=[...key(x.name).split(' '),...(x.spokenName?key(x.spokenName).split(' '):[])];
@@ -65,10 +65,10 @@ function resolve(input,items){
     const score=overlap*100-Math.abs(parts.length-words.length)*12;
     return {item:x,score};
   }).filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,8).map(x=>x.item);
-  return {type:'ambiguous',message:'Точного совпадения нет. Выберите позицию по коду или уточните название:',items:candidates};
+  return {type:'ambiguous',message:'Точного совпадения нет. Уточните название блюда:',items:candidates};
 }
 function proposal(item,command){
   return {type:'proposal',item:{kind:item.kind,id:String(item.id),code:item.code,name:item.name},command,
-    text:'Подтвердите изменение: «'+item.name+'» ('+item.code+') → '+command+'.'};
+    text:'Подтвердите изменение: «'+item.name+'» → '+command+'.'};
 }
 module.exports={normalize,key,parseText,resolve};

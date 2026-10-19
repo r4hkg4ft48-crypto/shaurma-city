@@ -20,6 +20,7 @@ const HELP='🥙 КООРДИНАТОР МЕНЮ · ШАУРМЕГ\n\n' +
   '5. Проверьте название заведения и блюдо, нажмите «Подтвердить».\n\n' +
   '/menu шаурма — поиск по меню\n' +
   '/status — подключённое заведение\n' +
+  '«Переименуй идентификатор сырной шаурмы в сырная» — своё имя для голоса\n' +
   'Можно менять состав, название, описание, категории, доступность, цены и добавки.\n' +
   'Этот бот работает только с заведениями «Шаурмега».';
 function equal(a,b){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}
@@ -69,7 +70,7 @@ async function projectFor(uid,requested){
   if(!(await coordinator.binding(uid)))throw fail('Заведение «Шаурмега» не подключено. Используйте /connect КЛЮЧ.',403);
   return 'shaurmeg';
 }
-const compactList=items=>(items||[]).slice(0,8).map(x=>'• '+x.name+' — '+x.code).join('\n');
+const compactList=items=>(items||[]).slice(0,8).map(x=>'• '+(x.identifier||x.name)+(x.spokenName?' ('+x.name+')':'')).join('\n');
 async function preview(uid,project,raw){
   const scope=await catalogFor(uid);
   const result=shaLanguage.resolve(raw,scope.items);
@@ -263,12 +264,12 @@ async function handle(message){
     if(!bound)return reply(chatId,'Сначала подключите своё заведение «Шаурмега»: /connect КЛЮЧ');
     const items=await coordinator.ensureCodes(bound.establishment_id);
     const search=language.normalize(showMenu[1]||'');
-    const dishes=items.filter(x=>x.kind==='item'&&(!search||language.normalize(x.name).includes(search)||language.normalize(x.code).includes(search)));
+    const dishes=items.filter(x=>x.kind==='item'&&(!search||language.normalize(x.name).includes(search)||language.normalize(x.identifier||'').includes(search)||language.normalize(x.code).includes(search)));
     const shown=dishes.slice(0,30);
     return reply(chatId,'🥙 '+bound.name+' · позиции меню ('+dishes.length+')\n'+
-      (shown.length?shown.map(x=>'• '+x.name+' — '+x.code).join('\n'):'Позиции не найдены.')+
+      (shown.length?shown.map(x=>'• '+(x.identifier||x.name)+(x.spokenName?' · '+x.name:'')).join('\n'):'Позиции не найдены.')+
       (dishes.length>shown.length?'\n…Ещё '+(dishes.length-shown.length)+'. Уточните поиск: /menu шаурма':'')+
-      '\n\nДля изменения произнесите или напишите: «Убери сырную шаурму».');
+      '\n\nПереименовать обращение: «Переименуй идентификатор сырной шаурмы в сырная». Внутренний код остаётся неизменным.');
   }
   if(/^\/(?:status|статус)(?:@\S+)?$/i.test(text)){
     const linked=await coordinator.binding(uid);

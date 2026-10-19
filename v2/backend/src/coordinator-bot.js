@@ -10,11 +10,17 @@ const config=require('./config');
 
 const token=()=>String(process.env.COORDINATOR_BOT_TOKEN||'').trim();
 const webhookSecret=()=>String(process.env.COORDINATOR_WEBHOOK_SECRET||'').trim();
-const coffeeBase=()=>String(process.env.COORDINATOR_COFFEE_URL||'https://kofeyok.vercel.app').replace(/\/+$/,'');
-const coffeeSecret=()=>String(process.env.COORDINATOR_COFFEE_SECRET||'').trim();
-const norm=x=>String(x||'').trim().toLowerCase().replace(/ё/g,'е');
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
-const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n/menu — коды и поиск блюд Шаурмега\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n8. Создать: создать позицию Название | 350 | КОД_КАТЕГОРИИ\n9. Создать ингредиент (Кофеёк): создать ингредиент Сироп | ml | 150\n10. Добавить вариант: КОД_ГРУППЫ добавить вариант Название | 25\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
+const HELP='🥙 КООРДИНАТОР МЕНЮ · ШАУРМЕГ\n\n' +
+  '1. Получите одноразовый ключ в админке своего заведения → Идентификаторы меню.\n' +
+  '2. Отправьте /connect SHA-MNU-... (ключ действует один раз).\n' +
+  '3. Проверьте подключение через /status, найдите позиции через /menu.\n' +
+  '4. Напишите или произнесите: «Убери сырную шаурму», «Измени цену на сырную шаурму 350».\n' +
+  '5. Проверьте название заведения и блюдо, нажмите «Подтвердить».\n\n' +
+  '/menu шаурма — поиск по меню\n' +
+  '/status — подключённое заведение\n' +
+  'Можно менять состав, название, описание, категории, доступность, цены и добавки.\n' +
+  'Этот бот работает только с заведениями «Шаурмега».';
 function equal(a,b){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}
 async function telegramRaw(method,body){
   if(!token())throw fail('COORDINATOR_BOT_TOKEN missing',503);
@@ -37,37 +43,9 @@ const homeKeyboard={inline_keyboard:[[
 async function reply(chatId,text,replyMarkup=null){
   return telegram('sendMessage',{chat_id:chatId,text:String(text).slice(0,3800),disable_web_page_preview:true,...(replyMarkup?{reply_markup:replyMarkup}:{})});
 }
-async function coffee(action,telegramId,payload={}){
-  const secret=coffeeSecret();
-  if(secret.length<32)throw fail('Соединение с «Кофейком» пока не настроено.',503);
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
-  try{
-    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.'+encodeURIComponent(action),{
-      method:'POST',headers:{'content-type':'application/json','x-coordinator-secret':secret},
-      body:JSON.stringify({telegramId,...payload}),signal:controller.signal
-    });
-    const data=await r.json();
-    if(!r.ok||data.ok===false)throw fail(String(data.message||data.error||'Ошибка кофейни'),r.status);
-    return data;
-  }finally{clearTimeout(timeout);}
-}
-async function coffeeResolve(telegramId){
-  const secret=coffeeSecret();
-  if(secret.length<32)return {ok:true,linked:false,project:'kofeyok'};
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8000);
-  try{
-    const r=await fetch(coffeeBase()+'/api/admin?action=coordinator.resolve&telegramId='+encodeURIComponent(telegramId),{headers:{'x-coordinator-secret':secret},signal:controller.signal});
-    const data=await r.json();
-    if(!r.ok||!data.ok)throw fail('Связь с Кофейком недоступна.',503);
-    return data;
-  }finally{clearTimeout(timeout);}
-}
 async function locations(uid){
-  const [sha,cof]=await Promise.all([
-    coordinator.binding(uid).then(x=>({project:'shaurmeg',linked:!!x,venue:x?.name||''})),
-    coffeeResolve(uid).catch(e=>({project:'kofeyok',linked:false,unavailable:e.message}))
-  ]);
-  return [sha,cof];
+  const bound=await coordinator.binding(uid);
+  return [{project:'shaurmeg',linked:!!bound,venue:bound?.name||'',venueId:bound?.establishment_id||null}];
 }
 
 const appUrl=()=>{
@@ -79,41 +57,21 @@ const menuKeyboard=()=>{
   if(appUrl())rows.unshift([{text:'🎙 Открыть Menu Control',web_app:{url:appUrl()}}]);
   return {inline_keyboard:rows};
 };
-async function catalogFor(uid,project){
-  if(project==='shaurmeg'){
-    const linked=await coordinator.binding(uid);
-    if(!linked)throw fail('Шаурмег: нет привязки к заведению',403);
-    return {ok:true,project,venue:linked.name,venueId:linked.establishment_id,
-      items:await coordinator.ensureCodes(linked.establishment_id)};
-  }
-  if(project==='kofeyok')return coffee('catalog',uid);
-  throw fail('Укажите проект',400);
+async function catalogFor(uid){
+  const linked=await coordinator.binding(uid);
+  if(!linked)throw fail('Сначала подключите своё заведение «Шаурмега»: /connect КЛЮЧ',403);
+  return {ok:true,project:'shaurmeg',venue:linked.name,venueId:linked.establishment_id,
+    items:await coordinator.ensureCodes(linked.establishment_id)};
 }
 async function projectFor(uid,requested){
-  // An explicitly selected project is verified directly against its own store.
-  // Coffee downtime must never authorize Coffee writes or block a scoped Shaurmeg command.
-  if(requested==='shaurmeg'){
-    if(!(await coordinator.binding(uid)))throw fail('Шаурмег: нет привязки к заведению',403);
-    return requested;
-  }
-  if(requested==='kofeyok'){
-    const b=await coffeeResolve(uid);
-    if(!b.linked)throw fail('Кофеёк: нет привязки к заведению',403);
-    return requested;
-  }
-  // If Shaurmeg is bound, it is the default even when the Coffee bridge is down.
-  // Explicit Coffee operations still require Coffee-specific binding verification.
-  if(await coordinator.binding(uid))return 'shaurmeg';
-  const list=await locations(uid);
-  if(list.some(x=>x.unavailable))throw fail('Не удалось проверить все подключения, выберите проект',503);
-  const connected=list.filter(x=>x.linked);
-  if(connected.length!==1)throw fail('Выберите конкретный проект: Шаурмег или Кофеёк',409);
-  return connected[0].project;
+  if(requested&&requested!=='shaurmeg')throw fail('Координатор управляет только меню «Шаурмега».',400);
+  if(!(await coordinator.binding(uid)))throw fail('Заведение «Шаурмега» не подключено. Используйте /connect КЛЮЧ.',403);
+  return 'shaurmeg';
 }
 const compactList=items=>(items||[]).slice(0,8).map(x=>'• '+x.name+' — '+x.code).join('\n');
 async function preview(uid,project,raw){
-  const scope=await catalogFor(uid,project);
-  const result=(project==='shaurmeg'?shaLanguage:language).resolve(raw,scope.items);
+  const scope=await catalogFor(uid);
+  const result=shaLanguage.resolve(raw,scope.items);
   if(result.type==='unsupported'||result.type==='ambiguous'||result.type==='unknown'||result.type==='found'){
     return {...result,text:result.message||(result.type==='found'?'Найдено:\n'+compactList(result.items):'Не удалось определить позицию.')+(result.type==='ambiguous'&&result.items.length?'\n'+compactList(result.items):'')};
   }
@@ -128,8 +86,8 @@ async function preview(uid,project,raw){
   return {type:'proposal',id,project,venue:scope.venue,text:'🔐 '+scope.venue+'\n'+result.text};
 }
 async function previewWithLegacy(uid,project,raw){
-  const scope=await catalogFor(uid,project);
-  let result=(project==='shaurmeg'?shaLanguage:language).resolve(raw,scope.items);
+  const scope=await catalogFor(uid);
+  let result=shaLanguage.resolve(raw,scope.items);
   if(result.type!=='unknown')return preview(uid,project,raw);
   // Legacy code-based commands remain supported, but now require confirmation too.
   const match=String(raw||'').trim().match(/^([^\s]+)\s+([\s\S]+)$/);
@@ -152,14 +110,16 @@ async function confirm(uid,id){
   );
   const row=r.rows[0];
   if(!row)throw fail('Команда уже обработана или время подтверждения истекло',409);
-  const project=await projectFor(uid,row.project);
-  const scope=await catalogFor(uid,project);
+  // Pre-existing pending records for other projects must never run in this bot.
+  if(row.project!=='shaurmeg')throw fail('Подтверждение не относится к заведению «Шаурмега».',403);
+  await projectFor(uid,row.project);
+  const scope=await catalogFor(uid);
   if(String(scope.venueId)!==String(row.venue_id))throw fail('Привязка заведения изменилась. Команда отменена.',403);
   if(row.code){
     const match=scope.items.find(x=>x.code===row.code&&x.kind===row.kind&&String(x.id)===row.entity_id);
     if(!match)throw fail('Позиция или код изменились. Повторите команду.',409);
   }
-  return project==='shaurmeg'?coordinator.execute(uid,row.command):coffee('execute',uid,{text:row.command});
+  return coordinator.execute(uid,row.command);
 }
 function verifyMiniApp(initData){
   if(!token())throw fail('Бот не настроен',503);
@@ -215,11 +175,17 @@ async function handle(message){
   }
   if(!text)return reply(chatId,'Отправьте текст или голосовую команду. Наберите /помощь.');
   if(/^\/(?:start|help|помощь)(?:@\S+)?$/i.test(text))return reply(chatId,HELP+'\n\n🎙 Можно произносить названия блюд обычными словами.',menuKeyboard());
-  const connect=text.match(/^\/(?:connect|подключить)(?:@\S+)?\s+(\S+)$/i)||text.match(/^((?:SHA|KOF)-MNU-[A-F0-9]{16})$/i);
-  if(connect){
-    const code=connect[1].toUpperCase(),response=code.startsWith('SHA-')?await coordinator.claim(uid,code):await coffee('claim',uid,{key:code});
-    return reply(chatId,'🔐 '+(response.venue||'Заведение')+' подключено в '+(response.project==='shaurmeg'?'Шаурмеге':'Кофейке')+'. Для команд используйте короткие коды из настройки «Идентификаторы блюд».');
+  const connectCommand=text.match(/^\/(?:connect|подключить)(?:@\S+)?(?:\s+(.+))?$/i);
+  const standaloneKey=/^SHA-MNU-[A-F0-9]{16}$/i.test(text);
+  if(connectCommand||standaloneKey){
+    const key=String(standaloneKey?text:connectCommand[1]||'').trim().toUpperCase();
+    if(!/^SHA-MNU-[A-F0-9]{16}$/.test(key))
+      return reply(chatId,'Укажите одноразовый ключ своего заведения «Шаурмега». Формат: /connect SHA-MNU-...\nСоздаётся в админке → Идентификаторы меню.');
+    const response=await coordinator.claim(uid,key);
+    return reply(chatId,'✅ '+response.venue+' · подключено к «Шаурмегу».\n/menu — посмотреть позиции и коды.\nОтправьте сообщение или голосовую команду. Для изменений потребуется подтверждение.',menuKeyboard());
   }
+  if(/^(?:KOF-MNU-|\/connect\s+KOF-MNU-)/i.test(text))
+    return reply(chatId,'Этот ключ не относится к «Шаурмегу». Получите ключ SHA-MNU-... в админке своего заведения.');
   const showMenu=text.match(/^\/(?:menu|меню|каталог)(?:@\S+)?(?:\s+(.+))?$/i);
   if(showMenu){
     const bound=await coordinator.binding(uid);
@@ -234,23 +200,14 @@ async function handle(message){
       '\n\nДля изменения произнесите или напишите: «Убери сырную шаурму».');
   }
   if(/^\/(?:status|статус)(?:@\S+)?$/i.test(text)){
-    const rows=await locations(uid);
-    return reply(chatId,'🔒 Подключения:\n'+rows.map(x=>(x.project==='shaurmeg'?'Шаурмег':'Кофеёк')+': '+(x.unavailable?'⚠️ сервис временно недоступен':x.linked?'✅ '+x.venue:'не подключён')).join('\n'));
+    const linked=await coordinator.binding(uid);
+    return reply(chatId,linked?'✅ «Шаурмег» · '+linked.name+'\nУправление меню доступно. /menu — список позиций.':'🥙 Заведение не подключено.\nОткройте админку заведения → Идентификаторы меню → Создать ключ, затем /connect SHA-MNU-...');
   }
-  let project=null,command=text;
-  const prefix=command.match(/^(шаурмег|shaurmeg|шаурма|кофеек|кофеёк|kofeyok)\s+(.+)$/is);
-  if(prefix){project=/^(кофе|kofeyok)/i.test(norm(prefix[1]))?'kofeyok':'shaurmeg';command=prefix[2].trim();}
-  if(!project){
-    // Telegram commands for a Shaurmeg employee must not depend on Coffee.
-    if(await coordinator.binding(uid))project='shaurmeg';
-    else{
-      const current=await locations(uid);
-      if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Не удалось проверить подключение. Для Шаурмега используйте /connect КЛЮЧ.');
-      const active=current.filter(x=>x.linked);
-      if(active.length!==1)return reply(chatId,active.length?'Укажите проект перед командой.':'Нет подключения. /connect СЕКРЕТНЫЙ_КЛЮЧ\n'+HELP);
-      project=active[0].project;
-    }
-  }
+  let command=text;
+  const prefix=command.match(/^(?:шаурмег|shaurmeg|шаурма)\s+(.+)$/is);
+  if(prefix)command=prefix[1].trim();
+  if(!(await coordinator.binding(uid)))return reply(chatId,'🥙 Сначала подключите своё заведение «Шаурмега»: /connect SHA-MNU-...');
+  const project='shaurmeg';
   const result=await previewWithLegacy(uid,project,command);
   if(result.type==='proposal')return reply(chatId,result.text,{inline_keyboard:[[
     {text:'✅ Подтвердить',callback_data:'cm:yes:'+result.id},
@@ -279,8 +236,8 @@ async function handleCallback(query){
     const result=await confirm(uid,confirmMatch[2]);
     return reply(chatId,result.text||'✅ Изменение сохранено.');
   }
-  const rows=await locations(uid);
-  return reply(chatId,'🔒 Подключения:\n'+rows.map(x=>(x.project==='shaurmeg'?'Шаурмег':'Кофеёк')+': '+(x.unavailable?'⚠️ сервис временно недоступен':x.linked?'✅ '+x.venue:'не подключён')).join('\n'),homeKeyboard);
+  const linked=await coordinator.binding(uid);
+  return reply(chatId,linked?'✅ «Шаурмег» · '+linked.name+'\nМеню доступно через /menu.':'🥙 Заведение не подключено. Используйте /connect SHA-MNU-...',homeKeyboard);
 }
 async function processUpdate(update){
   const id=Number(update?.update_id);
@@ -307,9 +264,15 @@ function install(app){
     try{
       const uid=verifyMiniApp(req.body?.initData),action=String(req.body?.action||'');
       if(action==='status')return res.json({ok:true,locations:await locations(uid)});
+      if(action==='connect'){
+        const key=String(req.body?.key||'').trim().toUpperCase();
+        if(!/^SHA-MNU-[A-F0-9]{16}$/.test(key))throw fail('Нужен одноразовый ключ «Шаурмега» в формате SHA-MNU-...',400);
+        const bound=await coordinator.claim(uid,key);
+        return res.json({ok:true,project:'shaurmeg',venue:bound.venue});
+      }
       const project=await projectFor(uid,String(req.body?.project||''));
       if(action==='catalog'){
-        const scope=await catalogFor(uid,project);
+        const scope=await catalogFor(uid);
         return res.json({ok:true,project,venue:scope.venue,venueId:scope.venueId,items:scope.items.slice(0,5000)});
       }
       if(action==='preview'){
@@ -341,12 +304,12 @@ function install(app){
   app.get('/api/v2/telegram/coordinator-health',(req,res)=>res.json({
     enabled:token().length>=30,webhookSecured:webhookSecret().length>=20,
     shaMenuAvailable:true,voiceConfigured:!!(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY),
-    miniAppConfigured:!!appUrl(),coffeeLinked:coffeeSecret().length>=32
+    miniAppConfigured:!!appUrl(),project:'shaurmeg'
   }));
 }
 async function sync(){
   await db.query('CREATE TABLE IF NOT EXISTS shaurma_coordinator_updates(update_id bigint PRIMARY KEY,received_at timestamptz NOT NULL DEFAULT now())');
-  await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_pending(id uuid PRIMARY KEY,telegram_id text NOT NULL,project text NOT NULL CHECK(project IN ('shaurmeg','kofeyok')),venue_id text NOT NULL,kind text,entity_id text,code text,command text NOT NULL,expires_at timestamptz NOT NULL,consumed_at timestamptz,created_at timestamptz NOT NULL DEFAULT now())");
+  await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_pending(id uuid PRIMARY KEY,telegram_id text NOT NULL,project text NOT NULL CHECK(project='shaurmeg'),venue_id text NOT NULL,kind text,entity_id text,code text,command text NOT NULL,expires_at timestamptz NOT NULL,consumed_at timestamptz,created_at timestamptz NOT NULL DEFAULT now())");
   await db.query('CREATE INDEX IF NOT EXISTS shaurma_coordinator_pending_actor ON shaurma_coordinator_pending(telegram_id,expires_at DESC)');
   if(!token()){console.warn('Coordinator bot disabled: COORDINATOR_BOT_TOKEN not configured');return {enabled:false};}
   if(token().length<30||webhookSecret().length<20)throw fail('Set COORDINATOR_BOT_TOKEN and a random COORDINATOR_WEBHOOK_SECRET (20+ chars)',503);
@@ -360,7 +323,7 @@ async function sync(){
   if(appUrl())await telegram('setChatMenuButton',{menu_button:{type:'web_app',text:'🎙 Menu Control',web_app:{url:appUrl()}}});
   let botUsername='unknown';
   try{botUsername=String((await telegram('getMe',{})).username||'unknown')}catch(e){console.warn('Coordinator getMe:',e.message)}
-  console.info('Coordinator bot synced @'+botUsername+': Shaurmeg primary, menu app '+(appUrl()?'configured':'unavailable')+', voice '+(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY?'configured':'unavailable'));
+  console.info('Coordinator bot synced @'+botUsername+': Shaurmeg only, menu app '+(appUrl()?'configured':'unavailable')+', voice '+(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY?'configured':'unavailable'));
   return {enabled:true};
 }
 module.exports={install,sync,handle};

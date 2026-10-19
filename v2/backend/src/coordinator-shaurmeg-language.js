@@ -8,15 +8,16 @@ const same=(a,b)=>normalize(a)===normalize(b)||base.key(a)===base.key(b);
 const clean=x=>String(x||'').trim();
 const unsafe=x=>!x||/[\u0000-\u001f]/.test(x);
 const message='Точное совпадение не найдено. Уточните название или используйте код позиции.';
+const stdAlias=x=>/^[\p{L}\p{N} _-]+$/u.test(x);
 function choose(catalog,name,kinds){
   const prefix=/^(?:(?:раздел|категорию|категория|блюдо|позицию|позиция)\s+)/i;
   const target=clean(name).replace(prefix,'');
   const scoped=catalog.filter(x=>kinds.includes(x.kind));
-  const matches=scoped.filter(x=>same(x.name,target));
+  const matches=scoped.filter(x=>same(x.name,target)||(x.spokenName&&same(x.spokenName,target))||same(x.code,target));
   if(matches.length===1)return {type:'match',item:matches[0]};
   if(matches.length>1)return {type:'ambiguous',message:'Несколько объектов с таким названием. Уточните по коду:',items:matches.slice(0,8)};
   const words=base.key(target).split(' ').filter(Boolean);
-  const candidates=scoped.filter(x=>words.some(w=>base.key(x.name).split(' ').includes(w))).slice(0,8);
+  const candidates=scoped.filter(x=>words.some(w=>[...base.key(x.name).split(' '),...(x.spokenName?base.key(x.spokenName).split(' '):[])].includes(w))).slice(0,8);
   return {type:'ambiguous',message,items:candidates};
 }
 function proposal(item,command){
@@ -33,7 +34,7 @@ function ingredientOf(catalog,dish,ingredient){
     try{const identity=JSON.parse(x.id);return Array.isArray(identity)&&String(identity[0])===String(dish.id)&&identity[1]==='ingredient'}
     catch{return false}
   });
-  const found=owned.filter(x=>same(String(x.name).split(' · ').pop(),ingredient));
+  const found=owned.filter(x=>same(String(x.name).split(' · ').pop(),ingredient)||(x.spokenName&&same(x.spokenName,ingredient)));
   if(found.length===1)return {type:'match',item:found[0]};
   return {type:'ambiguous',message:'Ингредиент не найден однозначно в составе выбранного блюда. Уточните:',items:owned.slice(0,8)};
 }
@@ -42,6 +43,18 @@ function advanced(input,items){
   if(!raw||raw.length>1200||/[\u0000-\u001f]/.test(raw))return null;
   const catalog=(Array.isArray(items)?items:[]).filter(x=>x?.code&&x?.name);
   let m;
+  // The human-friendly identifier is a separate venue-local alias. It never
+  // changes the immutable menu ID or guest-facing dish name.
+  m=raw.match(/^(?:переименуй|измени|задай|установи|назови)\s+(?:идентификатор|псевдоним|обращение)(?:\s+(?:для|у))?\s+(.+?)\s+(?:в|на|как)\s+(.+)$/i);
+  if(m){
+    const newName=clean(m[2]).replace(/^[«"']|[»"']$/g,'');
+    if(newName.length<2||newName.length>80||!stdAlias(newName))
+      return {type:'unsupported',message:'Укажите короткое имя от 2 до 80 символов: буквы, цифры, пробел, дефис или _.'};
+    const target=clean(m[1]);
+    const ingredient=/^ингредиента?\s+/i.test(target);
+    const kind=ingredient?['ingredient']:['item','ingredient','category','group','option'];
+    return forTarget(catalog,target.replace(/^ингредиента?\s+/i,''),kind,'идентификатор '+newName);
+  }
   // Explicit category requests cannot accidentally match an identically named dish.
   m=s.match(/^(?:убери|отключи|останови|выключи|поставь в стоп)\s+(?:раздел|категорию|категория)\s+(.+)$/);
   if(m)return forTarget(catalog,m[1],['category'],'стоп лист');

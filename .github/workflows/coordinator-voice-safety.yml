@@ -15,6 +15,7 @@ on:
       - 'v2/backend/test/coordinator-shaurmeg-language.test.js'
       - 'v2/backend/test/coordinator-sha-only.test.js'
       - 'v2/frontend/coordinator-console.html'
+      - 'v2/frontend/admin-coordinator.html'
       - '.github/workflows/coordinator-voice-safety.yml'
 jobs:
   validate:

@@ -263,13 +263,16 @@ async function handle(message){
     const bound=await coordinator.binding(uid);
     if(!bound)return reply(chatId,'Сначала подключите своё заведение «Шаурмега»: /connect КЛЮЧ');
     const items=await coordinator.ensureCodes(bound.establishment_id);
-    const search=language.normalize(showMenu[1]||'');
-    const dishes=items.filter(x=>x.kind==='item'&&(!search||language.normalize(x.name).includes(search)||language.normalize(x.identifier||'').includes(search)||language.normalize(x.code).includes(search)));
-    const shown=dishes.slice(0,30);
-    return reply(chatId,'🥙 '+bound.name+' · позиции меню ('+dishes.length+')\n'+
-      (shown.length?shown.map(x=>'• '+(x.identifier||x.name)+(x.spokenName?' · '+x.name:'')).join('\n'):'Позиции не найдены.')+
-      (dishes.length>shown.length?'\n…Ещё '+(dishes.length-shown.length)+'. Уточните поиск: /menu шаурма':'')+
-      '\n\nПереименовать обращение: «Переименуй идентификатор сырной шаурмы в сырная». Внутренний код остаётся неизменным.');
+    const phrase=language.normalize(showMenu[1]||'');
+    const ingredients=phrase==='ингредиенты'||phrase.startsWith('ингредиенты ');
+    const search=ingredients?phrase.replace(/^ингредиенты(?:\s+|$)/,''):phrase;
+    const matching=items.filter(x=>x.kind===(ingredients?'ingredient':'item')&&
+      (!search||language.normalize(x.name).includes(search)||language.normalize(x.identifier||'').includes(search)||language.normalize(x.code).includes(search)));
+    const shown=matching.slice(0,30);
+    return reply(chatId,'🥙 '+bound.name+' · '+(ingredients?'ингредиенты':'блюда')+' ('+matching.length+')\n'+
+      (shown.length?shown.map(x=>'• '+(x.identifier||x.name)+(x.spokenName?' · '+x.name:'')).join('\n'):'Совпадений нет.')+
+      (matching.length>shown.length?'\n…Ещё '+(matching.length-shown.length)+'. Уточните поиск: /menu '+(ingredients?'ингредиенты сыр':'шаурма'):'')+
+      '\n\nПонятное имя можно изменить: «Переименуй идентификатор сырной шаурмы в сырная».\nИнгредиенты: /menu ингредиенты.');
   }
   if(/^\/(?:status|статус)(?:@\S+)?$/i.test(text)){
     const linked=await coordinator.binding(uid);

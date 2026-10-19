@@ -7,6 +7,7 @@ on:
       - 'v2/backend/src/coordinator-*'
       - 'v2/backend/src/menu-coordinator.js'
       - 'v2/backend/test/coordinator-language.test.js'
+      - 'v2/backend/test/coordinator-shaurmeg-language.test.js'
       - 'v2/frontend/coordinator-console.html'
       - '.github/workflows/coordinator-voice-safety.yml'
 jobs:
@@ -20,10 +21,11 @@ jobs:
       - name: JavaScript syntax
         run: |
           node --check v2/backend/src/coordinator-language.js
+          node --check v2/backend/src/coordinator-shaurmeg-language.js
           node --check v2/backend/src/coordinator-bot.js
           node --check v2/backend/src/menu-coordinator.js
       - name: Russian menu resolution and isolation
-        run: node --test v2/backend/test/coordinator-language.test.js v2/backend/test/coordinator-webapp-syntax.test.js
+        run: node --test v2/backend/test/coordinator-language.test.js v2/backend/test/coordinator-shaurmeg-language.test.js v2/backend/test/coordinator-webapp-syntax.test.js
       - name: Menu coordinator contracts
         run: |
           cd v2/backend

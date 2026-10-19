@@ -38,7 +38,7 @@ a{color:var(--gold)}.count{color:var(--gold);font-size:12px;font-weight:700}#sco
 </style></head><body><main>
 <header><span class="brand">MENU CONTROL<span style="color:#f7ede0"> / AI</span></span><span class="chip" id="state">Подключение…</span></header>
 <h1>Управляй<br>меню Шаурмега.</h1>
-<p>Голосовое и ручное управление меню вашего заведения. Каждое действие проверяется по конкретной позиции и подтверждается перед сохранением.</p>
+<p>Голосовое управление меню по обычным названиям. Идентификатор блюда можно назвать по-своему; внутренний ID и название блюда в гостевом меню останутся прежними. Все изменения требуют подтверждения.</p>
 <section class="panel"><h2>🥙 Шаурмег · ваше заведение</h2><div id="project" style="font-size:18px;font-weight:800;color:var(--gold)">Проверка подключения…</div><div id="scope" class="muted">Работаем только с заведениями «Шаурмега».</div>
 <div id="connectPanel" class="hidden" style="margin-top:14px">
   <label for="connectKey" class="muted">Одноразовый ключ из админки вашего заведения:</label>
@@ -65,8 +65,8 @@ a{color:var(--gold)}.count{color:var(--gold);font-size:12px;font-weight:700}#sco
 </section>
 <section class="panel"><div class="flex" style="justify-content:space-between"><h2>Каталог заведения</h2><span id="count" class="count">—</span></div>
 <input id="search" class="search" placeholder="Поиск по названию или коду…" aria-label="Поиск позиции">
-<div class="actions"><select id="operation" aria-label="Действие"><option value="стоп лист">⏸ Снять с продажи</option><option value="в наличии">✓ Вернуть в продажу</option><option value="цена">₽ Изменить цену</option></select>
-<input id="price" type="number" min="0" max="1000000" step="1" placeholder="Цена ₽" aria-label="Новая цена" class="hidden">
+<div class="actions"><select id="operation" aria-label="Действие"><option value="стоп лист">⏸ Снять с продажи</option><option value="в наличии">✓ Вернуть в продажу</option><option value="цена">₽ Изменить цену</option><option value="идентификатор">✎ Переименовать обращение</option></select>
+<input id="price" type="number" min="0" max="1000000" step="1" placeholder="Цена ₽" aria-label="Новая цена" class="hidden"><input id="aliasName" type="text" maxlength="80" placeholder="Новое короткое название…" aria-label="Новое название идентификатора" class="hidden">
 </div><div class="list" id="items"></div>
 </section>
 <footer class="muted" style="padding:12px 8px">🔒 Права определяются на сервере по вашему Telegram ID. Изменения в другом заведении невозможны без отдельной привязки. Голос отправляется на распознавание только после нажатия.</footer>
@@ -106,9 +106,9 @@ async function api(action,extra={}){
 function refresh(){
   const search=$('search').value.trim().toLocaleLowerCase('ru').replace(/ё/g,'е');
   const rows=catalog.filter(x=>(x.kind==='item'||x.kind==='product'||x.kind==='ingredient')&&
-    (String(x.name).toLocaleLowerCase('ru').replace(/ё/g,'е').includes(search)||String(x.code).toLowerCase().includes(search)));
+    (String(x.name).toLocaleLowerCase('ru').replace(/ё/g,'е').includes(search)||String(x.identifier||'').toLocaleLowerCase('ru').replace(/ё/g,'е').includes(search)||String(x.code).toLowerCase().includes(search)));
   $('count').textContent=rows.length+' позиций';
-  $('items').innerHTML=rows.slice(0,350).map(x=>'<div class="item"><div><strong>'+esc(x.name)+'</strong><small>'+esc(x.code)+' · '+(x.kind==='ingredient'?'Ингредиент':'Позиция')+'</small></div><button data-code="'+esc(x.code)+'">Выбрать →</button></div>').join('')||
+  $('items').innerHTML=rows.slice(0,350).map(x=>'<div class="item"><div><strong>'+esc(x.identifier||x.name)+'</strong><small>'+(x.spokenName?'В меню: '+esc(x.name)+' · ':'')+(x.kind==='ingredient'?'Ингредиент':'Блюдо')+'</small></div><button data-code="'+esc(x.code)+'">Выбрать →</button></div>').join('')||
     '<p style="padding:18px 0">Ничего не найдено. Уточните название.</p>';
 }
 async function load(){
@@ -148,7 +148,7 @@ $('connectNow').addEventListener('click',async()=>{
   finally{$('connectNow').disabled=false}
 });
 $('search').addEventListener('input',refresh);
-$('operation').addEventListener('change',e=>$('price').classList.toggle('hidden',e.target.value!=='цена'));
+$('operation').addEventListener('change',e=>{$('price').classList.toggle('hidden',e.target.value!=='цена');$('aliasName').classList.toggle('hidden',e.target.value!=='идентификатор')});
 $('clear').addEventListener('click',()=>{$('requestText').value='';status('')});
 $('items').addEventListener('click',e=>{
   const b=e.target.closest('button[data-code]');if(!b)return;
@@ -157,6 +157,10 @@ $('items').addEventListener('click',e=>{
     const n=Number($('price').value);
     if(!Number.isSafeInteger(n)||n<0||n>1000000){status('Введите новую цену целым числом от 0 до 1000000.',true);return}
     $('requestText').value=b.dataset.code+' цена '+n;
+  }else if(action==='идентификатор'){
+    const n=$('aliasName').value.trim().replace(/\s+/g,' ');
+    if(n.length<2||n.length>80||!/^[-_\p{L}\p{N} ]+$/u.test(n)){status('Укажите понятное имя от 2 до 80 символов: буквы, цифры, пробелы, дефис.',true);return}
+    $('requestText').value=b.dataset.code+' идентификатор '+n;
   }else $('requestText').value=b.dataset.code+' '+action;
   $('requestText').focus();status('Проверьте команду и нажмите «Проверить команду».');
 });

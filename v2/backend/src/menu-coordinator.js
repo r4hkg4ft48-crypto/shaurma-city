@@ -10,12 +10,19 @@ const error=(message,status=400)=>Object.assign(new Error(message),{status});
 const labels={item:'Блюдо',category:'Категория',group:'Группа',option:'Вариант',ingredient:'Ингредиент'};
 const prefixes={item:'P',category:'C',group:'G',option:'O',ingredient:'I'};
 const valid=x=>/^[a-zа-яё0-9_-]{1,32}$/i.test(String(x||'').trim());
+// Friendly identifiers are venue-scoped names, not mutable database entity IDs.
+const friendly=x=>String(x||'').normalize('NFKC').trim().replace(/\s+/g,' ');
+const friendlyNorm=x=>norm(friendly(x));
+const validFriendly=x=>{const v=friendly(x);return v.length>=2&&v.length<=80&&/^[\p{L}\p{N} _-]+$/u.test(v)&&!/^\s+$/.test(v)};
 const keyHash=x=>crypto.createHash('sha256').update('coordinator:shaurmeg:'+x).digest('hex');
 const codeId=(...parts)=>JSON.stringify(parts.map(x=>String(x)));
 let ready;
 async function ensureSchema(){
   if(!ready)ready=(async()=>{
     await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_codes (establishment_id text NOT NULL,entity_type text NOT NULL CHECK(entity_type IN ('item','category','group','option','ingredient')),entity_id text NOT NULL,code text NOT NULL,normalized_code text NOT NULL,updated_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(establishment_id,entity_type,entity_id),UNIQUE(establishment_id,normalized_code))");
+    await db.query("ALTER TABLE shaurma_coordinator_codes ADD COLUMN IF NOT EXISTS spoken_name text");
+    await db.query("ALTER TABLE shaurma_coordinator_codes ADD COLUMN IF NOT EXISTS normalized_spoken_name text");
+    await db.query("CREATE UNIQUE INDEX IF NOT EXISTS shaurma_coordinator_spoken_name_unique ON shaurma_coordinator_codes(establishment_id,normalized_spoken_name) WHERE normalized_spoken_name IS NOT NULL");
     await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_keys (id bigserial PRIMARY KEY,establishment_id text NOT NULL,code_hash text NOT NULL UNIQUE,expires_at timestamptz NOT NULL,redeemed_by text,redeemed_at timestamptz,revoked_at timestamptz,created_at timestamptz NOT NULL DEFAULT now())");
     await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_bindings (telegram_id text PRIMARY KEY,establishment_id text NOT NULL,enabled boolean NOT NULL DEFAULT true,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now())");
     await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_audit (id bigserial PRIMARY KEY,establishment_id text NOT NULL,telegram_id text NOT NULL,entity_type text,entity_id text,command text NOT NULL,old_value jsonb,new_value jsonb,created_at timestamptz NOT NULL DEFAULT now())");
@@ -77,9 +84,9 @@ async function ensureCodes(est){
       await c.query('INSERT INTO shaurma_coordinator_codes(establishment_id,entity_type,entity_id,code,normalized_code) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',[est,e.kind,e.id,code,norm(code)]);
       used.add(norm(code));
     }
-    const aliases=await c.query('SELECT entity_type,entity_id,code FROM shaurma_coordinator_codes WHERE establishment_id=$1',[est]);
-    const map=new Map(aliases.rows.map(x=>[x.entity_type+':'+x.entity_id,x.code]));
-    return entries.map(x=>({...x,code:map.get(x.kind+':'+x.id)||null,label:labels[x.kind]}));
+    const aliases=await c.query('SELECT entity_type,entity_id,code,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1',[est]);
+    const map=new Map(aliases.rows.map(x=>[x.entity_type+':'+x.entity_id,x]));
+    return entries.map(x=>{const row=map.get(x.kind+':'+x.id);return {...x,code:row?.code||null,spokenName:row?.spoken_name||null,identifier:row?.spoken_name||x.name,label:labels[x.kind]};});
   });
 }
 async function ownerAccess(req,est,ownerOnly=false){
@@ -185,6 +192,51 @@ async function createScopedMenuObject(bind,telegramId,raw){
   const entry=codes.find(x=>x.kind===created.kind&&x.id===created.id);
   return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:'✅ Создано: '+created.name+(entry?.code?'\n🔖 Идентификатор: '+entry.code:'\nКод появится в настройках заведения.')};
 }
+async function setFriendlyIdentifierTx(c,est,kind,id,input,row,actor){
+  const proposed=friendly(input);
+  if(!validFriendly(proposed))throw error('Название идентификатора: 2–80 букв, цифр, пробелов, дефисов или _.',400);
+  // Same establishment venue row must be locked before this is invoked.
+  const current=extractEntities(row);
+  const own=current.find(x=>x.kind===kind&&String(x.id)===String(id));
+  if(!own)throw error('Объект не найден в текущем меню заведения.',404);
+  const otherNames=new Set();
+  for(const entity of current){
+    if(entity.kind===kind&&String(entity.id)===String(id))continue;
+    otherNames.add(friendlyNorm(entity.name));
+    // Bare ingredient names are also reserved. If cheese appears in two
+    // dishes, one of them cannot silently monopolize the spoken word "сыр".
+    if(entity.kind==='ingredient'&&entity.name.includes(' · '))
+      otherNames.add(friendlyNorm(entity.name.split(' · ').pop()));
+  }
+  const aliases=await c.query('SELECT entity_type,entity_id,code,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1',[est]);
+  for(const x of aliases.rows){
+    if(x.entity_type===kind&&String(x.entity_id)===String(id))continue;
+    if(x.spoken_name)otherNames.add(friendlyNorm(x.spoken_name));
+    otherNames.add(friendlyNorm(x.code));
+  }
+  if(otherNames.has(friendlyNorm(proposed)))throw error('Такое имя или идентификатор уже занят другим объектом заведения. Укажите более точное название.',409);
+  const old=aliases.rows.find(x=>x.entity_type===kind&&String(x.entity_id)===String(id));
+  if(!old)throw error('Код объекта не найден в текущем заведении.',404);
+  const stored=friendlyNorm(proposed)===friendlyNorm(own.name)?null:proposed;
+  try{
+    await c.query('UPDATE shaurma_coordinator_codes SET spoken_name=$4,normalized_spoken_name=$5,updated_at=now() WHERE establishment_id=$1 AND entity_type=$2 AND entity_id=$3',
+       [est,kind,id,stored,stored?friendlyNorm(stored):null]);
+  }catch(e){if(e.code==='23505')throw error('Такое имя уже занято другим объектом заведения.',409);throw e}
+  await c.query('INSERT INTO shaurma_coordinator_audit(establishment_id,telegram_id,entity_type,entity_id,command,old_value,new_value) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)',
+   [est,String(actor),kind,id,'идентификатор '+proposed,JSON.stringify({identifier:old.spoken_name||null}),JSON.stringify({identifier:proposed})]);
+  return {ok:true,identifier:proposed};
+}
+async function setFriendlyIdentifier(est,kind,id,name,actor='venue-owner'){
+  await ensureSchema();
+  const validEst=D.establishmentId(est);
+  if(!validEst||!prefixes[kind]||!id)throw error('Некорректное заведение или объект.',400);
+  await ensureCodes(validEst);
+  return db.tx(async c=>{
+    const venue=await c.query('SELECT menu,config,name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true FOR UPDATE',[validEst]);
+    if(!venue.rowCount)throw error('Заведение не найдено.',404);
+    return setFriendlyIdentifierTx(c,validEst,kind,String(id),name,venue.rows[0],actor);
+  });
+}
 async function execute(telegramId,text){
   await ensureSchema();
   const bind=await binding(telegramId);
@@ -201,6 +253,11 @@ async function execute(telegramId,text){
     const code=await c.query('SELECT entity_type,entity_id,code FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND normalized_code=$2',[bind.establishment_id,norm(match[1])]);
     if(!code.rowCount)throw error('Нет такого идентификатора в текущем заведении.',404);
     const obj=code.rows[0],row=q.rows[0],menu=Array.isArray(row.menu)?row.menu:[],cfg=row.config||{};
+    const aliasCommand=command.match(/^идентификатор\s+([\s\S]+)$/i);
+    if(aliasCommand){
+      const changed=await setFriendlyIdentifierTx(c,bind.establishment_id,obj.entity_type,obj.entity_id,aliasCommand[1],row,telegramId);
+      return {aliasOnly:true,text:'✅ '+row.name+' · понятное имя: «'+changed.identifier+'».\nВнутренний ID блюда не изменился.'};
+    }
     const loc=obj.entity_type==='category'
       ?{target:(D.menuSectionsAll(cfg,menu)).find(x=>String(x.id)===obj.entity_id)}
       :deref(menu,obj);
@@ -249,7 +306,14 @@ async function execute(telegramId,text){
       else throw error('Цену можно задать только позиции или варианту.');
     }else if(/^название\s+.+/i.test(command)){
       const name=command.replace(/^название\s+/i,'').trim().slice(0,140);
-      if(obj.entity_type==='item')target.n=name;
+      if(obj.entity_type==='item'){
+        if(menu.some(x=>String(x.id)!==String(obj.entity_id)&&friendlyNorm(x.n)===friendlyNorm(name)))
+          throw error('Блюдо с таким названием уже есть. Используйте настройки внутри существующей позиции.',409);
+        const aliases=await c.query('SELECT entity_type,entity_id,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND normalized_spoken_name=$2',[bind.establishment_id,friendlyNorm(name)]);
+        if(aliases.rows.some(x=>!(x.entity_type==='item'&&String(x.entity_id)===String(obj.entity_id))))
+          throw error('Название совпадает с идентификатором другого объекта заведения.',409);
+        target.n=name;
+      }
       else if(obj.entity_type==='option'||obj.entity_type==='group')target.name=name;
       else throw error('Тип не поддерживает переименование.');
     }else if(/^описание\s+.+/i.test(command)){
@@ -279,6 +343,7 @@ async function execute(telegramId,text){
     await c.query('INSERT INTO shaurma_coordinator_audit(establishment_id,telegram_id,entity_type,entity_id,command,old_value,new_value) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)',[bind.establishment_id,String(telegramId),obj.entity_type,obj.entity_id,command,JSON.stringify(before),JSON.stringify(target)]);
     return {row:r.rows[0],text:'✅ '+(row.name||'Заведение')+' · '+match[1]+' → '+command,revision:cfg.menu_revision};
   });
+  if(result.aliasOnly)return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:result.text};
   rt.pushVenue(bind.establishment_id,'menu_changed',{establishment_id:bind.establishment_id,revision:result.revision});
   rt.pushVenue(bind.establishment_id,'venue',result.row);
   rt.pushOwner('venue',result.row);
@@ -344,6 +409,15 @@ function install(app){
       res.json({ok:true,revoked:telegramId});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
+  app.post('/api/v2/coordinator/set-identifier',async(req,res)=>{
+    try{
+      const est=D.establishmentId(req.body?.establishment_id);
+      if(!est)throw error('bad_establishment_id',400);
+      await ownerAccess(req,est);
+      res.setHeader('Cache-Control','no-store');
+      res.json(await setFriendlyIdentifier(est,String(req.body?.kind||''),String(req.body?.entityId||''),String(req.body?.identifier||'')));
+    }catch(e){res.status(e.status||500).json({ok:false,error:e.message})}
+  });
   app.post('/api/v2/coordinator/set-code',async(req,res)=>{
     try{
       await ensureSchema();const est=D.establishmentId(req.body?.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est);
@@ -381,4 +455,4 @@ function install(app){
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
 }
-module.exports={ensureSchema,ensureCodes,issueKey,keyStatus,revokeKey,install,claim,binding,execute,help,extractEntities};
+module.exports={ensureSchema,ensureCodes,setFriendlyIdentifier,issueKey,keyStatus,revokeKey,install,claim,binding,execute,help,extractEntities};

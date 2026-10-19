@@ -18,17 +18,17 @@ function lookup(catalog,ref){
 }
 function ref(x){return {code:x.code,kind:x.kind,id:String(x.id)};}
 function optionsText(items){
- return items.map((x,i)=>String(i+1)+'. '+x.name+' · '+x.code).join('\n');
+ return items.map((x,i)=>String(i+1)+'. '+(x.identifier||x.name)+(x.identifier&&x.identifier!==x.name?' ('+x.name+')':'')).join('\n');
 }
 function choose(catalog,term,allowed=['item']){
  const raw=norm(term).replace(/^(?:позицию|блюдо|напиток|продукт|раздел|категорию)\s+/,'');
  const pool=catalog.filter(x=>allowed.includes(x.kind));
- const exact=pool.filter(x=>norm(x.code)===raw||norm(x.name)===raw||base.key(x.name)===base.key(raw));
+ const exact=pool.filter(x=>norm(x.code)===raw||norm(x.name)===raw||base.key(x.name)===base.key(raw)||(x.spokenName&&(norm(x.spokenName)===raw||base.key(x.spokenName)===base.key(raw))));
  if(exact.length===1)return {exact:exact[0],items:exact};
  if(exact.length>1)return {items:exact.slice(0,MAX_OPTIONS)};
  const query=words(raw);if(!query.length)return {items:[]};
  const ranked=pool.map(x=>{
-  const w=words(x.name);
+  const w=[...new Set([...words(x.name),...(x.spokenName?words(x.spokenName):[])])];
   const common=query.filter(q=>w.includes(q)||w.some(v=>v.startsWith(q)&&q.length>=3)).length;
   return {x,score:common*10-Math.abs(w.length-query.length)};
  }).filter(o=>o.score>0).sort((a,b)=>b.score-a.score);
@@ -95,7 +95,7 @@ function select(wait,text,catalog){
  const digit=n?Number(n[1]):ordinals[s];
  if(digit)return lookup(catalog,wait.options[digit-1]);
  const list=wait.options.map(x=>lookup(catalog,x)).filter(Boolean);
- const exact=list.filter(x=>norm(x.code)===s||norm(x.name)===s||base.key(x.name)===base.key(s));
+ const exact=list.filter(x=>norm(x.code)===s||norm(x.name)===s||base.key(x.name)===base.key(s)||(x.spokenName&&(norm(x.spokenName)===s||base.key(x.spokenName)===base.key(s))));
  return exact.length===1?exact[0]:null;
 }
 function requestSelection(candidates,task,catalog){
@@ -136,7 +136,7 @@ function step(input,catalog,previous={}){
  if(first.type==='found'){
   const list=first.items||[];
   return {type:'reply',state:{wait:null,last:list.length===1?ref(list[0]):null},
-   text:'Нашёл: '+list.map(x=>x.name+' · '+x.code).join(', ')};
+   text:'Нашёл: '+list.map(x=>x.identifier||x.name).join(', ')};
  }
  if(first.type==='unsupported')return {type:'reply',state,text:first.message};
  if(parsed.type==='info_query'){

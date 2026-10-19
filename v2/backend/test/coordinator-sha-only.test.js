@@ -33,7 +33,8 @@ test('Telegram and signed Mini App accept only Shaurmeg one-time venue keys',asy
     },
     async ensureCodes(est){
       assert.equal(est,'test_venue');
-      return [{kind:'item',id:'test_dish',code:'P123ABC',name:'Сырная шаурма'}];
+      return [{kind:'item',id:'test_dish',code:'P123ABC',name:'Сырная шаурма'},
+        {kind:'ingredient',id:JSON.stringify(['test_dish','ingredient','сыр']),code:'I321ABC',name:'Сырная шаурма · Сыр',identifier:'сыр-для-сырной',spokenName:'сыр-для-сырной'}];
     },
     async execute(id,command){executed.push([id,command]);return{text:'ok'};}
   };
@@ -76,7 +77,11 @@ test('Telegram and signed Mini App accept only Shaurmeg one-time venue keys',asy
   await bot.handle(message('/status'));
   assert.match(sent.at(-1).text,/Тестовое заведение/);
   await bot.handle(message('/menu шаурма'));
-  assert.match(sent.at(-1).text,/P123ABC/);
+  assert.match(sent.at(-1).text,/Сырная шаурма/);
+  assert.doesNotMatch(sent.at(-1).text,/• P123ABC/);
+  await bot.handle(message('/menu ингредиенты'));
+  assert.match(sent.at(-1).text,/сыр-для-сырной/);
+  assert.doesNotMatch(sent.at(-1).text,/• I321ABC/);
   
   bot.install(app);
   const dataCheck='auth_date='+authDate+'\nuser='+JSON.stringify({id:Number(uid)});

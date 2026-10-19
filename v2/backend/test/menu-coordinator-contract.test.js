@@ -36,12 +36,13 @@ test('Production entrypoint actually mounts the bot and coordinator',()=>{
   assert.match(source,/v2CoordinatorBot\.sync\(\)/);
 });
 
-test('Bot requires private chat, signed webhook and explicit project when ambiguous',()=>{
+test('Bot requires private chat, signed webhook and Shaurmeg-only tenant scoping',()=>{
   const source=read('v2/backend/src/coordinator-bot.js');
   assert.match(source,/message\.chat\.type\)!=='private'/);
   assert.match(source,/x-telegram-bot-api-secret-token/);
-  assert.match(source,/if\(current\.some\(x=>x\.unavailable\)\)/);
-  assert.match(source,/COORDINATOR_COFFEE_SECRET/);
+  assert.match(source,/const linked=await coordinator\.binding\(uid\)/);
+  assert.match(source,/if\(row\.project!=='shaurmeg'\)/);
+  assert.doesNotMatch(source,/COORDINATOR_COFFEE_SECRET|coffeeResolve|kofeyok/i);
 });
 
 test('Admin and restaurant user share normalizer that honours stop-list',()=>{

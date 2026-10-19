@@ -1,38 +1,43 @@
-# Menu Control · Telegram voice and Mini App
+# Menu Control · Шаурмег only
 
-## System
-The new coordinator bot is the staff-facing entry point for both Шаурмег and Кофеёк.
-It uses the already deployed per-venue coordinator bindings and single-use owner-issued keys.
-The voice resolver always loads codes under the Telegram actor's venue, never under a venue ID supplied by the client.
+## Scope
+The coordinator Telegram bot @Anukadavaikavihodibot serves **only Shaurmeg** venue menus. No outbound calls, project resolution, role bindings, keys, or configuration from Kofeyok are used.
 
-## Key invariants
-- Project and venue are inferred server-side from the authenticated Telegram identity.
-- Menu codes are unique **within a venue**, but never treated as a global identity.
-- Natural-language writes require a full-name match or an exact code. Ambiguous commands never execute.
-- All modifications must be confirmed within 3 minutes and are single-use.
-- The server rechecks that the venue, kind, immutable entity ID and code are still bound before executing.
-- Changes are applied by the existing project-specific coordinator executor; source catalog is never mutated by the language parser.
-- Scheduled stop-list restoration is not yet implemented; time-limited phrases are explicitly refused.
+This release does **not** change the independent Kofeyok project or its production services. Pre-existing historical database records are retained to avoid destructive migrations; pending records for other projects are expressly rejected during confirmation.
 
-## Telegram setup
-1. In the Shaurmeg API service, configure `COORDINATOR_BOT_TOKEN` (the newly created BotFather bot) and `COORDINATOR_WEBHOOK_SECRET` (at least 20 random characters).
-2. `V2_PUBLIC_API_URL` or `PUBLIC_API_URL` must be the public HTTPS origin of the Shaurmeg API. The server installs the Telegram webhook and a bot menu button when booting.
-3. To connect Coffee, configure the same 32+ character shared bridge secret in `COORDINATOR_COFFEE_SECRET` (Shaurmeg API service) and `COORDINATOR_API_SECRET` (Coffee service). The Coffee endpoint must be published.
-4. For voice recognition, configure `COORDINATOR_STT_API_KEY` (preferred) or `OPENAI_API_KEY` on the Shaurmeg API service. Without either, text controls still work, and voice displays a configuration error. Audio is sent to the provider only after staff records or sends a voice message.
-5. The coordinator Mini App is available at `https://shaurma-city-api.onrender.com/realcity-preview/coordinator-console.html` when production is deployed; open it from the bot menu, not from an external browser, for signed Telegram `initData`.
-6. Use a per-venue one-time key issued in the owner administration and send `/connect KEY` to the coordinator bot in private chat.
+## How to connect an establishment
+1. Open the **Shaurmeg** venue administration → `Идентификаторы меню`. Generate a one-time `SHA-MNU-<16 hex chars>` key (24 hours by default). Do not share the key publicly.
+2. Open [the coordinator Telegram bot](https://t.me/Anukadavaikavihodibot) in a **private chat**.
+3. Send `/connect SHA-MNU-...` or send the full key as a standalone private message. The server verifies and consumes the key and binds **that Telegram account** to exactly **one Shaurmeg venue**.
+4. Alternatively open the coordinator Mini App from the bot menu and enter the same key in the `Подключить заведение` field. Only signed Telegram WebApp `initData` can use this action.
+5. Check `/status`, then `/menu` or `/menu шаурма` to search venue-local IDs. In the Mini App, you see only the bound Shaurmeg venue.
+6. Send a textual or voice command. The bot resolves the exact venue-local immutable code and asks for explicit confirmation before changing menu data.
 
-## Validated actions
-- “Убери сырную шаурму”
-- “Верни классическую шаурму в продажу”
-- “Установи цену на капучино 250”
-- “Найди сырную шаурму”
-- “P012ABC стоп лист”
-- Legacy code commands: “P012ABC состав + сыр” (also requires confirmation)
-- Existing `создать позицию ...` commands remain supported, also with confirmation.
+### Common commands
+- `/start`, `/status`, `/menu`, `/menu шаурма`
+- `Убери сырную шаурму` / `Верни сырную шаурму в продажу`
+- `Измени цену на сырную шаурму 350`
+- `Переименуй сырную шаурму в Сырная шаурма XL`
+- `Измени описание сырной шаурмы на Фирменный соус`
+- `Добавь халапеньо в сырную шаурму`
+- `Убери сыр из сырной шаурмы`
+- `Замени состав сырной шаурмы на курица, лаваш, сыр`
+- `Отключи раздел Напитки`
+- `P012ABC состав + сыр` and other menu-code commands
 
-## Device roadmap
-A permanently listening counter-top speaker is **not connected** by this release. A future device requires hardware enrollment, per-device credentials, per-venue capabilities, push-to-talk/wake-word policy, loudspeaker audio, and token rotation. Until then, the voice path is Telegram voice notes and user-initiated Mini App recording.
+## Security guarantees
+- One Telegram ID → at most one active Shaurmeg venue binding at a time; distinct venues cannot be modified via user-supplied venue IDs.
+- Menu IDs are venue-scoped; duplicate names require clarification, and ingredients must belong to the selected dish.
+- Proposed changes require single-use three-minute confirmation and revalidate Telegram actor, venue, internal ID, kind and code.
+- Existing coordinator executor logs audit records, updates the right Shaurmeg venue and emits real-time menu refreshes.
+- Former cross-project confirmation records are rejected. This release does not erase historical records or alter third-party projects.
+- No unattended listening: audio is recorded only through explicit Telegram/Mini App microphone actions.
+- Time-limited "until tomorrow" commands are refused until scheduling is implemented.
 
-## Release checks
-`Coordinator Voice Safety` CI performs Node syntax checks, Russian command resolution tests, and existing coordinator isolation contracts. Test both production bridge secrets and the Telegram webhook after deploy. Do not assume Coffee connectivity just because its PR was merged; check the health diagnostics and the secret configuration.
+## Production / diagnostics
+- Render service: `shaurma-city-api` at `https://shaurma-city-api.onrender.com`.
+- Health (public, nonsecret): `/api/v2/telegram/coordinator-health` should return `project:"shaurmeg"`, and true for `enabled`, `webhookSecured`, `miniAppConfigured`, `voiceConfigured` where configured.
+- Mini App: `/realcity-preview/coordinator-console.html` must be opened from the Telegram bot so signed `initData` is available.
+- Required variables: `COORDINATOR_BOT_TOKEN` and `COORDINATOR_WEBHOOK_SECRET`; speech requires `COORDINATOR_STT_API_KEY` or `OPENAI_API_KEY`.
+- No bridge credentials or environment variables for other projects are used by Menu Control. Previous unused env variables can be retired manually in Render settings after verification.
+- End-to-end test must be conducted on a deliberately designated test item: connect, catalog, preview, confirm, inspect menu and audit log. Do not change live restaurant prices as a smoke test.

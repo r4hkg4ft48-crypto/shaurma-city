@@ -1974,6 +1974,29 @@ app.use('/api/v2',v2Router);
 autopay.install(app);
 v2Telegram.install(app);
 v2MenuCoordinator.install(app);
+// Legacy master-admin sessions use a different signer from v2 owner sessions.
+// Expose explicit ownerOk-protected endpoints so the Master Admin can issue
+// the SAME SHA-MNU keys as venue administration without duplicating secrets.
+app.post('/api/shaurma/admin/coordinator/key',async(req,res)=>{
+  if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});
+  try{
+    const result=await v2MenuCoordinator.issueKey(req.body?.establishment_id,req.body?.hours);
+    res.setHeader('Cache-Control','no-store');
+    res.json(result);
+  }catch(e){res.status(e.status||500).json({error:e.message||'coordinator_key_failed'});}
+});
+app.get('/api/shaurma/admin/coordinator/keys',async(req,res)=>{
+  if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});
+  try{
+    res.setHeader('Cache-Control','no-store');
+    res.json(await v2MenuCoordinator.keyStatus(req.query?.establishment_id));
+  }catch(e){res.status(e.status||500).json({error:e.message||'coordinator_keys_failed'});}
+});
+app.post('/api/shaurma/admin/coordinator/revoke-key',async(req,res)=>{
+  if(!ownerOk(req))return res.status(401).json({error:'unauthorized'});
+  try{res.json(await v2MenuCoordinator.revokeKey(req.body?.establishment_id,req.body?.keyId));}
+  catch(e){res.status(e.status||500).json({error:e.message||'coordinator_revoke_failed'});}
+});
 v2CoordinatorBot.install(app);
 v2ChannelBot.install(app);
 v2ChannelAssets.install(app);

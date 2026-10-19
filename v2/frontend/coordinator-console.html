@@ -29,9 +29,15 @@ button:disabled{opacity:.45;cursor:not-allowed}.gold{background:var(--gold);bord
 a{color:var(--gold)}.count{color:var(--gold);font-size:12px;font-weight:700}#scope{margin-top:8px}
 </style></head><body><main>
 <header><span class="brand">MENU CONTROL<span style="color:#f7ede0"> / AI</span></span><span class="chip" id="state">Подключение…</span></header>
-<h1>Управляй<br>одним словом.</h1>
+<h1>Управляй<br>меню Шаурмега.</h1>
 <p>Голосовое и ручное управление меню вашего заведения. Каждое действие проверяется по конкретной позиции и подтверждается перед сохранением.</p>
-<section class="panel"><h2>Подключённое заведение</h2><select id="project" aria-label="Выбор проекта"></select><div id="scope" class="muted">Проверяем права доступа…</div></section>
+<section class="panel"><h2>🥙 Шаурмег · ваше заведение</h2><div id="project" style="font-size:18px;font-weight:800;color:var(--gold)">Проверка подключения…</div><div id="scope" class="muted">Работаем только с заведениями «Шаурмега».</div>
+<div id="connectPanel" class="hidden" style="margin-top:14px">
+  <label for="connectKey" class="muted">Одноразовый ключ из админки вашего заведения:</label>
+  <input id="connectKey" type="text" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="SHA-MNU-..." style="margin:9px 0">
+  <button id="connectNow" class="gold" type="button" style="width:100%">Подключить заведение</button>
+  <div class="muted" style="margin-top:10px">Получите ключ в админке → «Идентификаторы меню». Он активируется один раз. Не отправляйте его третьим лицам.</div>
+</div></section>
 <section class="panel"><div class="voice"><span class="muted">ГОЛОСОВОЕ УПРАВЛЕНИЕ</span>
 <button class="orb" type="button" id="mic" aria-label="Начать или завершить запись">🎙</button>
 <strong id="micTitle">Нажмите, чтобы произнести команду</strong>
@@ -56,7 +62,7 @@ const tg=window.Telegram&&window.Telegram.WebApp;
 if(tg){tg.ready();tg.expand()}
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
-let catalog=[],scope='',pending='',recorder=null,stream=null,started=0;
+let catalog=[],scope='shaurmeg',pending='',recorder=null,stream=null,started=0;
 function status(text,error=false){$('result').textContent=text;$('result').classList.toggle('error',error)}
 $('speak').addEventListener('click',()=>{const message=$('result').textContent.trim();if(!message)return;if(!('speechSynthesis' in window))return status('Озвучивание не поддерживается устройством.',true);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message.slice(0,500));utterance.lang='ru-RU';utterance.rate=0.98;window.speechSynthesis.speak(utterance)});
 async function api(action,extra={}){
@@ -79,20 +85,38 @@ async function load(){
   if(!scope)return;
   const d=await api('catalog');
   catalog=d.items||[];
-  $('scope').textContent=d.venue+' · '+scope+' · доступ разрешён';
+  $('project').textContent='🥙 '+d.venue;
+  $('connectPanel').classList.add('hidden');
+  $('scope').textContent='Изменения разрешены только в этом заведении «Шаурмега».';
   $('state').textContent='На связи';refresh();
 }
 async function init(){
   if(!tg||!tg.initData){$('state').textContent='Только в Telegram';status('Откройте приложение через кнопку Menu Control в вашем Telegram-боте.',true);return}
   try{
     const d=await api('status');
-    const links=(d.locations||[]).filter(x=>x.linked);
-    if(!links.length){$('state').textContent='Нет привязки';$('scope').textContent='Сначала подключите заведение в боте командой /connect КЛЮЧ';return}
-    $('project').innerHTML=links.map(x=>'<option value="'+esc(x.project)+'">'+(x.project==='shaurmeg'?'🥙 Шаурмег':'☕ Кофеёк')+' · '+esc(x.venue)+'</option>').join('');
-    scope=links[0].project;await load();
+    const linked=(d.locations||[]).find(x=>x.project==='shaurmeg'&&x.linked);
+    if(!linked){
+      $('state').textContent='Нет привязки';
+      $('project').textContent='Заведение ещё не подключено';
+      $('scope').textContent='Введите одноразовый ключ из админки «Шаурмега» либо отправьте /connect КЛЮЧ непосредственно Telegram-боту.';
+      $('connectPanel').classList.remove('hidden');
+      return;
+    }
+    await load();
   }catch(e){$('state').textContent='Нет соединения';status(e.message,true)}
 }
-$('project').addEventListener('change',async e=>{scope=e.target.value;catalog=[];refresh();try{await load()}catch(err){status(err.message,true)}});
+$('connectNow').addEventListener('click',async()=>{
+  const key=$('connectKey').value.trim().toUpperCase();
+  if(!/^SHA-MNU-[A-F0-9]{16}$/.test(key))return status('Введите одноразовый ключ Шаурмега в формате SHA-MNU-...',true);
+  $('connectNow').disabled=true;
+  try{
+    await api('connect',{key});
+    $('connectKey').value='';
+    await load();
+    status('✅ Заведение подключено. Найдите блюдо в каталоге и отправьте команду.');
+  }catch(e){status(e.message,true)}
+  finally{$('connectNow').disabled=false}
+});
 $('search').addEventListener('input',refresh);
 $('operation').addEventListener('change',e=>$('price').classList.toggle('hidden',e.target.value!=='цена'));
 $('clear').addEventListener('click',()=>{$('requestText').value='';status('')});

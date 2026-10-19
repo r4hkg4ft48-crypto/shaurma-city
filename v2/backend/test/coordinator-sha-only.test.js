@@ -76,7 +76,8 @@ test('Telegram and signed Mini App accept only Shaurmeg one-time venue keys',asy
   await bot.handle(message('/status'));
   assert.match(sent.at(-1).text,/Тестовое заведение/);
   await bot.handle(message('/menu шаурма'));
-  assert.match(sent.at(-1).text,/P123ABC/);
+  assert.match(sent.at(-1).text,/Сырная шаурма/);
+  assert.doesNotMatch(sent.at(-1).text,/• P123ABC/);
   
   bot.install(app);
   const dataCheck='auth_date='+authDate+'\nuser='+JSON.stringify({id:Number(uid)});

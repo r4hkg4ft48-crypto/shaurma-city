@@ -26,7 +26,8 @@ function proposal(item,command){
 }
 function forTarget(catalog,name,kinds,command){
   const match=choose(catalog,name,kinds);
-  return match.type==='match'?proposal(match.item,command):match;
+  return match.type==='match'?proposal(match.item,command):
+    {...match,followup:{type:'write',command}};
 }
 function ingredientOf(catalog,dish,ingredient){
   const owned=catalog.filter(x=>{
@@ -91,19 +92,42 @@ function advanced(input,items){
   m=raw.match(/^(?:убери|удали|исключи)\s+ингредиент(?:а)?\s+(.+)$/i);
   if(m){
     const found=choose(catalog,clean(m[1]),['ingredient']);
-    if(found.type!=='match')return found;
+    if(found.type!=='match')return {...found,followup:{type:'remove_ingredient_ref'}};
     let parts;try{parts=JSON.parse(found.item.id)}catch{return {type:'unsupported',message:'Уточните блюдо для ингредиента.'}}
     const parent=catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0]));
     if(!parent||parts[1]!=='ingredient')return {type:'unsupported',message:'Ингредиент не связан с текущим блюдом.'};
     return proposal(parent,'состав '+found.item.code+' убрать');
   }
+  // Short "убери сыр" should not produce eight similar dish suggestions.
+  // Interpret a bare ingredient only if there is no exact dish by that name.
+  // If the ingredient occurs in multiple dishes, ask which dish.
+  m=raw.match(/^(?:убери|удали|исключи)\s+([^\n]+)$/i);
+  if(m&&!/^(?:раздел|категорию|блюдо|позицию|ингредиент)\s+/i.test(clean(m[1]))){
+    const target=clean(m[1]);
+    const exactDish=catalog.filter(x=>x.kind==='item'&&
+      (same(x.name,target)||(x.spokenName&&same(x.spokenName,target))));
+    if(!exactDish.length){
+      const ingredients=catalog.filter(x=>x.kind==='ingredient'&&
+        (same(String(x.name).split(' · ').pop(),target)||(x.spokenName&&same(x.spokenName,target))));
+      if(ingredients.length){
+        if(ingredients.length>1)return {type:'ambiguous',
+          message:'Этот ингредиент есть в нескольких блюдах. Уточните, из какого убрать:',
+          items:ingredients.slice(0,8),followup:{type:'remove_ingredient_ref'}};
+        const found=ingredients[0];
+        let parts;try{parts=JSON.parse(found.id)}catch{}
+        const parent=Array.isArray(parts)&&parts[1]==='ingredient'?
+          catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0])):null;
+        if(parent)return proposal(parent,'состав '+found.code+' убрать');
+      }
+    }
+  }
   // Check ownership of an ingredient BEFORE constructing an executor command.
   m=raw.match(/^(?:убери|удали|исключи)\s+(.+?)\s+из\s+(.+)$/i);
   if(m){
     const dish=choose(catalog,m[2],['item']);
-    if(dish.type!=='match')return dish;
+    if(dish.type!=='match')return {...dish,followup:{type:'remove_ingredient',ingredient:clean(m[1])}};
     const ingredient=ingredientOf(catalog,dish.item,clean(m[1]));
-    if(ingredient.type!=='match')return ingredient;
+    if(ingredient.type!=='match')return {...ingredient,followup:{type:'remove_ingredient_ref'}};
     return proposal(dish.item,'состав '+ingredient.item.code+' убрать');
   }
   m=raw.match(/^(?:добавь|добавить|положи)\s+(.+?)\s+(?:в|для)\s+(.+)$/i);
@@ -132,7 +156,13 @@ function advanced(input,items){
       if(!Number.isFinite(price)||price>1000000)return {type:'unsupported',message:'Недопустимая цена.'};
       action='цена '+String(price);
     }
-    return forTarget(catalog,m[1],['item','category','option','group','ingredient'],action);
+    // Ordinary staff commands modify a dish, never its derived options,
+    // category or ingredients unless that target type is stated explicitly.
+    const requested=normalize(m[1]);
+    const kinds=/^(?:ингредиент|ингредиента)\s+/.test(requested)?['ingredient']:
+      /^(?:раздел|категорию|категория)\s+/.test(requested)?['category']:
+      /^(?:вариант|опцию)\s+/.test(requested)?['option']:['item'];
+    return forTarget(catalog,m[1],kinds,action);
   }
   m=raw.match(/^(.+?)\s+(идентификатор|название|описание|состав)\s+(.+)$/i);
   if(m){
@@ -147,8 +177,11 @@ function advanced(input,items){
   return null;
 }
 function resolve(input,items){
-  const existing=base.resolve(input,items);
-  if(existing.type==='unsupported')return existing;
-  return advanced(input,items)||existing;
+  // A generic verb like "убери" must never intercept a more specific
+  // ingredient operation ("убери сыр из шаурмы"). Preserve the old
+  // duration-safety guard before examining any advanced grammar.
+  const parsed=base.parseText(input);
+  if(parsed?.type==='unsupported')return parsed;
+  return advanced(input,items)||base.resolve(input,items);
 }
 module.exports={resolve,advanced,choose,ingredientOf};

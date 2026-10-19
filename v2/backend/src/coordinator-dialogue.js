@@ -18,7 +18,16 @@ function lookup(catalog,ref){
 }
 function ref(x){return {code:x.code,kind:x.kind,id:String(x.id)};}
 function optionsText(items){
- return items.map((x,i)=>String(i+1)+'. '+(x.identifier||x.name)+(x.identifier&&x.identifier!==x.name?' ('+x.name+')':'')).join('\n');
+ const counts=new Map();
+ for(const x of items){const label=norm(x.name);counts.set(label,(counts.get(label)||0)+1);}
+ return items.map((x,i)=>{
+  const label=x.identifier||x.name, repeated=(counts.get(norm(x.name))||0)>1;
+  const price=Number(x.price);
+  const priced=x.price!==null&&x.price!==undefined&&x.price!==''&&Number.isFinite(price);
+  return (i+1)+'. '+label+(label!==x.name?' ('+x.name+')':'')+
+    (priced?' · '+price.toLocaleString('ru-RU')+' ₽':'')+
+    (repeated?' · отдельная карточка №'+(i+1):'');
+ }).join('\n');
 }
 function choose(catalog,term,allowed=['item']){
  const raw=norm(term).replace(/^(?:позицию|блюдо|напиток|продукт|раздел|категорию)\s+/,'');
@@ -93,7 +102,7 @@ function select(wait,text,catalog){
  const s=norm(text);
  let n=/^(?:номер\s+|вариант\s+|позиция\s+)?([1-8])$/.exec(s);
  const digit=n?Number(n[1]):ordinals[s];
- if(digit)return lookup(catalog,wait.options[digit-1]);
+ if(digit&&digit<=wait.options.length)return lookup(catalog,wait.options[digit-1]);
  const list=wait.options.map(x=>lookup(catalog,x)).filter(Boolean);
  const exact=list.filter(x=>norm(x.code)===s||norm(x.name)===s||base.key(x.name)===base.key(s)||(x.spokenName&&(norm(x.spokenName)===s||base.key(x.spokenName)===base.key(s))));
  return exact.length===1?exact[0]:null;
@@ -101,13 +110,32 @@ function select(wait,text,catalog){
 function requestSelection(candidates,task,catalog){
  const unique=candidates.slice(0,MAX_OPTIONS).filter(x=>lookup(catalog,ref(x)));
  if(!unique.length)return {type:'reply',state:fresh(),text:'Не нашёл подходящих позиций в меню вашего заведения. Назовите полное название.'};
+ const repeated=new Set(unique.map(x=>norm(x.name))).size<unique.length;
  return {type:'clarify',state:{wait:{mode:'choose',options:unique.map(ref),task},last:null},
- text:'Уточните, какую именно позицию вы имеете в виду. Ответьте номером или полным названием:\n'+optionsText(unique)};
+ text:(repeated?'В меню несколько отдельных карточек с одинаковым названием. Выберите номер нужной карточки; дубли рекомендуется объединить в админке.\n':'Уточните позицию по номеру или полному названию:\n')+optionsText(unique)};
 }
-function resultFor(item,task){
+function resultFor(item,task,catalog){
  if(!item)return {type:'reply',text:'Позиция была изменена или удалена. Назовите её заново.',state:fresh()};
- const state={wait:null,last:ref(item)};
+ const state={wait:null,last:item.kind==='item'?ref(item):null};
  if(task.type==='write')return {type:'proposal',item:{kind:item.kind,id:String(item.id),code:item.code,name:item.name},command:task.command,state};
+ if(task.type==='remove_ingredient'||task.type==='remove_ingredient_ref'){
+  let ingredient=item;
+  if(task.type==='remove_ingredient'){
+   if(item.kind!=='item')return {type:'reply',text:'Уточните блюдо.',state:fresh()};
+   const found=sha.ingredientOf(catalog,item,task.ingredient);
+   if(found.type!=='match'){
+    if(found.items?.length)return requestSelection(found.items,{type:'remove_ingredient_ref'},catalog);
+    return {type:'reply',text:'Ингредиент не найден в составе выбранного блюда.',state:fresh()};
+   }
+   ingredient=found.item;
+  }
+  if(ingredient.kind!=='ingredient')return {type:'reply',text:'Уточните ингредиент.',state:fresh()};
+  let parts;try{parts=JSON.parse(ingredient.id)}catch{return {type:'reply',text:'Состав блюда изменился. Повторите команду.',state:fresh()}}
+  if(!Array.isArray(parts)||parts[1]!=='ingredient')return {type:'reply',text:'Нельзя подтвердить принадлежность ингредиента.',state:fresh()};
+  const dish=catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0]));
+  if(!dish)return {type:'reply',text:'Блюдо этого ингредиента не найдено.',state:fresh()};
+  return {type:'proposal',item:{kind:'item',id:String(dish.id),code:dish.code,name:dish.name},command:'состав '+ingredient.code+' убрать',state:{wait:null,last:ref(dish)}};
+ }
  return {type:'info',topic:task.topic,item:ref(item),state};
 }
 function step(input,catalog,previous={}){
@@ -121,18 +149,18 @@ function step(input,catalog,previous={}){
  const first=sha.resolve(raw,catalog);
  if(first.type==='proposal'){
   const item=lookup(catalog,first.item);
-  if(item)return resultFor(item,{type:'write',command:first.command});
+  if(item)return resultFor(item,{type:'write',command:first.command},catalog);
  }
  // Explicit new natural-language request supersedes any prior clarification.
  if(state.wait?.mode==='choose'&&parsed.type==='unhandled'){
   const item=select(state.wait,raw,catalog);
-  if(item)return resultFor(item,state.wait.task);
+  if(item)return resultFor(item,state.wait.task,catalog);
   if(/^(?:нет|ни одну|не то|заново|отмена)$/i.test(norm(raw)))return {type:'reply',state:fresh(),text:'Уточнение отменено. Скажите новое название.'};
   return {type:'clarify',state,text:'Не удалось однозначно выбрать позицию. Ответьте её номером, кодом или полным названием:\n'+optionsText(state.wait.options.map(x=>lookup(catalog,x)).filter(Boolean))};
  }
  if(state.wait?.mode==='target'&&parsed.type==='unhandled'){
   const pick=choose(catalog,raw,['item']);
-  if(pick.exact)return resultFor(pick.exact,state.wait.task);
+  if(pick.exact)return resultFor(pick.exact,state.wait.task,catalog);
   return requestSelection(pick.items,state.wait.task,catalog);
  }
  if(first.type==='found'){
@@ -141,17 +169,20 @@ function step(input,catalog,previous={}){
    text:'Нашёл: '+list.map(x=>x.identifier||x.name).join(', ')};
  }
  if(first.type==='unsupported')return {type:'reply',state,text:first.message};
+ // Specific ingredient actions must retain their intent during clarification.
+ if(first.type==='ambiguous'&&first.followup)
+  return requestSelection(first.items||[],first.followup,catalog);
  if(parsed.type==='info_query'){
   const task={type:'info',topic:parsed.topic};
   if(!parsed.name){
    if(state.last){
     const prev=lookup(catalog,state.last);
-    if(prev&&prev.kind==='item')return resultFor(prev,task);
+    if(prev&&prev.kind==='item')return resultFor(prev,task,catalog);
    }
    return {type:'clarify',text:'Какое блюдо вас интересует? Назовите его полное название или код.',state:{wait:{mode:'target',task},last:state.last||null}};
   }
   const pick=choose(catalog,parsed.name,['item']);
-  if(pick.exact)return resultFor(pick.exact,task);
+  if(pick.exact)return resultFor(pick.exact,task,catalog);
   return requestSelection(pick.items,task,catalog);
  }
  if(parsed.type==='partial_write'){
@@ -159,24 +190,24 @@ function step(input,catalog,previous={}){
   const pronoun=/^(?:его|ее|её|это|эту|его же|ту же)$/i.test(norm(parsed.name));
   if(pronoun){
    const prev=lookup(catalog,state.last);
-   if(prev&&prev.kind==='item')return resultFor(prev,task);
+   if(prev&&prev.kind==='item')return resultFor(prev,task,catalog);
    return {type:'clarify',state:{wait:{mode:'target',task},last:null},text:'Какое блюдо нужно изменить? Назовите его полное название или код.'};
   }
   const pick=choose(catalog,parsed.name,['item']);
-  if(pick.exact)return resultFor(pick.exact,task);
+  if(pick.exact)return resultFor(pick.exact,task,catalog);
   return requestSelection(pick.items,task,catalog);
  }
  const contextual=safeContextAction(raw,state.last);
  if(contextual){
   const prev=lookup(catalog,state.last);
-  if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:contextual});
+  if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:contextual},catalog);
   return {type:'clarify',state:{wait:{mode:'target',task:{type:'write',command:contextual}},last:null},
    text:'Уточните полное название блюда. Какую позицию меняем?'};
  }
  const missing=actionWithIncompleteTarget(raw);
  if(missing){
   const prev=lookup(catalog,state.last);
-  if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:missing});
+  if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:missing},catalog);
   return {type:'clarify',state:{wait:{mode:'target',task:{type:'write',command:missing}},last:null},
    text:'Какое блюдо нужно изменить? Укажите название или код.'};
  }

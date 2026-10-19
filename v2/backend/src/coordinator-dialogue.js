@@ -48,8 +48,8 @@ function safeContextAction(text,previous){
 }
 function actionWithIncompleteTarget(input){
  const s=norm(input);
- if(/^(?:убери|останови продажу|сними с продажи|выключи|в стоп)\s+(?:его|ее|её|это)?$/.test(s))return 'стоп лист';
- if(/^(?:верни|включи)\s+(?:его|ее|её|это)?$/.test(s))return 'в наличии';
+ if(/^(?:убери|останови продажу|сними с продажи|выключи|в стоп)(?:\s+(?:его|ее|её|это))?$/.test(s))return 'стоп лист';
+ if(/^(?:верни|включи)(?:\s+(?:его|ее|её|это))?$/.test(s))return 'в наличии';
  const price=s.match(/^(?:поставь|установи|измени|сделай)\s+цену\s+(\d{1,7})$/);
  if(price&&Number(price[1])<=1000000)return 'цена '+price[1];
  return null;

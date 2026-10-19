@@ -93,3 +93,9 @@ test('Renaming dish title refuses duplicate titles in same venue',()=>{
  assert.match(backend,/Блюдо с таким названием уже есть/);
  assert.match(backend,/Название совпадает с идентификатором другого объекта/);
 });
+
+test('Bare ingredient names cannot be reserved when present in another dish',()=>{
+ const backend=fs.readFileSync(path.join(__dirname,'../src/menu-coordinator.js'),'utf8');
+ assert.match(backend,/if\(entity\.kind==='ingredient'&&entity\.name\.includes\(' · '\)\)/);
+ assert.match(backend,/otherNames\.add\(friendlyNorm\(entity\.name\.split\(' · '\)\.pop\(\)\)\)/);
+});

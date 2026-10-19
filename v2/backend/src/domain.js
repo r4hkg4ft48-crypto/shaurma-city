@@ -256,6 +256,7 @@ function normalizeMenuSections(input,menu=[],fallbackToDefaults=true){
         cover:String(v.cover||d.cover||'').trim().slice(0,700000),
         gallery:(Array.isArray(v.gallery)?v.gallery:(Array.isArray(d.gallery)?d.gallery:[])).map(x=>String(x||'').trim().slice(0,700000)).filter(Boolean).slice(0,12),
         color:hex(v.color||d.color,'#0B2945'),accent:hex(v.accent||d.accent,'#FF463D'),
+        custom_colors_enabled:v.custom_colors_enabled===true,
         inherit_template:v.inherit_template!==false,manual_sort:v.manual_sort!==false,
         dish_profile:['shawarma','pizza','salad','burger','drink','dessert','other'].includes(v.dish_profile)?v.dish_profile:'',
         settings:{
@@ -276,7 +277,7 @@ function normalizeMenuSections(input,menu=[],fallbackToDefaults=true){
     const id=slugMenu(item?.c||item?.category||'shawarma_doner','shawarma_doner');
     if(seen.has(id))continue;seen.add(id);
     const d=base.get(id);
-    out.push(d?{...d,order:out.length}:{id,name:id,emoji:'',active:true,order:out.length,cover:'',color:'#0B2945',accent:'#FF463D',manual_sort:true,settings:{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_fields:['Фото','Описание','Цена']}});
+    out.push(d?{...d,order:out.length}:{id,name:id,emoji:'',active:true,order:out.length,cover:'',color:'#0B2945',accent:'#FF463D',custom_colors_enabled:false,manual_sort:true,settings:{meats:[],sizes:[],bases:[],sauces:[],extras:[],required_fields:['Фото','Описание','Цена']}});
   }
   return out.sort((a,b)=>Number(a.order)-Number(b.order)).map((x,i)=>({...x,order:i}));
 }

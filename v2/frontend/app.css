@@ -61,9 +61,9 @@ body{overscroll-behavior:none}button,input,textarea,select{font:inherit;color:in
 
 /* ===== Shaurmeg venue design system v2 ===== */
 :root{
-  --venue-accent:#98e5af;--venue-accent2:#e2f8e8;--venue-bg:#08110d;
-  --venue-panel:#101b15;--venue-panel2:#15231b;--venue-hero:#1b3825;
-  --venue-glow:rgba(110,220,147,.28);--venue-ink:#0c1b11
+  --venue-accent:#D94343;--venue-accent2:#BF3939;--venue-bg:#0F1722;
+  --venue-panel:#1A202B;--venue-panel2:#262C36;--venue-hero:#1D2935;
+  --venue-glow:rgba(217,67,67,.27);--venue-ink:#FFFFFF
 }
 .venuePage{background:var(--venue-bg);color:#f7f8f4}
 .venuePage .venuePageInner{

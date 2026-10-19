@@ -104,7 +104,7 @@ function settingsPills(section,key){
   const arr=Array.isArray(section.settings?.[key])?section.settings[key]:[];
   return '<div class="pills" data-setting-group="'+key+'">'+arr.map((v,i)=>'<span class="pill '+(i>2?'gray':'')+'">'+esc(v)+'<button data-remove-setting="'+key+'" data-index="'+i+'">×</button></span>').join('')+'<button class="addPill" data-add-setting="'+key+'">＋ Добавить</button></div>'
 }
-function syncCategoryDraft(){const s=sectionOf(currentCategory);if(!s||!$('#catName'))return;s.name=$('#catName').value.trim()||s.name;s.subtitle=$('#catSubtitle').value.trim();s.manual_sort=$('#catManualSort').checked;s.inherit_template=$('#catInherit').checked;s.dish_profile=$('[data-dish-profile]')?.value||s.dish_profile;if(MASTER)s.active=$('#catActive')?.checked!==false}
+function syncCategoryDraft(){const s=sectionOf(currentCategory);if(!s||!$('#catName'))return;s.name=$('#catName').value.trim()||s.name;s.subtitle=$('#catSubtitle').value.trim();s.manual_sort=$('#catManualSort').checked;s.inherit_template=$('#catInherit').checked;s.dish_profile=$('[data-dish-profile]')?.value||s.dish_profile;s.custom_colors_enabled=$('#catCustomColors')?.checked===true;if($('#catColor'))s.color=$('#catColor').value;if($('#catAccent'))s.accent=$('#catAccent').value;if(MASTER)s.active=$('#catActive')?.checked!==false}
 function renderCategoryEditor(id){
   const s=sectionOf(id);if(!s||(!MASTER&&s.active===false)){$('#categoryEditor').innerHTML='';return}
   currentCategory=id;hydrateHeader();const cover=imageOf(s)||imageOf(menu.find(x=>x.c===id)),gallery=Array.isArray(s.gallery)?s.gallery:[];
@@ -119,7 +119,12 @@ function renderCategoryEditor(id){
      '<div class="settingCard"><div class="blockTitle"><b>'+esc(window.ShaurmegDishSettings.label(s,'sauces'))+'</b><span>варианты</span></div>'+visualSettings(s,'sauces')+settingsPills(s,'sauces')+'</div>'+
      '<div class="settingCard wide"><div class="blockTitle"><b>Обязательные параметры для карточки</b><span>контроль наполнения</span></div>'+settingsPills(s,'required_fields')+'</div>'+
      '<div class="settingCard wide"><div class="blockTitle"><b>'+esc(window.ShaurmegDishSettings.label(s,'extras'))+'</b><span>варианты</span></div>'+visualSettings(s,'extras')+settingsPills(s,'extras')+'</div>'+
-     '<div class="settingCard wide"><div class="blockTitle"><b>Цвет страницы категории</b><span>вид для гостя</span></div><div class="colorChoices">'+PRESET_COLORS.map(([c,n])=>'<button class="colorChoice '+(safeHex(s.color)===c?'active':'')+'" data-cat-color="'+c+'"><i style="background:'+c+'"></i>'+esc(n)+'</button>').join('')+'</div></div>'+
+     '<div class="settingCard wide"><div class="blockTitle"><b>Индивидуальные цвета категории</b><span>отдельная настройка</span></div>'+
+       '<label class="toggleRow"><div><b>Использовать свои цвета</b><small>Выключено — общий дизайн заведения, включая конструктор, не меняется</small></div><input type="checkbox" id="catCustomColors" '+(s.custom_colors_enabled===true?'checked':'')+'></label>'+
+       (s.custom_colors_enabled===true?
+         '<div class="colorChoices" style="margin:12px 0">'+PRESET_COLORS.map(([c,n])=>'<button type="button" class="colorChoice '+(safeHex(s.color)===c?'active':'')+'" data-cat-color="'+c+'"><i style="background:'+c+'"></i>'+esc(n)+'</button>').join('')+'</div>'+
+         '<div class="fieldGrid"><label class="field"><b>Фон раздела</b><input type="color" id="catColor" value="'+safeHex(s.color,'#0B2945')+'"></label><label class="field"><b>Акцент раздела</b><input type="color" id="catAccent" value="'+safeHex(s.accent,'#FF463D')+'"></label></div>'
+         :'<small class="consoleChoiceHint">Все категории наследуют общий цвет из настроек дизайна заведения.</small>')+'</div>'+
    '</div>'+
    '<div class="toggleRows"><label class="toggleRow"><div><b>Наследовать шаблон</b><small>Использовать стартовые параметры сети</small></div><input id="catInherit" type="checkbox" '+(s.inherit_template!==false?'checked':'')+'></label><label class="toggleRow"><div><b>Ручная сортировка</b><small>Менять порядок позиций в категории</small></div><input id="catManualSort" type="checkbox" '+(s.manual_sort!==false?'checked':'')+'></label></div>'+
    '<div class="galleryBlock"><div class="blockTitle"><b>Галерея категории</b><span>'+gallery.length+' фото</span></div><div class="galleryStrip"><label class="galleryAdd">＋ Добавить фото<input id="catGalleryInput" type="file" accept="image/*" multiple hidden></label>'+gallery.map((p,i)=>'<div class="galleryTile" data-cat-gallery="'+i+'"><img src="'+esc(p)+'"></div>').join('')+'</div></div>'+
@@ -252,12 +257,12 @@ function bind(){
     let g=e.target.closest('[data-cat-gallery]');if(g){const s=sectionOf(currentCategory);s?.gallery?.splice(Number(g.dataset.catGallery),1);return renderCategoryEditor(currentCategory)}
     let b=e.target.closest('[data-add-setting]');if(b)return addSetting(b.dataset.addSetting);
     b=e.target.closest('[data-remove-setting]');if(b)return removeSetting(b.dataset.removeSetting,Number(b.dataset.index));
-    b=e.target.closest('[data-cat-color]');if(b){sectionOf(currentCategory).color=b.dataset.catColor;sectionOf(currentCategory).accent=b.dataset.catColor==='#F7F8FA'?'#FF463D':'#FF463D';return renderCategoryEditor(currentCategory)}
+    b=e.target.closest('[data-cat-color]');if(b){const s=sectionOf(currentCategory);s.color=b.dataset.catColor;s.custom_colors_enabled=true;markMenuDirty();return renderCategoryEditor(currentCategory)}
     b=e.target.closest('[data-cat-move]');if(b)return moveCategory(Number(b.dataset.catMove));
     if(e.target.closest('[data-cat-photo]'))return $('#catPhotoInput').click();
     if(e.target.closest('[data-save-cat]'))return saveCategory();
   };
-  $('#categoryEditor').onchange=async e=>{if(e.target.matches('[data-dish-profile]')){syncCategoryDraft();markMenuDirty();renderCategoryEditor(currentCategory);return}if(e.target.id==='catActive'&&MASTER){if(busy)return;syncCategoryDraft();markMenuDirty();const input=e.target;input.disabled=true;await saveMenu(input.checked?'Категория включена ✓':'Категория выключена ✓');input.disabled=false;return}if(e.target.id==='catPhotoInput'&&e.target.files?.[0])catPhoto(e.target.files[0]).catch(x=>toast(x.message));if(e.target.id==='catGalleryInput'&&e.target.files?.length)catGallery(e.target.files).catch(x=>toast(x.message))};
+  $('#categoryEditor').onchange=async e=>{if(e.target.id==='catCustomColors'){syncCategoryDraft();markMenuDirty();renderCategoryEditor(currentCategory);return}if(e.target.matches('[data-dish-profile]')){syncCategoryDraft();markMenuDirty();renderCategoryEditor(currentCategory);return}if(e.target.id==='catActive'&&MASTER){if(busy)return;syncCategoryDraft();markMenuDirty();const input=e.target;input.disabled=true;await saveMenu(input.checked?'Категория включена ✓':'Категория выключена ✓');input.disabled=false;return}if(e.target.id==='catPhotoInput'&&e.target.files?.[0])catPhoto(e.target.files[0]).catch(x=>toast(x.message));if(e.target.id==='catGalleryInput'&&e.target.files?.length)catGallery(e.target.files).catch(x=>toast(x.message))};
   $('#itemSearch').oninput=renderItems;$('#itemCategoryFilter').onchange=renderItems;$('#newItemBtn').onclick=newItem;$('#itemsGrid').onclick=e=>{let b=e.target.closest('[data-move-item]');if(b)return moveItem(Number(b.dataset.index),Number(b.dataset.moveItem));b=e.target.closest('[data-edit-item]');if(b)openEdit(b.dataset.editItem)};
   $('#itemEditorBack').onclick=closeItemEditor;$('#deleteItemBtn').onclick=deleteItem;
   $('#itemEditorBody').onclick=e=>{

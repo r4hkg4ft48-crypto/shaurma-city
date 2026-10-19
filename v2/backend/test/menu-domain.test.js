@@ -65,6 +65,17 @@ test('server-authoritative selection price includes configured deltas and defaul
   assert.equal(defaults.price,250);
 });
 
+test('category accent is opt-in and survives menu normalization',()=>{
+  const input=[{id:'shawarma_doner',name:'Шаурма',color:'#F7F8FA',accent:'#FF709F'}];
+  const inherited=D.normalizeMenuSections(input,[],false)[0];
+  assert.equal(inherited.custom_colors_enabled,false,'legacy category colors must not override venue branding');
+  const explicit=D.normalizeMenuSections([{...input[0],custom_colors_enabled:true}],[],false)[0];
+  assert.equal(explicit.custom_colors_enabled,true);
+  assert.equal(explicit.accent,'#ff709f');
+  assert.equal(D.normalizeMenuSections([explicit],[],false)[0].custom_colors_enabled,true);
+  assert.equal(D.normalizeMenuSections([{...explicit,custom_colors_enabled:false}],[],false)[0].custom_colors_enabled,false);
+});
+
 test('inactive categories are retained in full section state',()=>{
   const seed=D.defaultMenuSeed();
   seed.sections[2].active=false;

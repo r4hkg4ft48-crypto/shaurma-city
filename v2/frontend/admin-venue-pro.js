@@ -144,9 +144,11 @@ function renderCategoryEditor(id){
       '<button data-cat-up '+(idx<=0?'disabled':'')+'>↑</button><button data-cat-down '+(idx>=sections.length-1?'disabled':'')+'>↓</button></div></div></div>'+
     '<div class="categoryBody"><div class="lockedNote">Включение и выключение категории доступно только в суперадминке. Здесь вы настраиваете её содержимое и внешний вид.</div>'+
     '<div class="formGrid two" style="margin-top:12px"><label class="field"><span>Название категории</span><input id="catName" value="'+esc(section.name)+'"></label>'+
-    '<label class="field"><span>Emoji</span><input id="catEmoji" value="'+esc(section.emoji||'')+'"></label>'+
-    '<label class="field"><span>Основной цвет</span><div class="colorRow"><input id="catColor" type="color" value="'+esc(section.color||'#0B2945')+'"><input value="'+esc(section.color||'#0B2945')+'" disabled></div></label>'+
-    '<label class="field"><span>Акцент</span><div class="colorRow"><input id="catAccent" type="color" value="'+esc(section.accent||'#FF463D')+'"><input value="'+esc(section.accent||'#FF463D')+'" disabled></div></label></div>'+
+    '<label class="field"><span>Emoji</span><input id="catEmoji" value="'+esc(section.emoji||'')+'"></label></div>'+
+    '<label class="toggleLine"><span><b>Отдельные цвета раздела</b><small>По умолчанию все разделы и конструктор используют единую тему заведения</small></span><input id="catCustomColors" type="checkbox" '+(section.custom_colors_enabled===true?'checked':'')+'></label>'+
+    '<div class="formGrid two '+(section.custom_colors_enabled===true?'':'hidden')+'" id="catColorFields" style="margin-top:12px">'+
+    '<label class="field"><span>Фон раздела</span><div class="colorRow"><input id="catColor" type="color" value="'+esc(section.color||'#0B2945')+'"></div></label>'+
+    '<label class="field"><span>Акцент раздела</span><div class="colorRow"><input id="catAccent" type="color" value="'+esc(section.accent||'#FF463D')+'"></div></label></div>'+
     '<div class="settingsGrid" style="margin-top:12px">'+SECTION_SETTING_GROUPS.map(([k,t])=>renderChipGroup(section,k,t)).join('')+'</div>'+
     '<label class="toggleLine"><span><b>Ручная сортировка</b><small>Разрешить менять порядок позиций внутри категории</small></span><input id="catManualSort" type="checkbox" '+(section.manual_sort!==false?'checked':'')+'></label>'+
     '<div class="actions"><button class="secondary" data-open-items>Открыть позиции</button><button class="primary" data-save-category>Сохранить изменения</button></div></div></article>';
@@ -168,7 +170,7 @@ function moveSection(delta){
 }
 async function saveCategory(){
   const s=sections.find(x=>x.id===currentCategory);if(!s)return;
-  s.name=$('#catName').value.trim()||s.name;s.emoji=$('#catEmoji').value.trim().slice(0,8);s.color=$('#catColor').value;s.accent=$('#catAccent').value;s.manual_sort=$('#catManualSort').checked;
+  s.name=$('#catName').value.trim()||s.name;s.emoji=$('#catEmoji').value.trim().slice(0,8);s.color=$('#catColor').value;s.accent=$('#catAccent').value;s.custom_colors_enabled=$('#catCustomColors').checked;s.manual_sort=$('#catManualSort').checked;
   await saveMenuRemote('Категория сохранена ✓');
 }
 async function saveMenuRemote(message='Меню сохранено ✓'){
@@ -412,7 +414,7 @@ function bind(){
     if(e.target.closest('[data-save-category]'))return saveCategory();
     if(e.target.closest('[data-open-items]')){$('#itemCategoryFilter').value=currentCategory;setView('items');renderItems()}
   };
-  $('#categoryEditor').onchange=e=>{if(e.target.id==='catPhotoInput'&&e.target.files?.[0])setCategoryPhoto(e.target.files[0])};
+  $('#categoryEditor').onchange=e=>{if(e.target.id==='catCustomColors')$('#catColorFields')?.classList.toggle('hidden',!e.target.checked);if(e.target.id==='catPhotoInput'&&e.target.files?.[0])setCategoryPhoto(e.target.files[0])};
   $('#itemSearch').oninput=renderItems;$('#itemCategoryFilter').onchange=renderItems;$('#newItemBtn').onclick=newItem;
   $('#itemGrid').onclick=e=>{
     let b=e.target.closest('[data-edit-item]');if(b)return openEditItem(b.dataset.editItem);

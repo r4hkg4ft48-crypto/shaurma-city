@@ -116,6 +116,13 @@ function step(input,catalog,previous={}){
  if(parsed.type==='reset')return {...parsed,state:fresh()};
  if(parsed.type==='reply')return {...parsed,state};
  if(parsed.type==='report')return {...parsed,state:{...state,wait:null}};
+ // A fresh, explicit action overrides an earlier unanswered clarification.
+ // Conversely, a bare name below only selects an object without writing.
+ const first=sha.resolve(raw,catalog);
+ if(first.type==='proposal'){
+  const item=lookup(catalog,first.item);
+  if(item)return resultFor(item,{type:'write',command:first.command});
+ }
  // Explicit new natural-language request supersedes any prior clarification.
  if(state.wait?.mode==='choose'&&parsed.type==='unhandled'){
   const item=select(state.wait,raw,catalog);
@@ -127,11 +134,6 @@ function step(input,catalog,previous={}){
   const pick=choose(catalog,raw,['item']);
   if(pick.exact)return resultFor(pick.exact,state.wait.task);
   return requestSelection(pick.items,state.wait.task,catalog);
- }
- const first=sha.resolve(raw,catalog);
- if(first.type==='proposal'){
-  const item=lookup(catalog,first.item);
-  if(item)return resultFor(item,{type:'write',command:first.command});
  }
  if(first.type==='found'){
   const list=first.items||[];
@@ -177,6 +179,11 @@ function step(input,catalog,previous={}){
   if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:missing});
   return {type:'clarify',state:{wait:{mode:'target',task:{type:'write',command:missing}},last:null},
    text:'Какое блюдо нужно изменить? Укажите название или код.'};
+ }
+ if(parsed.type==='unhandled'){
+   const selected=choose(catalog,raw,['item']);
+   if(selected.exact)return {type:'reply',state:{wait:null,last:ref(selected.exact)},
+     text:'Выбрано блюдо: «'+selected.exact.name+'». Что нужно изменить? Например, скажите «стоп лист», «в наличии» или «поставь 350».'};
  }
  if(first.type==='ambiguous'&&first.items?.length){
   const task=first.type==='ambiguous'&&/^(?:найди|покажи|найти|какой код у)/.test(norm(raw))?{type:'info',topic:'details'}:null;

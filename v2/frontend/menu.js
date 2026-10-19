@@ -5,23 +5,14 @@
 
   let cinema=null,builderStep=0,building=false,buildAttempt=0;
   const cinemaForType=()=>ctx?.venue?.config?.builder_cinema?.find(x=>x.type_id===builderState.type);
-  const THEME_KEYS=['emerald','amber','cobalt','cherry','violet','graphite','ocean','citrus'];
-  const THEMES={
-    emerald:{accent:'#54d9a0',accent2:'#eafff6',bg:'#120f18',panel:'#1a1420',panel2:'#241a2b',hero:'#25352f',glow:'rgba(84,217,160,.24)',ink:'#143326'},
-    amber:{accent:'#ffb468',accent2:'#fff2dc',bg:'#151019',panel:'#211720',panel2:'#2d201d',hero:'#4b321e',glow:'rgba(255,180,104,.24)',ink:'#3b2410'},
-    cobalt:{accent:'#6d8dff',accent2:'#e9eeff',bg:'#0f101a',panel:'#171927',panel2:'#20243a',hero:'#263f73',glow:'rgba(109,141,255,.27)',ink:'#17244e'},
-    cherry:{accent:'#ff709f',accent2:'#ffe8f0',bg:'#160f17',panel:'#24151d',panel2:'#311b27',hero:'#5e2941',glow:'rgba(255,112,159,.25)',ink:'#451529'},
-    violet:{accent:'#aa6cff',accent2:'#f1e8ff',bg:'#120d1a',panel:'#1d1426',panel2:'#291a37',hero:'#4a306c',glow:'rgba(170,108,255,.28)',ink:'#2d1749'},
-    graphite:{accent:'#cfd3da',accent2:'#f5f7f8',bg:'#111216',panel:'#191b20',panel2:'#23262d',hero:'#39404a',glow:'rgba(207,211,218,.18)',ink:'#20242a'},
-    ocean:{accent:'#58c9dc',accent2:'#e4fbff',bg:'#0d1218',panel:'#132028',panel2:'#17303a',hero:'#1c4b58',glow:'rgba(88,201,220,.24)',ink:'#10323a'},
-    citrus:{accent:'#c9e768',accent2:'#f5fadf',bg:'#12140e',panel:'#1c2115',panel2:'#28301a',hero:'#40511e',glow:'rgba(201,231,104,.23)',ink:'#29330f'}
-  };
+  // A missing venue theme must never select a random category-like color.
+  // Color customization is explicit and belongs to the venue, not the active menu category.
+  const DEFAULT_THEME={primary:'#D94343',secondary:'#13233B',tone:'balanced'};
 
   const cartKey='shaurmeg_cart_'+String(est||marker||'');
   try{cart=JSON.parse(localStorage.getItem(cartKey)||'[]')}catch{cart=[]}
 
   function toast(v){const el=$('#toast');if(!el)return;el.textContent=v;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1800)}
-  function themeKey(seed){let h=2166136261;for(const ch of String(seed||'shaurmeg')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return THEME_KEYS[Math.abs(h)%THEME_KEYS.length]}
   function cleanHex(v,fallback='#D94343'){const s=String(v||'').trim().toUpperCase();return /^#[0-9A-F]{6}$/.test(s)?s:fallback}
   function rgb(hex){const s=cleanHex(hex,'#000000').slice(1);return [parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)]}
   function mixHex(a,b,t=.5){
@@ -36,11 +27,11 @@
   }
   function contrastText(hex){return luminance(hex)>.46?'#142033':'#FFFFFF'}
   function customTheme(config={}){
-    const key=THEMES[config.theme_key]?config.theme_key:themeKey(est),legacy=THEMES[key]||THEMES.cobalt;
-    if(!(config.theme&&typeof config.theme==='object'))return {primary:legacy.accent,secondary:legacy.hero,tone:'balanced',legacyKey:key};
-    let primary=cleanHex(config.theme.primary,legacy.accent),secondary=cleanHex(config.theme.secondary,legacy.hero);
-    if(colorDistance(primary,secondary)<58)secondary=colorDistance(primary,'#13233B')>=58?'#13233B':'#D94343';
-    return {primary,secondary,tone:['dark','light','balanced'].includes(config.theme.tone)?config.theme.tone:'balanced',legacyKey:key};
+    if(!(config.theme&&typeof config.theme==='object'))return {...DEFAULT_THEME,legacyKey:'default'};
+    const primary=cleanHex(config.theme.primary,DEFAULT_THEME.primary);
+    let secondary=cleanHex(config.theme.secondary,DEFAULT_THEME.secondary);
+    if(colorDistance(primary,secondary)<58)secondary=colorDistance(primary,DEFAULT_THEME.secondary)>=58?DEFAULT_THEME.secondary:DEFAULT_THEME.primary;
+    return {primary,secondary,tone:['dark','light','balanced'].includes(config.theme.tone)?config.theme.tone:DEFAULT_THEME.tone,legacyKey:'custom'};
   }
   function derivedPalette(theme){
     const primary=theme.primary,secondary=theme.secondary,tone=theme.tone;
@@ -457,18 +448,33 @@
     buttons[next].focus({preventScroll:true});selectCategory(buttons[next].dataset.cat);
   });
 
+  function applyCategoryPalette(section){
+    const menuRoot=$('#menuSection');
+    if(!menuRoot)return;
+    // Category-specific values are opt-in and cannot leak to the builder, cart,
+    // navigation, Telegram chrome, or the next selected category.
+    const keys=['accent','accent2','hero','glow','ink'];
+    for(const key of keys)menuRoot.style.removeProperty('--venue-'+key);
+    menuRoot.style.removeProperty('--accent');
+    if(section?.custom_colors_enabled!==true){
+      delete menuRoot.dataset.categoryTheme;
+      return;
+    }
+    const base=derivedPalette(customTheme(ctx?.venue?.config||{}));
+    const accent=cleanHex(section.accent,base.accent);
+    const hero=cleanHex(section.color,base.hero);
+    const ink=contrastText(accent);
+    const values={accent,accent2:ink==='#FFFFFF'?mixHex(accent,'#000000',.12):mixHex(accent,'#FFFFFF',.15),hero,glow:rgba(accent,.27),ink};
+    for(const [key,value] of Object.entries(values))menuRoot.style.setProperty('--venue-'+key,value);
+    menuRoot.style.setProperty('--accent',accent);
+    menuRoot.dataset.categoryTheme='custom';
+  }
   function renderMenu(){
     const all=(ctx?.venue?.menu||[]).filter(x=>x.active!==false);
     const visible=all.filter(x=>category==='all'||String(x.c||x.category)===category);
     const sections=Array.isArray(ctx?.venue?.sections)?ctx.venue.sections:[];
     const sectionById=new Map(sections.map(x=>[String(x.id),x]));
-    if(category==='all')applyTheme(ctx?.venue?.config||{});
-    else{
-      const sectionTheme=sectionById.get(String(category))||{},root=document.documentElement;
-      const accent=cleanHex(sectionTheme.accent,'#8FE0A9'),hero=cleanHex(sectionTheme.color,'#152A3A');
-      root.style.setProperty('--venue-accent',accent);root.style.setProperty('--accent',accent);
-      root.style.setProperty('--venue-hero',hero);root.style.setProperty('--venue-glow',rgba(accent,.27));root.style.setProperty('--venue-ink',contrastText(accent));
-    }
+    applyCategoryPalette(category==='all'?null:sectionById.get(String(category)));
 
     const kindFor=x=>{
       const name=String(x.n||x.name||'').toLowerCase();

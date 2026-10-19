@@ -98,6 +98,29 @@ function advanced(input,items){
     if(!parent||parts[1]!=='ingredient')return {type:'unsupported',message:'Ингредиент не связан с текущим блюдом.'};
     return proposal(parent,'состав '+found.item.code+' убрать');
   }
+  // Short "убери сыр" should not produce eight similar dish suggestions.
+  // Interpret a bare ingredient only if there is no exact dish by that name.
+  // If the ingredient occurs in multiple dishes, ask which dish.
+  m=raw.match(/^(?:убери|удали|исключи)\s+([^\n]+)$/i);
+  if(m&&!/^(?:раздел|категорию|блюдо|позицию|ингредиент)\s+/i.test(clean(m[1]))){
+    const target=clean(m[1]);
+    const exactDish=catalog.filter(x=>x.kind==='item'&&
+      (same(x.name,target)||(x.spokenName&&same(x.spokenName,target))));
+    if(!exactDish.length){
+      const ingredients=catalog.filter(x=>x.kind==='ingredient'&&
+        (same(String(x.name).split(' · ').pop(),target)||(x.spokenName&&same(x.spokenName,target))));
+      if(ingredients.length){
+        if(ingredients.length>1)return {type:'ambiguous',
+          message:'Этот ингредиент есть в нескольких блюдах. Уточните, из какого убрать:',
+          items:ingredients.slice(0,8),followup:{type:'remove_ingredient_ref'}};
+        const found=ingredients[0];
+        let parts;try{parts=JSON.parse(found.id)}catch{}
+        const parent=Array.isArray(parts)&&parts[1]==='ingredient'?
+          catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0])):null;
+        if(parent)return proposal(parent,'состав '+found.code+' убрать');
+      }
+    }
+  }
   // Check ownership of an ingredient BEFORE constructing an executor command.
   m=raw.match(/^(?:убери|удали|исключи)\s+(.+?)\s+из\s+(.+)$/i);
   if(m){

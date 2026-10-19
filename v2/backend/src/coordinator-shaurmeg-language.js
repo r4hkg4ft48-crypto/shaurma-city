@@ -133,7 +133,13 @@ function advanced(input,items){
       if(!Number.isFinite(price)||price>1000000)return {type:'unsupported',message:'Недопустимая цена.'};
       action='цена '+String(price);
     }
-    return forTarget(catalog,m[1],['item','category','option','group','ingredient'],action);
+    // Ordinary staff commands modify a dish, never its derived options,
+    // category or ingredients unless that target type is stated explicitly.
+    const requested=normalize(m[1]);
+    const kinds=/^(?:ингредиент|ингредиента)\s+/.test(requested)?['ingredient']:
+      /^(?:раздел|категорию|категория)\s+/.test(requested)?['category']:
+      /^(?:вариант|опцию)\s+/.test(requested)?['option']:['item'];
+    return forTarget(catalog,m[1],kinds,action);
   }
   m=raw.match(/^(.+?)\s+(идентификатор|название|описание|состав)\s+(.+)$/i);
   if(m){

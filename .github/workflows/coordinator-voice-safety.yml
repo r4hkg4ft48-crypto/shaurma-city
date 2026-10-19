@@ -7,6 +7,7 @@ on:
       - 'v2/backend/src/coordinator-*'
       - 'v2/backend/test/coordinator-dialogue.test.js'
       - 'v2/backend/test/coordinator-human-identifiers.test.js'
+      - 'v2/backend/test/coordinator-name-commands.test.js'
       - 'v2/backend/src/menu-coordinator.js'
       - 'backend/master-admin.html'
       - 'backend/server.js'
@@ -34,7 +35,7 @@ jobs:
           node --check v2/backend/src/menu-coordinator.js
           node --check backend/server.js
       - name: Russian menu resolution and isolation
-        run: node --test v2/backend/test/coordinator-language.test.js v2/backend/test/coordinator-shaurmeg-language.test.js v2/backend/test/coordinator-sha-only.test.js v2/backend/test/coordinator-dialogue.test.js v2/backend/test/coordinator-human-identifiers.test.js v2/backend/test/coordinator-webapp-syntax.test.js v2/backend/test/master-coordinator-key-contract.test.js
+        run: node --test v2/backend/test/coordinator-language.test.js v2/backend/test/coordinator-shaurmeg-language.test.js v2/backend/test/coordinator-sha-only.test.js v2/backend/test/coordinator-dialogue.test.js v2/backend/test/coordinator-human-identifiers.test.js v2/backend/test/coordinator-name-commands.test.js v2/backend/test/coordinator-webapp-syntax.test.js v2/backend/test/master-coordinator-key-contract.test.js
       - name: Menu coordinator contracts
         run: |
           cd v2/backend

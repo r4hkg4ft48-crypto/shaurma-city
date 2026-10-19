@@ -14,7 +14,7 @@ const coffeeBase=()=>String(process.env.COORDINATOR_COFFEE_URL||'https://kofeyok
 const coffeeSecret=()=>String(process.env.COORDINATOR_COFFEE_SECRET||'').trim();
 const norm=x=>String(x||'').trim().toLowerCase().replace(/ё/g,'е');
 const fail=(message,status=400)=>Object.assign(new Error(message),{status});
-const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n8. Создать: создать позицию Название | 350 | КОД_КАТЕГОРИИ\n9. Создать ингредиент (Кофеёк): создать ингредиент Сироп | ml | 150\n10. Добавить вариант: КОД_ГРУППЫ добавить вариант Название | 25\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
+const HELP='📒 КООРДИНАТОР · МЕНЮ\n\n/menu — коды и поиск блюд Шаурмега\n\n1. Подключите заведение: /connect ВАШ_СЕКРЕТНЫЙ_КЛЮЧ\n2. Управляйте меню: 7777 стоп лист\n3. Верните в продажу: 7777 в наличии\n4. Новая цена: 7777 цена 350\n5. Скрыть: 7777 скрыть\n6. Название: 7777 название Новый напиток\n7. Состав: 7777 состав КОД_ИНГРЕДИЕНТА 120\n8. Создать: создать позицию Название | 350 | КОД_КАТЕГОРИИ\n9. Создать ингредиент (Кофеёк): создать ингредиент Сироп | ml | 150\n10. Добавить вариант: КОД_ГРУППЫ добавить вариант Название | 25\n\n/статус — активные подключения\n/помощь — справка\nЕсли подключены оба проекта, добавьте перед кодом «шаурмег» или «кофеёк».';
 function equal(a,b){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&crypto.timingSafeEqual(aa,bb);}
 async function telegramRaw(method,body){
   if(!token())throw fail('COORDINATOR_BOT_TOKEN missing',503);
@@ -220,6 +220,19 @@ async function handle(message){
     const code=connect[1].toUpperCase(),response=code.startsWith('SHA-')?await coordinator.claim(uid,code):await coffee('claim',uid,{key:code});
     return reply(chatId,'🔐 '+(response.venue||'Заведение')+' подключено в '+(response.project==='shaurmeg'?'Шаурмеге':'Кофейке')+'. Для команд используйте короткие коды из настройки «Идентификаторы блюд».');
   }
+  const showMenu=text.match(/^\/(?:menu|меню|каталог)(?:@\S+)?(?:\s+(.+))?$/i);
+  if(showMenu){
+    const bound=await coordinator.binding(uid);
+    if(!bound)return reply(chatId,'Сначала подключите своё заведение «Шаурмега»: /connect КЛЮЧ');
+    const items=await coordinator.ensureCodes(bound.establishment_id);
+    const search=language.normalize(showMenu[1]||'');
+    const dishes=items.filter(x=>x.kind==='item'&&(!search||language.normalize(x.name).includes(search)||language.normalize(x.code).includes(search)));
+    const shown=dishes.slice(0,30);
+    return reply(chatId,'🥙 '+bound.name+' · позиции меню ('+dishes.length+')\n'+
+      (shown.length?shown.map(x=>'• '+x.name+' — '+x.code).join('\n'):'Позиции не найдены.')+
+      (dishes.length>shown.length?'\n…Ещё '+(dishes.length-shown.length)+'. Уточните поиск: /menu шаурма':'')+
+      '\n\nДля изменения произнесите или напишите: «Убери сырную шаурму».');
+  }
   if(/^\/(?:status|статус)(?:@\S+)?$/i.test(text)){
     const rows=await locations(uid);
     return reply(chatId,'🔒 Подключения:\n'+rows.map(x=>(x.project==='shaurmeg'?'Шаурмег':'Кофеёк')+': '+(x.unavailable?'⚠️ сервис временно недоступен':x.linked?'✅ '+x.venue:'не подключён')).join('\n'));
@@ -341,6 +354,7 @@ async function sync(){
     {command:'start',description:'Инструкция и подключение'},
     {command:'connect',description:'Подключить заведение по ключу'},
     {command:'status',description:'Показать привязанные заведения'},
+    {command:'menu',description:'Поиск по меню Шаурмега'},
     {command:'help',description:'Команды меню'}]});
   await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message','callback_query']});
   if(appUrl())await telegram('setChatMenuButton',{menu_button:{type:'web_app',text:'🎙 Menu Control',web_app:{url:appUrl()}}});

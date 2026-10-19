@@ -7,7 +7,7 @@ const normalize=base.normalize;
 const same=(a,b)=>normalize(a)===normalize(b)||base.key(a)===base.key(b);
 const clean=x=>String(x||'').trim();
 const unsafe=x=>!x||/[\u0000-\u001f]/.test(x);
-const message='Точное совпадение не найдено. Уточните название или используйте код позиции.';
+const message='Точное совпадение не найдено. Назовите блюдо и его разновидность точнее.';
 const stdAlias=x=>/^[\p{L}\p{N} _-]+$/u.test(x);
 function choose(catalog,name,kinds){
   const prefix=/^(?:(?:раздел|категорию|категория|блюдо|позицию|позиция)\s+)/i;
@@ -15,14 +15,14 @@ function choose(catalog,name,kinds){
   const scoped=catalog.filter(x=>kinds.includes(x.kind));
   const matches=scoped.filter(x=>same(x.name,target)||(x.spokenName&&same(x.spokenName,target))||same(x.code,target));
   if(matches.length===1)return {type:'match',item:matches[0]};
-  if(matches.length>1)return {type:'ambiguous',message:'Несколько объектов с таким названием. Уточните по коду:',items:matches.slice(0,8)};
+  if(matches.length>1)return {type:'ambiguous',message:'Несколько объектов с похожим названием. Уточните полное название:',items:matches.slice(0,8)};
   const words=base.key(target).split(' ').filter(Boolean);
   const candidates=scoped.filter(x=>words.some(w=>[...base.key(x.name).split(' '),...(x.spokenName?base.key(x.spokenName).split(' '):[])].includes(w))).slice(0,8);
   return {type:'ambiguous',message,items:candidates};
 }
 function proposal(item,command){
   return {type:'proposal',item:{kind:item.kind,id:String(item.id),code:item.code,name:item.name},command,
-    text:'Подтвердите изменение: «'+item.name+'» ('+item.code+') → '+command+'.'};
+    text:'Подтвердите изменение: «'+item.name+'» → '+command+'.'};
 }
 function forTarget(catalog,name,kinds,command){
   const match=choose(catalog,name,kinds);

@@ -99,3 +99,22 @@ test('Bare ingredient names cannot be reserved when present in another dish',()=
  assert.match(backend,/if\(entity\.kind==='ingredient'&&entity\.name\.includes\(' · '\)\)/);
  assert.match(backend,/otherNames\.add\(friendlyNorm\(entity\.name\.split\(' · '\)\.pop\(\)\)\)/);
 });
+
+test('Old machine-code editing endpoint is now read-only and preserves stable IDs',()=>{
+ const backend=fs.readFileSync(path.join(__dirname,'../src/menu-coordinator.js'),'utf8');
+ const start=backend.indexOf("app.post('/api/v2/coordinator/set-code'");
+ const end=backend.indexOf("app.post('/api/v2/coordinator/key'",start);
+ assert.ok(start>0&&end>start);
+ const section=backend.slice(start,end);
+ assert.match(section,/await ownerAccess\(req,est\)/);
+ assert.match(section,/res\.status\(410\)/);
+ assert.match(section,/set-identifier/);
+ assert.doesNotMatch(section,/UPDATE shaurma_coordinator_codes/);
+});
+test('Russian coordinator prompts no longer expose machine codes as primary interface',()=>{
+ const language=fs.readFileSync(path.join(__dirname,'../src/coordinator-language.js'),'utf8');
+ const extended=fs.readFileSync(path.join(__dirname,'../src/coordinator-shaurmeg-language.js'),'utf8');
+ assert.doesNotMatch(language,/Уточните по коду/);
+ assert.doesNotMatch(extended,/Уточните по коду/);
+ assert.doesNotMatch(language,/item\.name\+'» \('\+item\.code/);
+});

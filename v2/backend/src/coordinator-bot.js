@@ -184,7 +184,7 @@ async function handle(message){
     const response=await coordinator.claim(uid,key);
     return reply(chatId,'✅ '+response.venue+' · подключено к «Шаурмегу».\n/menu — посмотреть позиции и коды.\nОтправьте сообщение или голосовую команду. Для изменений потребуется подтверждение.',menuKeyboard());
   }
-  if(/^(?:KOF-MNU-|\/connect\s+KOF-MNU-)/i.test(text))
+  if(/^(?:[A-Z]{3}-MNU-[A-F0-9]{16}|\/(?:connect|подключить)\s+[A-Z]{3}-MNU-[A-F0-9]{16})$/i.test(text))
     return reply(chatId,'Этот ключ не относится к «Шаурмегу». Получите ключ SHA-MNU-... в админке своего заведения.');
   const showMenu=text.match(/^\/(?:menu|меню|каталог)(?:@\S+)?(?:\s+(.+))?$/i);
   if(showMenu){

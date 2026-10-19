@@ -358,7 +358,9 @@ async function sync(){
     {command:'help',description:'Команды меню'}]});
   await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message','callback_query']});
   if(appUrl())await telegram('setChatMenuButton',{menu_button:{type:'web_app',text:'🎙 Menu Control',web_app:{url:appUrl()}}});
-  console.info('Coordinator bot synced: Shaurmeg primary, menu app '+(appUrl()?'configured':'unavailable')+', voice '+(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY?'configured':'unavailable'));
+  let botUsername='unknown';
+  try{botUsername=String((await telegram('getMe',{})).username||'unknown')}catch(e){console.warn('Coordinator getMe:',e.message)}
+  console.info('Coordinator bot synced @'+botUsername+': Shaurmeg primary, menu app '+(appUrl()?'configured':'unavailable')+', voice '+(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY?'configured':'unavailable'));
   return {enabled:true};
 }
 module.exports={install,sync,handle};

@@ -86,6 +86,17 @@ function advanced(input,items){
     const recipe=clean(m[2]);if(unsafe(recipe)||recipe.length>1200)return {type:'unsupported',message:'Состав должен содержать от 1 до 1200 символов.'};
     return forTarget(catalog,m[1],['item'],'состав = '+recipe);
   }
+  // A unique, named ingredient can be removed from its own dish by its
+  // friendly identifier. Bare repeated ingredients require disambiguation.
+  m=raw.match(/^(?:убери|удали|исключи)\s+ингредиент(?:а)?\s+(.+)$/i);
+  if(m){
+    const found=choose(catalog,clean(m[1]),['ingredient']);
+    if(found.type!=='match')return found;
+    let parts;try{parts=JSON.parse(found.item.id)}catch{return {type:'unsupported',message:'Уточните блюдо для ингредиента.'}}
+    const parent=catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0]));
+    if(!parent||parts[1]!=='ingredient')return {type:'unsupported',message:'Ингредиент не связан с текущим блюдом.'};
+    return proposal(parent,'состав '+found.item.code+' убрать');
+  }
   // Check ownership of an ingredient BEFORE constructing an executor command.
   m=raw.match(/^(?:убери|удали|исключи)\s+(.+?)\s+из\s+(.+)$/i);
   if(m){

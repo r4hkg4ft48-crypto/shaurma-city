@@ -46,7 +46,7 @@
       <button class="module" data-open="/shaurmeg-owner?from=master&v=5" style="--glow:rgba(89,199,220,.16)"><span class="moduleGlyph" data-icon="pin"></span><b>Карта и точки</b><small>Метки, координаты, карточки и синхронизация.</small></button>
       <button class="module" data-tab-open="astra" style="--glow:rgba(89,199,220,.18)"><span class="moduleGlyph" data-icon="layers"></span><b>RealCity · 30 фотографий</b><small>Пошагово снимай фасады и окружение. К каждому фото — объект, ракурс и связанные кадры.</small></button>
       <button class="module" data-tab-open="pro" style="--glow:rgba(77,226,210,.18)"><span class="moduleGlyph" data-icon="layers"></span><b>Точная калибровка · эксперт</b><small>Дополнительная ручная привязка исходников к граням карты, проверка и публикация.</small></button>
-      <button class="module" data-tab-open="access"><span class="moduleGlyph" data-icon="key"></span><b>Доступы</b><small>OWN-ключи, владельцы и отзыв доступа.</small></button>
+      <button class="module" data-tab-open="access"><span class="moduleGlyph" data-icon="key"></span><b>Доступы</b><small>OWN-ключи владельцев и SHA-MNU для Координатора.</small></button>
       <button class="module" data-tab-open="sites"><span class="moduleGlyph" data-icon="store"></span><b>Сайты заведений</b><small>Открыть конкретный SC-MSK с полными правами.</small></button>
       <button class="module" data-tab-open="owners" style="--glow:rgba(107,216,163,.14)"><span class="moduleGlyph" data-icon="users"></span><b>Админка владельцев</b><small>Это Mini App из @Shefofbotsbot: профиль, меню, сайт и заказы конкретной точки.</small></button>
       <button class="module" data-tab-open="bots"><span class="moduleGlyph" data-icon="telegram"></span><b>Боты и связки</b><small>Состояние Master Admin, legacy admin, ключей, владельца, кухни, карты и заказа.</small></button>
@@ -164,12 +164,22 @@
   </section>
 
   <section class="pane" id="accessPane">
-    <div class="sectionTitle"><h2>Доступы</h2><small>та же логика OWN-ключей</small></div>
+    <div class="sectionTitle"><h2>Доступы</h2><small>OWN — владельцы · SHA-MNU — координатор меню</small></div>
     <div class="panel">
       <div class="field"><label>Заведение</label><select id="accessVenue"></select></div>
       <div class="actions"><button class="btn primary" id="createKey">Создать свежий OWN-ключ</button><button class="btn" id="loadAdmins">Владельцы / админы</button></div>
       <div class="code" id="keyOutput" hidden></div>
-      <h3>Владельцы и администраторы</h3><div class="list" id="adminsList"></div><h3>Выданные ключи</h3><p class="muted">Сам ключ показывается один раз при создании. Здесь доступны срок, состояние и отзыв.</p><div class="list" id="invitesList"></div>
+      <h3>Владельцы и администраторы</h3><div class="list" id="adminsList"></div><h3>Выданные OWN-ключи</h3><p class="muted">Сам ключ показывается один раз при создании. Здесь доступны срок, состояние и отзыв.</p><div class="list" id="invitesList"></div>
+    </div>
+    <div class="panel" id="coordinatorKeysPanel" style="border:1px solid rgba(107,216,163,.27);background:linear-gradient(145deg,rgba(16,42,37,.72),rgba(11,17,27,.97))">
+      <div class="sectionTitle" style="margin-top:0"><h2>🥙 Координатор меню · SHA-MNU</h2><small>Отдельный доступ сотрудника · только Шаурмег</small></div>
+      <p class="muted">Выбранное выше заведение получит одноразовый ключ. Он даёт право управлять только его меню через <a href="https://t.me/Anukadavaikavihodibot" target="_blank" rel="noopener noreferrer" style="color:#a0e1c5">@Anukadavaikavihodibot</a>. <b>Не является OWN-ключом.</b></p>
+      <div class="actions"><button class="btn primary" id="createCoordinatorKey" type="button">Создать SHA-MNU на 24 часа</button><button class="btn" id="reloadCoordinatorKeys" type="button">Обновить список</button></div>
+      <div class="code" id="coordinatorKeyOutput" hidden role="status" style="margin-top:12px;white-space:pre-wrap;overflow-wrap:anywhere"></div>
+      <div class="actions" style="margin-top:8px"><button class="btn" id="copyCoordinatorKey" type="button" hidden>Скопировать ключ</button></div>
+      <div id="coordinatorKeyStatus" class="muted" role="status" aria-live="polite" style="margin:12px 0"></div>
+      <h3>Ключи этого заведения</h3><p class="muted">После создания значение ключа показывается только один раз. Неиспользованный ключ можно отозвать.</p>
+      <div class="list" id="coordinatorKeyList"></div>
     </div>
   </section>
 
@@ -246,7 +256,7 @@ function activate(name){
  syncMasterBack(name);
  renderConsoleScreen(name);
  if(name==='bots')loadBots();
- if(name==='owners')loadOwnerAdmins();if(name==='access'){loadAdmins();loadInvites()}
+ if(name==='owners')loadOwnerAdmins();if(name==='access'){loadAdmins();loadInvites();loadCoordinatorKeys()}
  if(name==='astra')loadAstraStudio();
  if(name==='pro'&&$('#proFrame').src.endsWith('about:blank'))$('#proFrame').src='/realcity-pro?from=master';
 }
@@ -463,6 +473,46 @@ async function createKey(){
   await loadAdmins();await loadInvites();toast('OWN-ключ создан')
  }catch(e){toast(e.status===401?'Сессия завершилась. Откройте суперадминку заново.':'Не удалось создать ключ: '+e.message)}finally{b.disabled=false}
 }
+let coordinatorSecretOnce='';
+async function loadCoordinatorKeys(){
+ const est=$('#accessVenue').value,el=$('#coordinatorKeyList');
+ if(!est){el.textContent='Сначала выберите заведение';return}
+ el.textContent='Загружаем ключи координатора…';
+ try{
+  const j=await api('/api/shaurma/admin/coordinator/keys?establishment_id='+encodeURIComponent(est));
+  if(est!==$('#accessVenue').value)return;
+  const keys=Array.isArray(j.keys)?j.keys:[];
+  el.innerHTML=keys.length?keys.map(x=>{
+   const date=x.expiresAt?new Date(x.expiresAt).toLocaleString('ru-RU'):'—';
+   const state=x.active?'Активен':x.redeemedAt?'Использован':x.revokedAt?'Отозван':'Истёк';
+   return '<div class="row"><div><b>SHA-MNU · #'+esc(x.id)+'</b><small>До '+esc(date)+'</small></div><span class="pill">'+esc(state)+'</span>'+(x.active?'<button class="btn danger" data-coordinator-revoke="'+esc(x.id)+'">Отозвать</button>':'')+'</div>';
+  }).join(''):'<div class="empty">Для этого заведения ключи ещё не выдавались</div>';
+ }catch(e){el.textContent='⚠️ Не удалось загрузить SHA-MNU ключи: '+e.message}
+}
+async function createCoordinatorKey(){
+ const est=$('#accessVenue').value;
+ if(!est)return toast('Выберите заведение');
+ const btn=$('#createCoordinatorKey');btn.disabled=true;
+ coordinatorSecretOnce='';$('#copyCoordinatorKey').hidden=true;$('#coordinatorKeyOutput').hidden=true;
+ try{
+  const j=await api('/api/shaurma/admin/coordinator/key',{method:'POST',body:JSON.stringify({establishment_id:est,hours:24})});
+  if(est!==$('#accessVenue').value)return;
+  coordinatorSecretOnce=String(j.key||'');
+  if(!/^SHA-MNU-[A-F0-9]{16}$/.test(coordinatorSecretOnce))throw Error('Сервер не вернул ключ нужного формата');
+  $('#coordinatorKeyOutput').hidden=false;
+  $('#coordinatorKeyOutput').textContent='КЛЮЧ КООРДИНАТОРА (ПОКАЗЫВАЕТСЯ ОДИН РАЗ):\n'+coordinatorSecretOnce+'\nЗаведение: '+String(j.venue||est)+'\nСрок: '+Number(j.expiresInHours||24)+' ч\n\nВ боте: /connect '+coordinatorSecretOnce;
+  $('#copyCoordinatorKey').hidden=false;
+  $('#coordinatorKeyStatus').textContent='✓ Одноразовый SHA-MNU ключ создан. Отправьте его только нужному сотруднику.';
+  await loadCoordinatorKeys();toast('Ключ Координатора готов');
+ }catch(e){$('#coordinatorKeyStatus').textContent='⚠️ '+e.message;toast('Не удалось создать SHA-MNU');}
+ finally{btn.disabled=false}
+}
+async function revokeCoordinatorKey(keyId){
+ const est=$('#accessVenue').value;
+ if(!est||!await window.ShaurmegConsole.dialog({title:'Отозвать SHA-MNU ключ?',message:'Неиспользованный ключ станет недействительным. Подключённых сотрудников это не отключит.',confirm:'Отозвать'}))return;
+ try{await api('/api/shaurma/admin/coordinator/revoke-key',{method:'POST',body:JSON.stringify({establishment_id:est,keyId})});await loadCoordinatorKeys();toast('SHA-MNU отозван')}
+ catch(e){$('#coordinatorKeyStatus').textContent='⚠️ '+e.message}
+}
 async function loadAdmins(){
  const est=$('#accessVenue').value;if(!est)return;
  try{
@@ -507,7 +557,7 @@ function renderConsoleScreen(name){
 }
 function openConsoleModule(path){if(path.startsWith('/shaurmeg-owner'))return activate('map');if(path.startsWith('/shaurma-owner'))return activate(path.includes('section=menu')?'menu':'orders');location.href=path}
 function renderConsoleTools(){
- const defs=[['astra','layers','RealCity · 30 фото','Понятная загрузка и связанные ракурсы'],['pro','layers','Точная калибровка · эксперт','Карта, грани и проверка оригиналов'],['access','key','Ключи доступа','Выдача OWN-ключей и отзыв доступа'],['owners','users','Владельцы','Привязки Telegram и кабинеты точек'],['bots','telegram','Telegram-боты','Состояние связок и вебхуков'],['orders','chart','Аналитика','Периоды, выручка и история'],['menu','menu','Меню сети','Категории, блюда и конструкторы'],['map','pin','Карта','Метки, координаты и оформление'],['sites','store','Заведения','Карточки и настройки каждой точки']];
+ const defs=[['astra','layers','RealCity · 30 фото','Понятная загрузка и связанные ракурсы'],['pro','layers','Точная калибровка · эксперт','Карта, грани и проверка оригиналов'],['access','key','Ключи доступа','Ключи OWN и SHA-MNU, отзыв доступа'],['owners','users','Владельцы','Привязки Telegram и кабинеты точек'],['bots','telegram','Telegram-боты','Состояние связок и вебхуков'],['orders','chart','Аналитика','Периоды, выручка и история'],['menu','menu','Меню сети','Категории, блюда и конструкторы'],['map','pin','Карта','Метки, координаты и оформление'],['sites','store','Заведения','Карточки и настройки каждой точки']];
  $('#consoleToolGrid').innerHTML=defs.map(([id,icon,title,desc])=>'<button class="consoleSetting" data-tab-open="'+id+'"><span data-icon="'+icon+'"></span><div><b>'+title+'</b><small>'+desc+'</small></div><i>›</i></button>').join('');
 }
 renderConsoleTools();
@@ -558,7 +608,20 @@ $('#exportAstraPackage').onclick=exportAstraPackage;
 $('#importAstraOutput').onclick=()=>$('#astraOutputFile').click();
 $('#astraOutputFile').onchange=async e=>{await importAstraOutput(e.target.files[0]);e.target.value=''};
 $('#ownerVenue').onchange=loadOwnerAdmins;
-$('#createKey').onclick=createKey;$('#loadAdmins').onclick=()=>{loadAdmins();loadInvites()};$('#accessVenue').onchange=()=>{$('#keyOutput').hidden=true;loadAdmins();loadInvites()};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
+$('#createKey').onclick=createKey;$('#loadAdmins').onclick=()=>{loadAdmins();loadInvites()};
+$('#createCoordinatorKey').onclick=createCoordinatorKey;
+$('#reloadCoordinatorKeys').onclick=loadCoordinatorKeys;
+$('#copyCoordinatorKey').onclick=async()=>{
+ if(!coordinatorSecretOnce)return;
+ try{await navigator.clipboard.writeText(coordinatorSecretOnce);toast('SHA-MNU скопирован')}
+ catch{window.prompt('Скопируйте ключ Координатора:',coordinatorSecretOnce)}
+};
+$('#coordinatorKeyList').onclick=e=>{const btn=e.target.closest('[data-coordinator-revoke]');if(btn)revokeCoordinatorKey(btn.dataset.coordinatorRevoke)};
+$('#accessVenue').onchange=()=>{
+ $('#keyOutput').hidden=true;
+ coordinatorSecretOnce='';$('#coordinatorKeyOutput').textContent='';$('#coordinatorKeyOutput').hidden=true;$('#copyCoordinatorKey').hidden=true;$('#coordinatorKeyStatus').textContent='';
+ loadAdmins();loadInvites();loadCoordinatorKeys()
+};$('#siteVenue').onchange=updateSiteSelector;$('#refreshBots').onclick=loadBots;$('#loginBtn').onclick=passwordLogin;$('#password').addEventListener('keydown',e=>{if(e.key==='Enter')passwordLogin()});
 (async()=>{
  if(adminSession||ownerToken){await boot();return}
  const tg=window.Telegram?.WebApp;

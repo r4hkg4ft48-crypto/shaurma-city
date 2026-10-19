@@ -199,7 +199,15 @@ async function setFriendlyIdentifierTx(c,est,kind,id,input,row,actor){
   const current=extractEntities(row);
   const own=current.find(x=>x.kind===kind&&String(x.id)===String(id));
   if(!own)throw error('Объект не найден в текущем меню заведения.',404);
-  const otherNames=new Set(current.filter(x=>!(x.kind===kind&&String(x.id)===String(id))).map(x=>friendlyNorm(x.name)));
+  const otherNames=new Set();
+  for(const entity of current){
+    if(entity.kind===kind&&String(entity.id)===String(id))continue;
+    otherNames.add(friendlyNorm(entity.name));
+    // Bare ingredient names are also reserved. If cheese appears in two
+    // dishes, one of them cannot silently monopolize the spoken word "сыр".
+    if(entity.kind==='ingredient'&&entity.name.includes(' · '))
+      otherNames.add(friendlyNorm(entity.name.split(' · ').pop()));
+  }
   const aliases=await c.query('SELECT entity_type,entity_id,code,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1',[est]);
   for(const x of aliases.rows){
     if(x.entity_type===kind&&String(x.entity_id)===String(id))continue;

@@ -418,8 +418,44 @@
     if(ctx.marker.hero_image){
       $('#menuSection')?.style.setProperty('--menu-atmosphere','url("'+String(ctx.marker.hero_image).replace(/["\\]/g,'')+'")');
     }
-    renderMenu();renderCart();
+    renderMenu();renderCart();syncCategoryGlass();
   }
+
+  const menuReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function syncCategoryGlass(center=false){
+    const rail=$('#chips');
+    rail.setAttribute('role','group');rail.setAttribute('aria-label','Разделы меню');
+    rail.querySelectorAll('[data-cat]').forEach(button=>{
+      const selected=button.dataset.cat===category;
+      button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+      if(selected&&center)rail.scrollTo({left:button.offsetLeft-(rail.clientWidth-button.offsetWidth)/2,behavior:menuReducedMotion()?'auto':'smooth'});
+    });
+  }
+  function revealMenu(){
+    if(menuReducedMotion())return;
+    document.querySelectorAll('#menuFeature .menuFeatureCard,#menuGrid .foodCard').forEach((card,index)=>{
+      if(index>11)return;
+      card.animate?.([{opacity:0,translate:'0 12px'},{opacity:1,translate:'0 0'}],{duration:380,delay:Math.min(index*32,220),easing:'cubic-bezier(.2,.8,.2,1)',fill:'backwards'});
+    });
+  }
+  function selectCategory(value){
+    if(category===value)return;
+    category=value;syncCategoryGlass(true);renderMenu();revealMenu();
+    tg?.HapticFeedback?.selectionChanged?.();
+  }
+  const categoryRail=$('#chips');let railIdle;
+  categoryRail.addEventListener('scroll',()=>{
+    if(menuReducedMotion())return;
+    categoryRail.classList.add('isScrolling');clearTimeout(railIdle);
+    railIdle=setTimeout(()=>categoryRail.classList.remove('isScrolling'),180);
+  },{passive:true});
+  categoryRail.addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    const buttons=[...categoryRail.querySelectorAll('[data-cat]')],index=buttons.indexOf(document.activeElement);
+    if(index<0)return;event.preventDefault();
+    const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:Math.max(0,Math.min(buttons.length-1,index+(event.key==='ArrowRight'?1:-1)));
+    buttons[next].focus({preventScroll:true});selectCategory(buttons[next].dataset.cat);
+  });
 
   function renderMenu(){
     const all=(ctx?.venue?.menu||[]).filter(x=>x.active!==false);
@@ -679,7 +715,7 @@
     if(hasItemOptions(src))return openItemOptions(src);
     if(addConfigured(src,{},{})){
       const name=String(src.n||src.name||'Позиция');toast(name+' добавлена в корзину');
-      document.querySelectorAll('[data-add="'+CSS.escape(String(id))+'"]').forEach(btn=>{const prev=btn.innerHTML;btn.classList.add('justAdded');btn.innerHTML='✓';clearTimeout(btn._addedTimer);btn._addedTimer=setTimeout(()=>{btn.classList.remove('justAdded');btn.innerHTML=prev},650)});
+      document.querySelectorAll('[data-add="'+CSS.escape(String(id))+'"]').forEach(btn=>{if(!btn.classList.contains('justAdded'))btn._restingHTML=btn.innerHTML;btn.classList.add('justAdded');btn.innerHTML='✓';clearTimeout(btn._addedTimer);btn._addedTimer=setTimeout(()=>{btn.classList.remove('justAdded');btn.innerHTML=btn._restingHTML},650)});
     }
   }
 
@@ -881,14 +917,12 @@
     }catch{}
   }
 
-  $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;category=b.dataset.cat;document.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('active',x===b));renderMenu()};
+  $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;selectCategory(b.dataset.cat)};
   $('#menuFeature').onclick=e=>{const custom=e.target.closest('[data-customize]');if(custom){const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===custom.dataset.customize);if(src&&hasItemOptions(src))openItemOptions(src);return}const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
     const section=e.target.closest('[data-section-cat]');
     if(section){
-      category=section.dataset.sectionCat;
-      document.querySelectorAll('#chips [data-cat]').forEach(x=>x.classList.toggle('active',x.dataset.cat===category));
-      renderMenu();
+      selectCategory(section.dataset.sectionCat);
       try{$('.menuSection')?.scrollIntoView?.({behavior:'smooth',block:'start'})}catch{}
       return;
     }

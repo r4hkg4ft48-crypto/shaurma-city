@@ -15,10 +15,11 @@ const fail=(message,status=400)=>Object.assign(new Error(message),{status});
 const HELP='🥙 КООРДИНАТОР МЕНЮ · ШАУРМЕГ\n\n' +
   '1. Получите одноразовый ключ в админке своего заведения → Идентификаторы меню.\n' +
   '2. Отправьте /connect SHA-MNU-... (ключ действует один раз).\n' +
-  '3. Проверьте подключение через /status, найдите позиции через /menu.\n' +
+  '3. Проверьте подключение через /status, найдите названия блюд через /menu.\n' +
   '4. Напишите или произнесите: «Убери сырную шаурму», «Измени цену на сырную шаурму 350».\n' +
   '5. Проверьте название заведения и блюдо, нажмите «Подтвердить».\n\n' +
   '/menu шаурма — поиск по меню\n' +
+  'Можно писать «Сырная шаурма стоп лист» или «Сырная шаурма цена 350».\n' +
   '/status — подключённое заведение\n' +
   '«Переименуй идентификатор сырной шаурмы в сырная» — своё имя для голоса\n' +
   'Можно менять состав, название, описание, категории, доступность, цены и добавки.\n' +
@@ -95,7 +96,7 @@ async function previewWithLegacy(uid,project,raw){
   const match=String(raw||'').trim().match(/^([^\s]+)\s+([\s\S]+)$/);
   const item=match?scope.items.find(x=>language.normalize(x.code)===language.normalize(match[1])):null;
   const creation=/^создать\s+(позицию|блюдо|напиток|категорию|ингредиент|группу)\s+.+/i.test(String(raw||'').trim());
-  if(!item&&!creation)return {type:'unknown',text:'Не распознал точную позицию. Назовите блюдо целиком или используйте его код.'};
+  if(!item&&!creation)return {type:'unknown',text:'Не нашёл точное блюдо в вашем заведении. Назовите его полностью или посмотрите /menu.'};
   const id=crypto.randomUUID();
   await db.query(
     'INSERT INTO shaurma_coordinator_pending(id,telegram_id,project,venue_id,kind,entity_id,code,command,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+interval \'3 minutes\')',
@@ -249,7 +250,7 @@ async function handle(message){
     if(!/^SHA-MNU-[A-F0-9]{16}$/.test(key))
       return reply(chatId,'Укажите одноразовый ключ своего заведения «Шаурмега». Формат: /connect SHA-MNU-...\nСоздаётся в админке → Идентификаторы меню.');
     const response=await coordinator.claim(uid,key);
-    return reply(chatId,'✅ '+response.venue+' · подключено к «Шаурмегу».\n/menu — посмотреть позиции и коды.\nОтправьте сообщение или голосовую команду. Для изменений потребуется подтверждение.',menuKeyboard());
+    return reply(chatId,'✅ '+response.venue+' · подключено к «Шаурмегу».\n/menu — названия блюд, /menu ингредиенты — состав.\nИзменения можно делать по названиям. Каждое действие требует подтверждения.',menuKeyboard());
   }
   if(/^(?:[A-Z]{3}-MNU-[A-F0-9]{16}|\/(?:connect|подключить)\s+[A-Z]{3}-MNU-[A-F0-9]{16})$/i.test(text))
     return reply(chatId,'Этот ключ не относится к «Шаурмегу». Получите ключ SHA-MNU-... в админке своего заведения.');

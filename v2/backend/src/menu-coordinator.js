@@ -250,7 +250,7 @@ async function execute(telegramId,text){
   const result=await db.tx(async c=>{
     const q=await c.query('SELECT menu,config,name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true FOR UPDATE',[bind.establishment_id]);
     if(!q.rowCount)throw error('Заведение больше не активно.',404);
-    const code=await c.query('SELECT entity_type,entity_id,code FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND normalized_code=$2',[bind.establishment_id,norm(match[1])]);
+    const code=await c.query('SELECT entity_type,entity_id,code,spoken_name FROM shaurma_coordinator_codes WHERE establishment_id=$1 AND normalized_code=$2',[bind.establishment_id,norm(match[1])]);
     if(!code.rowCount)throw error('Нет такого идентификатора в текущем заведении.',404);
     const obj=code.rows[0],row=q.rows[0],menu=Array.isArray(row.menu)?row.menu:[],cfg=row.config||{};
     const aliasCommand=command.match(/^идентификатор\s+([\s\S]+)$/i);
@@ -341,7 +341,8 @@ async function execute(telegramId,text){
     cfg.menu_revision=(Number(cfg.menu_revision)||0)+1;
     const r=await c.query('UPDATE shaurma_venues SET menu=$2::jsonb,config=$3::jsonb,updated_at=NOW() WHERE establishment_id=$1 RETURNING *',[bind.establishment_id,JSON.stringify(updated),JSON.stringify(cfg)]);
     await c.query('INSERT INTO shaurma_coordinator_audit(establishment_id,telegram_id,entity_type,entity_id,command,old_value,new_value) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)',[bind.establishment_id,String(telegramId),obj.entity_type,obj.entity_id,command,JSON.stringify(before),JSON.stringify(target)]);
-    return {row:r.rows[0],text:'✅ '+(row.name||'Заведение')+' · '+match[1]+' → '+command,revision:cfg.menu_revision};
+    const readable=obj.spoken_name||extractEntities(row).find(x=>x.kind===obj.entity_type&&String(x.id)===String(obj.entity_id))?.name||obj.code;
+    return {row:r.rows[0],text:'✅ '+(row.name||'Заведение')+' · «'+readable+'» → '+command,revision:cfg.menu_revision};
   });
   if(result.aliasOnly)return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:result.text};
   rt.pushVenue(bind.establishment_id,'menu_changed',{establishment_id:bind.establishment_id,revision:result.revision});

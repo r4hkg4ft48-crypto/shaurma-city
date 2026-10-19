@@ -284,6 +284,32 @@ async function execute(telegramId,text){
   rt.pushOwner('venue',result.row);
   return {ok:true,project:'shaurmeg',venue:bind.name,venueId:bind.establishment_id,text:result.text};
 }
+async function issueKey(establishmentId,hours=24){
+  await ensureSchema();
+  const est=D.establishmentId(establishmentId);
+  if(!est)throw error('bad_establishment_id',400);
+  const venue=await db.query('SELECT name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[est]);
+  if(!venue.rowCount)throw error('Заведение не найдено или отключено.',404);
+  const ttl=Math.max(1,Math.min(168,Number(hours)||24));
+  const code='SHA-MNU-'+crypto.randomBytes(8).toString('hex').toUpperCase();
+  const r=await db.query("INSERT INTO shaurma_coordinator_keys(establishment_id,code_hash,expires_at) VALUES($1,$2,NOW()+($3::text||' hours')::interval) RETURNING id,expires_at",[est,keyHash(code),String(ttl)]);
+  return {ok:true,project:'shaurmeg',key:code,keyId:String(r.rows[0].id),venue:venue.rows[0].name,establishmentId:est,expiresInHours:ttl,expiresAt:r.rows[0].expires_at};
+}
+async function keyStatus(establishmentId){
+  await ensureSchema();
+  const est=D.establishmentId(establishmentId);
+  if(!est)throw error('bad_establishment_id',400);
+  const r=await db.query('SELECT id,expires_at,redeemed_at,revoked_at,created_at FROM shaurma_coordinator_keys WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 100',[est]);
+  return {ok:true,establishmentId:est,keys:r.rows.map(x=>({id:String(x.id),expiresAt:x.expires_at,createdAt:x.created_at,redeemedAt:x.redeemed_at,revokedAt:x.revoked_at,active:!x.redeemed_at&&!x.revoked_at&&new Date(x.expires_at).getTime()>Date.now()}))};
+}
+async function revokeKey(establishmentId,keyId){
+  await ensureSchema();
+  const est=D.establishmentId(establishmentId);
+  if(!est||!/^[1-9][0-9]*$/.test(String(keyId||'')))throw error('invalid_key_identity',400);
+  const r=await db.query('UPDATE shaurma_coordinator_keys SET revoked_at=now() WHERE establishment_id=$1 AND id=$2 AND revoked_at IS NULL AND redeemed_at IS NULL RETURNING id',[est,String(keyId)]);
+  if(!r.rowCount)throw error('Ключ уже использован, отозван либо не относится к заведению.',404);
+  return {ok:true,establishmentId:est,keyId:String(r.rows[0].id)};
+}
 const help='🥙 КООРДИНАТОР · ШАУРМЕГ\nКОД стоп лист — приостановить продажу\nКОД в наличии — вернуть в продажу\nКОД скрыть / показать — управлять отображением\nКОД цена 350 — новая цена\nКОД название Новое название\nКОД описание Новый текст\nКОД состав + сыр — добавить ингредиент\nКОД состав = мясо, сыр, соус — заменить состав\nКОД состав КОД_ИНГРЕДИЕНТА убрать — убрать ингредиент\nКОД_ИНГРЕДИЕНТА стоп лист — заблокировать блюдо при отсутствии ингредиента\nКОД удалить — архивировать, сохранив историю.\nсоздать позицию Новая шаурма | 350 | КОД_КАТЕГОРИИ\nсоздать категорию Сезонное\nКОД_ГРУППЫ добавить вариант Халапеньо | 30';
 function install(app){
   app.get('/api/v2/coordinator/codes',async(req,res)=>{
@@ -332,11 +358,7 @@ function install(app){
   app.post('/api/v2/coordinator/key',async(req,res)=>{
     try{
       await ensureSchema();const est=D.establishmentId(req.body?.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est,true);
-      const venue=await db.query('SELECT name FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[est]);if(!venue.rowCount)throw error('Заведение не найдено.',404);
-      const code='SHA-MNU-'+crypto.randomBytes(8).toString('hex').toUpperCase();
-      const hours=Math.max(1,Math.min(168,Number(req.body?.hours)||24));
-      await db.query("INSERT INTO shaurma_coordinator_keys(establishment_id,code_hash,expires_at) VALUES($1,$2,NOW()+($3::text||' hours')::interval)",[est,keyHash(code),String(hours)]);
-      res.json({ok:true,key:code,venue:venue.rows[0].name,expiresInHours:hours});
+      res.json(await issueKey(est,req.body?.hours));
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
   app.post('/api/v2/coordinator/bridge',async(req,res)=>{
@@ -359,4 +381,4 @@ function install(app){
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
 }
-module.exports={ensureSchema,ensureCodes,install,claim,binding,execute,help,extractEntities};
+module.exports={ensureSchema,ensureCodes,issueKey,keyStatus,revokeKey,install,claim,binding,execute,help,extractEntities};

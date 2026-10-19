@@ -3,6 +3,7 @@ const crypto=require('crypto');
 const express=require('express');
 const language=require('./coordinator-language');
 const shaLanguage=require('./coordinator-shaurmeg-language');
+const dialogue=require('./coordinator-dialogue');
 const rich=require('../../../backend/telegram-rich');
 const coordinator=require('./menu-coordinator');
 const db=require('./db');
@@ -121,6 +122,66 @@ async function confirm(uid,id){
   }
   return coordinator.execute(uid,row.command);
 }
+
+async function dialogState(uid,scope){
+ const r=await db.query('SELECT state FROM shaurma_coordinator_dialogue WHERE telegram_id=$1 AND venue_id=$2 AND expires_at>now()',[String(uid),String(scope.venueId)]);
+ return r.rows[0]?.state||dialogue.fresh();
+}
+async function saveDialogState(uid,scope,state){
+ // The row is scoped to the actor AND establishment; no cross-venue conversational memory.
+ await db.query("INSERT INTO shaurma_coordinator_dialogue(telegram_id,venue_id,state,expires_at) VALUES($1,$2,$3::jsonb,now()+interval '15 minutes') ON CONFLICT(telegram_id) DO UPDATE SET venue_id=EXCLUDED.venue_id,state=EXCLUDED.state,expires_at=EXCLUDED.expires_at,updated_at=now()",
+ [String(uid),String(scope.venueId),JSON.stringify(state||dialogue.fresh())]);
+}
+const fmtMoney=v=>v===null||v===undefined||v===''?'не указана':(Number(v).toLocaleString('ru-RU')+' ₽');
+async function dialogInfo(scope,turn){
+ // A trusted catalog ref is checked again against this venue's current persisted menu.
+ const current=scope.items.find(x=>x.kind==='item'&&x.code===turn.item?.code&&String(x.id)===String(turn.item?.id));
+ if(!current)return 'Не могу подтвердить позицию: каталог изменился. Назовите блюдо заново.';
+ const r=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[scope.venueId]);
+ const dish=(Array.isArray(r.rows[0]?.menu)?r.rows[0].menu:[]).find(x=>String(x.id)===String(current.id));
+ if(!dish)return 'Блюдо больше не найдено в меню этого заведения.';
+ const name=String(dish.n||current.name);
+ const available=dish.active!==false&&dish.available!==false&&!(dish.coordinator_blocked_ingredients||[]).length;
+ if(turn.topic==='price')return '💰 '+name+' · '+fmtMoney(dish.p)+'.';
+ if(turn.topic==='composition')return '🥙 '+name+' · состав: '+String(dish.composition||'пока не указан')+'.';
+ if(turn.topic==='availability')return '📍 '+name+' · '+(available?'доступно по настройкам меню (расписание и часы продаж проверяются отдельно)':'ограничено или снято с продажи')+'.';
+ return '🥙 '+name+'\nКод: '+current.code+'\nЦена: '+fmtMoney(dish.p)+'\nСостав: '+String(dish.composition||'не указан')+'\nПродажа: '+(available?'разрешена настройками меню':'ограничена')+(dish.d?'\nОписание: '+String(dish.d).slice(0,200):'');
+}
+async function dialogReport(scope,topic){
+ if(topic==='audit'){
+  const r=await db.query('SELECT command,entity_type,created_at FROM shaurma_coordinator_audit WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 8',[scope.venueId]);
+  return r.rows.length?'🧾 Последние изменения меню · '+scope.venue+'\n'+r.rows.map((x,i)=>(i+1)+'. '+new Date(x.created_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК · '+String(x.command).slice(0,160)).join('\n'):'🧾 По этому заведению записей об изменениях меню пока нет.';
+ }
+ const r=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[scope.venueId]);
+ const menu=Array.isArray(r.rows[0]?.menu)?r.rows[0].menu:[];
+ const stopped=menu.filter(x=>x&&x.active===false||x&&x.available===false||x&&Array.isArray(x.coordinator_blocked_ingredients)&&x.coordinator_blocked_ingredients.length);
+ if(topic==='stopped')return '⏸ По явным настройкам меню «'+scope.venue+'» остановлено '+stopped.length+' позиций:\n'+
+   (stopped.length?stopped.slice(0,20).map(x=>'• '+String(x.n||x.id)+' · '+(scope.items.find(c=>c.kind==='item'&&String(c.id)===String(x.id))?.code||'без кода')).join('\n'):'Стоп-позиций нет.')+
+   (stopped.length>20?'\nИ ещё '+(stopped.length-20)+'.':'')+'\nСтатус расписания продаж сюда не входит.';
+ return '📊 Сводка меню · '+scope.venue+'\nВсего позиций: '+menu.length+'\nОтключены или ограничены настройками: '+stopped.length+
+   '\nНе ограничены настройками: '+(menu.length-stopped.length)+'\nДля списка скажите «Что в стоп-листе?», для истории — «Что изменилось?».'+
+   '\nЭто отчёт по сохранённым данным меню, не статистика заказов.';
+}
+async function dialogueTurn(uid,text){
+ const scope=await catalogFor(uid);
+ const state=await dialogState(uid,scope);
+ const turn=dialogue.step(String(text||'').slice(0,1200),scope.items,state);
+ if(turn.type==='unknown'){
+  const legacy=await previewWithLegacy(uid,'shaurmeg',text);
+  if(legacy.type==='proposal')return legacy;
+  return {...turn,text:turn.text||legacy.text};
+ }
+ await saveDialogState(uid,scope,turn.state);
+ if(turn.type==='proposal'){
+  const result=await previewWithLegacy(uid,'shaurmeg',turn.item.code+' '+turn.command);
+  if(result.type!=='proposal')throw fail('Команда не прошла повторную проверку, уточните действие',409);
+  return result;
+ }
+ if(turn.type==='info')return {type:'reply',text:await dialogInfo(scope,turn)};
+ if(turn.type==='report')return {type:'reply',text:await dialogReport(scope,turn.topic)};
+ return {...turn,text:turn.text||'Уточните запрос.'};
+}
+
 function verifyMiniApp(initData){
   if(!token())throw fail('Бот не настроен',503);
   if(typeof initData!=='string'||initData.length>4096)throw fail('telegram_identity_required',401);
@@ -186,6 +247,11 @@ async function handle(message){
   }
   if(/^(?:[A-Z]{3}-MNU-[A-F0-9]{16}|\/(?:connect|подключить)\s+[A-Z]{3}-MNU-[A-F0-9]{16})$/i.test(text))
     return reply(chatId,'Этот ключ не относится к «Шаурмегу». Получите ключ SHA-MNU-... в админке своего заведения.');
+  if(/^\/(?:reset|сброс)(?:@\S+)?$/i.test(text)){
+    const scope=await catalogFor(uid);
+    await saveDialogState(uid,scope,dialogue.fresh());
+    return reply(chatId,'Контекст разговора очищен. Меню не изменено.');
+  }
   const showMenu=text.match(/^\/(?:menu|меню|каталог)(?:@\S+)?(?:\s+(.+))?$/i);
   if(showMenu){
     const bound=await coordinator.binding(uid);
@@ -207,8 +273,7 @@ async function handle(message){
   const prefix=command.match(/^(?:шаурмег|shaurmeg|шаурма)\s+(.+)$/is);
   if(prefix)command=prefix[1].trim();
   if(!(await coordinator.binding(uid)))return reply(chatId,'🥙 Сначала подключите своё заведение «Шаурмега»: /connect SHA-MNU-...');
-  const project='shaurmeg';
-  const result=await previewWithLegacy(uid,project,command);
+  const result=await dialogueTurn(uid,command);
   if(result.type==='proposal')return reply(chatId,result.text,{inline_keyboard:[[
     {text:'✅ Подтвердить',callback_data:'cm:yes:'+result.id},
     {text:'✕ Отменить',callback_data:'cm:no:'+result.id}
@@ -276,7 +341,7 @@ function install(app){
         return res.json({ok:true,project,venue:scope.venue,venueId:scope.venueId,items:scope.items.slice(0,5000)});
       }
       if(action==='preview'){
-        const result=await previewWithLegacy(uid,project,String(req.body?.text||'').slice(0,350));
+        const result=await dialogueTurn(uid,String(req.body?.text||'').slice(0,600));
         return res.json({ok:true,...result});
       }
       if(action==='confirm'){
@@ -303,7 +368,7 @@ function install(app){
   });
   app.get('/api/v2/telegram/coordinator-health',(req,res)=>res.json({
     enabled:token().length>=30,webhookSecured:webhookSecret().length>=20,
-    shaMenuAvailable:true,voiceConfigured:!!(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY),
+    shaMenuAvailable:true,dialogueLocal:true,voiceConfigured:!!(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY),
     miniAppConfigured:!!appUrl(),project:'shaurmeg'
   }));
 }
@@ -311,6 +376,7 @@ async function sync(){
   await db.query('CREATE TABLE IF NOT EXISTS shaurma_coordinator_updates(update_id bigint PRIMARY KEY,received_at timestamptz NOT NULL DEFAULT now())');
   await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_pending(id uuid PRIMARY KEY,telegram_id text NOT NULL,project text NOT NULL CHECK(project='shaurmeg'),venue_id text NOT NULL,kind text,entity_id text,code text,command text NOT NULL,expires_at timestamptz NOT NULL,consumed_at timestamptz,created_at timestamptz NOT NULL DEFAULT now())");
   await db.query('CREATE INDEX IF NOT EXISTS shaurma_coordinator_pending_actor ON shaurma_coordinator_pending(telegram_id,expires_at DESC)');
+  await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_dialogue(telegram_id text PRIMARY KEY,venue_id text NOT NULL,state jsonb NOT NULL DEFAULT '{}'::jsonb,expires_at timestamptz NOT NULL,updated_at timestamptz NOT NULL DEFAULT now())");
   if(!token()){console.warn('Coordinator bot disabled: COORDINATOR_BOT_TOKEN not configured');return {enabled:false};}
   if(token().length<30||webhookSecret().length<20)throw fail('Set COORDINATOR_BOT_TOKEN and a random COORDINATOR_WEBHOOK_SECRET (20+ chars)',503);
   await telegram('setMyCommands',{commands:[
@@ -318,6 +384,7 @@ async function sync(){
     {command:'connect',description:'Подключить заведение по ключу'},
     {command:'status',description:'Показать привязанные заведения'},
     {command:'menu',description:'Поиск по меню Шаурмега'},
+    {command:'reset',description:'Очистить контекст диалога'},
     {command:'help',description:'Команды меню'}]});
   await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message','callback_query']});
   if(appUrl())await telegram('setChatMenuButton',{menu_button:{type:'web_app',text:'🎙 Menu Control',web_app:{url:appUrl()}}});

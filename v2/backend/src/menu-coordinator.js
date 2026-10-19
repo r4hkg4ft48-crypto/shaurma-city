@@ -36,7 +36,7 @@ function extractEntities(row){
   const out=sectionList.map(x=>({kind:'category',id:String(x.id),name:String(x.name||x.id)}));
   for(const item of menu){
     const itemId=String(item.id||'');if(!itemId)continue;
-    out.push({kind:'item',id:itemId,name:String(item.n||itemId)});
+    out.push({kind:'item',id:itemId,name:String(item.n||itemId),price:Number.isFinite(Number(item.p))?Number(item.p):null,weight:String(item.weight||'').slice(0,40)});
     const options=item.options||{};
     for(const group of ['meats','sizes','bases','sauces','extras']){
       if(!Array.isArray(options[group]))continue;

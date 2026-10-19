@@ -100,9 +100,9 @@ function select(wait,text,catalog){
 }
 function requestSelection(candidates,task,catalog){
  const unique=candidates.slice(0,MAX_OPTIONS).filter(x=>lookup(catalog,ref(x)));
- if(!unique.length)return {type:'reply',state:fresh(),text:'Не нашёл подходящих позиций в меню вашего заведения. Назовите полное название или код.'};
+ if(!unique.length)return {type:'reply',state:fresh(),text:'Не нашёл подходящих позиций в меню вашего заведения. Назовите полное название.'};
  return {type:'clarify',state:{wait:{mode:'choose',options:unique.map(ref),task},last:null},
- text:'Уточните, какую именно позицию вы имеете в виду. Ответьте номером, кодом или полным названием:\n'+optionsText(unique)};
+ text:'Уточните, какую именно позицию вы имеете в виду. Ответьте номером или полным названием:\n'+optionsText(unique)};
 }
 function resultFor(item,task){
  if(!item)return {type:'reply',text:'Позиция была изменена или удалена. Назовите её заново.',state:fresh()};
@@ -169,7 +169,7 @@ function step(input,catalog,previous={}){
   const prev=lookup(catalog,state.last);
   if(prev&&prev.kind==='item')return resultFor(prev,{type:'write',command:contextual});
   return {type:'clarify',state:{wait:{mode:'target',task:{type:'write',command:contextual}},last:null},
-   text:'Уточните полное название блюда или его код. Какую позицию меняем?'};
+   text:'Уточните полное название блюда. Какую позицию меняем?'};
  }
  const missing=actionWithIncompleteTarget(raw);
  if(missing){

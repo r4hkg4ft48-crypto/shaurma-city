@@ -68,7 +68,7 @@ test('Telegram and signed Mini App accept only Shaurmeg one-time venue keys',asy
   const message=(text)=>({chat:{id:1234567,type:'private'},from:{id:1234567},text});
   await bot.handle(message('/connect XYZ-MNU-0000000000000000'));
   assert.equal(issued.length,0,'A different-project key must never be routed to a bridge');
-  assert.match(sent.at(-1).text,/не относится к «Шаурмегу»/);
+  assert.match(sent.at(-1).text,/одноразовый ключ своего заведения «Шаурмега»/);
   await bot.handle(message('/connect SHA-MNU-0123456789ABCDEF'));
   assert.equal(issued.length,1);
   assert.match(sent.at(-1).text,/подключено к «Шаурмегу»/);

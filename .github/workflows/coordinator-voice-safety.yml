@@ -1,17 +1,18 @@
 name: Coordinator Voice Safety
 on:
   push:
-    branches: [feature/voice-menu-control-v1, 'fix/sha-only-coordinator-*', 'feat/coordinator-keys-in-master-admin-*']
+    branches: [feature/voice-menu-control-v1, 'fix/sha-only-coordinator-*', 'feat/coordinator-keys-in-master-admin-*', 'feat/shaurmeg-local-dialogue-*']
   pull_request:
     paths:
       - 'v2/backend/src/coordinator-*'
+      - 'v2/backend/test/coordinator-dialogue.test.js'
       - 'v2/backend/src/menu-coordinator.js'
       - 'backend/master-admin.html'
       - 'backend/server.js'
       - 'v2/backend/test/master-coordinator-key-contract.test.js'
       - 'v2/backend/test/coordinator-language.test.js'
       - 'v2/backend/test/coordinator-shaurmeg-language.test.js'
-      - 'v2/backend/test/coordinator-sha-only.test.js'
+      - 'v2/backend/test/coordinator-sha-only.test.js v2/backend/test/coordinator-dialogue.test.js'
       - 'v2/frontend/coordinator-console.html'
       - '.github/workflows/coordinator-voice-safety.yml'
 jobs:
@@ -26,6 +27,7 @@ jobs:
         run: |
           node --check v2/backend/src/coordinator-language.js
           node --check v2/backend/src/coordinator-shaurmeg-language.js
+          node --check v2/backend/src/coordinator-dialogue.js
           node --check v2/backend/src/coordinator-bot.js
           node --check v2/backend/src/menu-coordinator.js
           node --check backend/server.js

@@ -57,13 +57,14 @@ test('Missing or duplicated names never allow unsafe writes',()=>{
 test('Signed Mini App previews named command, records canonical internal code, confirms once',async()=>{
  const source=fs.readFileSync(path.join(__dirname,'../src/coordinator-bot.js'),'utf8');
  const uid='1234567', token='123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890';
- const recorded=[],executed=[],pending=new Map(),routes=new Map();
+ const recorded=[],executed=[],sent=[],pending=new Map(),routes=new Map();
  const coordinator={
   async binding(id){assert.equal(String(id),uid);return {name:'Тестовое заведение',establishment_id:'venue-test'};},
   async ensureCodes(id){assert.equal(id,'venue-test');return catalog;},
   async execute(id,command){executed.push({id:String(id),command});return {text:'✅ Готово'};}
  };
  const fakeDb={async query(sql,args=[]){
+  if(sql.startsWith('INSERT INTO shaurma_coordinator_updates'))return {rows:[{update_id:args[0]}],rowCount:1};
   if(sql.startsWith('SELECT state FROM shaurma_coordinator_dialogue'))return {rows:[],rowCount:0};
   if(sql.startsWith('INSERT INTO shaurma_coordinator_dialogue'))return {rows:[],rowCount:1};
   if(sql.startsWith('INSERT INTO shaurma_coordinator_pending')){
@@ -90,7 +91,7 @@ test('Signed Mini App previews named command, records canonical internal code, c
  };
  const env={COORDINATOR_BOT_TOKEN:token,COORDINATOR_WEBHOOK_SECRET:'a'.repeat(24)};
  const ctx={module:{exports:{}},exports:{},Buffer,console,AbortController,FormData,Blob,URLSearchParams,
-  setTimeout,clearTimeout,fetch:async()=>({ok:true,status:200,json:async()=>({ok:true,result:{}})}),
+  setTimeout,clearTimeout,fetch:async(url,opts)=>{if(String(url).includes('/sendMessage'))sent.push(JSON.parse(opts.body));return {ok:true,status:200,json:async()=>({ok:true,result:{}})};},
   process:{env},require(name){if(!(name in deps))throw Error('unexpected dependency '+name);return deps[name];}
  };
  vm.runInNewContext(source,ctx,{filename:'coordinator-bot.js'});
@@ -124,4 +125,23 @@ test('Signed Mini App previews named command, records canonical internal code, c
  const unknown=await api('preview',{text:'Чужое блюдо стоп лист'});
  assert.notEqual(unknown.body.type,'proposal');
  assert.equal(executed.length,1);
+
+ // Same code path is used by a live Telegram private-chat message.
+ await bot.handle({chat:{id:Number(uid),type:'private'},from:{id:Number(uid)},text:'сырная цена 350'});
+ assert.match(sent.at(-1).text,/Подтвердите изменение/);
+ assert.equal(recorded.at(-1).code,'P101');
+ assert.equal(recorded.at(-1).command,'P101 цена 350');
+ assert.equal(executed.length,1,'Telegram text does not alter menu until callback');
+ const lastId=recorded.at(-1).id;
+ const callback={
+  update_id:818231,
+  callback_query:{id:'callback1',from:{id:Number(uid)},message:{chat:{id:Number(uid),type:'private'}},data:'cm:yes:'+lastId}
+ };
+ const res={statusCode:200,sendStatus(x){this.statusCode=x;return this;}};
+ await routes.get('/api/v2/telegram/coordinator')({
+   body:callback,get(name){return name==='x-telegram-bot-api-secret-token'?'a'.repeat(24):''}
+ },res);
+ assert.equal(res.statusCode,200);
+ assert.equal(executed.length,2);
+ assert.equal(executed.at(-1).command,'P101 цена 350');
 });

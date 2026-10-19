@@ -52,6 +52,7 @@ test('Telegram and signed Mini App accept only Shaurmeg one-time venue keys',asy
     crypto,express,
     './coordinator-language':require('../src/coordinator-language'),
     './coordinator-shaurmeg-language':require('../src/coordinator-shaurmeg-language'),
+    './coordinator-dialogue':require('../src/coordinator-dialogue'),
     '../../../backend/telegram-rich':{withRich(_m,_b,fn){return fn(_m,_b);}},
     './menu-coordinator':coordinator,
     './db':{async query(sql){queries.push(sql);return {rows:[{id:'00000000-0000-4000-8000-000000000000',project:'other'}],rowCount:1};}},

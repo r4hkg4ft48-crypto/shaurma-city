@@ -118,6 +118,32 @@ function advanced(input,items){
     const name=clean(m[1]);if(unsafe(name)||name.length>120||/[|;]/.test(name))return {type:'unsupported',message:'Уточните название варианта.'};
     return forTarget(catalog,m[2],['group'],'добавить вариант '+name+' | 0');
   }
+  // Staff often use the old "IDENTIFIER action" syntax. Allow precisely
+  // named dishes and spoken aliases in that position, including spaces:
+  // "сырная шаурма стоп лист", "сырная цена 350", "сырная скрыть".
+  // Resolve to the immutable item before creating a confirmation proposal.
+  m=raw.match(/^(.+?)\s+(стоп(?:[\s-]+лист)?|стоп|нет в наличии|в наличии|снять стоп|скрыть|показать|цена\s+\d{1,7}(?:[.,]\d{1,2})?)$/i);
+  if(m){
+    let action=normalize(m[2]);
+    if(action==='стоп'||action==='стоп лист'||action==='стоп-лист'||action==='нет в наличии')action='стоп лист';
+    else if(action==='снять стоп')action='в наличии';
+    if(action.startsWith('цена ')){
+      const price=Number(action.replace(/^цена\s+/,'').replace(',','.'));
+      if(!Number.isFinite(price)||price>1000000)return {type:'unsupported',message:'Недопустимая цена.'};
+      action='цена '+String(price);
+    }
+    return forTarget(catalog,m[1],['item','category','option','group','ingredient'],action);
+  }
+  m=raw.match(/^(.+?)\s+(идентификатор|название|описание|состав)\s+(.+)$/i);
+  if(m){
+    const verb=normalize(m[2]);
+    const value=clean(m[3]);
+    if(verb==='идентификатор'){
+      if(value.length<2||value.length>80||!stdAlias(value))
+        return {type:'unsupported',message:'Понятное имя: от 2 до 80 букв, цифр, пробелов, дефисов или _.'};
+    }else if(value.length>1200)return {type:'unsupported',message:'Слишком длинная команда.'};
+    return forTarget(catalog,m[1],['item','category','option','group','ingredient'],verb+' '+value);
+  }
   return null;
 }
 function resolve(input,items){

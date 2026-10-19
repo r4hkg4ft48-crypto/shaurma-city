@@ -2,6 +2,7 @@
 const crypto=require('crypto');
 const express=require('express');
 const language=require('./coordinator-language');
+const shaLanguage=require('./coordinator-shaurmeg-language');
 const rich=require('../../../backend/telegram-rich');
 const coordinator=require('./menu-coordinator');
 const db=require('./db');
@@ -100,6 +101,9 @@ async function projectFor(uid,requested){
     if(!b.linked)throw fail('Кофеёк: нет привязки к заведению',403);
     return requested;
   }
+  // If Shaurmeg is bound, it is the default even when the Coffee bridge is down.
+  // Explicit Coffee operations still require Coffee-specific binding verification.
+  if(await coordinator.binding(uid))return 'shaurmeg';
   const list=await locations(uid);
   if(list.some(x=>x.unavailable))throw fail('Не удалось проверить все подключения, выберите проект',503);
   const connected=list.filter(x=>x.linked);
@@ -109,7 +113,7 @@ async function projectFor(uid,requested){
 const compactList=items=>(items||[]).slice(0,8).map(x=>'• '+x.name+' — '+x.code).join('\n');
 async function preview(uid,project,raw){
   const scope=await catalogFor(uid,project);
-  const result=language.resolve(raw,scope.items);
+  const result=(project==='shaurmeg'?shaLanguage:language).resolve(raw,scope.items);
   if(result.type==='unsupported'||result.type==='ambiguous'||result.type==='unknown'||result.type==='found'){
     return {...result,text:result.message||(result.type==='found'?'Найдено:\n'+compactList(result.items):'Не удалось определить позицию.')+(result.type==='ambiguous'&&result.items.length?'\n'+compactList(result.items):'')};
   }
@@ -125,7 +129,7 @@ async function preview(uid,project,raw){
 }
 async function previewWithLegacy(uid,project,raw){
   const scope=await catalogFor(uid,project);
-  let result=language.resolve(raw,scope.items);
+  let result=(project==='shaurmeg'?shaLanguage:language).resolve(raw,scope.items);
   if(result.type!=='unknown')return preview(uid,project,raw);
   // Legacy code-based commands remain supported, but now require confirmation too.
   const match=String(raw||'').trim().match(/^([^\s]+)\s+([\s\S]+)$/);
@@ -224,11 +228,15 @@ async function handle(message){
   const prefix=command.match(/^(шаурмег|shaurmeg|шаурма|кофеек|кофеёк|kofeyok)\s+(.+)$/is);
   if(prefix){project=/^(кофе|kofeyok)/i.test(norm(prefix[1]))?'kofeyok':'shaurmeg';command=prefix[2].trim();}
   if(!project){
-    const current=await locations(uid);
-    if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Сейчас не удалось проверить все привязки. Для безопасности укажите проект перед командой: «шаурмег 7777 стоп лист» или «кофеёк 7777 стоп лист».');
-    const active=current.filter(x=>x.linked);
-    if(active.length!==1)return reply(chatId,active.length?'Подключены два проекта. Добавьте «Шаурмег» или «Кофеёк» перед кодом.':'Нет однозначного подключения. /connect СЕКРЕТНЫЙ_КЛЮЧ\n'+HELP);
-    project=active[0].project;
+    // Telegram commands for a Shaurmeg employee must not depend on Coffee.
+    if(await coordinator.binding(uid))project='shaurmeg';
+    else{
+      const current=await locations(uid);
+      if(current.some(x=>x.unavailable))return reply(chatId,'⚠️ Не удалось проверить подключение. Для Шаурмега используйте /connect КЛЮЧ.');
+      const active=current.filter(x=>x.linked);
+      if(active.length!==1)return reply(chatId,active.length?'Укажите проект перед командой.':'Нет подключения. /connect СЕКРЕТНЫЙ_КЛЮЧ\n'+HELP);
+      project=active[0].project;
+    }
   }
   const result=await previewWithLegacy(uid,project,command);
   if(result.type==='proposal')return reply(chatId,result.text,{inline_keyboard:[[
@@ -317,13 +325,17 @@ function install(app){
       res.json({ok:true,text});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message})}
   });
-  app.get('/api/v2/telegram/coordinator-health',(req,res)=>res.json({enabled:!!token(),webhookSecured:webhookSecret().length>=20,coffeeLinked:coffeeSecret().length>=32}));
+  app.get('/api/v2/telegram/coordinator-health',(req,res)=>res.json({
+    enabled:token().length>=30,webhookSecured:webhookSecret().length>=20,
+    shaMenuAvailable:true,voiceConfigured:!!(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY),
+    miniAppConfigured:!!appUrl(),coffeeLinked:coffeeSecret().length>=32
+  }));
 }
 async function sync(){
   await db.query('CREATE TABLE IF NOT EXISTS shaurma_coordinator_updates(update_id bigint PRIMARY KEY,received_at timestamptz NOT NULL DEFAULT now())');
   await db.query("CREATE TABLE IF NOT EXISTS shaurma_coordinator_pending(id uuid PRIMARY KEY,telegram_id text NOT NULL,project text NOT NULL CHECK(project IN ('shaurmeg','kofeyok')),venue_id text NOT NULL,kind text,entity_id text,code text,command text NOT NULL,expires_at timestamptz NOT NULL,consumed_at timestamptz,created_at timestamptz NOT NULL DEFAULT now())");
   await db.query('CREATE INDEX IF NOT EXISTS shaurma_coordinator_pending_actor ON shaurma_coordinator_pending(telegram_id,expires_at DESC)');
-  if(!token())return {enabled:false};
+  if(!token()){console.warn('Coordinator bot disabled: COORDINATOR_BOT_TOKEN not configured');return {enabled:false};}
   if(token().length<30||webhookSecret().length<20)throw fail('Set COORDINATOR_BOT_TOKEN and a random COORDINATOR_WEBHOOK_SECRET (20+ chars)',503);
   await telegram('setMyCommands',{commands:[
     {command:'start',description:'Инструкция и подключение'},
@@ -332,6 +344,7 @@ async function sync(){
     {command:'help',description:'Команды меню'}]});
   await telegram('setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/coordinator',secret_token:webhookSecret(),allowed_updates:['message','callback_query']});
   if(appUrl())await telegram('setChatMenuButton',{menu_button:{type:'web_app',text:'🎙 Menu Control',web_app:{url:appUrl()}}});
+  console.info('Coordinator bot synced: Shaurmeg primary, menu app '+(appUrl()?'configured':'unavailable')+', voice '+(process.env.COORDINATOR_STT_API_KEY||process.env.OPENAI_API_KEY?'configured':'unavailable'));
   return {enabled:true};
 }
 module.exports={install,sync,handle};

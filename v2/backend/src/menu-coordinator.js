@@ -418,15 +418,14 @@ function install(app){
       res.json(await setFriendlyIdentifier(est,String(req.body?.kind||''),String(req.body?.entityId||''),String(req.body?.identifier||'')));
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message})}
   });
+  // Machine codes must never change: pending confirmations and old audit records
+  // may still reference them. The old endpoint remains to return a useful error.
   app.post('/api/v2/coordinator/set-code',async(req,res)=>{
     try{
-      await ensureSchema();const est=D.establishmentId(req.body?.establishment_id);if(!est)throw error('bad_establishment_id');await ownerAccess(req,est);
-      const kind=String(req.body?.kind||''),id=String(req.body?.entityId||''),code=String(req.body?.code||'').trim();
-      if(!prefixes[kind]||!valid(code))throw error('Код: 1–32 буквы, цифры, дефис или _');
-      if(!(await ensureCodes(est)).some(x=>x.kind===kind&&x.id===id))throw error('Объект не принадлежит заведению.',404);
-      try{await db.query('UPDATE shaurma_coordinator_codes SET code=$4,normalized_code=$5,updated_at=now() WHERE establishment_id=$1 AND entity_type=$2 AND entity_id=$3',[est,kind,id,code,norm(code)]);}
-      catch(e){if(e.code==='23505')throw error('Код уже занят в этом заведении.',409);throw e}
-      res.json({ok:true,code});
+      const est=D.establishmentId(req.body?.establishment_id);
+      if(!est)throw error('bad_establishment_id',400);
+      await ownerAccess(req,est);
+      return res.status(410).json({ok:false,error:'Технические коды закреплены навсегда. Меняйте понятное имя через set-identifier или в настройках Координатора.'});
     }catch(e){res.status(e.status||500).json({ok:false,error:e.message});}
   });
   app.post('/api/v2/coordinator/key',async(req,res)=>{

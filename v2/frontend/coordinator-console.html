@@ -18,7 +18,15 @@ button:disabled{opacity:.45;cursor:not-allowed}.gold{background:var(--gold);bord
 .orb.recording{box-shadow:0 0 0 12px #eb866044,0 0 60px #e48a70aa;animation:pulse 1.2s infinite}@keyframes pulse{50%{transform:scale(1.07)}}
 .microhint{font-size:12px;color:var(--muted);max-width:330px}
 #requestText{min-height:66px;resize:vertical;margin-top:12px}#result{white-space:pre-wrap;font-size:13px;line-height:1.5;padding:10px 0;min-height:20px;color:#e1e9ee}
-#result.error{color:#ffab94}.search{margin:10px 0}.list{max-height:450px;overflow:auto}
+#result.error{color:#ffab94}
+.dialogueHistory{display:grid;gap:9px;max-height:260px;overflow:auto;margin:11px 0;padding:5px 0}
+.dialogLine{border:1px solid #314454;background:#101f2b;border-radius:14px;padding:10px 12px;font-size:12px;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}
+.dialogLine.user{margin-left:24px;border-color:#786347;background:#29291f}
+.dialogLine strong{display:block;font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:5px}
+.dialogExamples{display:flex;overflow-x:auto;gap:7px;padding:5px 0 12px;scrollbar-width:thin}
+.dialogExamples button{flex:none;font-size:11px;padding:9px 11px;border-radius:25px}
+.dialogSwitch{display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted);margin-top:9px}
+.dialogSwitch input{width:17px;height:17px;padding:0;accent-color:var(--gold)}.search{margin:10px 0}.list{max-height:450px;overflow:auto}
 .item{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:13px 0;border-top:1px solid #293b48}
 .item strong{display:block;font-size:13px}.item small{display:block;color:var(--muted);font-size:10px;margin-top:5px;overflow-wrap:anywhere}
 .item button{font-size:12px;white-space:nowrap;padding:10px}.actions{display:grid;grid-template-columns:1.5fr 1fr;gap:9px}
@@ -41,10 +49,18 @@ a{color:var(--gold)}.count{color:var(--gold);font-size:12px;font-weight:700}#sco
 <section class="panel"><div class="voice"><span class="muted">ГОЛОСОВОЕ УПРАВЛЕНИЕ</span>
 <button class="orb" type="button" id="mic" aria-label="Начать или завершить запись">🎙</button>
 <strong id="micTitle">Нажмите, чтобы произнести команду</strong>
-<div class="microhint">Например: «Убери сырную шаурму» или «Поставь цену на капучино 250». Запись не ведётся без нажатия.</div>
-</div><textarea id="requestText" placeholder="Или напишите команду обычными словами…" maxlength="350"></textarea>
+<div class="microhint">Спросите: «Что в стоп-листе?», «Какая цена у сырной шаурмы?», «Что изменилось?» или произнесите изменение. Неясное название я уточню.</div>
+</div><div class="dialogExamples" id="dialogExamples">
+<button type="button" data-dialog-example="Отчет по меню">📊 Сводка</button>
+<button type="button" data-dialog-example="Что в стоп-листе?">⏸ Стоп-лист</button>
+<button type="button" data-dialog-example="Что изменилось?">🧾 Изменения</button>
+<button type="button" data-dialog-example="Что ты умеешь?">💬 Помощь</button>
+</div>
+<div id="dialogHistory" class="dialogueHistory" aria-label="История текущего разговора" aria-live="polite"></div>
+<textarea id="requestText" placeholder="Обращайтесь как к помощнику: вопрос, команда или ответ на уточнение…" maxlength="600"></textarea>
 <div class="flex" style="margin-top:9px"><button id="send" class="gold" style="flex:1">Проверить команду →</button><button id="clear">Очистить</button></div>
-<div id="result" role="status" aria-live="polite"></div><button id="speak" type="button" aria-label="Озвучить ответ" style="width:100%;margin-top:5px">🔊 Озвучить ответ</button>
+<div id="result" role="status" aria-live="polite"></div><div class="dialogSwitch"><input id="autoSpeak" type="checkbox"><label for="autoSpeak">Озвучивать ответы автоматически, если устройство разрешает</label></div>
+<button id="speak" type="button" aria-label="Озвучить ответ" style="width:100%;margin-top:5px">🔊 Озвучить ответ</button>
 </section>
 <section class="panel"><div class="flex" style="justify-content:space-between"><h2>Каталог заведения</h2><span id="count" class="count">—</span></div>
 <input id="search" class="search" placeholder="Поиск по названию или коду…" aria-label="Поиск позиции">
@@ -64,7 +80,20 @@ const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
 let catalog=[],scope='shaurmeg',pending='',recorder=null,stream=null,started=0;
 function status(text,error=false){$('result').textContent=text;$('result').classList.toggle('error',error)}
-$('speak').addEventListener('click',()=>{const message=$('result').textContent.trim();if(!message)return;if(!('speechSynthesis' in window))return status('Озвучивание не поддерживается устройством.',true);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(message.slice(0,500));utterance.lang='ru-RU';utterance.rate=0.98;window.speechSynthesis.speak(utterance)});
+function readAloud(message){
+ if(!message||!('speechSynthesis' in window))return;
+ window.speechSynthesis.cancel();
+ const utterance=new SpeechSynthesisUtterance(message.slice(0,500));utterance.lang='ru-RU';utterance.rate=0.98;
+ window.speechSynthesis.speak(utterance);
+}
+function addDialogueLine(author,message){
+ const area=$('dialogHistory'),line=document.createElement('div'),label=document.createElement('strong');
+ line.className='dialogLine'+(author==='Вы'?' user':'');label.textContent=author;line.append(label,document.createTextNode(message));
+ area.appendChild(line);
+ while(area.children.length>16)area.firstElementChild.remove();
+ area.scrollTop=area.scrollHeight;
+}
+$('speak').addEventListener('click',()=>{const message=$('result').textContent.trim();if(!message)return;if(!('speechSynthesis' in window))return status('Озвучивание не поддерживается устройством.',true);readAloud(message)});
 async function api(action,extra={}){
   if(!tg||!tg.initData)throw Error('Откройте Menu Control через кнопку в Telegram-боте.');
   const r=await fetch('/api/v2/coordinator-app',{method:'POST',headers:{'content-type':'application/json'},
@@ -131,23 +160,30 @@ $('items').addEventListener('click',e=>{
   $('requestText').focus();status('Проверьте команду и нажмите «Проверить команду».');
 });
 async function send(){
-  const text=$('requestText').value.trim();if(!text)return status('Введите команду.',true);
-  $('send').disabled=true;
+  const text=$('requestText').value.trim();if(!text)return status('Введите вопрос или команду.',true);
+  $('send').disabled=true;addDialogueLine('Вы',text);
   try{
     const d=await api('preview',{text});
-    status(d.text||'');
+    const answer=d.text||'';
+    status(answer);addDialogueLine('Координатор',answer);
+    $('requestText').value='';
     if(d.type==='proposal'){
-      pending=d.id;$('confirmText').textContent=d.text;$('confirmation').classList.remove('hidden');
-    }
-  }catch(e){status(e.message,true)}finally{$('send').disabled=false}
+      pending=d.id;$('confirmText').textContent=answer;$('confirmation').classList.remove('hidden');
+    }else if($('autoSpeak').checked)readAloud(answer);
+  }catch(e){status(e.message,true);addDialogueLine('Координатор','⚠️ '+e.message)}
+  finally{$('send').disabled=false}
 }
 $('send').addEventListener('click',send);
+$('dialogExamples').addEventListener('click',e=>{
+ const button=e.target.closest('[data-dialog-example]');if(!button)return;
+ $('requestText').value=button.dataset.dialogExample;send();
+});
 $('cancel').addEventListener('click',()=>{pending='';$('confirmation').classList.add('hidden');status('Изменение отменено.')});
 $('confirm').addEventListener('click',async()=>{
   if(!pending)return;const id=pending;pending='';
   $('confirm').disabled=true;
   try{
-    const r=await api('confirm',{pendingId:id});status(r.text||'Изменение сохранено.');$('confirmation').classList.add('hidden');await load();
+    const r=await api('confirm',{pendingId:id});const answer=r.text||'Изменение сохранено.';status(answer);addDialogueLine('Координатор',answer);if($('autoSpeak').checked)readAloud(answer);$('confirmation').classList.add('hidden');await load();
   }catch(e){status(e.message,true);$('confirmation').classList.add('hidden')}
   finally{$('confirm').disabled=false}
 });
@@ -176,7 +212,7 @@ $('mic').addEventListener('click',async()=>{
           'x-telegram-init-data':tg.initData,'content-type':blob.type.split(';')[0]||'application/octet-stream'},body:blob});
         const d=await r.json().catch(()=>({}));
         if(!r.ok||!d.ok)throw Error(d.error||'Не удалось распознать речь');
-        $('requestText').value=d.text;status('Распознано: '+d.text+'\nПроверьте команду перед подтверждением.');
+        $('requestText').value=d.text;status('🎙 Распознано: '+d.text+'\nКоординатор обрабатывает вашу речь…');await send();
       }catch(e){status(e.message,true)}
     };
     recorder.start();started=Date.now();$('mic').classList.add('recording');$('micTitle').textContent='Идёт запись · нажмите ещё раз для остановки';

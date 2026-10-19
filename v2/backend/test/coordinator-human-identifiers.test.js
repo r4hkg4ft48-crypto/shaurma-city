@@ -72,3 +72,24 @@ test('The Mini App has an identifier editing mode and script parses',()=>{
  const inline=[...html.matchAll(/<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]).filter(Boolean);
  for(const part of inline)assert.doesNotThrow(()=>new vm.Script(part));
 });
+
+test('Owner venue admin edits friendly names via authorized separate endpoint',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../../frontend/admin-coordinator.html'),'utf8');
+ const backend=fs.readFileSync(path.join(__dirname,'../src/menu-coordinator.js'),'utf8');
+ assert.match(html,/setIdentifier:'\/coordinator\/set-identifier'/);
+ assert.match(html,/identifier:input\.value\.trim\(\)/);
+ assert.match(html,/value="[^"]*"|x\.identifier\|\|x\.name/);
+ assert.match(backend,/app\.post\('\/api\/v2\/coordinator\/set-identifier'/);
+ const anchor=backend.indexOf("app.post('/api/v2/coordinator/set-identifier'");
+ assert.ok(anchor>0);
+ assert.match(backend.slice(anchor,anchor+350),/await ownerAccess\(req,est\)/);
+ assert.match(backend,/async function setFriendlyIdentifierTx/);
+ assert.match(backend,/async function setFriendlyIdentifier\(/);
+ const scripts=[...html.matchAll(/<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/g)].map(x=>x[1]).filter(Boolean);
+ for(const script of scripts)assert.doesNotThrow(()=>new vm.Script(script));
+});
+test('Renaming dish title refuses duplicate titles in same venue',()=>{
+ const backend=fs.readFileSync(path.join(__dirname,'../src/menu-coordinator.js'),'utf8');
+ assert.match(backend,/Блюдо с таким названием уже есть/);
+ assert.match(backend,/Название совпадает с идентификатором другого объекта/);
+});

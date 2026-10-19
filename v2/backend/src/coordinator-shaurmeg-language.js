@@ -26,7 +26,8 @@ function proposal(item,command){
 }
 function forTarget(catalog,name,kinds,command){
   const match=choose(catalog,name,kinds);
-  return match.type==='match'?proposal(match.item,command):match;
+  return match.type==='match'?proposal(match.item,command):
+    {...match,followup:{type:'write',command}};
 }
 function ingredientOf(catalog,dish,ingredient){
   const owned=catalog.filter(x=>{
@@ -91,7 +92,7 @@ function advanced(input,items){
   m=raw.match(/^(?:убери|удали|исключи)\s+ингредиент(?:а)?\s+(.+)$/i);
   if(m){
     const found=choose(catalog,clean(m[1]),['ingredient']);
-    if(found.type!=='match')return found;
+    if(found.type!=='match')return {...found,followup:{type:'remove_ingredient_ref'}};
     let parts;try{parts=JSON.parse(found.item.id)}catch{return {type:'unsupported',message:'Уточните блюдо для ингредиента.'}}
     const parent=catalog.find(x=>x.kind==='item'&&String(x.id)===String(parts[0]));
     if(!parent||parts[1]!=='ingredient')return {type:'unsupported',message:'Ингредиент не связан с текущим блюдом.'};
@@ -101,9 +102,9 @@ function advanced(input,items){
   m=raw.match(/^(?:убери|удали|исключи)\s+(.+?)\s+из\s+(.+)$/i);
   if(m){
     const dish=choose(catalog,m[2],['item']);
-    if(dish.type!=='match')return dish;
+    if(dish.type!=='match')return {...dish,followup:{type:'remove_ingredient',ingredient:clean(m[1])}};
     const ingredient=ingredientOf(catalog,dish.item,clean(m[1]));
-    if(ingredient.type!=='match')return ingredient;
+    if(ingredient.type!=='match')return {...ingredient,followup:{type:'remove_ingredient_ref'}};
     return proposal(dish.item,'состав '+ingredient.item.code+' убрать');
   }
   m=raw.match(/^(?:добавь|добавить|положи)\s+(.+?)\s+(?:в|для)\s+(.+)$/i);
@@ -147,8 +148,11 @@ function advanced(input,items){
   return null;
 }
 function resolve(input,items){
-  const existing=base.resolve(input,items);
-  if(existing.type==='unsupported')return existing;
-  return advanced(input,items)||existing;
+  // A generic verb like "убери" must never intercept a more specific
+  // ingredient operation ("убери сыр из шаурмы"). Preserve the old
+  // duration-safety guard before examining any advanced grammar.
+  const parsed=base.parseText(input);
+  if(parsed?.type==='unsupported')return parsed;
+  return advanced(input,items)||base.resolve(input,items);
 }
 module.exports={resolve,advanced,choose,ingredientOf};

@@ -144,7 +144,7 @@ async function dialogInfo(scope,turn){
  const available=dish.active!==false&&dish.available!==false&&!(dish.coordinator_blocked_ingredients||[]).length;
  if(turn.topic==='price')return '💰 '+name+' · '+fmtMoney(dish.p)+'.';
  if(turn.topic==='composition')return '🥙 '+name+' · состав: '+String(dish.composition||'пока не указан')+'.';
- if(turn.topic==='availability')return '📍 '+name+' · '+(available?'доступно по настройкам меню (расписание и часы продаж проверяются отдельно)':'ограничено или снято с продажи')+'.';
+ if(turn.topic==='availability')return '📍 '+name+' · '+(available?'не ограничено флагами блюда (категория и расписание проверяются отдельно)':'ограничено или снято с продажи')+'.';
  return '🥙 '+name+'\nКод: '+current.code+'\nЦена: '+fmtMoney(dish.p)+'\nСостав: '+String(dish.composition||'не указан')+'\nПродажа: '+(available?'разрешена настройками меню':'ограничена')+(dish.d?'\nОписание: '+String(dish.d).slice(0,200):'');
 }
 async function dialogReport(scope,topic){
@@ -162,10 +162,10 @@ async function dialogReport(scope,topic){
  const stopped=menu.filter(x=>x&&x.active===false||x&&x.available===false||x&&Array.isArray(x.coordinator_blocked_ingredients)&&x.coordinator_blocked_ingredients.length);
  if(topic==='stopped')return '⏸ По явным настройкам меню «'+scope.venue+'» остановлено '+stopped.length+' позиций:\n'+
    (stopped.length?stopped.slice(0,20).map(x=>'• '+String(x.n||x.id)+' · '+(scope.items.find(c=>c.kind==='item'&&String(c.id)===String(x.id))?.code||'без кода')).join('\n'):'Стоп-позиций нет.')+
-   (stopped.length>20?'\nИ ещё '+(stopped.length-20)+'.':'')+'\nСтатус расписания продаж сюда не входит.';
+   (stopped.length>20?'\nИ ещё '+(stopped.length-20)+'.':'')+'\nОтключение категории и расписание продаж здесь отдельно не учитываются.';
  return '📊 Сводка меню · '+scope.venue+'\nВсего позиций: '+menu.length+'\nОтключены или ограничены настройками: '+stopped.length+
    '\nНе ограничены настройками: '+(menu.length-stopped.length)+'\nДля списка скажите «Что в стоп-листе?», для истории — «Что изменилось?».'+
-   '\nЭто отчёт по сохранённым данным меню, не статистика заказов.';
+   '\nЭто сводка по флагам отдельных блюд: без отключений категорий и расписаний. Статистика заказов не включена.';
 }
 async function dialogueTurn(uid,text){
  const scope=await catalogFor(uid);

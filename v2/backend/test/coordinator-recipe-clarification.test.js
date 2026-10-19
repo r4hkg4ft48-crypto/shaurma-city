@@ -76,3 +76,21 @@ test('Timed ingredient removal is not converted to a permanent removal',()=>{
  const r=agent.step('Убери сыр из сырной шаурмы до завтра',sample);
  assert.notEqual(r.type,'proposal');
 });
+
+test('Short "убери сыр" asks which parent dish, not which cheesy dish to disable',()=>{
+ const first=agent.step('Убери сыр',sample);
+ assert.equal(first.type,'clarify');
+ assert.equal(first.state.wait.task.type,'remove_ingredient_ref');
+ assert.equal(first.state.wait.options.length,2);
+ const result=agent.step('Первую',sample,first.state);
+ assert.equal(result.type,'proposal');
+ assert.equal(result.item.id,'dish1');
+ assert.equal(result.command,'состав I001 убрать');
+});
+test('A uniquely named ingredient can be removed safely without dish stop',()=>{
+ const only=[sample[0],sample[1]];
+ const r=agent.step('Убери сыр',only);
+ assert.equal(r.type,'proposal');
+ assert.equal(r.item.id,'dish1');
+ assert.equal(r.command,'состав I001 убрать');
+});

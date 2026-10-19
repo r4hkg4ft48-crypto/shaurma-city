@@ -148,9 +148,14 @@ async function dialogInfo(scope,turn){
  return '🥙 '+name+'\nКод: '+current.code+'\nЦена: '+fmtMoney(dish.p)+'\nСостав: '+String(dish.composition||'не указан')+'\nПродажа: '+(available?'разрешена настройками меню':'ограничена')+(dish.d?'\nОписание: '+String(dish.d).slice(0,200):'');
 }
 async function dialogReport(scope,topic){
- if(topic==='audit'){
-  const r=await db.query('SELECT command,entity_type,created_at FROM shaurma_coordinator_audit WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 8',[scope.venueId]);
-  return r.rows.length?'🧾 Последние изменения меню · '+scope.venue+'\n'+r.rows.map((x,i)=>(i+1)+'. '+new Date(x.created_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК · '+String(x.command).slice(0,160)).join('\n'):'🧾 По этому заведению записей об изменениях меню пока нет.';
+ if(topic==='audit'||topic==='audit24h'){
+  // Reports never read outside the currently authenticated Shaurmeg establishment.
+  const query=topic==='audit24h'
+   ? "SELECT command,entity_type,created_at FROM shaurma_coordinator_audit WHERE establishment_id=$1 AND created_at>=now()-interval '24 hours' ORDER BY created_at DESC LIMIT 8"
+   : 'SELECT command,entity_type,created_at FROM shaurma_coordinator_audit WHERE establishment_id=$1 ORDER BY created_at DESC LIMIT 8';
+  const r=await db.query(query,[scope.venueId]);
+  const label=topic==='audit24h'?'Изменения меню за 24 часа':'Последние изменения меню';
+  return r.rows.length?'🧾 '+label+' · '+scope.venue+'\n'+r.rows.map((x,i)=>(i+1)+'. '+new Date(x.created_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' МСК · '+String(x.command).slice(0,160)).join('\n'):'🧾 '+(topic==='audit24h'?'За последние 24 часа':'За всё время')+' изменений меню этого заведения не найдено.';
  }
  const r=await db.query('SELECT menu FROM shaurma_venues WHERE establishment_id=$1 AND is_active=true',[scope.venueId]);
  const menu=Array.isArray(r.rows[0]?.menu)?r.rows[0].menu:[];

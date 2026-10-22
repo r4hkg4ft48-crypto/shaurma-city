@@ -16,8 +16,14 @@ function mockHarness({price=320,available=true,duplicate=false,sendKitchen=1,sta
   config:{menu_sections:[{id:'flatbread',name:'Лепёшки',active:true}]},
   menu:[{id:'flat_cheese',n:'Лепёшка с сыром',c:'flatbread',p:price,active:true,available,stock:null}]};
  const user={first_name:'Пётр',username:'petr',favorites:staleFavorite?[]:[{establishment_id:EST,item_id:'flat_cheese'}]};
+ intent.choices=[{establishment_id:EST,venue_id:'lepyoshka',marker_id:'5',item_id:'flat_cheese',name:'Лепёшка с сыром',venue_name:'В Лепёшке',price:320}];
  const query=async(sql,params)=>{
   log.queries.push({sql,params});
+  if(sql.startsWith('SELECT id,state,expires_at FROM shaurma_quick_order_intents'))return {rows:[intent]};
+  if(sql.startsWith('INSERT INTO shaurma_quick_order_intents'))return {rows:[intent]};
+  if(sql.includes("SET state='cancelled'")){intent.state='cancelled';return {rows:[{id:ID}]}}
+  if(sql.includes("SET state='completed'")){intent.state='completed';return {rows:[]}}
+  if(sql.includes('SELECT v.establishment_id,v.venue_id,v.name,v.menu'))return {rows:[venue]};
   if(sql.includes('SELECT * FROM shaurma_quick_order_intents WHERE id='))return {rows:[intent]};
   if(sql.includes('pg_advisory_xact_lock'))return {rows:[]};
   if(sql.includes("AND state='completed' AND created_at"))return {rows:duplicate?[{id:'previous'}]:[]};
@@ -87,5 +93,65 @@ test('flags missing kitchen confirmation and preserves the order for retry',asyn
   assert.equal(m.log.orders.length,1);
   assert.match(m.log.api[0].body.text,/ещё не подтверждена/);
   assert.equal(m.log.queries.some(q=>q.sql.includes('kitchen_confirmed_at=NOW()')),false);
+ }finally{m.restore()}
+});
+
+function privateRequest(text='Закажи лепёшку с сыром'){
+ return {chat:{id:7891234,type:'private'},from:{id:7891234},message_id:123,text};
+}
+function button(action='qc',id=ID,chatId=7891234){
+ return {id:'test-callback',from:{id:7891234},message:{chat:{id:chatId,type:'private'},message_id:55},data:action+':'+id};
+}
+test('text prepares a confirmation message but creates no kitchen order',async()=>{
+ const m=mockHarness();
+ try{
+  assert.equal(await quick.onMessage(privateRequest(),m.api),true);
+  assert.equal(m.log.orders.length,0);
+  assert.equal(m.log.notified,0);
+  const preview=m.log.api.find(x=>x.method==='sendMessage');
+  assert.match(preview.body.text,/Подтверждение заказа/);
+  assert.match(preview.body.text,/В Лепёшке/);
+  assert.match(preview.body.text,/Лепёшка с сыром/);
+  assert.match(preview.body.text,/320 ₽/);
+  assert.match(preview.body.text,/НЕ оформлен/);
+  assert.equal(preview.body.reply_markup.inline_keyboard[0][0].callback_data,'qc:'+ID);
+  assert.equal(preview.body.reply_markup.inline_keyboard[1][0].callback_data,'qx:'+ID);
+ }finally{m.restore()}
+});
+test('only confirm callback creates and dispatches the unpaid pickup order once',async()=>{
+ const m=mockHarness();
+ try{
+  await quick.onMessage(privateRequest(),m.api);
+  assert.equal(m.log.orders.length,0);
+  assert.equal(await quick.onCallback(button(),m.api),true);
+  assert.equal(m.log.orders.length,1);
+  assert.equal(m.log.notified,1);
+  assert.ok(m.log.api.some(x=>x.method==='answerCallbackQuery'));
+  assert.ok(m.log.api.some(x=>x.method==='editMessageReplyMarkup'));
+  assert.ok(m.log.api.some(x=>x.method==='sendMessage'&&x.body.text.includes('Передан на кухню')));
+  await quick.onCallback(button(),m.api);
+  assert.equal(m.log.orders.length,1,'repeated callback must not create a second order');
+ }finally{m.restore()}
+});
+test('cancel callback closes the draft without kitchen or payment actions',async()=>{
+ const m=mockHarness();
+ try{
+  await quick.onMessage(privateRequest(),m.api);
+  assert.equal(await quick.onCallback(button('qx'),m.api),true);
+  assert.equal(m.log.orders.length,0);
+  assert.equal(m.log.notified,0);
+  assert.ok(m.log.api.some(x=>x.method==='editMessageText'&&/отменён/.test(x.body.text)));
+  await quick.onCallback(button(),m.api);
+  assert.equal(m.log.orders.length,0);
+ }finally{m.restore()}
+});
+test('confirmation callback from another chat cannot create an order',async()=>{
+ const m=mockHarness();
+ try{
+  await quick.onMessage(privateRequest(),m.api);
+  await quick.onCallback(button('qc',ID,9999),m.api);
+  assert.equal(m.log.orders.length,0);
+  assert.equal(m.log.notified,0);
+  assert.ok(m.log.api.some(x=>x.method==='answerCallbackQuery'&&x.body.show_alert));
  }finally{m.restore()}
 });

@@ -63,9 +63,28 @@ async function makeIntent(uid,messageId,matches,quantity){
  return q.rows[0]||null;
 }
 
+// A message only prepares an order: it cannot send anything to the kitchen.
+// Telegram callback_data stays below the Bot API 64-byte limit.
+function confirmationMarkup(id){
+ return {inline_keyboard:[
+  [{text:'✅ Подтвердить заказ',callback_data:'qc:'+id}],
+  [{text:'✕ Отменить',callback_data:'qx:'+id}]
+ ]};
+}
+async function promptConfirmation(x,uid,api){
+ const item=x?.items?.[0],venue=x?.choices?.[0]?.venue_name;
+ if(!item||!venue||!Number.isFinite(Number(x.total))||Number(x.total)<=0)throw new Error('quick_order_invalid_preview');
+ await say(api,uid,
+  '🥙 Подтверждение заказа\n\n'+venue+'\n'+item.n+' × '+x.quantity+
+  (item.detail?'\n'+item.detail:'')+
+  '\n\nИтого: '+x.total+' ₽\nПолучение: самовывоз\nОплата: при получении\n\n'+
+  'Заказ ещё НЕ оформлен и на кухню НЕ отправлен. Проверьте данные и нажмите кнопку ниже. Кнопка действует 15 минут.',
+  confirmationMarkup(x.id));
+}
+
 /**
- * A text message is an explicit order instruction. Until card payments are
- * launched we create a real pickup order, with payment due at collection.
+ * Only a verified confirmation callback can invoke this transaction.
+ * For now we create a real pickup order, with payment due at collection.
  * Client cannot supply price, venue, Telegram identity or recipe in the bot.
  */
 async function placeUnpaidOrder(id,uid,api){
@@ -348,7 +367,8 @@ async function onMessage(m,api){
    '🥙 Быстрый заказ Шаурмега\n\n'+
    '1. Добавьте блюдо в избранное в Mini App.\n'+
    '2. Напишите: «Закажи лепёшку с сыром».\n'+
-   '3. Заказ сразу отправится в заведение. Оплата — при получении.\n\n'+
+   '3. Проверьте предварительный заказ и нажмите «Подтвердить заказ».\n'+
+   '4. Только после подтверждения заказ уйдёт в заведение. Оплата — при получении.\n\n'+
    'Можно указать количество и заведение, например: «Закажи две лепёшки с сыром в Лепёшке».\n'+
    'Команда /favorites покажет доступные избранные блюда.',mapButton());
   return true;
@@ -378,16 +398,48 @@ async function onMessage(m,api){
  }
  const x=await makeIntent(uid,m.message_id,matches,parsed.quantity);
  if(!x)return true; // Deduplicate Telegram redelivery.
- if(matches.length===1){await checkoutIntent(x.id,uid,api);return true}
+ if(matches.length===1){await promptConfirmation(x,uid,api);return true}
  await say(api,uid,'Есть несколько совпадений. Выберите конкретное заведение и блюдо:',
   {inline_keyboard:matches.map((c,i)=>[{text:(c.venue_name+' · '+c.name+' · '+amount(c.price*parsed.quantity)+' ₽').slice(0,64),
     callback_data:'qf:'+x.id+':'+i}])});
  return true;
 }
 async function onCallback(cb,api){
- const m=String(cb?.data||'').match(/^qf:([a-f0-9-]{36}):([0-5])$/);
- if(!m)return false;
+ const data=String(cb?.data||'');
+ const m=data.match(/^qf:([a-f0-9-]{36}):([0-5])$/);
+ const confirm=data.match(/^q([cx]):([a-f0-9-]{36})$/);
+ if(!m&&!confirm)return false;
  const uid=String(cb.from?.id||'');
+ // Never process button presses forwarded to a group or a different chat.
+ if(cb?.message?.chat?.type!=='private'||String(cb.message.chat.id)!==uid){
+  await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Заказы подтверждаются только в личном чате с ботом.',show_alert:true});
+  return true;
+ }
+ if(confirm){
+  const id=confirm[2],cancel=confirm[1]==='x';
+  if(cancel){
+   const result=await db.query("UPDATE shaurma_quick_order_intents SET state='cancelled',updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='draft' AND expires_at>NOW() RETURNING id",[id,uid]);
+   await api('answerCallbackQuery',{callback_query_id:cb.id,text:result.rows.length?'Заказ отменён':'Заказ уже обработан или устарел.'});
+   if(result.rows.length){
+    await api('editMessageText',{chat_id:uid,message_id:cb.message.message_id,text:'❌ Заказ отменён. На кухню ничего не отправлено.'}).catch(e=>console.warn('quick_order_cancel_edit',e.message));
+   }
+   return true;
+  }
+  const result=await db.query("SELECT id,state,expires_at FROM shaurma_quick_order_intents WHERE id=$1 AND telegram_user_id=$2",[id,uid]);
+  const intent=result.rows[0];
+  if(!intent||intent.state!=='draft'||new Date(intent.expires_at).getTime()<=Date.now()){
+   await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Этот заказ уже обработан или устарел. Напишите команду ещё раз.',show_alert:true});
+   return true;
+  }
+  await api('answerCallbackQuery',{callback_query_id:cb.id,text:'Подтверждено. Проверяем наличие и отправляем заказ…'});
+  const outcome=await checkoutIntent(id,uid,api);
+  if(outcome?.order||outcome?.stale||outcome?.duplicate||outcome?.expired){
+   await api('editMessageReplyMarkup',{chat_id:uid,message_id:cb.message.message_id,reply_markup:{inline_keyboard:[]}})
+    .catch(e=>console.warn('quick_order_confirm_edit',e.message));
+  }
+  return true;
+ }
+
  const q=await db.query("SELECT * FROM shaurma_quick_order_intents WHERE id=$1 AND telegram_user_id=$2 AND state='selecting' AND expires_at>NOW()",[m[1],uid]);
  const x=q.rows[0],saved=x?.choices?.[Number(m[2])];
  if(!saved){
@@ -402,7 +454,7 @@ async function onCallback(cb,api){
  const u=await db.query("UPDATE shaurma_quick_order_intents SET state='draft',establishment_id=$3,venue_id=$4,marker_id=$5,item_id=$6,items=$7::jsonb,choices=$8::jsonb,total=$9,updated_at=NOW() WHERE id=$1 AND telegram_user_id=$2 AND state='selecting' RETURNING id",
   [x.id,uid,c.establishment_id,c.venue_id,c.marker_id,c.item_id,JSON.stringify([item]),JSON.stringify([snapshot(c)]),amount(item.p*item.q)]);
  await api('answerCallbackQuery',{callback_query_id:cb.id,text:u.rows[0]?'Выбрано':'Уже обработано'});
- if(u.rows[0])await checkoutIntent(x.id,uid,api);
+ if(u.rows[0])await promptConfirmation({...x,...u.rows[0],items:[item],quantity:x.quantity,choices:[snapshot(c)],total:amount(item.p*item.q)},uid,api);
  return true;
 }
 async function onPreCheckout(p,api){

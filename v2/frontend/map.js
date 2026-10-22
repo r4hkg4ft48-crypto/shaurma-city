@@ -8,7 +8,9 @@
   const baseLabelPaint=new Map();
   const realCityWorldPaint=new Map();
   let session=sessionStorage.getItem('shaurmeg_client_session')||'',dashboard=null,userOrders=[],favoriteGroups=[],orderFilter='all',userStream=null,currentReferralUrl='',orderDetailId='';
-  let pointsWarmPromise=null;
+  let pointsWarmPromise=null,pointsRetryActive=false,authRefreshPromise=null;
+  let apiUnavailable=false;
+  function serviceNotice(show){apiUnavailable=show;$('#serviceNotice')?.classList.toggle('hidden',!show)}
   const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches===true;
   const bootStarted=performance.now();
   const STYLE='https://tiles.openfreemap.org/styles/liberty';
@@ -47,9 +49,9 @@
     setTimeout(()=>{b.classList.add('out');setTimeout(()=>b.remove(),900)},wait);
   }
   const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  async function fetchWithTimeout(url,ms=7000){
+  async function fetchWithTimeout(url,ms=7000,options={}){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),ms);
-    try{return await fetch(url,{cache:'no-store',signal:controller.signal})}
+    try{return await fetch(url,{...options,cache:'no-store',signal:controller.signal})}
     finally{clearTimeout(timer)}
   }
   async function fetchPointsPayload(ms=28000){
@@ -68,17 +70,32 @@
   function authHeaders(){return session?{Authorization:'Bearer '+session}:{}}
   async function authClient(){
     if(session){
-      try{const r=await fetch(api+'/me/dashboard',{headers:authHeaders(),cache:'no-store'});if(r.ok){dashboard=await r.json();return true}}catch{}
+      try{
+        const r=await fetchWithTimeout(api+'/me/dashboard',12000,{headers:authHeaders()});
+        if(r.ok){dashboard=await r.json();return true}
+        // Do not log a real customer out when the database is suspended or API is down.
+        if(r.status!==401&&r.status!==403)return null;
+      }catch{return null}
       session='';sessionStorage.removeItem('shaurmeg_client_session');
     }
     if(!tg?.initData)return false;
     try{
       const body={initData:tg.initData};if(qs.get('ref'))body.referral_code=qs.get('ref');
-      const r=await fetch(api+'/auth/telegram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(!r.ok)return false;
+      const r=await fetchWithTimeout(api+'/auth/telegram',12000,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(!r.ok)return r.status>=500?null:false;
       const j=await r.json();session=j.session;sessionStorage.setItem('shaurmeg_client_session',session);
       return true;
-    }catch{return false}
+    }catch{return null}
+  }
+  function refreshClientData(){
+    if(authRefreshPromise)return authRefreshPromise;
+    authRefreshPromise=authClient().then(async ok=>{
+      if(ok===true){await Promise.all([loadDashboard(),loadOrders(),loadFavorites()]);connectUserStream()}
+      else if(ok===false){renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}
+      else serviceNotice(true);
+    }).catch(e=>{console.warn('client data reconnect',e);serviceNotice(true)})
+      .finally(()=>{authRefreshPromise=null});
+    return authRefreshPromise;
   }
   async function loadDashboard(){
     if(!session)return renderGuestProfile();
@@ -1024,11 +1041,20 @@
     const direct=qs.get('marker');if(direct){const p=points.find(x=>String(x.id)===direct);if(p)setTimeout(()=>selectPoint(p),350)}
   }
   async function loadPointsWithRetry(){
-    for(let attempt=0;attempt<5;attempt++){
-      try{await loadPoints();return}
-      catch(e){console.warn('points load failed',attempt+1,e);pointsWarmPromise=null;if(attempt<4)await sleep(700+attempt*850)}
+    if(pointsRetryActive)return;
+    pointsRetryActive=true;
+    let recovered=false;
+    try{
+      for(let attempt=0;attempt<3;attempt++){
+        try{await loadPoints();recovered=true;serviceNotice(false);break}
+        catch(e){console.warn('points load failed',attempt+1,e);pointsWarmPromise=null;if(attempt<2)await sleep(900+attempt*1500)}
+      }
+      if(recovered)await refreshClientData();
+      else serviceNotice(true);
+    }finally{
+      pointsRetryActive=false;
+      if(!recovered)setTimeout(()=>{pointsWarmPromise=null;loadPointsWithRetry()},15000);
     }
-    toast('Карта открыта, точки догружаются…');setTimeout(()=>{pointsWarmPromise=null;loadPointsWithRetry()},3500);
   }
   function fitAll(){
     const valid=points.filter(validMapPoint);if(!valid.length)return;
@@ -1118,7 +1144,8 @@
   };
 
   try{tg?.ready();tg?.expand();tg?.BackButton?.hide?.();const chrome=daypart()==='night'?'#09111D':'#0F2035';tg?.setHeaderColor?.(chrome);tg?.setBackgroundColor?.(chrome)}catch{}
+  $('#retryConnection').onclick=()=>{pointsWarmPromise=null;loadPointsWithRetry();refreshClientData()};
   warmPoints().catch(e=>console.warn('points warmup failed',e));
-  authClient().then(ok=>{if(ok){loadDashboard();loadOrders();loadFavorites();connectUserStream()}else{renderGuestProfile();renderOrdersPanel();renderActiveOrderBadge();loadFavorites()}});
+  refreshClientData();
   bootMap().catch(e=>{console.error(e);dismissBoot();toast('Не удалось загрузить подложку карты. Откройте приложение ещё раз.')});
 })();

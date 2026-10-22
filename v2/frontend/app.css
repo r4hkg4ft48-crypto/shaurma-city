@@ -4238,3 +4238,9 @@ body.venuePage[data-tone="light"] .menuSection #chips .chip:not(.active){color:#
   body.venuePage .menuSection #chips,body.venuePage .menuSection #chips .chip,body.venuePage #menuGrid .addBtn,body.venuePage #menuFeature [data-add]{transition:none;animation:none;scroll-behavior:auto}
   body.venuePage .floatCart.cartBump{animation:none}
 }
+
+/* Persistent connectivity status: a map tile is not evidence of a healthy API. */
+.serviceNotice{position:fixed;z-index:35;left:12px;right:12px;top:calc(var(--safe-t) + 76px);display:flex;align-items:center;gap:10px;padding:12px;border:1px solid rgba(242,190,102,.4);border-radius:18px;background:rgba(19,25,26,.96);box-shadow:0 14px 44px rgba(0,0,0,.35);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.serviceNoticeIcon{flex:none;display:grid;place-items:center;width:28px;height:28px;border:1px solid rgba(242,190,102,.5);border-radius:10px;color:#f2c36f;font-weight:900}
+.serviceNotice div{flex:1;min-width:0}.serviceNotice b{display:block;font-size:13px}.serviceNotice small{display:block;margin-top:2px;font-size:11px;line-height:1.35;color:#c4ccc7}.serviceNotice button{flex:none;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:rgba(255,255,255,.08);padding:9px 10px;font-weight:750;font-size:11px}
+@media(max-width:390px){.serviceNotice{flex-wrap:wrap}.serviceNotice button{margin-left:38px}}

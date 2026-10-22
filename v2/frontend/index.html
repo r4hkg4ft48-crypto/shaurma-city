@@ -29,6 +29,12 @@
   <button class="iconBtn" id="searchToggle" aria-label="Поиск">⌕</button>
 </header>
 
+<div class="serviceNotice hidden" id="serviceNotice" role="status" aria-live="polite">
+  <span class="serviceNoticeIcon" aria-hidden="true">!</span>
+  <div><b>Данные временно недоступны</b><small>Не удаётся подключиться к серверу. Карта остаётся открытой; заведения, избранное и профиль появятся после восстановления соединения.</small></div>
+  <button type="button" id="retryConnection">Повторить</button>
+</div>
+
 <button class="activeOrderBadge hidden" id="activeOrderBadge" type="button" aria-label="Открыть активные заказы" data-status="new">
   <span class="activeOrderHalo" aria-hidden="true"></span>
   <span class="activeOrderPhoto">

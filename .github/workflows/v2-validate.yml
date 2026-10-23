@@ -7,6 +7,7 @@ on:
     paths:
       - "v2/**"
       - "backend/**"
+      - "scripts/migrate-shaurmeg-db.sh"
       - ".github/workflows/v2-validate.yml"
 
 jobs:
@@ -18,6 +19,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: PostgreSQL migration tool syntax and destructive-operation guard
+        run: |
+          bash -n scripts/migrate-shaurmeg-db.sh
+          if env -u SOURCE_DATABASE_URL -u TARGET_DATABASE_URL -u SHAURMEG_BACKUP_DIR -u SHAURMEG_WRITES_FROZEN bash scripts/migrate-shaurmeg-db.sh; then
+            echo "migration incorrectly permitted missing credentials" >&2
+            exit 1
+          fi
+          echo "migration blocks unsafe execution without explicit prerequisites"
       - name: JavaScript syntax
         run: |
           find v2 -name '*.js' -print0 | xargs -0 -n1 node --check

@@ -4,7 +4,7 @@ body.venuePage #itemOptionsSheet{
   --gallery-ink:#f5efe6;
   --gallery-muted:#b6bdc7;
   --gallery-gold:#dec49c;
-  --gallery-surface:color-mix(in srgb,var(--venue-panel,#132337) 55%,#111b28);
+  --gallery-surface:color-mix(in srgb,var(--venue-panel,#132337) 15%,#111b28);
   --gallery-line:rgba(230,220,199,.17);
   color:var(--gallery-ink)
 }
@@ -41,9 +41,9 @@ body.venuePage #menuGrid .foodPic img{filter:saturate(.97) contrast(1.02) bright
 body.venuePage #menuGrid .foodPic>i{background:linear-gradient(180deg,rgba(255,255,255,.05),transparent 35%,rgba(8,17,28,.35));pointer-events:none}
 body.venuePage #menuGrid .foodBody{background:transparent!important;backdrop-filter:none;padding:13px 11px 11px!important}
 body.venuePage #menuGrid .foodTitle{min-height:0!important;padding:0 23px 0 0!important}
-body.venuePage #menuGrid .foodTitle h3{font-size:14px!important;font-weight:650;line-height:1.3!important;letter-spacing:-.02em;min-height:36px;overflow-wrap:anywhere;color:var(--gallery-ink)}
+body.venuePage #menuGrid .foodTitle h3{font-size:14px!important;font-weight:650;line-height:1.3!important;letter-spacing:-.02em;min-height:36px;display:block;overflow:visible;overflow-wrap:anywhere!important;color:var(--gallery-ink)}
 body.venuePage #menuGrid .foodTitle h3 button,body.venuePage #menuFeature h3 button{display:block;padding:0;border:0;background:none;font:inherit;letter-spacing:inherit;text-align:left;color:inherit;cursor:pointer}
-body.venuePage #menuGrid .foodFavorite{top:-3px;right:-5px;width:30px;height:35px;min-width:0;background:transparent;border:0;color:#acb7c5;font-size:17px}
+body.venuePage #menuGrid .foodFavorite{top:-3px!important;right:-5px!important;width:30px!important;height:35px!important;min-width:0;background:transparent;border:0;color:#acb7c5;font-size:17px}
 body.venuePage #menuGrid .foodFavorite.active{color:#f2928b}
 body.venuePage #menuGrid .foodBody p{color:var(--gallery-muted);font-size:11px!important;line-height:1.55!important;min-height:34px!important;margin:7px 0 0!important;-webkit-line-clamp:2!important}
 body.venuePage #menuGrid .foodBody p:empty{display:none!important}
@@ -102,3 +102,6 @@ body.venuePage #itemOptionsSheet button:focus-visible,body.venuePage #menuSectio
 @media(max-width:370px){body.venuePage #menuGrid .foodBody{padding:10px 8px!important}body.venuePage #menuGrid .foodRow{flex-wrap:wrap}body.venuePage #menuGrid .foodRow b{flex-basis:100%}body.venuePage #menuGrid .foodTitle h3{font-size:12px!important}body.venuePage #menuFeature .menuFeatureCopy{padding:80px 16px 17px}}
 @media(min-width:700px){body.venuePage #menuGrid .foodCardRef .foodVisual{aspect-ratio:1.25}body.venuePage #menuFeature .menuFeatureCopy{padding-top:140px}body.venuePage #menuFeature h3{font-size:40px}}
 @media(prefers-reduced-motion:reduce){body.venuePage #menuGrid .foodCardRef,body.venuePage #menuGrid .foodPic img{transition:none}body.venuePage #menuGrid .dishPhotoButton:hover img{transform:none}}
+
+body.venuePage[data-menu-descriptions="hide"] #menuGrid .foodBody p{display:none!important}
+body.venuePage #menuGrid .foodTitle h3 button{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}

@@ -114,6 +114,8 @@
     $('#backdrop').classList.remove('show');
     document.querySelectorAll('.sheet').forEach(x=>x.classList.remove('show'));
     unlockSheetBackground();
+    if(dishReturnFocus?.isConnected) dishReturnFocus.focus({preventScroll:true});
+    dishReturnFocus=null;
   }
 
   async function authTelegram(){
@@ -513,7 +515,7 @@
     const customizeFor=x=>hasItemOptions(x)&&x.customization_icon!==false?'<button type="button" class="customizeDish" data-customize="'+esc(x.id)+'" aria-label="Изменить состав '+esc(x.n||x.name)+'" title="Изменить состав"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6M15 14v6"/></svg></button>':'';
     const badgeFor=x=>siteCustomization?.features?.menu_badges===false?'':String(x.badge||x.tag||'').trim();
     const card=(x,mode)=>{
-      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=String(x.d||x.description||''),unavailable=itemUnavailable(x),hasOptions=hasItemOptions(x);
+      const id=String(x.id),name=String(x.n||x.name||'Позиция'),description=dishSummary(x),unavailable=itemUnavailable(x),hasOptions=hasItemOptions(x);
       // Older seeds stored the category name as a tag. Keep real dish tags,
       // while the configurable caption is the only category-replacement label.
       const categoryKey=v=>String(v||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е');
@@ -523,10 +525,10 @@
       const meta=[String(x.weight||'').trim(),...tags].filter(Boolean);
       const badge=badgeFor(x),cls=mode==='main'?'foodCardMain':'foodCardOther';
       return '<article class="foodCard foodCardRef '+cls+' kind-'+kindFor(x)+(unavailable?' unavailable':'')+'">'+
-        '<div class="foodVisual">'+photo(x)+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(unavailable?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+
+        '<div class="foodVisual"><button class="dishPhotoButton" type="button" data-detail="'+esc(id)+'" aria-label="Подробнее: '+esc(name)+'">'+photo(x)+'</button>'+(badge?'<strong class="foodBadge">'+esc(badge)+'</strong>':'')+(unavailable?'<strong class="foodSoldOut">Нет в наличии</strong>':'')+'</div>'+
         '<div class="foodBody">'+
-          '<div class="foodTitle"><h3>'+esc(name)+'</h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
-          '<p>'+esc(description)+'</p>'+captionFor(x)+
+          '<div class="foodTitle"><h3><button type="button" data-detail="'+esc(id)+'">'+esc(name)+'</button></h3>'+(siteCustomization?.features?.favorites===false?'':'<button class="foodFavorite '+(favoriteIds.has(id)?'active':'')+'" data-favorite="'+esc(id)+'" aria-label="'+(favoriteIds.has(id)?'Убрать из избранного':'Добавить в избранное')+'">♥</button>')+'</div>'+
+          '<p>'+esc(description)+'</p>'+captionFor(x)+'<button type="button" class="dishReadMore" data-detail="'+esc(id)+'">О блюде <span aria-hidden="true">↗</span></button>'+
           (meta.length?'<div class="foodMeta">'+meta.map(v=>'<span>'+esc(v)+'</span>').join('')+'</div>':'')+
           '<div class="foodRow"><b>'+(hasOptions?'от ':'')+money(x.p??x.price)+'</b>'+customizeFor(x)+'<button class="addBtn" data-add="'+esc(id)+'" aria-label="Добавить '+esc(name)+'" '+(unavailable?'disabled':'')+'>'+(unavailable?'×':hasOptions&&x.customization_icon===false?'Выбрать':'+')+'</button></div>'+
         '</div></article>';
@@ -541,7 +543,7 @@
     let rest=visible;
     if(category==='all'){
       const feature=visible.find(x=>x.featured===true)||visible[0];
-      const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=String(feature.d||feature.description||'');
+      const featureId=String(feature.id),featureName=String(feature.n||feature.name||'Позиция'),featureDesc=dishSummary(feature);
       const featureImage=imageFor(feature);
       const featureKind=kindFor(feature);
       $('#menuFeature').innerHTML=
@@ -552,8 +554,8 @@
           '</div>'+
           '<div class="menuFeatureCopy">'+
             '<small>'+esc(siteCustomization?.menu?.hero_label||'НАША ГОРДОСТЬ')+'</small>'+
-            '<h3>'+esc(featureName)+'</h3>'+
-            '<p>'+esc(featureDesc)+'</p>'+captionFor(feature)+
+            '<h3><button type="button" data-detail="'+esc(featureId)+'">'+esc(featureName)+'</button></h3>'+
+            '<p>'+esc(featureDesc)+'</p>'+captionFor(feature)+'<button type="button" class="dishReadMore" data-detail="'+esc(featureId)+'">О блюде <span aria-hidden="true">↗</span></button>'+
             '<div class="menuFeatureBottom"><b>'+(hasItemOptions(feature)?'от ':'')+money(feature.p??feature.price)+'</b>'+customizeFor(feature)+'<button data-add="'+esc(featureId)+'" '+(itemUnavailable(feature)?'disabled':'')+'>'+(itemUnavailable(feature)?'Нет в наличии':'Добавить <span>＋</span>')+'</button></div>'+
           '</div>'+
           '<div class="menuFeatureDots"><i></i><i></i><i></i></div>'+
@@ -676,17 +678,36 @@
     setTimeout(()=>offerFavorite(src),280);
     return true;
   }
+  // Composition comes only from the venue; option lists are not a fixed recipe.
+  function dishComposition(src){return String(src.composition||src.ingredients||'').trim()}
+  function dishSummary(src){return String(src.d||src.description||'').trim()||dishComposition(src)}
+  let dishReturnFocus=null;
+  function openDishDetail(id){
+    const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===String(id));
+    if(src)openItemOptions(src);
+  }
+  function renderDishDetails(src){
+    const visual=$('#dishDetailVisual'),photo=String(src.image||src.i||'').trim();
+    visual.replaceChildren();
+    if(photo){const img=document.createElement('img');img.src=photo;img.alt=String(src.n||src.name||'');img.style.objectFit=src.image_fit==='contain'?'contain':'cover';img.onerror=()=>{if(visual.contains(img)){visual.replaceChildren();visual.classList.add('noPhoto')}};visual.append(img)}
+    visual.classList.toggle('noPhoto',!photo);
+    const section=(ctx?.venue?.sections||[]).find(x=>String(x.id)===String(src.c||src.category));
+    const facts=[section?.name,String(src.weight||'').trim(),itemUnavailable(src)?'Временно недоступно':hasItemOptions(src)?'Можно настроить':'Рецепт заведения'].filter(Boolean);
+    $('#dishDetailFacts').innerHTML=facts.map(v=>'<span>'+esc(v)+'</span>').join('');
+    $('#dishCompositionText').textContent=dishComposition(src)||'Заведение пока не указало состав этой позиции.';
+    const confirm=$('#confirmItemOptions');confirm.disabled=itemUnavailable(src);confirm.textContent=itemUnavailable(src)?'Временно недоступно':'Добавить в корзину';
+  }
   function renderItemOptions(){
     const src=pendingItem;if(!src)return;
     $('#itemOptionsTitle').textContent=String(src.n||src.name||'Позиция');
-    $('#itemOptionsDescription').textContent=String(src.d||src.description||'');
+    $('#itemOptionsDescription').textContent=dishSummary(src)||'Подробное описание пока не добавлено заведением.';
     $('#itemOptionsBasePrice').textContent=money(Number(src.p??src.price)||0);
     const blocks=[];
-    for(const group of fixedOptionGroups(src)){
+    for(const group of (hasItemOptions(src)?fixedOptionGroups(src):[])){
       const raw=itemSelectionState[group.id],selected=Array.isArray(raw)?raw:(raw?[String(raw)]:[]);
       blocks.push({kind:'fixed',id:group.id,name:group.name,type:group.type,required:group.required,min:group.required?1:0,max:group.type==='single'?1:group.options.length,options:group.options.map(o=>({id:o.id,name:o.name,price:Number(o.price)||0}))});
     }
-    for(const group of customOptionGroups(src)){
+    for(const group of (hasItemOptions(src)?customOptionGroups(src):[])){
       blocks.push({kind:'custom',id:String(group.id),name:String(group.name||'Выбор'),type:group.type==='multiple'?'multiple':'single',required:group.required===true,min:Math.max(group.required?1:0,Number(group.min)||0),max:group.type==='single'?1:Math.max(1,Number(group.max)||group.options.length),options:group.options.filter(o=>o?.active!==false).map(o=>({id:o.id,name:o.name,price:Number(o.price_delta)||0}))});
     }
     $('#itemOptionGroups').innerHTML=blocks.map(group=>{
@@ -697,17 +718,18 @@
     $('#itemOptionsTotal').textContent=money(localSelectionPrice(src,itemSelectionState,itemChoiceState).price);
   }
   function openItemOptions(src){
-    if(itemUnavailable(src)){toast('Позиция временно недоступна');return}
-    pendingItem=src;itemSelectionState=defaultItemSelection(src);itemChoiceState=defaultCustomChoices(src);
-    renderItemOptions();openSheet('itemOptionsSheet');
+    dishReturnFocus=document.activeElement;
+    pendingItem=src;itemSelectionState=hasItemOptions(src)?defaultItemSelection(src):{};itemChoiceState=hasItemOptions(src)?defaultCustomChoices(src):{};
+    renderDishDetails(src);renderItemOptions();openSheet('itemOptionsSheet');
+    $('#itemOptionsSheet').scrollTop=0;$('#itemOptionsSheet').focus({preventScroll:true});
   }
   function confirmItemOptions(){
     const src=pendingItem;if(!src)return;
-    for(const group of fixedOptionGroups(src)){
+    for(const group of (hasItemOptions(src)?fixedOptionGroups(src):[])){
       const raw=itemSelectionState[group.id],count=Array.isArray(raw)?raw.length:(raw?1:0);
       if(group.required&&!count){toast('Выберите: '+group.name);return}
     }
-    for(const group of customOptionGroups(src)){
+    for(const group of (hasItemOptions(src)?customOptionGroups(src):[])){
       const selected=Array.isArray(itemChoiceState[group.id])?itemChoiceState[group.id]:[];
       const min=Math.max(group.required?1:0,Number(group.min)||0),max=group.type==='single'?1:Math.max(min,Number(group.max)||group.options.length);
       if(selected.length<min){toast('Выберите: '+String(group.name||'вариант'));return}
@@ -924,8 +946,9 @@
   }
 
   $('#chips').onclick=e=>{const b=e.target.closest('[data-cat]');if(!b)return;selectCategory(b.dataset.cat)};
-  $('#menuFeature').onclick=e=>{const custom=e.target.closest('[data-customize]');if(custom){const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===custom.dataset.customize);if(src&&hasItemOptions(src))openItemOptions(src);return}const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
+  $('#menuFeature').onclick=e=>{const detail=e.target.closest('[data-detail]');if(detail){openDishDetail(detail.dataset.detail);return}const custom=e.target.closest('[data-customize]');if(custom){const src=(ctx?.venue?.menu||[]).find(x=>String(x.id)===custom.dataset.customize);if(src&&hasItemOptions(src))openItemOptions(src);return}const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)};
   $('#menuGrid').onclick=e=>{
+    const detail=e.target.closest('[data-detail]');if(detail){openDishDetail(detail.dataset.detail);return}
     const section=e.target.closest('[data-section-cat]');
     if(section){
       selectCategory(section.dataset.sectionCat);
@@ -954,6 +977,14 @@
     renderItemOptions();
   };
   $('#confirmItemOptions').onclick=confirmItemOptions;
+  $('#itemOptionsSheet').addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSheets();return}
+    if(event.key!=='Tab')return;
+    const nodes=[...event.currentTarget.querySelectorAll('button:not(:disabled),[tabindex="0"]')].filter(el=>el.getClientRects().length);
+    const first=nodes[0],last=nodes.at(-1);
+    if(event.shiftKey&&(document.activeElement===first||document.activeElement===event.currentTarget)){event.preventDefault();last?.focus()}
+    else if(!event.shiftKey&&(document.activeElement===last||document.activeElement===event.currentTarget)){event.preventDefault();first?.focus()}
+  });
   $('#cartItems').onclick=e=>{
     let b=e.target.closest('[data-plus]');if(b){
       const x=cart.find(v=>String(v.cart_key||v.id)===String(b.dataset.plus));

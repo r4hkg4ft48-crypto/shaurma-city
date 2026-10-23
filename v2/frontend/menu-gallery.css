@@ -1,0 +1,104 @@
+/* Venue menu — a nocturnal gallery. Scoped to the catalog and dish dialog. */
+body.venuePage .menuSection,
+body.venuePage #itemOptionsSheet{
+  --gallery-ink:#f5efe6;
+  --gallery-muted:#b6bdc7;
+  --gallery-gold:#dec49c;
+  --gallery-surface:color-mix(in srgb,var(--venue-panel,#132337) 55%,#111b28);
+  --gallery-line:rgba(230,220,199,.17);
+  color:var(--gallery-ink)
+}
+body.venuePage #menuSection{margin-top:38px;padding:28px 0 16px}
+body.venuePage #menuSection:before{
+  inset:0 -14px -70px;border-radius:38px 38px 0 0;
+  border-top:1px solid var(--gallery-line);
+  background:radial-gradient(ellipse at 0 18%,rgba(115,142,158,.15),transparent 38%),radial-gradient(ellipse at 100% 48%,color-mix(in srgb,var(--venue-accent) 12%,transparent),transparent 45%),linear-gradient(180deg,color-mix(in srgb,var(--venue-bg,#091626) 65%,#15202d),#0a1522 65%,var(--venue-bg,#091626));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06)
+}
+body.venuePage #menuSection:after{
+  inset:0 -14px 0;opacity:.38;filter:none;border-radius:38px;
+  background:repeating-linear-gradient(118deg,transparent 0,transparent 119px,rgba(220,231,238,.045) 120px,transparent 121px,transparent 240px),radial-gradient(ellipse at 100% 0,rgba(222,196,156,.16),transparent 35%);
+  mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)
+}
+body.venuePage #menuSection .sectionHead{margin:0 6px 25px;align-items:center}
+body.venuePage #menuSection .sectionHead small:first-child{font-size:9px;letter-spacing:.2em;color:var(--gallery-gold)}
+body.venuePage #menuSection .sectionHead h2{font-family:Georgia,'Times New Roman',serif;font-size:clamp(30px,8vw,43px);font-weight:400;letter-spacing:-.045em;line-height:1.12;margin:9px 0;color:var(--gallery-ink)}
+body.venuePage #menuSection .sectionHead h2 span{color:var(--gallery-gold)}
+.menuEditorialIntro{font-size:11px;letter-spacing:.025em;color:var(--gallery-muted);margin:0}
+body.venuePage #menuCount{background:rgba(255,255,255,.035);border:1px solid var(--gallery-line);border-radius:50%;min-width:42px;height:42px;display:grid;place-items:center;padding:6px;color:var(--gallery-muted)}
+body.venuePage #menuSection #chips{margin:20px 0!important;border-radius:22px;background:linear-gradient(125deg,rgba(238,228,208,.11),rgba(255,255,255,.02) 45%,rgba(156,190,218,.09)),rgba(12,24,37,.9);border-color:var(--gallery-line)}
+body.venuePage #menuSection #chips .chip:not(.active){color:#c4cbd5}
+body.venuePage #menuGrid .foodCardRef:nth-child(n){
+  border:1px solid var(--gallery-line);border-radius:23px!important;min-height:0!important;
+  background:linear-gradient(140deg,rgba(255,255,255,.1),transparent 48%),var(--gallery-surface)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(0,0,0,.2),0 14px 24px -14px rgba(0,0,0,.7);
+  transition:border-color .25s,box-shadow .25s
+}
+body.venuePage #menuGrid .foodCardRef .foodVisual{height:auto!important;aspect-ratio:1.1;overflow:hidden;margin:5px 5px 0;border-radius:18px;isolation:isolate}
+body.venuePage #menuGrid .dishPhotoButton{display:block;position:absolute;inset:0;width:100%;height:100%;padding:0;border:0;background:transparent;border-radius:inherit;cursor:pointer}
+body.venuePage #menuGrid .foodPic{background:radial-gradient(ellipse at 50% 30%,#3c4751,var(--gallery-surface) 80%)}
+body.venuePage #menuGrid .foodPic img{filter:saturate(.97) contrast(1.02) brightness(.97);transform:scale(1.01);transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+body.venuePage #menuGrid .foodPic>i{background:linear-gradient(180deg,rgba(255,255,255,.05),transparent 35%,rgba(8,17,28,.35));pointer-events:none}
+body.venuePage #menuGrid .foodBody{background:transparent!important;backdrop-filter:none;padding:13px 11px 11px!important}
+body.venuePage #menuGrid .foodTitle{min-height:0!important;padding:0 23px 0 0!important}
+body.venuePage #menuGrid .foodTitle h3{font-size:14px!important;font-weight:650;line-height:1.3!important;letter-spacing:-.02em;min-height:36px;overflow-wrap:anywhere;color:var(--gallery-ink)}
+body.venuePage #menuGrid .foodTitle h3 button,body.venuePage #menuFeature h3 button{display:block;padding:0;border:0;background:none;font:inherit;letter-spacing:inherit;text-align:left;color:inherit;cursor:pointer}
+body.venuePage #menuGrid .foodFavorite{top:-3px;right:-5px;width:30px;height:35px;min-width:0;background:transparent;border:0;color:#acb7c5;font-size:17px}
+body.venuePage #menuGrid .foodFavorite.active{color:#f2928b}
+body.venuePage #menuGrid .foodBody p{color:var(--gallery-muted);font-size:11px!important;line-height:1.55!important;min-height:34px!important;margin:7px 0 0!important;-webkit-line-clamp:2!important}
+body.venuePage #menuGrid .foodBody p:empty{display:none!important}
+body.venuePage #menuSection .dishReadMore{display:flex;align-items:center;justify-content:space-between;gap:4px;width:100%;min-height:36px;padding:6px 0;border:0;background:transparent;font-size:10px;letter-spacing:.04em;color:var(--gallery-gold);text-align:left;cursor:pointer}
+body.venuePage #menuSection .dishReadMore span{font-size:15px;font-weight:400}
+body.venuePage #menuGrid .foodMeta{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px;color:var(--gallery-muted)}
+body.venuePage #menuGrid .foodMeta span{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:3px 5px;font-size:9px}
+body.venuePage #menuGrid .foodRow{border-top:1px solid var(--gallery-line);padding-top:10px!important;gap:5px!important}
+body.venuePage #menuGrid .foodRow b{font-size:16px!important;font-weight:650;letter-spacing:-.04em;color:var(--gallery-ink);overflow-wrap:anywhere}
+body.venuePage #menuGrid .addBtn{border-radius:13px!important;background:linear-gradient(145deg,rgba(255,255,255,.26),transparent 65%),color-mix(in srgb,var(--venue-accent) 65%,#ba9670);min-width:40px!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 5px 15px rgba(0,0,0,.15)}
+body.venuePage #menuGrid .customizeDish{border-color:var(--gallery-line);color:var(--gallery-gold);background:rgba(255,255,255,.04)}
+body.venuePage #menuGrid .foodBadge{top:9px;left:9px;max-width:calc(100% - 18px);background:rgba(13,23,35,.66);color:#f7e4c6;border:1px solid rgba(255,255,255,.25);border-radius:8px;font-size:8px;font-weight:600;letter-spacing:.06em;padding:5px 7px;pointer-events:none}
+body.venuePage #menuGrid .foodSoldOut{pointer-events:none;font-size:9px;left:5px;bottom:7px;padding:6px}
+body.venuePage #menuFeature .menuFeatureCard{aspect-ratio:auto;min-height:300px;border-radius:26px;border:1px solid var(--gallery-line);background:var(--gallery-surface);box-shadow:0 18px 38px -18px #0009;overflow:hidden}
+body.venuePage #menuFeature .menuFeatureCopy{position:relative;inset:auto;width:100%;padding:100px 22px 21px;background:linear-gradient(180deg,transparent,rgba(7,17,28,.8) 38%,#101e2b 92%)}
+body.venuePage #menuFeature .menuFeatureCopy>small{color:var(--gallery-gold);font-size:9px;letter-spacing:.17em}
+body.venuePage #menuFeature h3{font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.12;font-weight:400;max-width:85%;color:var(--gallery-ink);letter-spacing:-.025em}
+body.venuePage #menuFeature p{color:#cbd0d5;font-size:12px;line-height:1.6;max-width:90%}
+body.venuePage #menuFeature .dishReadMore{max-width:130px;margin-bottom:5px}
+body.venuePage #menuFeature .menuFeatureDots{display:none}
+body.venuePage #menuFeature .menuFeatureBottom{padding-top:12px;border-top:1px solid var(--gallery-line)}
+body.venuePage #menuGrid .menuCategoryLabel{border:0;border-bottom:1px solid var(--gallery-line);border-radius:0;background:none;padding:2px 2px 14px;margin:0 0 19px;color:var(--gallery-ink);font-family:Georgia,'Times New Roman',serif;font-size:23px}
+.menuColophon{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:13px;max-width:280px;margin:36px auto 18px;text-align:center;color:#8e9daa}
+.menuColophon span{height:1px;background:linear-gradient(90deg,transparent,var(--gallery-line))}.menuColophon span:nth-of-type(2){transform:rotate(180deg)}
+.menuColophon b{font-size:9px;letter-spacing:.26em;font-weight:500}.menuColophon small{grid-column:1/-1;font:italic 13px Georgia,serif;color:#aeb6bd}
+/* The detail dialog uses the same glass, lighting and quiet warm accents. */
+body.venuePage #itemOptionsSheet{max-height:92dvh;padding:12px 18px 0;border:1px solid var(--gallery-line);border-radius:32px 32px 0 0;background:radial-gradient(ellipse at 100% 0,var(--venue-glow),transparent 40%),linear-gradient(145deg,#213040,#0c1826 65%);box-shadow:0 -25px 80px #0007;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#435060 transparent}
+body.venuePage #itemOptionsSheet .sheetHead{align-items:flex-start;margin:10px 0 20px}
+body.venuePage #itemOptionsSheet .sheetEyebrow{font-size:9px;letter-spacing:.2em;color:var(--gallery-gold)}
+body.venuePage #itemOptionsTitle{font-family:Georgia,'Times New Roman',serif;font-size:30px;font-weight:400;line-height:1.1;letter-spacing:-.03em;color:var(--gallery-ink);overflow-wrap:anywhere;margin-top:6px}
+body.venuePage #itemOptionsSheet .iconBtn{flex:none;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--gallery-line);color:var(--gallery-ink)}
+.dishDetailVisual{position:relative;aspect-ratio:1.6;overflow:hidden;border-radius:22px;background:radial-gradient(ellipse at 50% 30%,#586372,#152332 75%);border:1px solid var(--gallery-line)}
+.dishDetailVisual img{width:100%;height:100%;display:block}.dishDetailVisual:after{content:'';position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 1px 0 #fff3;border-radius:inherit;background:linear-gradient(transparent 65%,#09142270)}
+.dishDetailVisual.noPhoto{aspect-ratio:3}.dishDetailVisual.noPhoto:before{content:'SHAURMEG';position:absolute;inset:0;display:grid;place-items:center;font-size:13px;letter-spacing:.35em;color:var(--gallery-gold)}
+.dishDetailFacts{display:flex;flex-wrap:wrap;gap:7px;margin:15px 0}.dishDetailFacts span{font-size:10px;padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid var(--gallery-line);border-radius:9px;color:#d5dbe2}
+body.venuePage #itemOptionsSheet .itemOptionsIntro{background:none;border:0;padding:0;margin:18px 0;display:block}
+body.venuePage #itemOptionsDescription{font-size:14px;line-height:1.7;color:#c8d0d8;white-space:pre-line}
+body.venuePage #itemOptionsBasePrice{display:none}
+.dishComposition{position:relative;margin:22px 0;padding:18px 18px 18px 20px;border:1px solid var(--gallery-line);border-radius:19px;background:linear-gradient(120deg,rgba(232,215,188,.09),rgba(255,255,255,.025));box-shadow:inset 0 1px 0 #ffffff0a}
+.dishComposition:before{content:'';position:absolute;top:22px;bottom:22px;left:0;width:2px;background:linear-gradient(transparent,var(--gallery-gold),transparent)}
+.dishComposition small{font-size:8px;letter-spacing:.18em;color:var(--gallery-gold)}
+.dishComposition h3{font:400 23px Georgia,serif;margin:7px 0 10px;color:var(--gallery-ink)}
+.dishComposition p{margin:0;font-size:13px;line-height:1.75;color:#c8d0d8;white-space:pre-line;overflow-wrap:anywhere}
+body.venuePage #itemOptionsSheet .itemOptionGroup{background:rgba(255,255,255,.035);border:1px solid var(--gallery-line)}
+body.venuePage #itemOptionsSheet .itemOptionGroup header b{color:var(--gallery-ink)}
+body.venuePage #itemOptionsSheet .itemOptionGroup header small{color:var(--gallery-muted)}
+body.venuePage #itemOptionsSheet .itemOptionButtons button:not(.active){color:#e0e5e9;background:#213141;border:1px solid var(--gallery-line)}
+body.venuePage #itemOptionsSheet .itemOptionButtons button:not(.active) small{color:#b5c1cc}
+.dishDetailFooter{position:sticky;bottom:0;margin:20px -18px 0;padding:14px 18px calc(18px + env(safe-area-inset-bottom,0px));background:rgba(12,24,37,.96);border-top:1px solid var(--gallery-line);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);z-index:3}
+body.venuePage #itemOptionsSheet .totalRow{margin:0 0 12px;padding:0;border:0;color:var(--gallery-muted);font-size:12px}
+body.venuePage #itemOptionsTotal{color:var(--gallery-ink);font-size:24px;font-weight:600}
+body.venuePage #confirmItemOptions{margin:0;min-height:50px;border-radius:16px;border:1px solid rgba(255,255,255,.26);background:linear-gradient(140deg,rgba(255,255,255,.22),transparent),var(--venue-accent);color:var(--venue-ink,#fff);box-shadow:inset 0 1px 0 #ffffff35}
+body.venuePage #confirmItemOptions:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+body.venuePage #itemOptionsSheet button:focus-visible,body.venuePage #menuSection button:focus-visible{outline:2px solid var(--gallery-gold);outline-offset:-3px}
+@media(hover:hover){body.venuePage #menuGrid .foodCardRef:hover{border-color:#dcc29966;box-shadow:inset 0 1px 0 #ffffff25,0 16px 30px -12px #0009}body.venuePage #menuGrid .dishPhotoButton:hover img{transform:scale(1.065)}}
+@media(max-width:370px){body.venuePage #menuGrid .foodBody{padding:10px 8px!important}body.venuePage #menuGrid .foodRow{flex-wrap:wrap}body.venuePage #menuGrid .foodRow b{flex-basis:100%}body.venuePage #menuGrid .foodTitle h3{font-size:12px!important}body.venuePage #menuFeature .menuFeatureCopy{padding:80px 16px 17px}}
+@media(min-width:700px){body.venuePage #menuGrid .foodCardRef .foodVisual{aspect-ratio:1.25}body.venuePage #menuFeature .menuFeatureCopy{padding-top:140px}body.venuePage #menuFeature h3{font-size:40px}}
+@media(prefers-reduced-motion:reduce){body.venuePage #menuGrid .foodCardRef,body.venuePage #menuGrid .foodPic img{transition:none}body.venuePage #menuGrid .dishPhotoButton:hover img{transform:none}}

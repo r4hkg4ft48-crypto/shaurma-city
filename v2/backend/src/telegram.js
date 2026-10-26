@@ -3,6 +3,7 @@ const crypto=require('crypto');
 const rich=require('../../../backend/telegram-rich');
 const config=require('./config');
 const AGGREGATOR_DELIVERY_SECRET=config.AGGREGATOR_BOT_TOKEN?crypto.createHash('sha256').update('shaurmeg-aggregator-header:'+config.AGGREGATOR_BOT_TOKEN).digest('hex'):'';
+const ADMIN_DELIVERY_SECRET=config.UNIFIED_MODE&&config.ADMIN_BOT_TOKEN?crypto.createHash('sha256').update('shaurmeg-v3-admin-webhook:'+config.ADMIN_BOT_TOKEN).digest('hex'):'';
 const db=require('./db');
 const rt=require('./realtime');
 const voice=require('./voice-assistant');
@@ -609,6 +610,15 @@ async function kitchenPhotoDataUrl(msg){
 async function handleKitchenMessage(msg){
   const chatId=msg?.chat?.id,user=msg?.from;
   if(!chatId)return;
+  // One administrative bot serves both the management Mini App and the kitchen dialogue.
+  if(config.UNIFIED_MODE&&/^\/(?:start|panel|admin)(?:@[A-Za-z0-9_]+)?$/i.test(String(msg.text||'').trim())){
+    const url=config.PUBLIC_APP_URL+'/admin-unified.html';
+    return call(config.KITCHEN_BOT_TOKEN,'sendMessage',{
+      chat_id:chatId,
+      text:'Шаурмег V3 · управление заведениями, меню и заказами.\n\nОткройте единый кабинет или отправьте OWN-ключ для подключения заведения. Управлять меню можно сообщениями прямо здесь: /assistant.',
+      reply_markup:{inline_keyboard:[[{text:'Открыть админ-панель',web_app:{url}}]]}
+    });
+  }
 
   if(msg?.photo?.length&&user?.id){
     try{
@@ -702,28 +712,31 @@ async function sync(){
     add('aggregator.webhook',()=>call(config.AGGREGATOR_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/aggregator',secret_token:AGGREGATOR_DELIVERY_SECRET,allowed_updates:['message','callback_query','pre_checkout_query']}));
   }
 
-  if(config.CLIENT_BOT_TOKEN){
+  if(!config.UNIFIED_MODE&&config.CLIENT_BOT_TOKEN){
     add('client.menu',()=>call(config.CLIENT_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Выбрать заведение',web_app:{url:mapUrl}}}));
     add('client.commands',()=>call(config.CLIENT_BOT_TOKEN,'setMyCommands',{commands:[{command:'start',description:'Открыть меню выбранной точки'},{command:'menu',description:'Открыть меню'}]}));
     add('client.webhook',()=>call(config.CLIENT_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/client',allowed_updates:['message']}));
   }
 
-  if(config.ADMIN_BOT_TOKEN){
+  if(config.UNIFIED_MODE&&config.ADMIN_BOT_TOKEN){
+    add('admin.menu',()=>call(config.ADMIN_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Управление',web_app:{url:config.PUBLIC_APP_URL+'/admin-unified.html'}}}));
+  }else if(config.ADMIN_BOT_TOKEN){
     add('admin.menu',()=>call(config.ADMIN_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Админка карты',web_app:{url:adminUrl}}}));
   }
-  if(config.VENUE_OWNER_BOT_TOKEN){
+  if(!config.UNIFIED_MODE&&config.VENUE_OWNER_BOT_TOKEN){
     add('venue.menu',()=>call(config.VENUE_OWNER_BOT_TOKEN,'setChatMenuButton',{menu_button:{type:'web_app',text:'Мои заведения',web_app:{url:venueUrl}}}));
   }
   if(config.KITCHEN_BOT_TOKEN){
     add('kitchen.commands',()=>call(config.KITCHEN_BOT_TOKEN,'setMyCommands',{commands:[
-      {command:'start',description:'Подключить приём заказов'},
+      {command:'start',description:config.UNIFIED_MODE?'Единая админ-панель':'Подключить приём заказов'},
+      ...(config.UNIFIED_MODE?[{command:'panel',description:'Управление заведениями'}]:[]),
       {command:'status',description:'Показать подключённые заведения'},
       {command:'voice',description:'Голосовые команды кухни'},
       {command:'assistant',description:'Управление меню и точкой'},
       {command:'connect',description:'Подключить заведение по ключу'},
       {command:'disconnect',description:'Отключить этот чат от заказов'}
     ]}));
-    add('kitchen.webhook',()=>call(config.KITCHEN_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/kitchen',allowed_updates:['message','callback_query']}));
+    add('kitchen.webhook',()=>call(config.KITCHEN_BOT_TOKEN,'setWebhook',{url:config.PUBLIC_API_URL+'/api/v2/telegram/kitchen',...(config.UNIFIED_MODE?{secret_token:ADMIN_DELIVERY_SECRET}:{}),allowed_updates:['message','callback_query']}));
   }
 
   let ok=0;
@@ -822,6 +835,7 @@ function install(app){
   });
 
   app.post('/api/v2/telegram/kitchen',async(req,res)=>{
+    if(config.UNIFIED_MODE&&(!ADMIN_DELIVERY_SECRET||req.get('x-telegram-bot-api-secret-token')!==ADMIN_DELIVERY_SECRET))return res.sendStatus(403);
     res.sendStatus(200);
     if(!config.KITCHEN_BOT_TOKEN)return;
     try{

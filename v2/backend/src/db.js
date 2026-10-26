@@ -5,6 +5,10 @@ const config=require('./config');
 
 function v3SslOptions(connectionString){
   const address=new URL(connectionString);
+  const expectedName=String(process.env.V3_DB_NAME||'shaurmeg_v3').trim();
+  if(decodeURIComponent(address.pathname.slice(1))!==expectedName){
+    throw new Error('v3_database_name_mismatch_refusing_shared_v2_database');
+  }
   const transport=String(process.env.V3_DB_TRANSPORT||'tls').toLowerCase();
   if(transport==='local'){
     if(!['localhost','127.0.0.1','[::1]'].includes(address.hostname)){

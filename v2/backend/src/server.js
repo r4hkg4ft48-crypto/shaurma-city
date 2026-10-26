@@ -1,5 +1,6 @@
 'use strict';
 const express=require('express');
+const path=require('path');
 const config=require('./config');
 const db=require('./db');
 const {ensureSchema}=require('./schema');
@@ -27,6 +28,10 @@ coordinator.install(app);
 coordinatorBot.install(app);
 channelBot.install(app);
 channelAssets.install(app);
+if(config.UNIFIED_MODE){
+  app.use(express.static(path.join(__dirname,'../../frontend'),{index:'index.html',setHeaders:res=>res.setHeader('Cache-Control','no-store')}));
+  app.get('/admin',(req,res)=>res.redirect(302,'/admin-unified.html'));
+}
 app.use((req,res)=>res.status(404).json({error:'not_found'}));
 
 ensureSchema()
@@ -34,8 +39,8 @@ ensureSchema()
  .then(()=>require('./autopay').ensureSchema())
  .then(()=>coordinator.ensureSchema())
  .then(()=>realcity.bootstrap())
- .then(()=>channelBot.bootstrap())
+ .then(()=>config.UNIFIED_MODE?null:channelBot.bootstrap())
  .then(()=>telegram.sync())
- .then(()=>coordinatorBot.sync())
+ .then(()=>config.UNIFIED_MODE?null:coordinatorBot.sync())
  .catch(e=>console.error('bootstrap',e.message))
- .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);const quickOrderRetry=setInterval(()=>Promise.allSettled([require('./quick-order-bot').retryPendingKitchenOrders(),require('./quick-order-bot').reconcilePendingProviderPayments()]).catch(e=>console.error('quick order delivery recovery',e.message)),60000);quickOrderRetry.unref?.();channelBot.sync().then(()=>channelBot.publishLaunchMissing()).then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel bot post-start sync',e.message))}));
+ .finally(()=>app.listen(config.PORT,()=>{console.log('Shaurmeg V2 API on '+config.PORT+' · db='+db.configured);const quickOrderRetry=setInterval(()=>Promise.allSettled([require('./quick-order-bot').retryPendingKitchenOrders(),require('./quick-order-bot').reconcilePendingProviderPayments()]).catch(e=>console.error('quick order delivery recovery',e.message)),60000);quickOrderRetry.unref?.();(config.UNIFIED_MODE?Promise.resolve({enabled:false}):channelBot.sync().then(()=>channelBot.publishLaunchMissing())).then(r=>{if(r?.enabled)console.log('Channel launch publish · '+r.published+' published · '+(r.failed||0)+' failed')}).catch(e=>console.error('channel bot post-start sync',e.message))}));

@@ -700,6 +700,10 @@ async function handleKitchenMessage(msg){
 }
 
 async function sync(){
+  if(config.UNIFIED_MODE&&config.AGGREGATOR_BOT_TOKEN&&config.AGGREGATOR_BOT_TOKEN===config.ADMIN_BOT_TOKEN){
+    console.error('V3 configuration invalid: user and admin Telegram bots must be different');
+    return {ok:false,total:0,failed:1};
+  }
   const mapUrl=config.PUBLIC_APP_URL+'/index.html';
   const adminUrl=config.PUBLIC_APP_URL+'/admin-map.html';
   const venueUrl=config.PUBLIC_APP_URL+'/admin-venue-pro.html?v=20261005-final4';

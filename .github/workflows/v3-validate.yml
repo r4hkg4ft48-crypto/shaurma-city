@@ -1,0 +1,71 @@
+name: v3-validate
+on:
+  push:
+    branches:
+      - 'release/v3-unified-*'
+  workflow_dispatch:
+
+jobs:
+  unified:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static syntax
+        run: |
+          find v2 -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          node --check v3/config-test.cjs
+          node --check backend/venue-command.js
+          node --check backend/venue-agent.js
+      - name: Admin inline script syntax
+        run: |
+          python3 - <<'PY'
+          import re,pathlib,subprocess,tempfile
+          p=pathlib.Path('v2/frontend/admin-unified.html')
+          for script in re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>',p.read_text(),re.S|re.I):
+              if not script.strip(): continue
+              with tempfile.NamedTemporaryFile(suffix='.js',mode='w',delete=False) as f:
+                  f.write(script)
+                  temp=f.name
+              check=subprocess.run(['node','--check',temp],capture_output=True,text=True)
+              pathlib.Path(temp).unlink()
+              assert check.returncode == 0,check.stderr
+          PY
+      - name: V3 bot and API isolation
+        run: node v3/config-test.cjs
+      - name: Install dependencies
+        run: |
+          npm --prefix backend install --ignore-scripts
+          npm --prefix v2/backend install --ignore-scripts
+      - name: Core domain tests
+        run: |
+          node --test v2/backend/test/menu-domain.test.js v2/backend/test/quick-order-no-payment.test.js v2/backend/test/voice-assistant.test.js
+      - name: Load API with unified mode
+        env:
+          V3_UNIFIED_MODE: 'true'
+        run: node -e "require('./v2/backend/src/routes');require('./v2/backend/src/telegram')"
+      - name: Single-service startup and webhook security
+        env:
+          V3_UNIFIED_MODE: 'true'
+          V3_USER_BOT_TOKEN: 'test-user-bot-token'
+          V3_ADMIN_BOT_TOKEN: 'test-admin-bot-token'
+          V3_PUBLIC_URL: 'http://127.0.0.1:3000'
+        run: |
+          node v2/backend/src/server.js > /tmp/v3.log 2>&1 &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:3000/admin-unified.html -o /tmp/v3-admin.html; then break; fi
+            sleep 1
+          done
+          grep -q 'центр управления' /tmp/v3-admin.html
+          curl -fsS http://127.0.0.1:3000/index.html -o /tmp/v3-user.html
+          grep -q 'Шаурмег' /tmp/v3-user.html
+          H=$(curl -s -o /tmp/v3-health.json -w '%{http_code}' http://127.0.0.1:3000/api/v2/health)
+          test "$H" = '503'
+          grep -q '"architecture":"unified-v3"' /tmp/v3-health.json
+          W=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:3000/api/v2/telegram/kitchen)
+          test "$W" = '403'

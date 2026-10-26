@@ -3,23 +3,27 @@
 
 const clean=v=>String(v||'').trim();
 const csv=v=>clean(v).split(',').map(x=>x.trim()).filter(Boolean);
+const UNIFIED_MODE=clean(process.env.V3_UNIFIED_MODE).toLowerCase()==='true';
+const unifiedUrl=clean(process.env.V3_PUBLIC_URL||process.env.RENDER_EXTERNAL_URL).replace(/\/+$/,'');
+
 
 module.exports={
+  UNIFIED_MODE,
   PORT:Number(process.env.PORT||3000),
   DATABASE_URL:clean(process.env.DATABASE_URL),
-  PUBLIC_API_URL:clean(process.env.V2_PUBLIC_API_URL||process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,''),
-  PUBLIC_APP_URL:clean(process.env.V2_PUBLIC_APP_URL||process.env.PUBLIC_APP_URL||'https://shaurmeg-v2-app.onrender.com').replace(/\/+$/,''),
+  PUBLIC_API_URL:UNIFIED_MODE?unifiedUrl:clean(process.env.V2_PUBLIC_API_URL||process.env.PUBLIC_API_URL||'https://shaurma-city-api.onrender.com').replace(/\/+$/,''),
+  PUBLIC_APP_URL:UNIFIED_MODE?unifiedUrl:clean(process.env.V2_PUBLIC_APP_URL||process.env.PUBLIC_APP_URL||'https://shaurmeg-v2-app.onrender.com').replace(/\/+$/,''),
   TELEGRAM_CUTOVER:clean(process.env.V2_TELEGRAM_CUTOVER).toLowerCase()==='true',
-  CLIENT_BOT_TOKEN:clean(process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN),
-  AGGREGATOR_BOT_TOKEN:clean(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN),
-  AGGREGATOR_BOT_USERNAME:clean(process.env.AGGREGATOR_TELEGRAM_BOT_USERNAME||'Shaurmeggbot').replace(/^@/,'')||'Shaurmeggbot',
-  ADMIN_BOT_TOKEN:clean(process.env.ADMIN_TELEGRAM_BOT_TOKEN),
-  ACCESS_ADMIN_BOT_TOKEN:clean(process.env.ACCESS_ADMIN_TELEGRAM_BOT_TOKEN||process.env.ADMIN_ACCESS_TELEGRAM_BOT_TOKEN),
+  CLIENT_BOT_TOKEN:UNIFIED_MODE?'':clean(process.env.CLIENT_TELEGRAM_BOT_TOKEN||process.env.CUSTOMER_BOT_TOKEN||process.env.TELEGRAM_BOT_TOKEN),
+  AGGREGATOR_BOT_TOKEN:UNIFIED_MODE?clean(process.env.V3_USER_BOT_TOKEN):clean(process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN||process.env.SHAURMEG_TELEGRAM_BOT_TOKEN),
+  AGGREGATOR_BOT_USERNAME:clean(UNIFIED_MODE?process.env.V3_USER_BOT_USERNAME:process.env.AGGREGATOR_TELEGRAM_BOT_USERNAME||'Shaurmeggbot').replace(/^@/,'')||'Shaurmeggbot',
+  ADMIN_BOT_TOKEN:UNIFIED_MODE?clean(process.env.V3_ADMIN_BOT_TOKEN):clean(process.env.ADMIN_TELEGRAM_BOT_TOKEN),
+  ACCESS_ADMIN_BOT_TOKEN:UNIFIED_MODE?'':clean(process.env.ACCESS_ADMIN_TELEGRAM_BOT_TOKEN||process.env.ADMIN_ACCESS_TELEGRAM_BOT_TOKEN),
   ACCESS_ADMIN_BOT_USERNAME:clean(process.env.ACCESS_ADMIN_TELEGRAM_BOT_USERNAME||'Shauermenadmenbot').replace(/^@/,'')||'Shauermenadmenbot',
-  VENUE_OWNER_BOT_TOKEN:clean(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN),
-  KITCHEN_BOT_TOKEN:clean(process.env.KITCHEN_TELEGRAM_BOT_TOKEN),
+  VENUE_OWNER_BOT_TOKEN:UNIFIED_MODE?clean(process.env.V3_ADMIN_BOT_TOKEN):clean(process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN),
+  KITCHEN_BOT_TOKEN:UNIFIED_MODE?clean(process.env.V3_ADMIN_BOT_TOKEN):clean(process.env.KITCHEN_TELEGRAM_BOT_TOKEN),
   KITCHEN_BOT_USERNAME:clean(process.env.KITCHEN_TELEGRAM_BOT_USERNAME||'').replace(/^@/,''),
-  CHANNEL_BOT_TOKEN:clean(process.env.CHANNEL_TELEGRAM_BOT_TOKEN),
+  CHANNEL_BOT_TOKEN:UNIFIED_MODE?'':clean(process.env.CHANNEL_TELEGRAM_BOT_TOKEN),
   CHANNEL_BOT_USERNAME:clean(process.env.CHANNEL_TELEGRAM_BOT_USERNAME||'').replace(/^@/,''),
   CHANNEL_CHAT_ID:clean(process.env.SHAURMEG_CHANNEL_CHAT_ID),
   CHANNEL_ASSET_BASE_URL:clean(process.env.SHAURMEG_CHANNEL_ASSET_BASE_URL).replace(/\/+$/,''),
@@ -49,5 +53,5 @@ module.exports={
   OWNER_PASSWORD:clean(process.env.OWNER_PASSWORD),
   ADMIN_IDS:new Set(csv([process.env.ADMIN_TELEGRAM_IDS||'',process.env.ADDITIONAL_ADMIN_TELEGRAM_IDS||''].filter(Boolean).join(','))),
   SESSION_TTL_SEC:7*24*60*60,
-  BUILD:'v2-realcity-open-only-measured-21'
+  BUILD:UNIFIED_MODE?'v3-unified-candidate-20261026':'v2-realcity-open-only-measured-21'
 };

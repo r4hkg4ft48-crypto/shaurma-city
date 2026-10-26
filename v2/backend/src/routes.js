@@ -225,7 +225,7 @@ router.get('/menu-photo/:fileName',async(req,res)=>{
   }catch(e){fail(res,e,'menu_photo_failed')}
 });
 
-router.get('/health',(req,res)=>res.json({ok:true,version:config.BUILD,database:db.configured,architecture:'clean-v2'}));
+router.get('/health',(req,res)=>res.status(config.UNIFIED_MODE&&(!db.configured||!config.PUBLIC_APP_URL||!config.AGGREGATOR_BOT_TOKEN||!config.ADMIN_BOT_TOKEN)?503:200).json({ok:!config.UNIFIED_MODE||(!!db.configured&&!!config.PUBLIC_APP_URL&&!!config.AGGREGATOR_BOT_TOKEN&&!!config.ADMIN_BOT_TOKEN),version:config.BUILD,database:db.configured,architecture:config.UNIFIED_MODE?'unified-v3':'clean-v2',bots:config.UNIFIED_MODE?{user:!!config.AGGREGATOR_BOT_TOKEN,admin:!!config.ADMIN_BOT_TOKEN}:undefined}));
 
 router.get('/map/points',async(req,res)=>{
   try{

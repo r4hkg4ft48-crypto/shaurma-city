@@ -1,0 +1,28 @@
+'use strict';
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const child=require('node:child_process');
+const script=`
+process.env.V3_UNIFIED_MODE='true';
+process.env.V3_USER_BOT_TOKEN='v3-client-only-token';
+process.env.V3_ADMIN_BOT_TOKEN='v3-admin-only-token';
+process.env.V3_USER_BOT_USERNAME='V3SandboxBot';
+process.env.V3_PUBLIC_URL='https://v3.example.test';
+process.env.ADMIN_TELEGRAM_BOT_TOKEN='legacy-admin-token';
+process.env.AGGREGATOR_TELEGRAM_BOT_TOKEN='legacy-aggregator-token';
+process.env.CLIENT_TELEGRAM_BOT_TOKEN='legacy-client-token';
+process.env.KITCHEN_TELEGRAM_BOT_TOKEN='legacy-kitchen-token';
+process.env.VENUE_OWNER_TELEGRAM_BOT_TOKEN='legacy-owner-token';
+process.env.CHANNEL_TELEGRAM_BOT_TOKEN='legacy-channel-token';
+const c=require('./v2/backend/src/config');
+if(!c.UNIFIED_MODE)throw Error('unified mode disabled');
+if(c.CLIENT_BOT_TOKEN||c.CHANNEL_BOT_TOKEN||c.ACCESS_ADMIN_BOT_TOKEN)throw Error('legacy token loaded');
+if(c.AGGREGATOR_BOT_TOKEN!=='v3-client-only-token')throw Error('user token not isolated');
+if(c.ADMIN_BOT_TOKEN!=='v3-admin-only-token'||c.KITCHEN_BOT_TOKEN!==c.ADMIN_BOT_TOKEN||c.VENUE_OWNER_BOT_TOKEN!==c.ADMIN_BOT_TOKEN)throw Error('admin tokens not unified');
+if(c.PUBLIC_API_URL!=='https://v3.example.test'||c.PUBLIC_APP_URL!==c.PUBLIC_API_URL)throw Error('not same-origin');
+if(c.AGGREGATOR_BOT_USERNAME!=='V3SandboxBot')throw Error('wrong bot username');
+console.log('V3 two-bot isolation OK');
+`;
+const result=child.spawnSync(process.execPath,['-e',script],{cwd:path.join(__dirname,'..'),encoding:'utf8'});
+assert.equal(result.status,0,result.stderr||result.stdout);
+process.stdout.write(result.stdout);
